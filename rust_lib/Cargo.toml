@@ -1,0 +1,37 @@
+[package]
+name = "rust_lib"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["staticlib"]
+
+[profile.release]
+opt-level = "z"
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[dependencies]
+# https://crates.io/crates/once_cell
+once_cell = { version = "1.19.0" }
+# https://crates.io/crates/tokio
+tokio = { version = "1.38.0", features = ["rt-multi-thread"] }
+# https://crates.io/crates/sqlx
+sqlx = { version = "0.7", features = [
+    "runtime-tokio", # Use the tokio runtime without enabling a TLS backend.
+    "postgres",      # Add support for the Postgres database server.
+    "uuid",          # Add support for UUID (in Postgres).
+    "bigdecimal",    # Add support for NUMERIC using the bigdecimal crate.
+    "json",          # Add support for JSON and JSONB (in postgres) using the serde_json crate.
+    "chrono",        # Add support for date and time types from chrono.
+] }
+# https://github.com/serde-rs/json
+serde = "1.0"
+serde_json = "1.0"
+sqlx-pgrow-serde = "0.2.0"
+
+[build-dependencies]
+# https://crates.io/crates/cbindgen
+cbindgen = "0.26.0"
