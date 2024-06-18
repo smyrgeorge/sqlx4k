@@ -30,6 +30,27 @@ You will need the rust toolchain in order to lib.
 ./gradlew binaries
 ```
 
+## Examples
+
+See `Main.kt` file for more examples.
+
+```kotlin
+// Initialize the connection pool.
+sqlx4k_of(
+    host = "localhost",
+    port = cValuesOf(5432),
+    username = "test",
+    password = "test",
+    database = "test_db",
+    max_connections = cValuesOf(10)
+).checkExitCode()
+
+// Make a simple query.
+sqlx4k_query_fetch_all("select * from data_collector.sqlx4k;").use {
+    println(it.toStr())
+}
+```
+
 ## Run
 
 ```shell
