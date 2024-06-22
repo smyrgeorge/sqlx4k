@@ -20,7 +20,9 @@ The driver currently only supports the `PostgreSQL` database.
 
 - [ ] PostgresSQL (in progress)
 - [x] Transactions
+- [ ] Transaction isolation level
 - [ ] Better error handling (in progress)
+- [ ] Provide a more kotlin like API (in progress)
 - [ ] MySql
 - [ ] SQLite
 
