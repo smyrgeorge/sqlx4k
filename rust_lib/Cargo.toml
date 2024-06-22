@@ -10,7 +10,6 @@ crate-type = ["staticlib"]
 opt-level = "z"
 strip = true
 lto = true
-codegen-units = 1
 panic = "abort"
 
 [dependencies]
