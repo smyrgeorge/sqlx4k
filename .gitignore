@@ -1,5 +1,5 @@
-# Created by https://www.toptal.com/developers/gitignore/api/java,macos,maven,gradle,kotlin,eclipse,windows,intellij,visualstudiocode,rust
-# Edit at https://www.toptal.com/developers/gitignore?templates=java,macos,maven,gradle,kotlin,eclipse,windows,intellij,visualstudiocode,rust
+# Created by https://www.toptal.com/developers/gitignore/api/java,rust,macos,maven,gradle,kotlin,eclipse,windows,intellij,visualstudiocode
+# Edit at https://www.toptal.com/developers/gitignore?templates=java,rust,macos,maven,gradle,kotlin,eclipse,windows,intellij,visualstudiocode
 
 ### Eclipse ###
 .metadata
@@ -208,6 +208,7 @@ hs_err_pid*
 replay_pid*
 
 ### Kotlin ###
+.kotlin
 # Compiled class file
 
 # Log file
@@ -357,4 +358,4 @@ gradle-app.setting
 # Java heap dump
 *.hprof
 
-# End of https://www.toptal.com/developers/gitignore/api/java,macos,maven,gradle,kotlin,eclipse,windows,intellij,visualstudiocode,rust
+# End of https://www.toptal.com/developers/gitignore/api/java,rust,macos,maven,gradle,kotlin,eclipse,windows,intellij,visualstudiocode

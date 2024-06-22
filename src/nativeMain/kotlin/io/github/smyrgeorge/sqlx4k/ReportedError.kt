@@ -1,3 +1,5 @@
+package io.github.smyrgeorge.sqlx4k
+
 import kotlinx.cinterop.ExperimentalForeignApi
 import librust_lib.INVALID_TYPE_CONVERSION
 import librust_lib.OK

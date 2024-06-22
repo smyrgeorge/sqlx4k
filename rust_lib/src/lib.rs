@@ -1,8 +1,10 @@
 use sqlx::postgres::{PgPool, PgPoolOptions, PgRow, PgValueFormat, PgValueRef};
 use sqlx::{Column, Executor};
 use sqlx::{Row, TypeInfo, ValueRef};
-use std::ffi::c_void;
+use std::collections::HashMap;
+use std::ffi::{c_long, c_void};
 use std::ptr::null_mut;
+use std::sync::RwLock;
 use std::{
     ffi::{c_char, c_int, c_short, CStr, CString},
     sync::OnceLock,
@@ -16,26 +18,27 @@ pub type ResultCode<T> = Result<T, c_int>;
 static SQLX4K: OnceLock<Sqlx4k> = OnceLock::new();
 
 #[derive(Debug)]
-pub struct Sqlx4k {
+pub struct Sqlx4k<'a> {
     runtime: Runtime,
     pool: PgPool,
+    tx: RwLock<HashMap<u8, sqlx::Transaction<'a, sqlx::Postgres>>>,
 }
 
 #[repr(C)]
-pub struct Sqlx4kPgResult {
+pub struct Sqlx4kResult {
     pub error: c_short,
     pub error_message: *mut c_char,
     pub size: c_int,
-    pub rows: *mut Sqlx4kPgRow,
+    pub rows: *mut Sqlx4kRow,
 }
 
 #[repr(C)]
-pub struct Sqlx4kPgRow {
+pub struct Sqlx4kRow {
     pub size: c_int,
-    pub columns: *mut Sqlx4kPgColumn,
+    pub columns: *mut Sqlx4kColumn,
 }
 
-impl Default for Sqlx4kPgRow {
+impl Default for Sqlx4kRow {
     fn default() -> Self {
         Self {
             size: 0,
@@ -45,7 +48,7 @@ impl Default for Sqlx4kPgRow {
 }
 
 #[repr(C)]
-pub struct Sqlx4kPgColumn {
+pub struct Sqlx4kColumn {
     pub ordinal: c_int,
     pub name: *mut c_char,
     pub kind: c_int,
@@ -89,11 +92,9 @@ pub extern "C" fn sqlx4k_of(
 
     // Create the pool here.
     let pool: PgPool = runtime.block_on(pool).unwrap();
-    let sqlx4k = Sqlx4k {
-        runtime,
-        pool,
-        // results,
-    };
+    // Create the transaction keeper here.
+    let tx = RwLock::new(HashMap::with_capacity(max_connections as usize));
+    let sqlx4k = Sqlx4k { runtime, pool, tx };
     SQLX4K.set(sqlx4k).unwrap();
     OK
 }
@@ -108,18 +109,96 @@ pub extern "C" fn sqlx4k_query(sql: *const c_char) -> c_int {
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_free(ptr: *mut Sqlx4kPgResult) {
-    let ptr: Sqlx4kPgResult = unsafe { *Box::from_raw(ptr) };
+pub extern "C" fn sqlx4k_fetch_all(sql: *const c_char) -> *mut Sqlx4kResult {
+    let sqlx4k = SQLX4K.get().unwrap();
+    let sql = c_chars_to_str(sql).unwrap();
+    let query = sqlx4k.pool.fetch_all(sql);
+    let result: Result<Vec<PgRow>, sqlx::Error> = sqlx4k.runtime.block_on(query);
+    let result = sqlx4k_result_of(result);
+    let result = Box::new(result);
+    let result = Box::leak(result);
+    result
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_tx_begin() -> c_long {
+    let sqlx4k = SQLX4K.get().unwrap();
+    let tx = sqlx4k.runtime.block_on(sqlx4k.pool.begin()).unwrap();
+    let id = {
+        let mut lock = sqlx4k.tx.write().unwrap();
+        let id = 1; // TODO: create an id.
+        lock.insert(id, tx);
+        id
+    };
+    id.into()
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_tx_commit(tx: c_long) {
+    let sqlx4k = SQLX4K.get().unwrap();
+    {
+        let mut lock = sqlx4k.tx.write().unwrap();
+        let tx = tx as u8;
+        let tx = lock.remove(&tx).unwrap();
+        sqlx4k.runtime.block_on(tx.commit()).unwrap();
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_tx_rollback(tx: c_long) {
+    let sqlx4k = SQLX4K.get().unwrap();
+    {
+        let mut lock = sqlx4k.tx.write().unwrap();
+        let tx = tx as u8;
+        let tx = lock.remove(&tx).unwrap();
+        sqlx4k.runtime.block_on(tx.rollback()).unwrap();
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_tx_query(tx: c_long, sql: *const c_char) -> c_int {
+    let sqlx4k = SQLX4K.get().unwrap();
+    let sql = c_chars_to_str(sql).unwrap();
+    {
+        let mut lock = sqlx4k.tx.write().unwrap();
+        let tx = tx as u8;
+        let tx = lock.get_mut(&tx).unwrap();
+        let query = tx.fetch_optional(sql);
+        let _result = sqlx4k.runtime.block_on(query).unwrap();
+    };
+    OK
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_tx_fetch_all(tx: c_long, sql: *const c_char) -> *mut Sqlx4kResult {
+    let sqlx4k = SQLX4K.get().unwrap();
+    let sql = c_chars_to_str(sql).unwrap();
+    let result = {
+        let mut lock = sqlx4k.tx.write().unwrap();
+        let tx = tx as u8;
+        let tx = lock.get_mut(&tx).unwrap();
+        let query = tx.fetch_all(sql);
+        let result: Result<Vec<PgRow>, sqlx::Error> = sqlx4k.runtime.block_on(query);
+        sqlx4k_result_of(result)
+    };
+    let result = Box::new(result);
+    let result = Box::leak(result);
+    result
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_free(ptr: *mut Sqlx4kResult) {
+    let ptr: Sqlx4kResult = unsafe { *Box::from_raw(ptr) };
 
     if ptr.error == 1 {
         let error_message = unsafe { CString::from_raw(ptr.error_message) };
         std::mem::drop(error_message);
     }
 
-    let rows: Vec<Sqlx4kPgRow> =
+    let rows: Vec<Sqlx4kRow> =
         unsafe { Vec::from_raw_parts(ptr.rows, ptr.size as usize, ptr.size as usize) };
     for row in rows {
-        let columns: Vec<Sqlx4kPgColumn> =
+        let columns: Vec<Sqlx4kColumn> =
             unsafe { Vec::from_raw_parts(row.columns, row.size as usize, row.size as usize) };
         for col in columns {
             let name = unsafe { CString::from_raw(col.name) };
@@ -131,36 +210,31 @@ pub extern "C" fn sqlx4k_free(ptr: *mut Sqlx4kPgResult) {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn sqlx4k_query_fetch_all(sql: *const c_char) -> *mut Sqlx4kPgResult {
-    let sqlx4k = SQLX4K.get().unwrap();
-    let sql = c_chars_to_str(sql).unwrap();
-    let query = sqlx4k.pool.fetch_all(sql);
-    let result: Result<Vec<sqlx::postgres::PgRow>, sqlx::Error> = sqlx4k.runtime.block_on(query);
-    let result: Sqlx4kPgResult = match result {
+fn sqlx4k_result_of(result: Result<Vec<PgRow>, sqlx::Error>) -> Sqlx4kResult {
+    match result {
         Ok(rows) => {
-            let mut rows: Vec<Sqlx4kPgRow> = rows.iter().map(|r| pgrow_to_sqlx4krow(r)).collect();
+            let mut rows: Vec<Sqlx4kRow> = rows.iter().map(|r| sqlx4k_row_of(r)).collect();
 
             // Make sure we're not wasting space.
             rows.shrink_to_fit();
             assert!(rows.len() == rows.capacity());
 
             let size = rows.len();
-            let rows: Box<[Sqlx4kPgRow]> = rows.into_boxed_slice();
-            let rows: &mut [Sqlx4kPgRow] = Box::leak(rows);
-            let rows: *mut Sqlx4kPgRow = rows.as_mut_ptr();
+            let rows: Box<[Sqlx4kRow]> = rows.into_boxed_slice();
+            let rows: &mut [Sqlx4kRow] = Box::leak(rows);
+            let rows: *mut Sqlx4kRow = rows.as_mut_ptr();
 
             // https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=d0e44ce1f765ce89523ef89ccd864e54
             // https://stackoverflow.com/questions/57616229/returning-array-from-rust-to-ffi
             // https://stackoverflow.com/questions/76706784/why-stdmemforget-cannot-be-used-for-creating-static-references
-            Sqlx4kPgResult {
+            Sqlx4kResult {
                 error: 0,
                 error_message: null_mut(),
                 size: size as c_int,
                 rows,
             }
         }
-        Err(err) => Sqlx4kPgResult {
+        Err(err) => Sqlx4kResult {
             error: 1,
             error_message: {
                 let message = match err {
@@ -178,25 +252,21 @@ pub extern "C" fn sqlx4k_query_fetch_all(sql: *const c_char) -> *mut Sqlx4kPgRes
             size: 0,
             rows: null_mut(),
         },
-    };
-
-    let result = Box::new(result);
-    let result = Box::leak(result);
-    result
+    }
 }
 
-fn pgrow_to_sqlx4krow(row: &PgRow) -> Sqlx4kPgRow {
+fn sqlx4k_row_of(row: &PgRow) -> Sqlx4kRow {
     let columns = row.columns();
     if columns.is_empty() {
-        Sqlx4kPgRow::default()
+        Sqlx4kRow::default()
     } else {
-        let mut columns: Vec<Sqlx4kPgColumn> = row
+        let mut columns: Vec<Sqlx4kColumn> = row
             .columns()
             .iter()
             .map(|c| {
                 let v: &PgValueRef = &row.try_get_raw(c.ordinal()).unwrap();
-                let (kind, size, value) = pgvalueref_to_sqlx4kvalue(v);
-                Sqlx4kPgColumn {
+                let (kind, size, value) = sqlx4k_value_of(v);
+                Sqlx4kColumn {
                     ordinal: c.ordinal() as c_int,
                     name: CString::new(c.name()).unwrap().into_raw(),
                     kind,
@@ -211,18 +281,18 @@ fn pgrow_to_sqlx4krow(row: &PgRow) -> Sqlx4kPgRow {
         assert!(columns.len() == columns.capacity());
 
         let size = columns.len();
-        let columns: Box<[Sqlx4kPgColumn]> = columns.into_boxed_slice();
-        let columns: &mut [Sqlx4kPgColumn] = Box::leak(columns);
-        let columns: *mut Sqlx4kPgColumn = columns.as_mut_ptr();
+        let columns: Box<[Sqlx4kColumn]> = columns.into_boxed_slice();
+        let columns: &mut [Sqlx4kColumn] = Box::leak(columns);
+        let columns: *mut Sqlx4kColumn = columns.as_mut_ptr();
 
-        Sqlx4kPgRow {
+        Sqlx4kRow {
             size: size as c_int,
             columns,
         }
     }
 }
 
-fn pgvalueref_to_sqlx4kvalue(value: &PgValueRef) -> (i32, usize, *mut c_void) {
+fn sqlx4k_value_of(value: &PgValueRef) -> (i32, usize, *mut c_void) {
     let info: std::borrow::Cow<sqlx::postgres::PgTypeInfo> = value.type_info();
     let kind: i32 = match info.name() {
         "BOOL" => 1,
