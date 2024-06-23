@@ -1,4 +1,4 @@
-import io.github.smyrgeorge.sqlx4k.ReportedError.Companion.checkExitCode
+import io.github.smyrgeorge.sqlx4k.orThrow
 import io.github.smyrgeorge.sqlx4k.toStr
 import io.github.smyrgeorge.sqlx4k.use
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -16,7 +16,8 @@ import librust_lib.sqlx4k_tx_rollback
 
 @OptIn(ExperimentalForeignApi::class)
 fun main() {
-    sqlx4k_hello("Hello from kotlin.".cstr).checkExitCode()
+    sqlx4k_hello("Hello from kotlin.".cstr).orThrow()
+
     sqlx4k_of(
         host = "localhost",
         port = cValuesOf(15432),
@@ -24,12 +25,12 @@ fun main() {
         password = "postgres",
         database = "test",
         max_connections = cValuesOf(10)
-    ).checkExitCode()
+    ).orThrow()
 
-    sqlx4k_query("drop table if exists sqlx4k;").checkExitCode()
-    sqlx4k_query("create table if not exists sqlx4k(id integer);").checkExitCode()
-    sqlx4k_query("insert into sqlx4k (id) values (65);").checkExitCode()
-    sqlx4k_query("insert into sqlx4k (id) values (66);").checkExitCode()
+    sqlx4k_query("drop table if exists sqlx4k;").orThrow()
+    sqlx4k_query("create table if not exists sqlx4k(id integer);").orThrow()
+    sqlx4k_query("insert into sqlx4k (id) values (65);").orThrow()
+    sqlx4k_query("insert into sqlx4k (id) values (66);").orThrow()
 
     sqlx4k_fetch_all("select * from sqlx4k;").use {
         println(it.toStr())
@@ -54,7 +55,7 @@ fun main() {
     println("\n\n\n::: TX :::")
 
     val tx1 = sqlx4k_tx_begin()
-    sqlx4k_tx_query(tx1, "delete from sqlx4k;").checkExitCode()
+    sqlx4k_tx_query(tx1, "delete from sqlx4k;").orThrow()
     sqlx4k_tx_fetch_all(tx1, "select * from sqlx4k;").use {
         println(it.toStr())
     }
@@ -67,8 +68,8 @@ fun main() {
     }
 
     val tx2 = sqlx4k_tx_begin()
-    sqlx4k_tx_query(tx2, "insert into sqlx4k (id) values (65);").checkExitCode()
-    sqlx4k_tx_query(tx2, "insert into sqlx4k (id) values (66);").checkExitCode()
+    sqlx4k_tx_query(tx2, "insert into sqlx4k (id) values (65);").orThrow()
+    sqlx4k_tx_query(tx2, "insert into sqlx4k (id) values (66);").orThrow()
     sqlx4k_tx_fetch_all(tx2, "select * from sqlx4k;").use {
         println(it.toStr())
     }

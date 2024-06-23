@@ -7,12 +7,44 @@ import kotlinx.cinterop.pointed
 import kotlinx.cinterop.readBytes
 import kotlinx.cinterop.toKString
 import librust_lib.Sqlx4kColumn
+import librust_lib.Sqlx4kQueryResult
 import librust_lib.Sqlx4kResult
 import librust_lib.Sqlx4kRow
-import librust_lib.sqlx4k_free
+import librust_lib.sqlx4k_free_query_result
+import librust_lib.sqlx4k_free_result
 
 @OptIn(ExperimentalForeignApi::class)
-fun Sqlx4kResult.toStr(): String = buildString {
+fun <T> CPointer<Sqlx4kResult>?.use(f: (it: Sqlx4kResult) -> T): T {
+    val res = this?.pointed?.let { f(it) }
+        ?: error("Could not extract the value from the raw pointer (null).")
+    // TODO: the above error can leak memory (the free will not be triggered).
+    sqlx4k_free_result(this)
+    return res
+}
+
+@OptIn(ExperimentalForeignApi::class)
+fun CPointer<Sqlx4kResult>?.orThrow() {
+    val error = use { Sqlx4kError(it.error, it.error_message?.toKString()) }
+    error.throwIfError()
+}
+
+@OptIn(ExperimentalForeignApi::class)
+fun <T> CPointer<Sqlx4kQueryResult>?.use(f: (it: Sqlx4kQueryResult) -> T): T {
+    val res = this?.pointed?.let { f(it) }
+        ?: error("Could not extract the value from the raw pointer (null).")
+    // TODO: the above error can leak memory (the free will not be triggered).
+    sqlx4k_free_query_result(this)
+    return res
+}
+
+@OptIn(ExperimentalForeignApi::class)
+fun CPointer<Sqlx4kQueryResult>?.orThrow() {
+    val error = use { Sqlx4kError(it.error, it.error_message?.toKString()) }
+    error.throwIfError()
+}
+
+@OptIn(ExperimentalForeignApi::class)
+fun Sqlx4kQueryResult.toStr(): String = buildString {
     append("\n[Sqlx4kPgResult]")
     append("\nerror: $error")
     append("\nerror_message: ${error_message?.toKString()}")
@@ -47,11 +79,4 @@ fun Sqlx4kColumn.toStr(): String {
         append("\n        size: $size")
         append("\n        value: ${value?.readBytes(size)?.toKString()}")
     }
-}
-
-@OptIn(ExperimentalForeignApi::class)
-fun CPointer<Sqlx4kResult>?.use(f: (it: Sqlx4kResult) -> Unit) {
-    val res = this?.pointed ?: error("Could not extract the value from the raw pointer (null).")
-    f(res)
-    sqlx4k_free(this)
 }

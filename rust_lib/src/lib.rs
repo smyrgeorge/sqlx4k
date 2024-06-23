@@ -4,15 +4,16 @@ use sqlx::{Row, TypeInfo, ValueRef};
 use std::collections::HashMap;
 use std::ffi::{c_long, c_void};
 use std::ptr::null_mut;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::RwLock;
 use std::{
-    ffi::{c_char, c_int, c_short, CStr, CString},
+    ffi::{c_char, c_int, CStr, CString},
     sync::OnceLock,
 };
 use tokio::runtime::Runtime;
 
 pub const OK: c_int = 0;
-pub const INVALID_TYPE_CONVERSION: c_int = 1;
+pub const INVALID_STRING_CONVERSION: c_int = 100;
 pub type ResultCode<T> = Result<T, c_int>;
 
 static SQLX4K: OnceLock<Sqlx4k> = OnceLock::new();
@@ -21,12 +22,28 @@ static SQLX4K: OnceLock<Sqlx4k> = OnceLock::new();
 pub struct Sqlx4k<'a> {
     runtime: Runtime,
     pool: PgPool,
-    tx: RwLock<HashMap<u8, sqlx::Transaction<'a, sqlx::Postgres>>>,
+    tx: RwLock<HashMap<i64, sqlx::Transaction<'a, sqlx::Postgres>>>,
+    tx_id_generator: AtomicI64,
 }
 
 #[repr(C)]
 pub struct Sqlx4kResult {
-    pub error: c_short,
+    pub error: c_int,
+    pub error_message: *mut c_char,
+}
+
+impl Default for Sqlx4kResult {
+    fn default() -> Self {
+        Self {
+            error: OK,
+            error_message: null_mut(),
+        }
+    }
+}
+
+#[repr(C)]
+pub struct Sqlx4kQueryResult {
+    pub error: c_int,
     pub error_message: *mut c_char,
     pub size: c_int,
     pub rows: *mut Sqlx4kRow,
@@ -57,9 +74,9 @@ pub struct Sqlx4kColumn {
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_hello(msg: *mut c_char) -> c_int {
+pub extern "C" fn sqlx4k_hello(msg: *mut c_char) -> *mut Sqlx4kResult {
     println!("Rust: {}.", c_chars_to_str(msg).unwrap());
-    OK
+    ok()
 }
 
 #[no_mangle]
@@ -70,7 +87,7 @@ pub extern "C" fn sqlx4k_of(
     password: *const c_char,
     database: *const c_char,
     max_connections: *const c_int,
-) -> c_int {
+) -> *mut Sqlx4kResult {
     let host = c_chars_to_str(host).unwrap();
     let port = c_int_to_i32(port).unwrap();
     let username = c_chars_to_str(username).unwrap();
@@ -79,7 +96,7 @@ pub extern "C" fn sqlx4k_of(
     let max_connections = c_int_to_i32(max_connections).unwrap();
 
     let url = format!(
-        "postgres://{}:{}@{}:{}/{}",
+        "postgres://{}:{}@{}:{:?}/{}",
         username, password, host, port, database
     );
 
@@ -94,22 +111,28 @@ pub extern "C" fn sqlx4k_of(
     let pool: PgPool = runtime.block_on(pool).unwrap();
     // Create the transaction keeper here.
     let tx = RwLock::new(HashMap::with_capacity(max_connections as usize));
-    let sqlx4k = Sqlx4k { runtime, pool, tx };
+    let tx_id_generator = AtomicI64::new(0);
+    let sqlx4k = Sqlx4k {
+        runtime,
+        pool,
+        tx,
+        tx_id_generator,
+    };
     SQLX4K.set(sqlx4k).unwrap();
-    OK
+    ok()
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_query(sql: *const c_char) -> c_int {
+pub extern "C" fn sqlx4k_query(sql: *const c_char) -> *mut Sqlx4kResult {
     let sqlx4k = SQLX4K.get().unwrap();
     let sql = c_chars_to_str(sql).unwrap();
     let query = sqlx::query(sql).fetch_optional(&sqlx4k.pool);
     let _result = sqlx4k.runtime.block_on(query).unwrap();
-    OK
+    ok()
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_fetch_all(sql: *const c_char) -> *mut Sqlx4kResult {
+pub extern "C" fn sqlx4k_fetch_all(sql: *const c_char) -> *mut Sqlx4kQueryResult {
     let sqlx4k = SQLX4K.get().unwrap();
     let sql = c_chars_to_str(sql).unwrap();
     let query = sqlx4k.pool.fetch_all(sql);
@@ -126,8 +149,17 @@ pub extern "C" fn sqlx4k_tx_begin() -> c_long {
     let tx = sqlx4k.runtime.block_on(sqlx4k.pool.begin()).unwrap();
     let id = {
         let mut lock = sqlx4k.tx.write().unwrap();
-        let id = 1; // TODO: create an id.
-        lock.insert(id, tx);
+        let id = sqlx4k.tx_id_generator.fetch_add(1, Ordering::SeqCst);
+
+        // Reset the tx id generator to zero to prevent overflow.
+        if id > 999_999_999_999 {
+            sqlx4k.tx_id_generator.store(0, Ordering::SeqCst)
+        }
+
+        // If tx id exists, the driver will panic.
+        if let Some(id) = lock.insert(id, tx) {
+            panic!("Encountered dublicate tx id={:?}.", id);
+        }
         id
     };
     id.into()
@@ -138,7 +170,6 @@ pub extern "C" fn sqlx4k_tx_commit(tx: c_long) {
     let sqlx4k = SQLX4K.get().unwrap();
     {
         let mut lock = sqlx4k.tx.write().unwrap();
-        let tx = tx as u8;
         let tx = lock.remove(&tx).unwrap();
         sqlx4k.runtime.block_on(tx.commit()).unwrap();
     }
@@ -149,33 +180,30 @@ pub extern "C" fn sqlx4k_tx_rollback(tx: c_long) {
     let sqlx4k = SQLX4K.get().unwrap();
     {
         let mut lock = sqlx4k.tx.write().unwrap();
-        let tx = tx as u8;
         let tx = lock.remove(&tx).unwrap();
         sqlx4k.runtime.block_on(tx.rollback()).unwrap();
     }
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_tx_query(tx: c_long, sql: *const c_char) -> c_int {
+pub extern "C" fn sqlx4k_tx_query(tx: c_long, sql: *const c_char) -> *mut Sqlx4kResult {
     let sqlx4k = SQLX4K.get().unwrap();
     let sql = c_chars_to_str(sql).unwrap();
     {
         let mut lock = sqlx4k.tx.write().unwrap();
-        let tx = tx as u8;
         let tx = lock.get_mut(&tx).unwrap();
         let query = tx.fetch_optional(sql);
         let _result = sqlx4k.runtime.block_on(query).unwrap();
     };
-    OK
+    ok()
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_tx_fetch_all(tx: c_long, sql: *const c_char) -> *mut Sqlx4kResult {
+pub extern "C" fn sqlx4k_tx_fetch_all(tx: c_long, sql: *const c_char) -> *mut Sqlx4kQueryResult {
     let sqlx4k = SQLX4K.get().unwrap();
     let sql = c_chars_to_str(sql).unwrap();
     let result = {
         let mut lock = sqlx4k.tx.write().unwrap();
-        let tx = tx as u8;
         let tx = lock.get_mut(&tx).unwrap();
         let query = tx.fetch_all(sql);
         let result: Result<Vec<PgRow>, sqlx::Error> = sqlx4k.runtime.block_on(query);
@@ -187,10 +215,20 @@ pub extern "C" fn sqlx4k_tx_fetch_all(tx: c_long, sql: *const c_char) -> *mut Sq
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_free(ptr: *mut Sqlx4kResult) {
+pub extern "C" fn sqlx4k_free_result(ptr: *mut Sqlx4kResult) {
     let ptr: Sqlx4kResult = unsafe { *Box::from_raw(ptr) };
 
-    if ptr.error == 1 {
+    if ptr.error > 0 {
+        let error_message = unsafe { CString::from_raw(ptr.error_message) };
+        std::mem::drop(error_message);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_free_query_result(ptr: *mut Sqlx4kQueryResult) {
+    let ptr: Sqlx4kQueryResult = unsafe { *Box::from_raw(ptr) };
+
+    if ptr.error > 0 {
         let error_message = unsafe { CString::from_raw(ptr.error_message) };
         std::mem::drop(error_message);
     }
@@ -210,7 +248,7 @@ pub extern "C" fn sqlx4k_free(ptr: *mut Sqlx4kResult) {
     }
 }
 
-fn sqlx4k_result_of(result: Result<Vec<PgRow>, sqlx::Error>) -> Sqlx4kResult {
+fn sqlx4k_result_of(result: Result<Vec<PgRow>, sqlx::Error>) -> Sqlx4kQueryResult {
     match result {
         Ok(rows) => {
             let mut rows: Vec<Sqlx4kRow> = rows.iter().map(|r| sqlx4k_row_of(r)).collect();
@@ -227,14 +265,14 @@ fn sqlx4k_result_of(result: Result<Vec<PgRow>, sqlx::Error>) -> Sqlx4kResult {
             // https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=d0e44ce1f765ce89523ef89ccd864e54
             // https://stackoverflow.com/questions/57616229/returning-array-from-rust-to-ffi
             // https://stackoverflow.com/questions/76706784/why-stdmemforget-cannot-be-used-for-creating-static-references
-            Sqlx4kResult {
+            Sqlx4kQueryResult {
                 error: 0,
                 error_message: null_mut(),
                 size: size as c_int,
                 rows,
             }
         }
-        Err(err) => Sqlx4kResult {
+        Err(err) => Sqlx4kQueryResult {
             error: 1,
             error_message: {
                 let message = match err {
@@ -329,9 +367,16 @@ fn sqlx4k_value_of(value: &PgValueRef) -> (i32, usize, *mut c_void) {
     (kind, size, value)
 }
 
+fn ok() -> *mut Sqlx4kResult {
+    let ok = Sqlx4kResult::default();
+    let ok = Box::new(ok);
+    let ok = Box::leak(ok);
+    ok
+}
+
 fn c_chars_to_str<'a>(c_chars: *const c_char) -> ResultCode<&'a str> {
     let c_str = unsafe { CStr::from_ptr(c_chars) };
-    let str = c_str.to_str().map_err(|_| INVALID_TYPE_CONVERSION)?;
+    let str = c_str.to_str().map_err(|_| INVALID_STRING_CONVERSION)?;
     Ok(str)
 }
 
