@@ -46,12 +46,14 @@ See `Main.kt` file for more examples.
 // Initialize the connection pool.
 sqlx4k_of(
     host = "localhost",
-    port = cValuesOf(15432),
+    port = 15432,
     username = "postgres",
     password = "postgres",
     database = "test",
-    max_connections = cValuesOf(10)
-).checkExitCode()
+    max_connections = 10
+).orThrow()
+
+sqlx4k_query("drop table if exists sqlx4k;").orThrow()
 
 // Make a simple query.
 sqlx4k_fetch_all("select * from sqlx4k;").use {
@@ -63,7 +65,7 @@ Also, we do make support transactions
 
 ```kotlin
 val tx1 = sqlx4k_tx_begin()
-sqlx4k_tx_query(tx1, "delete from sqlx4k;").checkExitCode()
+sqlx4k_tx_query(tx1, "delete from sqlx4k;").orThrow()
 sqlx4k_tx_fetch_all(tx1, "select * from sqlx4k;").use {
     println(it.toStr())
 }

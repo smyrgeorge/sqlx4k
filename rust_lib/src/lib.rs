@@ -1,7 +1,7 @@
 use sqlx::postgres::{PgPool, PgPoolOptions, PgRow, PgValueFormat, PgValueRef};
 use sqlx::{Column, Executor, Postgres, Transaction};
 use sqlx::{Row, TypeInfo, ValueRef};
-use std::ffi::{c_long, c_void};
+use std::ffi::c_void;
 use std::ptr::null_mut;
 use std::sync::RwLock;
 use std::{
@@ -40,7 +40,7 @@ static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 #[derive(Debug)]
 struct Sqlx4k<'a> {
     pool: PgPool,
-    tx_id: RwLock<Vec<u8>>,
+    tx_id: RwLock<Vec<i32>>,
     tx: &'a mut [*mut Transaction<'a, Postgres>],
 }
 
@@ -55,7 +55,7 @@ impl<'a> Sqlx4k<'a> {
         result
     }
 
-    async fn tx_begin(&mut self) -> i64 {
+    async fn tx_begin(&mut self) -> i32 {
         let tx = self.pool.begin().await.unwrap();
         let id = { self.tx_id.write().unwrap().pop().unwrap() } as usize;
         if self.tx[id] != null_mut() {
@@ -64,10 +64,10 @@ impl<'a> Sqlx4k<'a> {
         let tx = Box::new(tx);
         let tx = Box::leak(tx);
         self.tx[id] = tx;
-        id as i64
+        id as i32
     }
 
-    async fn tx_commit(&mut self, tx: i64) {
+    async fn tx_commit(&mut self, tx: i32) {
         let id = tx as usize;
         let tx = self.tx[id];
         if tx == null_mut() {
@@ -76,10 +76,10 @@ impl<'a> Sqlx4k<'a> {
         let tx = unsafe { *Box::from_raw(tx) };
         self.tx[id] = null_mut();
         tx.commit().await.unwrap();
-        self.tx_id.write().unwrap().push(id as u8)
+        self.tx_id.write().unwrap().push(id as i32)
     }
 
-    async fn tx_rollback(&mut self, tx: i64) {
+    async fn tx_rollback(&mut self, tx: i32) {
         let id = tx as usize;
         let tx = self.tx[id];
         if tx == null_mut() {
@@ -88,10 +88,10 @@ impl<'a> Sqlx4k<'a> {
         let tx = unsafe { *Box::from_raw(tx) };
         self.tx[id] = null_mut();
         tx.rollback().await.unwrap();
-        self.tx_id.write().unwrap().push(id as u8)
+        self.tx_id.write().unwrap().push(id as i32)
     }
 
-    async fn tx_query(&mut self, tx: i64, sql: &str) {
+    async fn tx_query(&mut self, tx: i32, sql: &str) {
         let id = tx as usize;
         let tx = self.tx[id];
         if tx == null_mut() {
@@ -104,7 +104,7 @@ impl<'a> Sqlx4k<'a> {
         self.tx[id] = tx;
     }
 
-    async fn tx_fetch_all(&mut self, tx: i64, sql: &str) -> Sqlx4kQueryResult {
+    async fn tx_fetch_all(&mut self, tx: i32, sql: &str) -> Sqlx4kQueryResult {
         let id = tx as usize;
         let tx = self.tx[id];
         if tx == null_mut() {
@@ -202,8 +202,8 @@ pub extern "C" fn sqlx4k_of(
     // Create the pool here.
     let pool: PgPool = runtime.block_on(pool).unwrap();
     // Create the transaction holder here.
-    let tx_id: RwLock<Vec<u8>> = RwLock::new((0..=max_connections as u8 - 1).collect());
-    let mut tx: Vec<*mut Transaction<Postgres>> = (0..=max_connections as u8 - 1)
+    let tx_id: RwLock<Vec<i32>> = RwLock::new((0..=max_connections as i32 - 1).collect());
+    let mut tx: Vec<*mut Transaction<Postgres>> = (0..=max_connections as i32 - 1)
         .map(|_| null_mut())
         .collect();
 
@@ -248,28 +248,28 @@ pub extern "C" fn sqlx4k_fetch_all(sql: *const c_char) -> *mut Sqlx4kQueryResult
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_tx_begin() -> c_long {
+pub extern "C" fn sqlx4k_tx_begin() -> c_int {
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
     runtime.block_on(sqlx4k.tx_begin()).into()
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_tx_commit(tx: c_long) {
+pub extern "C" fn sqlx4k_tx_commit(tx: c_int) {
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
     runtime.block_on(sqlx4k.tx_commit(tx));
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_tx_rollback(tx: c_long) {
+pub extern "C" fn sqlx4k_tx_rollback(tx: c_int) {
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
     runtime.block_on(sqlx4k.tx_rollback(tx));
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_tx_query(tx: c_long, sql: *const c_char) -> *mut Sqlx4kResult {
+pub extern "C" fn sqlx4k_tx_query(tx: c_int, sql: *const c_char) -> *mut Sqlx4kResult {
     let sql = c_chars_to_str(sql).unwrap();
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
@@ -278,7 +278,7 @@ pub extern "C" fn sqlx4k_tx_query(tx: c_long, sql: *const c_char) -> *mut Sqlx4k
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_tx_fetch_all(tx: c_long, sql: *const c_char) -> *mut Sqlx4kQueryResult {
+pub extern "C" fn sqlx4k_tx_fetch_all(tx: c_int, sql: *const c_char) -> *mut Sqlx4kQueryResult {
     let sql = c_chars_to_str(sql).unwrap();
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
