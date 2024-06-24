@@ -1,7 +1,6 @@
 use sqlx::postgres::{PgPool, PgPoolOptions, PgRow, PgValueFormat, PgValueRef};
-use sqlx::{Column, Executor};
+use sqlx::{Column, Executor, Postgres, Transaction};
 use sqlx::{Row, TypeInfo, ValueRef};
-use std::collections::HashMap;
 use std::ffi::{c_long, c_void};
 use std::ptr::null_mut;
 use std::sync::RwLock;
@@ -15,15 +14,90 @@ pub const OK: c_int = 0;
 pub const INVALID_STRING_CONVERSION: c_int = 100;
 pub type ResultCode<T> = Result<T, c_int>;
 
-static SQLX4K: OnceLock<Sqlx4k> = OnceLock::new();
+static mut SQLX4K: OnceLock<Sqlx4k> = OnceLock::new();
+static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
 #[derive(Debug)]
-pub struct Sqlx4k<'a> {
-    runtime: Runtime,
+struct Sqlx4k<'a> {
     pool: PgPool,
-    tx: RwLock<(i64, HashMap<i64, sqlx::Transaction<'a, sqlx::Postgres>>)>,
+    tx_id: RwLock<Vec<u8>>,
+    tx: &'a mut [*mut Transaction<'a, Postgres>],
 }
-// tx: Vec<sqlx::Transaction<'a, sqlx::Postgres>>,
+
+impl<'a> Sqlx4k<'a> {
+    async fn query(&self, sql: &str) {
+        let _result = self.pool.fetch_optional(sql).await.unwrap();
+    }
+
+    async fn fetch_all(&self, sql: &str) -> Sqlx4kQueryResult {
+        let result: Result<Vec<PgRow>, sqlx::Error> = self.pool.fetch_all(sql).await;
+        let result = sqlx4k_result_of(result);
+        result
+    }
+
+    async fn tx_begin(&mut self) -> i64 {
+        let tx = self.pool.begin().await.unwrap();
+        let id = { self.tx_id.write().unwrap().pop().unwrap() } as usize;
+        if self.tx[id] != null_mut() {
+            panic!("Encountered dublicate tx, id={:?}.", id);
+        }
+        let tx = Box::new(tx);
+        let tx = Box::leak(tx);
+        self.tx[id] = tx;
+        id as i64
+    }
+
+    async fn tx_commit(&mut self, tx: i64) {
+        let id = tx as usize;
+        let tx = self.tx[id];
+        if tx == null_mut() {
+            panic!("Attempted to commit null tx, id={}.", id);
+        }
+        let tx = unsafe { *Box::from_raw(tx) };
+        self.tx[id] = null_mut();
+        tx.commit().await.unwrap();
+        self.tx_id.write().unwrap().push(id as u8)
+    }
+
+    async fn tx_rollback(&mut self, tx: i64) {
+        let id = tx as usize;
+        let tx = self.tx[id];
+        if tx == null_mut() {
+            panic!("Attempted to rollback null tx, id={}.", id);
+        }
+        let tx = unsafe { *Box::from_raw(tx) };
+        self.tx[id] = null_mut();
+        tx.rollback().await.unwrap();
+        self.tx_id.write().unwrap().push(id as u8)
+    }
+
+    async fn tx_query(&mut self, tx: i64, sql: &str) {
+        let id = tx as usize;
+        let tx = self.tx[id];
+        if tx == null_mut() {
+            panic!("Attempted to query null tx, id={}.", id);
+        }
+        let mut tx = unsafe { *Box::from_raw(tx) };
+        tx.fetch_optional(sql).await.unwrap();
+        let tx = Box::new(tx);
+        let tx = Box::leak(tx);
+        self.tx[id] = tx;
+    }
+
+    async fn tx_fetch_all(&mut self, tx: i64, sql: &str) -> Sqlx4kQueryResult {
+        let id = tx as usize;
+        let tx = self.tx[id];
+        if tx == null_mut() {
+            panic!("Attempted to query null tx, id={}.", id);
+        }
+        let mut tx = unsafe { *Box::from_raw(tx) };
+        let result = tx.fetch_all(sql).await;
+        let tx = Box::new(tx);
+        let tx = Box::leak(tx);
+        self.tx[id] = tx;
+        sqlx4k_result_of(result)
+    }
+}
 
 #[repr(C)]
 pub struct Sqlx4kResult {
@@ -101,6 +175,7 @@ pub extern "C" fn sqlx4k_of(
 
     // Create the tokio runtime.
     let runtime = Runtime::new().unwrap();
+
     // Create the db pool options.
     let pool = PgPoolOptions::new()
         .max_connections(max_connections as u32)
@@ -109,30 +184,36 @@ pub extern "C" fn sqlx4k_of(
     // Create the pool here.
     let pool: PgPool = runtime.block_on(pool).unwrap();
     // Create the transaction holder here.
-    let tx: RwLock<(i64, HashMap<i64, sqlx::Transaction<sqlx::Postgres>>)> =
-        RwLock::new((0, HashMap::with_capacity(max_connections as usize)));
-    // let tx: Vec<sqlx::Transaction<sqlx::Postgres>> = Vec::with_capacity(max_connections as usize);
-    let sqlx4k = Sqlx4k { runtime, pool, tx };
-    SQLX4K.set(sqlx4k).unwrap();
+    let tx_id: RwLock<Vec<u8>> = RwLock::new((0..=max_connections as u8 - 1).collect());
+    let mut tx: Vec<*mut Transaction<Postgres>> = (0..=max_connections as u8 - 1)
+        .map(|_| null_mut())
+        .collect();
+
+    tx.shrink_to_fit();
+    let tx = Box::leak(tx.into_boxed_slice());
+    let sqlx4k = Sqlx4k { pool, tx_id, tx };
+
+    RUNTIME.set(runtime).unwrap();
+    unsafe { SQLX4K.set(sqlx4k).unwrap() };
+
     ok()
 }
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_query(sql: *const c_char) -> *mut Sqlx4kResult {
-    let sqlx4k = SQLX4K.get().unwrap();
     let sql = c_chars_to_str(sql).unwrap();
-    let query = sqlx::query(sql).fetch_optional(&sqlx4k.pool);
-    let _result = sqlx4k.runtime.block_on(query).unwrap();
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { SQLX4K.get().unwrap() };
+    runtime.block_on(sqlx4k.query(sql));
     ok()
 }
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_fetch_all(sql: *const c_char) -> *mut Sqlx4kQueryResult {
-    let sqlx4k = SQLX4K.get().unwrap();
     let sql = c_chars_to_str(sql).unwrap();
-    let query = sqlx4k.pool.fetch_all(sql);
-    let result: Result<Vec<PgRow>, sqlx::Error> = sqlx4k.runtime.block_on(query);
-    let result = sqlx4k_result_of(result);
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { SQLX4K.get().unwrap() };
+    let result = runtime.block_on(sqlx4k.fetch_all(sql));
     let result = Box::new(result);
     let result = Box::leak(result);
     result
@@ -140,70 +221,40 @@ pub extern "C" fn sqlx4k_fetch_all(sql: *const c_char) -> *mut Sqlx4kQueryResult
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_tx_begin() -> c_long {
-    let sqlx4k = SQLX4K.get().unwrap();
-    let tx = sqlx4k.runtime.block_on(sqlx4k.pool.begin()).unwrap();
-    let id = {
-        let mut lock = sqlx4k.tx.write().unwrap();
-
-        let id = lock.0 + 1;
-        if id > 999_999_999_999 {
-            // Reset the tx id generator to zero to prevent overflow.
-            lock.0 = 0;
-        }
-
-        // If tx id exists, the driver will panic.
-        if let Some(id) = lock.1.insert(id, tx) {
-            panic!("Encountered dublicate tx id={:?}.", id);
-        }
-        id
-    };
-    id.into()
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
+    runtime.block_on(sqlx4k.tx_begin()).into()
 }
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_tx_commit(tx: c_long) {
-    let sqlx4k = SQLX4K.get().unwrap();
-    {
-        let mut lock = sqlx4k.tx.write().unwrap();
-        let tx = lock.1.remove(&tx).unwrap();
-        sqlx4k.runtime.block_on(tx.commit()).unwrap();
-    }
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
+    runtime.block_on(sqlx4k.tx_commit(tx));
 }
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_tx_rollback(tx: c_long) {
-    let sqlx4k = SQLX4K.get().unwrap();
-    {
-        let mut lock = sqlx4k.tx.write().unwrap();
-        let tx = lock.1.remove(&tx).unwrap();
-        sqlx4k.runtime.block_on(tx.rollback()).unwrap();
-    }
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
+    runtime.block_on(sqlx4k.tx_rollback(tx));
 }
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_tx_query(tx: c_long, sql: *const c_char) -> *mut Sqlx4kResult {
-    let sqlx4k = SQLX4K.get().unwrap();
     let sql = c_chars_to_str(sql).unwrap();
-    {
-        let mut lock = sqlx4k.tx.write().unwrap();
-        let tx = lock.1.get_mut(&tx).unwrap();
-        let query = tx.fetch_optional(sql);
-        let _result = sqlx4k.runtime.block_on(query).unwrap();
-    };
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
+    runtime.block_on(sqlx4k.tx_query(tx, sql));
     ok()
 }
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_tx_fetch_all(tx: c_long, sql: *const c_char) -> *mut Sqlx4kQueryResult {
-    let sqlx4k = SQLX4K.get().unwrap();
     let sql = c_chars_to_str(sql).unwrap();
-    let result = {
-        let mut lock = sqlx4k.tx.write().unwrap();
-        let tx = lock.1.get_mut(&tx).unwrap();
-        let query = tx.fetch_all(sql);
-        let result: Result<Vec<PgRow>, sqlx::Error> = sqlx4k.runtime.block_on(query);
-        sqlx4k_result_of(result)
-    };
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
+    let result = runtime.block_on(sqlx4k.tx_fetch_all(tx, sql));
     let result = Box::new(result);
     let result = Box::leak(result);
     result
@@ -226,6 +277,10 @@ pub extern "C" fn sqlx4k_free_query_result(ptr: *mut Sqlx4kQueryResult) {
     if ptr.error > 0 {
         let error_message = unsafe { CString::from_raw(ptr.error_message) };
         std::mem::drop(error_message);
+    }
+
+    if ptr.rows == null_mut() {
+        return;
     }
 
     let rows: Vec<Sqlx4kRow> =

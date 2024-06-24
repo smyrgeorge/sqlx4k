@@ -88,6 +88,27 @@ Then run the `main` method.
 ./build/bin/macosArm64/releaseExecutable/sqlx4k
 ```
 
+## Checking for memory leaks
+
+### MacOs
+Check for memory leaks with the `leaks` tool.
+First sign you binary:
+```shell
+codesign -s - -v -f --entitlements =(echo -n '<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd"\>
+<plist version="1.0">
+    <dict>
+        <key>com.apple.security.get-task-allow</key>
+        <true/>
+    </dict>
+</plist>') ./build/bin/macosArm64/releaseExecutable/sqlx4k
+```
+
+Then run the tool:
+```shell
+leaks -atExit -- ./build/bin/macosArm64/releaseExecutable/sqlx4k
+```
+
 ## References
 - https://kotlinlang.org/docs/multiplatform.html
 - https://kotlinlang.org/docs/native-c-interop.html

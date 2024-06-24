@@ -80,4 +80,8 @@ fun main() {
     sqlx4k_fetch_all("select * from sqlx4k;").use {
         println(it.toStr())
     }
+
+
+
+
 }
