@@ -218,6 +218,16 @@ pub extern "C" fn sqlx4k_of(
 }
 
 #[no_mangle]
+pub extern "C" fn sqlx4k_pool_size() -> c_int {
+    unsafe { SQLX4K.get().unwrap() }.pool.size() as c_int
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_pool_idle_size() -> c_int {
+    unsafe { SQLX4K.get().unwrap() }.pool.num_idle() as c_int
+}
+
+#[no_mangle]
 pub extern "C" fn sqlx4k_query(sql: *const c_char) -> *mut Sqlx4kResult {
     let sql = c_chars_to_str(sql).unwrap();
     let runtime = RUNTIME.get().unwrap();
