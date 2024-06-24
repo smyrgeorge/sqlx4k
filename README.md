@@ -144,3 +144,6 @@ Process 36668: 0 leaks for 0 total leaked bytes.
 - https://kotlinlang.org/docs/native-c-interop.html
 - https://github.com/launchbadge/sqlx
 - https://github.com/avan1235/kotlin-native-rust-interop
+- https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=d0e44ce1f765ce89523ef89ccd864e54
+- https://stackoverflow.com/questions/57616229/returning-array-from-rust-to-ffi
+- https://stackoverflow.com/questions/76706784/why-stdmemforget-cannot-be-used-for-creating-static-references

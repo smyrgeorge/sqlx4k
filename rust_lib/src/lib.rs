@@ -12,6 +12,26 @@ use tokio::runtime::Runtime;
 
 pub const OK: c_int = 0;
 pub const INVALID_STRING_CONVERSION: c_int = 100;
+
+pub const TYPE_BOOL: c_int = 1000;
+pub const TYPE_INT2: c_int = 1001;
+pub const TYPE_INT4: c_int = 1002;
+pub const TYPE_INT8: c_int = 1003;
+pub const TYPE_FLOAT4: c_int = 1004;
+pub const TYPE_FLOAT8: c_int = 1005;
+pub const TYPE_NUMERIC: c_int = 1006;
+pub const TYPE_CHAR: c_int = 1007;
+pub const TYPE_VARCHAR: c_int = 1008;
+pub const TYPE_TEXT: c_int = 1009;
+pub const TYPE_TIMESTAMP: c_int = 1010;
+pub const TYPE_TIMESTAMPTZ: c_int = 1011;
+pub const TYPE_DATE: c_int = 1012;
+pub const TYPE_TIME: c_int = 1013;
+pub const TYPE_BYTEA: c_int = 1014;
+pub const TYPE_UUID: c_int = 1015;
+pub const TYPE_JSON: c_int = 1016;
+pub const TYPE_JSONB: c_int = 1017;
+
 pub type ResultCode<T> = Result<T, c_int>;
 
 static mut SQLX4K: OnceLock<Sqlx4k> = OnceLock::new();
@@ -310,9 +330,6 @@ fn sqlx4k_result_of(result: Result<Vec<PgRow>, sqlx::Error>) -> Sqlx4kQueryResul
             let rows: &mut [Sqlx4kRow] = Box::leak(rows);
             let rows: *mut Sqlx4kRow = rows.as_mut_ptr();
 
-            // https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=d0e44ce1f765ce89523ef89ccd864e54
-            // https://stackoverflow.com/questions/57616229/returning-array-from-rust-to-ffi
-            // https://stackoverflow.com/questions/76706784/why-stdmemforget-cannot-be-used-for-creating-static-references
             Sqlx4kQueryResult {
                 error: 0,
                 error_message: null_mut(),
@@ -378,29 +395,33 @@ fn sqlx4k_row_of(row: &PgRow) -> Sqlx4kRow {
     }
 }
 
-fn sqlx4k_value_of(value: &PgValueRef) -> (i32, usize, *mut c_void) {
+fn sqlx4k_value_of(value: &PgValueRef) -> (c_int, usize, *mut c_void) {
     let info: std::borrow::Cow<sqlx::postgres::PgTypeInfo> = value.type_info();
-    let kind: i32 = match info.name() {
-        "BOOL" => 1,
-        "INT2" | "INT4" => 2,
-        "INT8" => 3,
-        "FLOAT4" => 4,
-        "FLOAT8" => 5,
-        "NUMERIC" => 6,
-        "CHAR" | "VARCHAR" | "TEXT" => 7,
-        "TIMESTAMP" => 8,
-        "TIMESTAMPTZ" => 9,
-        "DATE" => 10,
-        "TIME" => 11,
-        "BYTEA" => 12,
-        "UUID" => 13,
-        "JSON" | "JSONB" => 14,
-        _ => panic!("Could not map value of type {}.", info.name()),
+    let kind: c_int = match info.name() {
+        "BOOL" => TYPE_BOOL,
+        "INT2" => TYPE_INT2,
+        "INT4" => TYPE_INT4,
+        "INT8" => TYPE_INT8,
+        "FLOAT4" => TYPE_FLOAT4,
+        "FLOAT8" => TYPE_FLOAT8,
+        "NUMERIC" => TYPE_NUMERIC,
+        "CHAR" => TYPE_CHAR,
+        "VARCHAR" => TYPE_VARCHAR,
+        "TEXT" => TYPE_TEXT,
+        "TIMESTAMP" => TYPE_TIMESTAMP,
+        "TIMESTAMPTZ" => TYPE_TIMESTAMPTZ,
+        "DATE" => TYPE_DATE,
+        "TIME" => TYPE_TIME,
+        "BYTEA" => TYPE_BYTEA,
+        "UUID" => TYPE_UUID,
+        "JSON" => TYPE_JSON,
+        "JSONB" => TYPE_JSONB,
+        _ => panic!("Unsupported type value {}.", info.name()),
     };
 
     let bytes: &[u8] = match value.format() {
         PgValueFormat::Text => value.as_str().unwrap().as_bytes(),
-        PgValueFormat::Binary => todo!("Is not implemented yet."),
+        PgValueFormat::Binary => todo!("Binary format is not implemented yet."),
         // PgValueFormat::Binary => value.as_bytes().unwrap(),
     };
 
