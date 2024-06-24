@@ -1,9 +1,11 @@
+import io.github.smyrgeorge.sqlx4k.forEachParallel
 import io.github.smyrgeorge.sqlx4k.orThrow
 import io.github.smyrgeorge.sqlx4k.toStr
 import io.github.smyrgeorge.sqlx4k.use
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.cValuesOf
 import kotlinx.cinterop.cstr
+import kotlinx.coroutines.runBlocking
 import librust_lib.sqlx4k_fetch_all
 import librust_lib.sqlx4k_hello
 import librust_lib.sqlx4k_of
@@ -13,6 +15,7 @@ import librust_lib.sqlx4k_tx_commit
 import librust_lib.sqlx4k_tx_fetch_all
 import librust_lib.sqlx4k_tx_query
 import librust_lib.sqlx4k_tx_rollback
+import kotlin.time.measureTime
 
 @OptIn(ExperimentalForeignApi::class)
 fun main() {
@@ -67,21 +70,21 @@ fun main() {
         println(it.toStr())
     }
 
-    val tx2 = sqlx4k_tx_begin()
-    sqlx4k_tx_query(tx2, "insert into sqlx4k (id) values (65);").orThrow()
-    sqlx4k_tx_query(tx2, "insert into sqlx4k (id) values (66);").orThrow()
-    sqlx4k_tx_fetch_all(tx2, "select * from sqlx4k;").use {
-        println(it.toStr())
+    val time = measureTime {
+        runBlocking {
+            (1..8).forEachParallel {
+                repeat(10_000) {
+                    val tx2 = sqlx4k_tx_begin()
+                    sqlx4k_tx_query(tx2, "insert into sqlx4k (id) values (65);").orThrow()
+                    sqlx4k_tx_query(tx2, "insert into sqlx4k (id) values (66);").orThrow()
+                    sqlx4k_tx_fetch_all(tx2, "select * from sqlx4k;").use {}
+                    sqlx4k_fetch_all("select * from sqlx4k;").use {}
+                    sqlx4k_tx_rollback(tx2)
+                    sqlx4k_fetch_all("select * from sqlx4k;").use {}
+                }
+            }
+        }
     }
-    sqlx4k_fetch_all("select * from sqlx4k;").use {
-        println(it.toStr())
-    }
-    sqlx4k_tx_rollback(tx2)
-    sqlx4k_fetch_all("select * from sqlx4k;").use {
-        println(it.toStr())
-    }
 
-
-
-
+    println(time)
 }

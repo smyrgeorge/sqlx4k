@@ -91,7 +91,8 @@ kotlin {
     }
     sourceSets {
         getByName("nativeMain").dependencies {
-            // Add more dependencies here (if needed).
+            // https://github.com/Kotlin/kotlinx.coroutines
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
         }
     }
 }

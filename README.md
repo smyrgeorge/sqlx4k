@@ -23,6 +23,8 @@ The driver currently only supports the `PostgreSQL` database.
 - [ ] Transaction isolation level
 - [ ] Better error handling (in progress)
 - [ ] Provide a more kotlin like API (in progress)
+- [x] Check for memory leaks
+- [ ] Benchmark
 - [ ] Publish to maven central
 - [ ] MySql
 - [ ] SQLite
@@ -107,6 +109,34 @@ codesign -s - -v -f --entitlements =(echo -n '<?xml version="1.0" encoding="UTF-
 Then run the tool:
 ```shell
 leaks -atExit -- ./build/bin/macosArm64/releaseExecutable/sqlx4k
+```
+
+Sample output:
+```text
+Process:         sqlx4k [36668]
+Path:            /Users/USER/*/sqlx4k
+Load Address:    0x10011c000
+Identifier:      sqlx4k
+Version:         0
+Code Type:       ARM64
+Platform:        macOS
+Parent Process:  leaks [36667]
+
+Date/Time:       2024-06-24 03:40:42.054 +0200
+Launch Time:     2024-06-24 03:39:33.576 +0200
+OS Version:      macOS 14.5 (23F79)
+Report Version:  7
+Analysis Tool:   /Applications/Xcode.app/Contents/Developer/usr/bin/leaks
+Analysis Tool Version:  Xcode 15.4 (15F31d)
+
+Physical footprint:         18.5M
+Physical footprint (peak):  19.8M
+Idle exit:                  untracked
+----
+
+leaks Report Version: 4.0, multi-line stacks
+Process 36668: 1617 nodes malloced for 718 KB
+Process 36668: 0 leaks for 0 total leaked bytes.
 ```
 
 ## References
