@@ -3,7 +3,6 @@ import io.github.smyrgeorge.sqlx4k.orThrow
 import io.github.smyrgeorge.sqlx4k.toStr
 import io.github.smyrgeorge.sqlx4k.use
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.cValuesOf
 import kotlinx.cinterop.cstr
 import kotlinx.coroutines.runBlocking
 import librust_lib.sqlx4k_fetch_all
@@ -23,11 +22,11 @@ fun main() {
 
     sqlx4k_of(
         host = "localhost",
-        port = cValuesOf(15432),
+        port = 15432,
         username = "postgres",
         password = "postgres",
         database = "test",
-        max_connections = cValuesOf(10)
+        max_connections = 10
     ).orThrow()
 
     sqlx4k_query("drop table if exists sqlx4k;").orThrow()
@@ -85,6 +84,5 @@ fun main() {
             }
         }
     }
-
     println(time)
 }

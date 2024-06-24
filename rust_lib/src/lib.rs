@@ -155,21 +155,19 @@ pub extern "C" fn sqlx4k_hello(msg: *mut c_char) -> *mut Sqlx4kResult {
 #[no_mangle]
 pub extern "C" fn sqlx4k_of(
     host: *const c_char,
-    port: *const c_int,
+    port: c_int,
     username: *const c_char,
     password: *const c_char,
     database: *const c_char,
-    max_connections: *const c_int,
+    max_connections: c_int,
 ) -> *mut Sqlx4kResult {
     let host = c_chars_to_str(host).unwrap();
-    let port = c_int_to_i32(port).unwrap();
     let username = c_chars_to_str(username).unwrap();
     let password = c_chars_to_str(password).unwrap();
     let database = c_chars_to_str(database).unwrap();
-    let max_connections = c_int_to_i32(max_connections).unwrap();
 
     let url = format!(
-        "postgres://{}:{}@{}:{:?}/{}",
+        "postgres://{}:{}@{}:{}/{}",
         username, password, host, port, database
     );
 
@@ -408,7 +406,7 @@ fn sqlx4k_value_of(value: &PgValueRef) -> (i32, usize, *mut c_void) {
 
     let size: usize = bytes.len();
     // TODO: clone under the hood here.
-    // Find a way to keep to "leak" data from the sqlx lib.
+    // Find a way to keep "leak" data from the sqlx lib.
     let bytes: Vec<u8> = bytes.iter().cloned().collect();
     let bytes: Box<[u8]> = bytes.into_boxed_slice();
     let bytes: &mut [u8] = Box::leak(bytes);
@@ -428,8 +426,4 @@ fn c_chars_to_str<'a>(c_chars: *const c_char) -> ResultCode<&'a str> {
     let c_str = unsafe { CStr::from_ptr(c_chars) };
     let str = c_str.to_str().map_err(|_| INVALID_STRING_CONVERSION)?;
     Ok(str)
-}
-
-fn c_int_to_i32(c_int: *const c_int) -> ResultCode<i32> {
-    unsafe { Ok(*c_int) }
 }
