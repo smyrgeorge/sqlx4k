@@ -1,88 +1,105 @@
-import io.github.smyrgeorge.sqlx4k.forEachParallel
-import io.github.smyrgeorge.sqlx4k.orThrow
-import io.github.smyrgeorge.sqlx4k.toStr
-import io.github.smyrgeorge.sqlx4k.use
-import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.cstr
+import io.github.smyrgeorge.sqlx4k.Sqlx4k
+import io.github.smyrgeorge.sqlx4k.driver.Transaction
+import io.github.smyrgeorge.sqlx4k.driver.impl.Postgres
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
-import librust_lib.sqlx4k_fetch_all
-import librust_lib.sqlx4k_hello
-import librust_lib.sqlx4k_of
-import librust_lib.sqlx4k_query
-import librust_lib.sqlx4k_tx_begin
-import librust_lib.sqlx4k_tx_commit
-import librust_lib.sqlx4k_tx_fetch_all
-import librust_lib.sqlx4k_tx_query
-import librust_lib.sqlx4k_tx_rollback
-import kotlin.time.measureTime
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.CoroutineContext
 
-@OptIn(ExperimentalForeignApi::class)
+@Suppress("unused")
 fun main() {
-    sqlx4k_hello("Hello from kotlin.".cstr).orThrow()
+    runBlocking {
+        suspend fun <A, B> Iterable<A>.mapParallel(
+            context: CoroutineContext = Dispatchers.IO,
+            f: suspend (A) -> B
+        ): List<B> = withContext(context) { map { async { f(it) } }.awaitAll() }
 
-    sqlx4k_of(
-        host = "localhost",
-        port = 15432,
-        username = "postgres",
-        password = "postgres",
-        database = "test",
-        max_connections = 10
-    ).orThrow()
+        suspend fun <A> Iterable<A>.forEachParallel(
+            context: CoroutineContext = Dispatchers.IO,
+            f: suspend (A) -> Unit
+        ): Unit = withContext(context) { map { async { f(it) } }.awaitAll() }
 
-    sqlx4k_query("drop table if exists sqlx4k;").orThrow()
-    sqlx4k_query("create table if not exists sqlx4k(id integer);").orThrow()
-    sqlx4k_query("insert into sqlx4k (id) values (65);").orThrow()
-    sqlx4k_query("insert into sqlx4k (id) values (66);").orThrow()
+        val pg = Postgres(
+            host = "localhost",
+            port = 15432,
+            username = "postgres",
+            password = "postgres",
+            database = "test",
+            maxConnections = 10
+        )
 
-    sqlx4k_fetch_all("select * from sqlx4k;").use {
-        println(it.toStr())
-    }
+        pg.query("drop table if exists sqlx4k;")
+        pg.query("create table if not exists sqlx4k(id integer);")
+        pg.query("insert into sqlx4k (id) values (65);")
+        pg.query("insert into sqlx4k (id) values (66);")
 
-    sqlx4k_fetch_all("select * from sqlx4kk;").use {
-        println(it.toStr())
-    }
-
-    sqlx4k_fetch_all("select 1;").use {
-        println(it.toStr())
-    }
-
-    sqlx4k_fetch_all("select now();").use {
-        println(it.toStr())
-    }
-
-    sqlx4k_fetch_all("select 'testtest', 'test1';").use {
-        println(it.toStr())
-    }
-
-    println("\n\n\n::: TX :::")
-
-    val tx1 = sqlx4k_tx_begin()
-    sqlx4k_tx_query(tx1, "delete from sqlx4k;").orThrow()
-    sqlx4k_tx_fetch_all(tx1, "select * from sqlx4k;").use {
-        println(it.toStr())
-    }
-    sqlx4k_fetch_all("select * from sqlx4k;").use {
-        println(it.toStr())
-    }
-    sqlx4k_tx_commit(tx1)
-    sqlx4k_fetch_all("select * from sqlx4k;").use {
-        println(it.toStr())
-    }
-
-    val time = measureTime {
-        runBlocking {
-            (1..8).forEachParallel {
-                repeat(10_000) {
-                    val tx2 = sqlx4k_tx_begin()
-                    sqlx4k_tx_query(tx2, "insert into sqlx4k (id) values (65);").orThrow()
-                    sqlx4k_tx_query(tx2, "insert into sqlx4k (id) values (66);").orThrow()
-                    sqlx4k_tx_fetch_all(tx2, "select * from sqlx4k;").use {}
-                    sqlx4k_fetch_all("select * from sqlx4k;").use {}
-                    sqlx4k_tx_rollback(tx2)
-                    sqlx4k_fetch_all("select * from sqlx4k;").use {}
-                }
-            }
+        data class Test(val id: Int)
+        pg.fetchAll("select * from sqlx4k;") {
+            val id: Sqlx4k.Row.Column = get("id")
+            val test = Test(id = id.value.toInt())
+            println(test)
+            test
         }
+
+        pg.fetchAll("select * from sqlx4kk;") {
+            val id: Sqlx4k.Row.Column = get("id")
+            Test(id = id.value.toInt())
+        }
+
+        pg.fetchAll("select 1;") {
+            println(debug())
+        }
+
+        pg.fetchAll("select now();") {
+            println(debug())
+        }
+
+        pg.fetchAll("select 'testtest', 'test1';") {
+            println(debug())
+        }
+
+        println("\n\n\n::: TX :::")
+
+        val tx1: Transaction = pg.begin()
+        tx1.query("delete from sqlx4k;")
+        tx1.fetchAll("select * from sqlx4k;") {
+            println(debug())
+        }
+        pg.fetchAll("select * from sqlx4k;") {
+            println(debug())
+        }
+        tx1.commit()
+        pg.fetchAll("select * from sqlx4k;") {
+            println(debug())
+        }
+
+        pg.query("insert into sqlx4k (id) values (65);")
+        pg.query("insert into sqlx4k (id) values (66);")
+
+        val test = pg.fetchAll("select * from sqlx4k;") {
+            val id: Sqlx4k.Row.Column = get("id")
+            Test(id = id.value.toInt())
+        }
+        println(test)
+
+//    val time = measureTime {
+//        runBlocking {
+//            (1..8).forEachParallel {
+//                repeat(10_000) {
+//                    val tx2 = sqlx4k_tx_begin()
+//                    sqlx4k_tx_query(tx2, "insert into sqlx4k (id) values (65);").orThrow()
+//                    sqlx4k_tx_query(tx2, "insert into sqlx4k (id) values (66);").orThrow()
+//                    sqlx4k_tx_fetch_all(tx2, "select * from sqlx4k;").use {}
+//                    sqlx4k_fetch_all("select * from sqlx4k;").use {}
+//                    sqlx4k_tx_rollback(tx2)
+//                    sqlx4k_fetch_all("select * from sqlx4k;").use {}
+//                }
+//            }
+//        }
+//    }
+//    println(time)
     }
-    println(time)
 }

@@ -13,24 +13,24 @@ use tokio::runtime::Runtime;
 pub const OK: c_int = 0;
 pub const INVALID_STRING_CONVERSION: c_int = 100;
 
-pub const TYPE_BOOL: c_int = 1000;
-pub const TYPE_INT2: c_int = 1001;
-pub const TYPE_INT4: c_int = 1002;
-pub const TYPE_INT8: c_int = 1003;
-pub const TYPE_FLOAT4: c_int = 1004;
-pub const TYPE_FLOAT8: c_int = 1005;
-pub const TYPE_NUMERIC: c_int = 1006;
-pub const TYPE_CHAR: c_int = 1007;
-pub const TYPE_VARCHAR: c_int = 1008;
-pub const TYPE_TEXT: c_int = 1009;
-pub const TYPE_TIMESTAMP: c_int = 1010;
-pub const TYPE_TIMESTAMPTZ: c_int = 1011;
-pub const TYPE_DATE: c_int = 1012;
-pub const TYPE_TIME: c_int = 1013;
-pub const TYPE_BYTEA: c_int = 1014;
-pub const TYPE_UUID: c_int = 1015;
-pub const TYPE_JSON: c_int = 1016;
-pub const TYPE_JSONB: c_int = 1017;
+pub const TYPE_BOOL: c_int = 0;
+pub const TYPE_INT2: c_int = 1;
+pub const TYPE_INT4: c_int = 2;
+pub const TYPE_INT8: c_int = 3;
+pub const TYPE_FLOAT4: c_int = 4;
+pub const TYPE_FLOAT8: c_int = 5;
+pub const TYPE_NUMERIC: c_int = 6;
+pub const TYPE_CHAR: c_int = 7;
+pub const TYPE_VARCHAR: c_int = 8;
+pub const TYPE_TEXT: c_int = 9;
+pub const TYPE_TIMESTAMP: c_int = 10;
+pub const TYPE_TIMESTAMPTZ: c_int = 11;
+pub const TYPE_DATE: c_int = 12;
+pub const TYPE_TIME: c_int = 13;
+pub const TYPE_BYTEA: c_int = 14;
+pub const TYPE_UUID: c_int = 15;
+pub const TYPE_JSON: c_int = 16;
+pub const TYPE_JSONB: c_int = 17;
 
 pub type ResultCode<T> = Result<T, c_int>;
 
@@ -164,12 +164,6 @@ pub struct Sqlx4kColumn {
     pub kind: c_int,
     pub size: c_int,
     pub value: *mut c_void,
-}
-
-#[no_mangle]
-pub extern "C" fn sqlx4k_hello(msg: *mut c_char) -> *mut Sqlx4kResult {
-    println!("Rust: {}.", c_chars_to_str(msg).unwrap());
-    ok()
 }
 
 #[no_mangle]
