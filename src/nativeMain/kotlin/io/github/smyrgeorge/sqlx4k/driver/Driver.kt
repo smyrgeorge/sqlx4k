@@ -14,24 +14,12 @@ import librust_lib.Sqlx4kResult
 import librust_lib.sqlx4k_free_result
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 
 @OptIn(ExperimentalForeignApi::class)
 interface Driver {
 
     suspend fun query(sql: String): Result<Unit>
     suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>>
-
-    suspend fun call(f: (idx: ULong) -> Unit): CPointer<Sqlx4kResult>? =
-        suspendCoroutine { c: Continuation<CPointer<Sqlx4kResult>?> ->
-            runBlocking {
-                // The [runBlocking] it totally fine at this level.
-                // We only lock for a very short period of time, just to store in the HashMap.
-                val idx = idx()
-                mutexMap.withLock { map[idx] = c } // Store the [Continuation] object to the HashMap.
-                f(idx)
-            }
-        }
 
     private fun <T> CPointer<Sqlx4kResult>?.use(f: (it: Sqlx4kResult) -> T): T {
         return try {
@@ -72,14 +60,14 @@ interface Driver {
     companion object {
         private var idx: ULong = ULong.MIN_VALUE
         private lateinit var mutexIdx: Mutex
-        internal suspend fun idx(): ULong = mutexIdx.withLock {
+        suspend fun idx(): ULong = mutexIdx.withLock {
             // At some point is going to overflow, thus it will start from 0.
             // It's the expected behaviour.
             idx++
         }
 
-        internal lateinit var mutexMap: Mutex
-        internal lateinit var map: HashMap<ULong, Continuation<CPointer<Sqlx4kResult>?>>
+        lateinit var mutexMap: Mutex
+        lateinit var map: HashMap<ULong, Continuation<CPointer<Sqlx4kResult>?>>
         internal val fn = staticCFunction<ULong, CPointer<Sqlx4kResult>?, Unit> { idx, it ->
             runBlocking { mutexMap.withLock { map.remove(idx) } }!!.resume(it)
         }

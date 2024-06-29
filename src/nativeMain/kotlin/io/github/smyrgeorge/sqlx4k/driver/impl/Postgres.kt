@@ -3,21 +3,12 @@ package io.github.smyrgeorge.sqlx4k.driver.impl
 import io.github.smyrgeorge.sqlx4k.Sqlx4k
 import io.github.smyrgeorge.sqlx4k.driver.Driver
 import io.github.smyrgeorge.sqlx4k.driver.Driver.Companion.fn
-import io.github.smyrgeorge.sqlx4k.driver.Driver.Companion.idx
-import io.github.smyrgeorge.sqlx4k.driver.Driver.Companion.map
-import io.github.smyrgeorge.sqlx4k.driver.Driver.Companion.mutexMap
 import io.github.smyrgeorge.sqlx4k.driver.Transaction
-import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.withLock
-import librust_lib.Sqlx4kResult
 import librust_lib.sqlx4k_fetch_all
 import librust_lib.sqlx4k_of
 import librust_lib.sqlx4k_query
 import librust_lib.sqlx4k_tx_begin
-import kotlin.coroutines.Continuation
-import kotlin.coroutines.suspendCoroutine
 
 @OptIn(ExperimentalForeignApi::class)
 class Postgres(
