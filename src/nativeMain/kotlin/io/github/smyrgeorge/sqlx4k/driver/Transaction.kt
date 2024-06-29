@@ -18,40 +18,28 @@ import kotlin.coroutines.suspendCoroutine
 @OptIn(ExperimentalForeignApi::class)
 class Transaction(private val id: Int) : Driver {
 
-    suspend fun commit(): Result<Unit> = runCatching {
+    private suspend fun callTx(f: () -> Unit): CPointer<Sqlx4kResult>? =
         suspendCoroutine { c: Continuation<CPointer<Sqlx4kResult>?> ->
             runBlocking {
                 arr[id] = c
-                sqlx4k_tx_commit(id, fn)
+                f()
             }
-        }.orThrow()
+        }
+
+    suspend fun commit(): Result<Unit> = runCatching {
+        callTx { sqlx4k_tx_commit(id, fn) }.orThrow()
     }
 
     suspend fun rollback(): Result<Unit> = runCatching {
-        suspendCoroutine { c: Continuation<CPointer<Sqlx4kResult>?> ->
-            runBlocking {
-                arr[id] = c
-                sqlx4k_tx_rollback(id, fn)
-            }
-        }.orThrow()
+        callTx { sqlx4k_tx_rollback(id, fn) }.orThrow()
     }
 
     override suspend fun query(sql: String): Result<Unit> = runCatching {
-        suspendCoroutine { c: Continuation<CPointer<Sqlx4kResult>?> ->
-            runBlocking {
-                arr[id] = c
-                sqlx4k_tx_query(id, sql, fn)
-            }
-        }.orThrow()
+        callTx { sqlx4k_tx_query(id, sql, fn) }.orThrow()
     }
 
     override suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>> = runCatching {
-        suspendCoroutine { c: Continuation<CPointer<Sqlx4kResult>?> ->
-            runBlocking {
-                arr[id] = c
-                sqlx4k_tx_fetch_all(id, sql, fn)
-            }
-        }.map { mapper(this) }
+        callTx { sqlx4k_tx_fetch_all(id, sql, fn) }.map { mapper(this) }
     }
 
     companion object {

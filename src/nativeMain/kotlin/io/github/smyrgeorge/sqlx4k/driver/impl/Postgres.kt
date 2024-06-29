@@ -44,34 +44,14 @@ class Postgres(
     }
 
     override suspend fun query(sql: String): Result<Unit> = runCatching {
-        suspendCoroutine { c: Continuation<CPointer<Sqlx4kResult>?> ->
-            runBlocking {
-                // The [runBlocking] it totally fine at this level.
-                // We only lock for a very short period of time, just to store in the HashMap.
-                val idx = idx()
-                mutexMap.withLock { map[idx] = c } // Store the [Continuation] object to the HashMap.
-                sqlx4k_query(idx, sql, fn)
-            }
-        }.orThrow()
+        call { idx -> sqlx4k_query(idx, sql, fn) }.orThrow()
     }
 
     override suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>> = runCatching {
-        suspendCoroutine { c: Continuation<CPointer<Sqlx4kResult>?> ->
-            runBlocking {
-                val idx = idx()
-                mutexMap.withLock { map[idx] = c }
-                sqlx4k_fetch_all(idx, sql, fn)
-            }
-        }.map { mapper(this) }
+        call { idx -> sqlx4k_fetch_all(idx, sql, fn) }.map { mapper(this) }
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
-        suspendCoroutine { c: Continuation<CPointer<Sqlx4kResult>?> ->
-            runBlocking {
-                val idx = idx()
-                mutexMap.withLock { map[idx] = c }
-                sqlx4k_tx_begin(idx, fn)
-            }
-        }.tx()
+        call { idx -> sqlx4k_tx_begin(idx, fn) }.tx()
     }
 }

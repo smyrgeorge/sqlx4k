@@ -14,13 +14,25 @@ import librust_lib.Sqlx4kResult
 import librust_lib.sqlx4k_free_result
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 @OptIn(ExperimentalForeignApi::class)
 interface Driver {
+
     suspend fun query(sql: String): Result<Unit>
     suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>>
 
-    @OptIn(ExperimentalForeignApi::class)
+    suspend fun call(f: (idx: ULong) -> Unit): CPointer<Sqlx4kResult>? =
+        suspendCoroutine { c: Continuation<CPointer<Sqlx4kResult>?> ->
+            runBlocking {
+                // The [runBlocking] it totally fine at this level.
+                // We only lock for a very short period of time, just to store in the HashMap.
+                val idx = idx()
+                mutexMap.withLock { map[idx] = c } // Store the [Continuation] object to the HashMap.
+                f(idx)
+            }
+        }
+
     private fun <T> CPointer<Sqlx4kResult>?.use(f: (it: Sqlx4kResult) -> T): T {
         return try {
             this?.pointed?.let { f(it) }
@@ -30,22 +42,18 @@ interface Driver {
         }
     }
 
-    @OptIn(ExperimentalForeignApi::class)
     fun CPointer<Sqlx4kResult>?.orThrow() {
         use { Sqlx4k.Error(it.error, it.error_message?.toKString()) }.throwIfError()
     }
 
-    @OptIn(ExperimentalForeignApi::class)
     private fun Sqlx4kResult.throwIfError(): Unit =
         Sqlx4k.Error(error, error_message?.toKString()).throwIfError()
 
-    @OptIn(ExperimentalForeignApi::class)
     fun CPointer<Sqlx4kResult>?.tx(): Transaction = use { result ->
         result.throwIfError()
         Transaction(result.tx)
     }
 
-    @OptIn(ExperimentalForeignApi::class)
     fun <T> CPointer<Sqlx4kResult>?.map(f: Sqlx4k.Row.() -> T): List<T> = use { result ->
         result.throwIfError()
         val rows = mutableListOf<T>()
