@@ -10,7 +10,6 @@ use std::{
 };
 use tokio::runtime::Runtime;
 
-pub const OK: c_int = 0;
 pub const INVALID_STRING_CONVERSION: c_int = 100;
 
 pub const TYPE_BOOL: c_int = 0;
@@ -44,18 +43,27 @@ struct Sqlx4k<'a> {
     tx: &'a mut [*mut Transaction<'a, Postgres>],
 }
 
-impl<'a> Sqlx4k<'a> {
-    async fn query(&self, sql: &str) {
-        let _result = self.pool.fetch_optional(sql).await.unwrap();
-    }
+unsafe impl<'a> Sync for Sqlx4k<'a> {}
+unsafe impl<'a> Send for Sqlx4k<'a> {}
 
-    async fn fetch_all(&self, sql: &str) -> Sqlx4kQueryResult {
-        let result: Result<Vec<PgRow>, sqlx::Error> = self.pool.fetch_all(sql).await;
-        let result = sqlx4k_result_of(result);
+impl<'a> Sqlx4k<'a> {
+    async fn query(&self, sql: &str) -> *mut Sqlx4kResult {
+        self.pool.fetch_optional(sql).await.unwrap();
+        let result = Sqlx4kResult::default();
+        let result = Box::new(result);
+        let result = Box::leak(result);
         result
     }
 
-    async fn tx_begin(&mut self) -> i32 {
+    async fn fetch_all(&self, sql: &str) -> *mut Sqlx4kResult {
+        let result: Result<Vec<PgRow>, sqlx::Error> = self.pool.fetch_all(sql).await;
+        let result = sqlx4k_result_of(result);
+        let result = Box::new(result);
+        let result = Box::leak(result);
+        result
+    }
+
+    async fn tx_begin(&mut self) -> *mut Sqlx4kResult {
         let tx = self.pool.begin().await.unwrap();
         let id = { self.tx_id.write().unwrap().pop().unwrap() } as usize;
         if self.tx[id] != null_mut() {
@@ -64,10 +72,16 @@ impl<'a> Sqlx4k<'a> {
         let tx = Box::new(tx);
         let tx = Box::leak(tx);
         self.tx[id] = tx;
-        id as i32
+        let result = Sqlx4kResult {
+            tx: id as c_int,
+            ..Default::default()
+        };
+        let result = Box::new(result);
+        let result = Box::leak(result);
+        result
     }
 
-    async fn tx_commit(&mut self, tx: i32) {
+    async fn tx_commit(&mut self, tx: i32) -> *mut Sqlx4kResult {
         let id = tx as usize;
         let tx = self.tx[id];
         if tx == null_mut() {
@@ -76,10 +90,17 @@ impl<'a> Sqlx4k<'a> {
         let tx = unsafe { *Box::from_raw(tx) };
         self.tx[id] = null_mut();
         tx.commit().await.unwrap();
-        self.tx_id.write().unwrap().push(id as i32)
+        self.tx_id.write().unwrap().push(id as i32);
+        let result = Sqlx4kResult {
+            tx: id as c_int,
+            ..Default::default()
+        };
+        let result = Box::new(result);
+        let result = Box::leak(result);
+        result
     }
 
-    async fn tx_rollback(&mut self, tx: i32) {
+    async fn tx_rollback(&mut self, tx: i32) -> *mut Sqlx4kResult {
         let id = tx as usize;
         let tx = self.tx[id];
         if tx == null_mut() {
@@ -88,10 +109,17 @@ impl<'a> Sqlx4k<'a> {
         let tx = unsafe { *Box::from_raw(tx) };
         self.tx[id] = null_mut();
         tx.rollback().await.unwrap();
-        self.tx_id.write().unwrap().push(id as i32)
+        self.tx_id.write().unwrap().push(id as i32);
+        let result = Sqlx4kResult {
+            tx: id as c_int,
+            ..Default::default()
+        };
+        let result = Box::new(result);
+        let result = Box::leak(result);
+        result
     }
 
-    async fn tx_query(&mut self, tx: i32, sql: &str) {
+    async fn tx_query(&mut self, tx: i32, sql: &str) -> *mut Sqlx4kResult {
         let id = tx as usize;
         let tx = self.tx[id];
         if tx == null_mut() {
@@ -102,9 +130,13 @@ impl<'a> Sqlx4k<'a> {
         let tx = Box::new(tx);
         let tx = Box::leak(tx);
         self.tx[id] = tx;
+        let result = Sqlx4kResult::default();
+        let result = Box::new(result);
+        let result = Box::leak(result);
+        result
     }
 
-    async fn tx_fetch_all(&mut self, tx: i32, sql: &str) -> Sqlx4kQueryResult {
+    async fn tx_fetch_all(&mut self, tx: i32, sql: &str) -> *mut Sqlx4kResult {
         let id = tx as usize;
         let tx = self.tx[id];
         if tx == null_mut() {
@@ -115,7 +147,10 @@ impl<'a> Sqlx4k<'a> {
         let tx = Box::new(tx);
         let tx = Box::leak(tx);
         self.tx[id] = tx;
-        sqlx4k_result_of(result)
+        let result = sqlx4k_result_of(result);
+        let result = Box::new(result);
+        let result = Box::leak(result);
+        result
     }
 }
 
@@ -123,24 +158,24 @@ impl<'a> Sqlx4k<'a> {
 pub struct Sqlx4kResult {
     pub error: c_int,
     pub error_message: *mut c_char,
+    pub tx: c_int,
+    pub size: c_int,
+    pub rows: *mut Sqlx4kRow,
 }
 
 impl Default for Sqlx4kResult {
     fn default() -> Self {
         Self {
-            error: OK,
+            error: 0,
             error_message: null_mut(),
+            tx: 0,
+            size: 0,
+            rows: null_mut(),
         }
     }
 }
 
-#[repr(C)]
-pub struct Sqlx4kQueryResult {
-    pub error: c_int,
-    pub error_message: *mut c_char,
-    pub size: c_int,
-    pub rows: *mut Sqlx4kRow,
-}
+unsafe impl Send for Sqlx4kResult {}
 
 #[repr(C)]
 pub struct Sqlx4kRow {
@@ -208,7 +243,10 @@ pub extern "C" fn sqlx4k_of(
     RUNTIME.set(runtime).unwrap();
     unsafe { SQLX4K.set(sqlx4k).unwrap() };
 
-    ok()
+    let result = Sqlx4kResult::default();
+    let result = Box::new(result);
+    let result = Box::leak(result);
+    result
 }
 
 #[no_mangle]
@@ -222,79 +260,111 @@ pub extern "C" fn sqlx4k_pool_idle_size() -> c_int {
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_query(sql: *const c_char) -> *mut Sqlx4kResult {
-    let sql = c_chars_to_str(sql).unwrap();
+pub extern "C" fn sqlx4k_query(
+    idx: u64,
+    sql: *const c_char,
+    fun: unsafe extern "C" fn(idx: u64, *mut Sqlx4kResult),
+) {
+    let sql = c_chars_to_str(sql).unwrap().to_owned();
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get().unwrap() };
-    runtime.block_on(sqlx4k.query(sql));
-    ok()
+    runtime.spawn(async move {
+        let result = sqlx4k.query(&sql).await;
+        unsafe { fun(idx, result) }
+    });
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_fetch_all(sql: *const c_char) -> *mut Sqlx4kQueryResult {
-    let sql = c_chars_to_str(sql).unwrap();
+pub extern "C" fn sqlx4k_fetch_all(
+    idx: u64,
+    sql: *const c_char,
+    fun: unsafe extern "C" fn(idx: u64, *mut Sqlx4kResult),
+) {
+    let sql = c_chars_to_str(sql).unwrap().to_owned();
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get().unwrap() };
-    let result = runtime.block_on(sqlx4k.fetch_all(sql));
-    let result = Box::new(result);
-    let result = Box::leak(result);
-    result
+    runtime.spawn(async move {
+        let result = sqlx4k.fetch_all(&sql).await;
+        unsafe { fun(idx, result) }
+    });
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_tx_begin() -> c_int {
+pub extern "C" fn sqlx4k_tx_begin(
+    idx: u64,
+    fun: unsafe extern "C" fn(idx: u64, *mut Sqlx4kResult),
+) {
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
-    runtime.block_on(sqlx4k.tx_begin()).into()
+    runtime.spawn(async move {
+        let result = sqlx4k.tx_begin().await;
+        unsafe { fun(idx, result) }
+    });
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_tx_commit(tx: c_int) {
+pub extern "C" fn sqlx4k_tx_commit(
+    idx: u64,
+    tx: c_int,
+    fun: unsafe extern "C" fn(idx: u64, *mut Sqlx4kResult),
+) {
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
-    runtime.block_on(sqlx4k.tx_commit(tx));
+    runtime.spawn(async move {
+        let result = sqlx4k.tx_commit(tx).await;
+        unsafe { fun(idx, result) }
+    });
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_tx_rollback(tx: c_int) {
+pub extern "C" fn sqlx4k_tx_rollback(
+    idx: u64,
+    tx: c_int,
+    fun: unsafe extern "C" fn(idx: u64, *mut Sqlx4kResult),
+) {
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
-    runtime.block_on(sqlx4k.tx_rollback(tx));
+    runtime.spawn(async move {
+        let result = sqlx4k.tx_rollback(tx).await;
+        unsafe { fun(idx, result) }
+    });
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_tx_query(tx: c_int, sql: *const c_char) -> *mut Sqlx4kResult {
-    let sql = c_chars_to_str(sql).unwrap();
+pub extern "C" fn sqlx4k_tx_query(
+    idx: u64,
+    tx: c_int,
+    sql: *const c_char,
+    fun: unsafe extern "C" fn(idx: u64, *mut Sqlx4kResult),
+) {
+    let sql = c_chars_to_str(sql).unwrap().to_owned();
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
-    runtime.block_on(sqlx4k.tx_query(tx, sql));
-    ok()
+    runtime.spawn(async move {
+        let result = sqlx4k.tx_query(tx, &sql).await;
+        unsafe { fun(idx, result) }
+    });
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_tx_fetch_all(tx: c_int, sql: *const c_char) -> *mut Sqlx4kQueryResult {
-    let sql = c_chars_to_str(sql).unwrap();
+pub extern "C" fn sqlx4k_tx_fetch_all(
+    idx: u64,
+    tx: c_int,
+    sql: *const c_char,
+    fun: unsafe extern "C" fn(idx: u64, *mut Sqlx4kResult),
+) {
+    let sql = c_chars_to_str(sql).unwrap().to_owned();
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
-    let result = runtime.block_on(sqlx4k.tx_fetch_all(tx, sql));
-    let result = Box::new(result);
-    let result = Box::leak(result);
-    result
+    runtime.spawn(async move {
+        let result = sqlx4k.tx_fetch_all(tx, &sql).await;
+        unsafe { fun(idx, result) }
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_free_result(ptr: *mut Sqlx4kResult) {
     let ptr: Sqlx4kResult = unsafe { *Box::from_raw(ptr) };
-
-    if ptr.error > 0 {
-        let error_message = unsafe { CString::from_raw(ptr.error_message) };
-        std::mem::drop(error_message);
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn sqlx4k_free_query_result(ptr: *mut Sqlx4kQueryResult) {
-    let ptr: Sqlx4kQueryResult = unsafe { *Box::from_raw(ptr) };
 
     if ptr.error > 0 {
         let error_message = unsafe { CString::from_raw(ptr.error_message) };
@@ -320,7 +390,7 @@ pub extern "C" fn sqlx4k_free_query_result(ptr: *mut Sqlx4kQueryResult) {
     }
 }
 
-fn sqlx4k_result_of(result: Result<Vec<PgRow>, sqlx::Error>) -> Sqlx4kQueryResult {
+fn sqlx4k_result_of(result: Result<Vec<PgRow>, sqlx::Error>) -> Sqlx4kResult {
     match result {
         Ok(rows) => {
             let mut rows: Vec<Sqlx4kRow> = rows.iter().map(|r| sqlx4k_row_of(r)).collect();
@@ -334,14 +404,13 @@ fn sqlx4k_result_of(result: Result<Vec<PgRow>, sqlx::Error>) -> Sqlx4kQueryResul
             let rows: &mut [Sqlx4kRow] = Box::leak(rows);
             let rows: *mut Sqlx4kRow = rows.as_mut_ptr();
 
-            Sqlx4kQueryResult {
-                error: 0,
-                error_message: null_mut(),
+            Sqlx4kResult {
                 size: size as c_int,
                 rows,
+                ..Default::default()
             }
         }
-        Err(err) => Sqlx4kQueryResult {
+        Err(err) => Sqlx4kResult {
             error: 1,
             error_message: {
                 let message = match err {
@@ -356,8 +425,7 @@ fn sqlx4k_result_of(result: Result<Vec<PgRow>, sqlx::Error>) -> Sqlx4kQueryResul
                 };
                 CString::new(message).unwrap().into_raw()
             },
-            size: 0,
-            rows: null_mut(),
+            ..Default::default()
         },
     }
 }
@@ -438,13 +506,6 @@ fn sqlx4k_value_of(value: &PgValueRef) -> (c_int, usize, *mut c_void) {
     let bytes: *mut u8 = bytes.as_mut_ptr();
     let value: *mut c_void = bytes as *mut c_void;
     (kind, size, value)
-}
-
-fn ok() -> *mut Sqlx4kResult {
-    let ok = Sqlx4kResult::default();
-    let ok = Box::new(ok);
-    let ok = Box::leak(ok);
-    ok
 }
 
 fn c_chars_to_str<'a>(c_chars: *const c_char) -> ResultCode<&'a str> {

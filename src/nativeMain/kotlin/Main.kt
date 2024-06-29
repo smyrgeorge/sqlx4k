@@ -8,6 +8,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
+import kotlin.time.measureTime
 
 @Suppress("unused")
 fun main() {
@@ -37,12 +38,13 @@ fun main() {
         pg.query("insert into sqlx4k (id) values (66);")
 
         data class Test(val id: Int)
-        pg.fetchAll("select * from sqlx4k;") {
+
+        val r1 = pg.fetchAll("select * from sqlx4k;") {
             val id: Sqlx4k.Row.Column = get("id")
-            val test = Test(id = id.value.toInt())
-            println(test)
-            test
+            Test(id = id.value.toInt())
         }
+
+        println(r1)
 
         pg.fetchAll("select * from sqlx4kk;") {
             val id: Sqlx4k.Row.Column = get("id")
@@ -63,7 +65,7 @@ fun main() {
 
         println("\n\n\n::: TX :::")
 
-        val tx1: Transaction = pg.begin()
+        val tx1: Transaction = pg.begin().getOrThrow()
         tx1.query("delete from sqlx4k;")
         tx1.fetchAll("select * from sqlx4k;") {
             println(debug())
@@ -85,21 +87,48 @@ fun main() {
         }
         println(test)
 
-//    val time = measureTime {
-//        runBlocking {
-//            (1..8).forEachParallel {
-//                repeat(10_000) {
-//                    val tx2 = sqlx4k_tx_begin()
-//                    sqlx4k_tx_query(tx2, "insert into sqlx4k (id) values (65);").orThrow()
-//                    sqlx4k_tx_query(tx2, "insert into sqlx4k (id) values (66);").orThrow()
-//                    sqlx4k_tx_fetch_all(tx2, "select * from sqlx4k;").use {}
-//                    sqlx4k_fetch_all("select * from sqlx4k;").use {}
-//                    sqlx4k_tx_rollback(tx2)
-//                    sqlx4k_fetch_all("select * from sqlx4k;").use {}
-//                }
-//            }
-//        }
-//    }
-//    println(time)
+        val t1 = measureTime {
+            runBlocking {
+                (1..20).forEachParallel {
+                    repeat(1_000) {
+                        pg.fetchAll("select * from sqlx4k limit 1000;") {
+                            val id: Sqlx4k.Row.Column = get("id")
+                            Test(id = id.value.toInt())
+                        }
+                        pg.fetchAll("select * from sqlx4k;") {
+                            val id: Sqlx4k.Row.Column = get("id")
+                            Test(id = id.value.toInt())
+                        }
+                    }
+                }
+            }
+        }
+        println(t1)
+
+        val t2 = measureTime {
+            runBlocking {
+                (1..20).forEachParallel {
+                    repeat(1_000) {
+                        val tx2 = pg.begin().getOrThrow()
+                        tx2.query("insert into sqlx4k (id) values (65);")
+                        tx2.query("insert into sqlx4k (id) values (66);")
+                        tx2.fetchAll("select * from sqlx4k;") {
+                            val id: Sqlx4k.Row.Column = get("id")
+                            Test(id = id.value.toInt())
+                        }
+                        pg.fetchAll("select * from sqlx4k;") {
+                            val id: Sqlx4k.Row.Column = get("id")
+                            Test(id = id.value.toInt())
+                        }
+                        tx2.rollback()
+                        pg.fetchAll("select * from sqlx4k;") {
+                            val id: Sqlx4k.Row.Column = get("id")
+                            Test(id = id.value.toInt())
+                        }
+                    }
+                }
+            }
+        }
+        println(t2)
     }
 }

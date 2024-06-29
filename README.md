@@ -20,8 +20,9 @@ The driver currently only supports the `PostgreSQL` database.
 ## Todo
 
 - [ ] PostgresSQL (in progress)
+- [x] Try to "bridge" the 2 async worlds (kotlin-rust)
+- [x] Use non-blocking io end to end, using the `suspendCoroutine` function
 - [x] Transactions
-- [ ] Try to "bridge" the 2 async worlds (kotlin-rust) (in progress)
 - [ ] Transaction isolation level
 - [ ] Better error handling (in progress)
 - [x] Check for memory leaks
