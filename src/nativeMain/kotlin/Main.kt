@@ -32,10 +32,10 @@ fun main() {
             maxConnections = 10
         )
 
-        pg.query("drop table if exists sqlx4k;")
-        pg.query("create table if not exists sqlx4k(id integer);")
-        pg.query("insert into sqlx4k (id) values (65);")
-        pg.query("insert into sqlx4k (id) values (66);")
+        pg.query("drop table if exists sqlx4k;").getOrThrow()
+        pg.query("create table if not exists sqlx4k(id integer);").getOrThrow()
+        pg.query("insert into sqlx4k (id) values (65);").getOrThrow()
+        pg.query("insert into sqlx4k (id) values (66);").getOrThrow()
 
         data class Test(val id: Int)
 
@@ -66,20 +66,20 @@ fun main() {
         println("\n\n\n::: TX :::")
 
         val tx1: Transaction = pg.begin().getOrThrow()
-        tx1.query("delete from sqlx4k;")
+        tx1.query("delete from sqlx4k;").getOrThrow()
         tx1.fetchAll("select * from sqlx4k;") {
             println(debug())
         }
         pg.fetchAll("select * from sqlx4k;") {
             println(debug())
         }
-        tx1.commit()
+        tx1.commit().getOrThrow()
         pg.fetchAll("select * from sqlx4k;") {
             println(debug())
         }
 
-        pg.query("insert into sqlx4k (id) values (65);")
-        pg.query("insert into sqlx4k (id) values (66);")
+        pg.query("insert into sqlx4k (id) values (65);").getOrThrow()
+        pg.query("insert into sqlx4k (id) values (66);").getOrThrow()
 
         val test = pg.fetchAll("select * from sqlx4k;") {
             val id: Sqlx4k.Row.Column = get("id")
@@ -110,17 +110,13 @@ fun main() {
                 (1..20).forEachParallel {
                     repeat(1_000) {
                         val tx2 = pg.begin().getOrThrow()
-                        tx2.query("insert into sqlx4k (id) values (65);")
-                        tx2.query("insert into sqlx4k (id) values (66);")
+                        tx2.query("insert into sqlx4k (id) values (65);").getOrThrow()
+                        tx2.query("insert into sqlx4k (id) values (66);").getOrThrow()
                         tx2.fetchAll("select * from sqlx4k;") {
                             val id: Sqlx4k.Row.Column = get("id")
                             Test(id = id.value.toInt())
                         }
-                        pg.fetchAll("select * from sqlx4k;") {
-                            val id: Sqlx4k.Row.Column = get("id")
-                            Test(id = id.value.toInt())
-                        }
-                        tx2.rollback()
+                        tx2.rollback().getOrThrow()
                         pg.fetchAll("select * from sqlx4k;") {
                             val id: Sqlx4k.Row.Column = get("id")
                             Test(id = id.value.toInt())

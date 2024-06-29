@@ -26,6 +26,7 @@ The driver currently only supports the `PostgreSQL` database.
 - [ ] Transaction isolation level
 - [ ] Better error handling (in progress)
 - [x] Check for memory leaks
+- [ ] Documentation
 - [ ] Benchmark
 - [ ] Publish to maven central
 - [ ] MySql
