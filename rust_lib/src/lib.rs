@@ -489,7 +489,6 @@ fn sqlx4k_value_of(value: &PgValueRef) -> (c_int, usize, *mut c_void) {
 
     let size: usize = bytes.len();
     // TODO: clone under the hood here.
-    // Find a way to keep "leak" data from the sqlx lib.
     let bytes: Vec<u8> = bytes.iter().cloned().collect();
     let bytes: Box<[u8]> = bytes.into_boxed_slice();
     let bytes: &mut [u8] = Box::leak(bytes);
