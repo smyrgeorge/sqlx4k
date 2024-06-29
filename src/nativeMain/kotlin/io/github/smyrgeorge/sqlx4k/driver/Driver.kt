@@ -63,17 +63,23 @@ interface Driver {
 
     companion object {
         private var idx: ULong = ULong.MIN_VALUE
-        private val mutexIdx = Mutex()
+        private lateinit var mutexIdx: Mutex
         internal suspend fun idx(): ULong = mutexIdx.withLock {
             // At some point is going to overflow, thus it will start from 0.
             // It's the expected behaviour.
             idx++
         }
 
-        internal val mutexMap = Mutex()
-        internal val map: HashMap<ULong, Continuation<CPointer<Sqlx4kResult>?>> = HashMap(128)
+        internal lateinit var mutexMap: Mutex
+        internal lateinit var map: HashMap<ULong, Continuation<CPointer<Sqlx4kResult>?>>
         internal val fn = staticCFunction<ULong, CPointer<Sqlx4kResult>?, Unit> { idx, it ->
             runBlocking { mutexMap.withLock { map.remove(idx) } }!!.resume(it)
+        }
+
+        fun init(maxConnections: Int) {
+            mutexIdx = Mutex()
+            mutexMap = Mutex()
+            map = HashMap(maxConnections)
         }
     }
 }

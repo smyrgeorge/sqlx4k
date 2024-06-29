@@ -104,6 +104,7 @@ fun main() {
             }
         }
 //      4.740002541s
+//      4.732109584s
         println(t1)
 
         val t2 = measureTime {
@@ -127,6 +128,7 @@ fun main() {
             }
         }
 //      9.385897375s
+//      9.351138833s
         println(t2)
     }
 }

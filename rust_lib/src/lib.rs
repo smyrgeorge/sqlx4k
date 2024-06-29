@@ -298,61 +298,57 @@ pub extern "C" fn sqlx4k_tx_begin(
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_tx_commit(
-    idx: u64,
     tx: c_int,
-    fun: unsafe extern "C" fn(idx: u64, *mut Sqlx4kResult),
+    fun: unsafe extern "C" fn(tx: c_int, *mut Sqlx4kResult),
 ) {
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
     runtime.spawn(async move {
         let result = sqlx4k.tx_commit(tx).await;
-        unsafe { fun(idx, result) }
+        unsafe { fun(tx, result) }
     });
 }
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_tx_rollback(
-    idx: u64,
     tx: c_int,
-    fun: unsafe extern "C" fn(idx: u64, *mut Sqlx4kResult),
+    fun: unsafe extern "C" fn(tx: c_int, *mut Sqlx4kResult),
 ) {
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
     runtime.spawn(async move {
         let result = sqlx4k.tx_rollback(tx).await;
-        unsafe { fun(idx, result) }
+        unsafe { fun(tx, result) }
     });
 }
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_tx_query(
-    idx: u64,
     tx: c_int,
     sql: *const c_char,
-    fun: unsafe extern "C" fn(idx: u64, *mut Sqlx4kResult),
+    fun: unsafe extern "C" fn(tx: c_int, *mut Sqlx4kResult),
 ) {
     let sql = unsafe { c_chars_to_str(sql).to_owned() };
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
     runtime.spawn(async move {
         let result = sqlx4k.tx_query(tx, &sql).await;
-        unsafe { fun(idx, result) }
+        unsafe { fun(tx, result) }
     });
 }
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_tx_fetch_all(
-    idx: u64,
     tx: c_int,
     sql: *const c_char,
-    fun: unsafe extern "C" fn(idx: u64, *mut Sqlx4kResult),
+    fun: unsafe extern "C" fn(tx: c_int, *mut Sqlx4kResult),
 ) {
     let sql = unsafe { c_chars_to_str(sql).to_owned() };
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
     runtime.spawn(async move {
         let result = sqlx4k.tx_fetch_all(tx, &sql).await;
-        unsafe { fun(idx, result) }
+        unsafe { fun(tx, result) }
     });
 }
 
