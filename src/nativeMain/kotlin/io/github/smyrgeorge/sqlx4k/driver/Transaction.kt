@@ -1,7 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.driver
 
 import io.github.smyrgeorge.sqlx4k.Sqlx4k
-import io.github.smyrgeorge.sqlx4k.driver.impl.call
+import io.github.smyrgeorge.sqlx4k.driver.impl.sqlx
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.staticCFunction
@@ -18,19 +18,19 @@ import kotlin.coroutines.resume
 class Transaction(private val id: Int) : Driver {
 
     suspend fun commit(): Result<Unit> = runCatching {
-        call(id) { sqlx4k_tx_commit(id, fn) }.orThrow()
+        sqlx(id) { sqlx4k_tx_commit(id, fn) }.orThrow()
     }
 
     suspend fun rollback(): Result<Unit> = runCatching {
-        call(id) { sqlx4k_tx_rollback(id, fn) }.orThrow()
+        sqlx(id) { sqlx4k_tx_rollback(id, fn) }.orThrow()
     }
 
     override suspend fun query(sql: String): Result<Unit> = runCatching {
-        call(id) { sqlx4k_tx_query(id, sql, fn) }.orThrow()
+        sqlx(id) { sqlx4k_tx_query(id, sql, fn) }.orThrow()
     }
 
     override suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>> = runCatching {
-        call(id) { sqlx4k_tx_fetch_all(id, sql, fn) }.map { mapper(this) }
+        sqlx(id) { sqlx4k_tx_fetch_all(id, sql, fn) }.map { mapper(this) }
     }
 
     companion object {

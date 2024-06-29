@@ -13,7 +13,7 @@ import kotlin.coroutines.Continuation
 import kotlin.coroutines.suspendCoroutine
 
 @OptIn(ExperimentalForeignApi::class)
-suspend inline fun call(crossinline f: (idx: ULong) -> Unit): CPointer<Sqlx4kResult>? =
+suspend inline fun sqlx(crossinline f: (idx: ULong) -> Unit): CPointer<Sqlx4kResult>? =
     suspendCoroutine { c: Continuation<CPointer<Sqlx4kResult>?> ->
         runBlocking {
             // The [runBlocking] it totally fine at this level.
@@ -25,7 +25,7 @@ suspend inline fun call(crossinline f: (idx: ULong) -> Unit): CPointer<Sqlx4kRes
     }
 
 @OptIn(ExperimentalForeignApi::class)
-suspend inline fun call(id: Int, crossinline f: () -> Unit): CPointer<Sqlx4kResult>? =
+suspend inline fun sqlx(id: Int, crossinline f: () -> Unit): CPointer<Sqlx4kResult>? =
     suspendCoroutine { c: Continuation<CPointer<Sqlx4kResult>?> ->
         runBlocking {
             arr[id] = c

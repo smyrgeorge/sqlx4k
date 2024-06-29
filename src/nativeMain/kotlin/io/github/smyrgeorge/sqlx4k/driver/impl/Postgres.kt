@@ -35,14 +35,14 @@ class Postgres(
     }
 
     override suspend fun query(sql: String): Result<Unit> = runCatching {
-        call { idx -> sqlx4k_query(idx, sql, fn) }.orThrow()
+        sqlx { idx -> sqlx4k_query(idx, sql, fn) }.orThrow()
     }
 
     override suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>> = runCatching {
-        call { idx -> sqlx4k_fetch_all(idx, sql, fn) }.map { mapper(this) }
+        sqlx { idx -> sqlx4k_fetch_all(idx, sql, fn) }.map { mapper(this) }
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
-        call { idx -> sqlx4k_tx_begin(idx, fn) }.tx()
+        sqlx { idx -> sqlx4k_tx_begin(idx, fn) }.tx()
     }
 }
