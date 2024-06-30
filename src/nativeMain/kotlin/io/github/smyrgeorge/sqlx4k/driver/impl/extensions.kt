@@ -15,20 +15,19 @@ import kotlin.coroutines.suspendCoroutine
 @OptIn(ExperimentalForeignApi::class)
 suspend inline fun sqlx(crossinline f: (idx: ULong) -> Unit): CPointer<Sqlx4kResult>? =
     suspendCoroutine { c: Continuation<CPointer<Sqlx4kResult>?> ->
-        runBlocking {
+        val idx = runBlocking {
             // The [runBlocking] it totally fine at this level.
             // We only lock for a very short period of time, just to store in the HashMap.
             val idx = idx()
             mutexMap.withLock { map[idx] = c } // Store the [Continuation] object to the HashMap.
-            f(idx)
+            idx
         }
+        f(idx)
     }
 
 @OptIn(ExperimentalForeignApi::class)
 suspend inline fun sqlx(id: Int, crossinline f: () -> Unit): CPointer<Sqlx4kResult>? =
     suspendCoroutine { c: Continuation<CPointer<Sqlx4kResult>?> ->
-        runBlocking {
-            arr[id] = c
-            f()
-        }
+        arr[id] = c
+        f()
     }

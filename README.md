@@ -4,31 +4,65 @@
 ![GitHub License](https://img.shields.io/github/license/smyrgeorge/sqlx4k)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/w/smyrgeorge/sqlx4k)
 ![GitHub issues](https://img.shields.io/github/issues/smyrgeorge/sqlx4k)
+[![Kotlin](https://img.shields.io/badge/kotlin-2.0.0-blue.svg?logo=kotlin)](http://kotlinlang.org)
 
-A small sql library written in kotlin for the native platform.
+A small non-blocking database driver written in Kotlin for the Native platform.
+Under the hood, it uses the sqlx library from the Rust ecosystem.
+_In the future, we may provide a pure Kotlin driver implementation._
 
-## Main goal
+The project is in a very early stage; thus, breaking changes and bugs should be expected.
 
-Provide a sql driver for the kotlin native platform.
-Under the hood uses the `sqlx` library from the `rust` ecosystem.
-Maybe in the future we will provide a pure kotlin driver implementation.
+Currently, the driver only supports the `PostgreSQL` database.
 
-The project is a very early stage, thus braking changes, bugs should be expected.
+## Features
 
-The driver currently only supports the `PostgreSQL` database.
+### Async-io
+
+The drivers fully supports non-blocking io.
+
+### Connection pool
+
+You can set the `maxConnections` from the driver constructor:
+
+```kotlin
+val pg = Postgres(
+    host = "localhost",
+    port = 15432,
+    username = "postgres",
+    password = "postgres",
+    database = "test",
+    maxConnections = 10 // set the max-pool-size here
+)
+```
+
+### Transactions
+
+```kotlin
+val tx1: Transaction = pg.begin().getOrThrow()
+tx1.query("delete from sqlx4k;").getOrThrow()
+tx1.fetchAll("select * from sqlx4k;") {
+    println(debug())
+}
+pg.fetchAll("select * from sqlx4k;") {
+    println(debug())
+}
+tx1.commit().getOrThrow()
+```
 
 ## Todo
 
-- [ ] PostgresSQL (in progress)
+- [x] PostgresSQL
 - [x] Try to "bridge" the 2 async worlds (kotlin-rust)
 - [x] Use non-blocking io end to end, using the `suspendCoroutine` function
 - [x] Transactions
 - [ ] Transaction isolation level
+- [ ] Named parameters
+- [ ] Publish to maven central
 - [ ] Better error handling (in progress)
 - [x] Check for memory leaks
+- [ ] Testing
 - [ ] Documentation
 - [ ] Benchmark
-- [ ] Publish to maven central
 - [ ] MySql
 - [ ] SQLite
 
@@ -53,7 +87,7 @@ val pg = Postgres(
     username = "postgres",
     password = "postgres",
     database = "test",
-    maxConnections = 10
+    maxConnections = 10 // set the max-pool-size here
 )
 
 pg.query("drop table if exists sqlx4k;")
@@ -66,24 +100,6 @@ pg.fetchAll("select * from sqlx4k;") {
     println(test)
     test
 }
-```
-
-Also, we do make support transactions
-
-```kotlin
-val tx1: Transaction = pg.begin()
-tx1.query("delete from sqlx4k;")
-tx1.fetchAll("select * from sqlx4k;") {
-    println(debug())
-}
-pg.fetchAll("select * from sqlx4k;") {
-    println(debug())
-}
-tx1.commit()
-pg.fetchAll("select * from sqlx4k;") {
-    println(debug())
-}
-println(test)
 ```
 
 ## Run
@@ -103,8 +119,10 @@ Then run the `main` method.
 ## Checking for memory leaks
 
 ### MacOs
+
 Check for memory leaks with the `leaks` tool.
 First sign you binary:
+
 ```shell
 codesign -s - -v -f --entitlements =(echo -n '<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd"\>
@@ -117,11 +135,13 @@ codesign -s - -v -f --entitlements =(echo -n '<?xml version="1.0" encoding="UTF-
 ```
 
 Then run the tool:
+
 ```shell
 leaks -atExit -- ./build/bin/macosArm64/releaseExecutable/sqlx4k
 ```
 
 Sample output:
+
 ```text
 Process:         sqlx4k [36668]
 Path:            /Users/USER/*/sqlx4k
@@ -150,6 +170,7 @@ Process 36668: 0 leaks for 0 total leaked bytes.
 ```
 
 ## References
+
 - https://kotlinlang.org/docs/multiplatform.html
 - https://kotlinlang.org/docs/native-c-interop.html
 - https://github.com/launchbadge/sqlx
