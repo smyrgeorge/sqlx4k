@@ -17,9 +17,20 @@ import kotlin.coroutines.resume
 
 @OptIn(ExperimentalForeignApi::class)
 interface Driver {
-
     suspend fun query(sql: String): Result<Unit>
+    suspend fun query(
+        sql: String,
+        params: Map<String, Any?>,
+        paramsMapper: ((v: Any?) -> String?)? = null
+    ): Result<Unit> = query(sql.withNamedParameters(params, paramsMapper))
+
     suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>>
+    suspend fun <T> fetchAll(
+        sql: String,
+        params: Map<String, Any?>,
+        paramsMapper: ((v: Any?) -> String?)? = null,
+        mapper: Sqlx4k.Row.() -> T,
+    ): Result<List<T>> = fetchAll(sql.withNamedParameters(params, paramsMapper), mapper)
 
     private fun <T> CPointer<Sqlx4kResult>?.use(f: (it: Sqlx4kResult) -> T): T {
         return try {
@@ -79,6 +90,33 @@ interface Driver {
 
             // Initialize the tx-holder.
             Transaction.init(maxConnections)
+        }
+
+        private val nameParameterRegex = Regex("""(?<!:):(?!:)[a-zA-Z]\w+""")
+        private fun extractNamedParamsIndexes(sql: String): Map<String, List<IntRange>> =
+            nameParameterRegex.findAll(sql)
+                .mapIndexed { index, group -> Pair(group, index) }
+                .groupBy({ it.first.value.substring(1) }, { it.first.range })
+
+        private fun String.withNamedParameters(
+            params: Map<String, Any?>,
+            paramsMapper: ((v: Any?) -> String?)?
+        ): String {
+            fun Any?.toValueString(): String {
+                if (paramsMapper != null) paramsMapper(this)?.let { return it }
+                return when (this) {
+                    null -> "null"
+                    is String -> this
+                    is Byte, is Boolean, is Int, is Long, is Short, is Double, is Float -> toString()
+                    else -> Sqlx4k.Error(0, "Could not map named parameter of type ${this::class.qualifiedName}").ex()
+                }
+            }
+
+            var res = this
+            extractNamedParamsIndexes(this).entries.forEach { (name, ranges) ->
+                ranges.forEach { res = res.replaceRange(it, params[name].toValueString()) }
+            }
+            return res
         }
     }
 }

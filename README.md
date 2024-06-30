@@ -35,6 +35,26 @@ val pg = Postgres(
 )
 ```
 
+### Named parameters
+
+```kotlin
+pg.query("drop table if exists :table;", mapOf("table" to "sqlx4k")).getOrThrow()
+
+pg.fetchAll("select * from :table;", mapOf("table" to "sqlx4k")) {
+    val id: Sqlx4k.Row.Column = get("id")
+    Test(id = id.value.toInt())
+}
+```
+
+You can also pass your own parameter mapper (in case that you want to use non built in types)
+
+```kotlin
+pg.query("drop table if exists :table;", mapOf("table" to "sqlx4k")) { v: Any? ->
+    //  Map the value here.
+    "MAPPED_VALUE"
+}.getOrThrow()
+```
+
 ### Transactions
 
 ```kotlin
@@ -55,8 +75,8 @@ tx1.commit().getOrThrow()
 - [x] Try to "bridge" the 2 async worlds (kotlin-rust)
 - [x] Use non-blocking io end to end, using the `suspendCoroutine` function
 - [x] Transactions
+- [x] Named parameters
 - [ ] Transaction isolation level
-- [ ] Named parameters
 - [ ] Publish to maven central
 - [ ] Better error handling (in progress)
 - [x] Check for memory leaks

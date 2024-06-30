@@ -32,7 +32,11 @@ fun main() {
             maxConnections = 10
         )
 
-        pg.query("drop table if exists sqlx4k;").getOrThrow()
+        pg.query("drop table if exists :table;", mapOf("table" to "sqlx4k")).getOrThrow()
+        pg.query("drop table if exists :table;", mapOf("table" to "sqlx4k")) { v: Any? ->
+            //  Map the value here.
+            "MAPPED_VALUE"
+        }.getOrThrow()
         pg.query("create table if not exists sqlx4k(id integer);").getOrThrow()
         pg.query("insert into sqlx4k (id) values (65);").getOrThrow()
         pg.query("insert into sqlx4k (id) values (66);").getOrThrow()
@@ -46,7 +50,7 @@ fun main() {
 
         println(r1)
 
-        pg.fetchAll("select * from sqlx4kk;") {
+        pg.fetchAll("select * from :table;", mapOf("table" to "sqlx4k")) {
             val id: Sqlx4k.Row.Column = get("id")
             Test(id = id.value.toInt())
         }
