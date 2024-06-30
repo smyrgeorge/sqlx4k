@@ -76,6 +76,9 @@ interface Driver {
             mutexIdx = Mutex()
             mutexMap = Mutex()
             map = HashMap(maxConnections)
+
+            // Initialize the tx-holder.
+            Transaction.init(maxConnections)
         }
     }
 }

@@ -22,7 +22,6 @@ class Postgres(
 
     init {
         Driver.init(maxConnections)
-        Transaction.init(maxConnections)
 
         sqlx4k_of(
             host = host,
