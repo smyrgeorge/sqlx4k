@@ -108,12 +108,16 @@ interface Driver {
                     null -> "null"
                     is String -> this
                     is Byte, is Boolean, is Int, is Long, is Short, is Double, is Float -> toString()
+                    // TODO: fix error code
                     else -> Sqlx4k.Error(0, "Could not map named parameter of type ${this::class.qualifiedName}").ex()
                 }
             }
 
             var res = this
             extractNamedParamsIndexes(this).entries.forEach { (name, ranges) ->
+                // TODO: fix error code
+                if (!params.containsKey(name))
+                    Sqlx4k.Error(0, "Value for named parameter '$name' was not supplied").ex()
                 ranges.forEach { res = res.replaceRange(it, params[name].toValueString()) }
             }
             return res
