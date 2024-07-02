@@ -1,5 +1,5 @@
 use sqlx::postgres::{PgPool, PgPoolOptions, PgRow, PgValueFormat, PgValueRef};
-use sqlx::{Column, Executor, Postgres, Transaction};
+use sqlx::{Column, Error, Executor, Postgres, Transaction};
 use sqlx::{Row, TypeInfo, ValueRef};
 use std::ffi::c_void;
 use std::ptr::null_mut;
@@ -9,6 +9,11 @@ use std::{
     sync::OnceLock,
 };
 use tokio::runtime::Runtime;
+
+pub const ERROR_DATABASE: c_int = 1000;
+pub const ERROR_POOL_TIMED_OUT: c_int = 1001;
+pub const ERROR_POOL_CLOSED: c_int = 1002;
+pub const ERROR_WORKER_CRASHED: c_int = 1003;
 
 pub const TYPE_BOOL: c_int = 0;
 pub const TYPE_INT2: c_int = 1;
@@ -44,8 +49,12 @@ unsafe impl<'a> Send for Sqlx4k<'a> {}
 
 impl<'a> Sqlx4k<'a> {
     async fn query(&self, sql: &str) -> *mut Sqlx4kResult {
-        self.pool.fetch_optional(sql).await.unwrap();
-        Sqlx4kResult::default().leak()
+        let result = self.pool.fetch_optional(sql).await;
+        let result = match result {
+            Ok(_) => Sqlx4kResult::default(),
+            Err(err) => sqlx4k_error_result_of(err),
+        };
+        result.leak()
     }
 
     async fn fetch_all(&self, sql: &str) -> *mut Sqlx4kResult {
@@ -54,7 +63,14 @@ impl<'a> Sqlx4k<'a> {
     }
 
     async fn tx_begin(&mut self) -> *mut Sqlx4kResult {
-        let tx = self.pool.begin().await.unwrap();
+        let tx = self.pool.begin().await;
+        let tx = match tx {
+            Ok(tx) => tx,
+            Err(err) => {
+                return sqlx4k_error_result_of(err).leak();
+            }
+        };
+
         let id = {
             let mut guard = self.tx_id.write().unwrap();
             let id = guard.pop().unwrap() as usize;
@@ -82,7 +98,12 @@ impl<'a> Sqlx4k<'a> {
         }
         let tx = unsafe { *Box::from_raw(tx) };
         self.tx[id] = null_mut();
-        tx.commit().await.unwrap();
+        match tx.commit().await {
+            Ok(_) => (),
+            Err(err) => {
+                return sqlx4k_error_result_of(err).leak();
+            }
+        };
         {
             let mut guard = self.tx_id.write().unwrap();
             guard.push(id as i32);
@@ -103,7 +124,12 @@ impl<'a> Sqlx4k<'a> {
         }
         let tx = unsafe { *Box::from_raw(tx) };
         self.tx[id] = null_mut();
-        tx.rollback().await.unwrap();
+        match tx.rollback().await {
+            Ok(_) => (),
+            Err(err) => {
+                return sqlx4k_error_result_of(err).leak();
+            }
+        };
         {
             let mut guard = self.tx_id.write().unwrap();
             guard.push(id as i32);
@@ -123,11 +149,15 @@ impl<'a> Sqlx4k<'a> {
             panic!("Attempted to query null tx, id={}.", id);
         }
         let mut tx = unsafe { *Box::from_raw(tx) };
-        tx.fetch_optional(sql).await.unwrap();
+        let result = tx.fetch_optional(sql).await;
         let tx = Box::new(tx);
         let tx = Box::leak(tx);
         self.tx[id] = tx;
-        Sqlx4kResult::default().leak()
+        let result = match result {
+            Ok(_) => Sqlx4kResult::default(),
+            Err(err) => sqlx4k_error_result_of(err),
+        };
+        result.leak()
     }
 
     async fn tx_fetch_all(&mut self, tx: i32, sql: &str) -> *mut Sqlx4kResult {
@@ -400,23 +430,47 @@ fn sqlx4k_result_of(result: Result<Vec<PgRow>, sqlx::Error>) -> Sqlx4kResult {
                 ..Default::default()
             }
         }
-        Err(err) => Sqlx4kResult {
-            error: 1,
-            error_message: {
-                let message = match err {
-                    sqlx::Error::PoolTimedOut => "PoolTimedOut".to_string(),
-                    sqlx::Error::PoolClosed => "PoolClosed".to_string(),
-                    sqlx::Error::WorkerCrashed => "WorkerCrashed".to_string(),
-                    sqlx::Error::Database(e) => match e.code() {
-                        Some(code) => format!("[{}] {}", code, e.to_string()),
-                        None => format!("{}", e.to_string()),
-                    },
-                    _ => "Unknown error.".to_string(),
-                };
-                CString::new(message).unwrap().into_raw()
-            },
-            ..Default::default()
+        Err(err) => sqlx4k_error_result_of(err),
+    }
+}
+
+fn sqlx4k_error_result_of(err: sqlx::Error) -> Sqlx4kResult {
+    let (code, message) = match err {
+        Error::Configuration(_) => panic!("Unexpected error occurred."),
+        Error::Database(e) => match e.code() {
+            Some(code) => (ERROR_DATABASE, format!("[{}] {}", code, e.to_string())),
+            None => (ERROR_DATABASE, format!("{}", e.to_string())),
         },
+        Error::Io(_) => panic!("Io :: Unexpected error occurred."),
+        Error::Tls(_) => panic!("Tls :: Unexpected error occurred."),
+        Error::Protocol(_) => panic!("Protocol :: Unexpected error occurred."),
+        Error::RowNotFound => panic!("RowNotFound :: Unexpected error occurred."),
+        Error::TypeNotFound { type_name: _ } => {
+            panic!("TypeNotFound :: Unexpected error occurred.")
+        }
+        Error::ColumnIndexOutOfBounds { index: _, len: _ } => {
+            panic!("ColumnIndexOutOfBounds :: Unexpected error occurred.")
+        }
+        Error::ColumnNotFound(_) => panic!("ColumnNotFound :: Unexpected error occurred."),
+        Error::ColumnDecode {
+            index: _,
+            source: _,
+        } => {
+            panic!("ColumnDecode :: Unexpected error occurred.")
+        }
+        Error::Decode(_) => panic!("Decode :: Unexpected error occurred."),
+        Error::AnyDriverError(_) => panic!("AnyDriverError :: Unexpected error occurred."),
+        Error::PoolTimedOut => (ERROR_POOL_TIMED_OUT, "PoolTimedOut".to_string()),
+        Error::PoolClosed => (ERROR_POOL_CLOSED, "PoolClosed".to_string()),
+        Error::WorkerCrashed => (ERROR_WORKER_CRASHED, "WorkerCrashed".to_string()),
+        Error::Migrate(_) => panic!("Migrate :: Unexpected error occurred."),
+        _ => panic!("Unexpected error occurred."),
+    };
+
+    Sqlx4kResult {
+        error: code,
+        error_message: CString::new(message).unwrap().into_raw(),
+        ..Default::default()
     }
 }
 

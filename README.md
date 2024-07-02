@@ -78,7 +78,7 @@ tx1.commit().getOrThrow()
 - [x] Named parameters
 - [ ] Transaction isolation level
 - [ ] Publish to maven central
-- [ ] Better error handling (in progress)
+- [x] Better error handling (in progress)
 - [x] Check for memory leaks
 - [ ] Testing
 - [ ] Documentation

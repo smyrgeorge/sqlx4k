@@ -80,8 +80,8 @@ class Sqlx4k {
 
     class Error(
         val code: Int,
-        override val message: String? = null,
-    ) : RuntimeException(message) {
+        message: String? = null,
+    ) : RuntimeException("[$code] $message") {
         fun ex(): Nothing = throw this
         fun isError(): Boolean = code > 0
         fun throwIfError() {
