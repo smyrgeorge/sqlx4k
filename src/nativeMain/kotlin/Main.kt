@@ -122,9 +122,6 @@ fun main() {
                             val id: Sqlx4k.Row.Column = get("id")
                             Test(id = id.value.toInt())
                         }
-                        pg.fetchAll("select * from sqlx4k;") {
-
-                        }.getOrThrow()
                         tx2.rollback().getOrThrow()
                         pg.fetchAll("select * from sqlx4k;") {
                             val id: Sqlx4k.Row.Column = get("id")

@@ -1,5 +1,5 @@
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
-import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTargetWithHostTests
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import java.lang.System.getenv
 
 plugins {
@@ -33,25 +33,17 @@ private val cargo: String
         ?.absolutePath
         ?: throw GradleException("Rust cargo binary is required to build project but it wasn't found.")
 
-fun projectFile(path: String): String =
-    projectDir.resolve(path).absolutePath
-
-private val rustLibAbsolutePath: String
-    get() = projectFile(
-        path = when {
-            os.isWindows -> "rust_lib/target/release/rust_lib.lib"
-            else -> "rust_lib/target/release/librust_lib.a"
-        }
-    )
-
 kotlin {
+    fun projectFile(path: String): String =
+        projectDir.resolve(path).absolutePath
+
     applyDefaultHierarchyTemplate()
 
     val host: Host = when {
-//        os.isMacOsX && arch.isAmd64 -> Host(macosX64())
-//        os.isMacOsX && arch.isArm64 -> Host(macosArm64())
-        os.isMacOsX -> Host(macosArm64())
-        os.isLinux && arch.isAmd64 -> Host(linuxX64())
+        os.isMacOsX && arch.isArm64 -> Host(macosArm64(), "aarch64-apple-darwin")
+        os.isMacOsX && arch.isAmd64 -> Host(macosX64(), "x86_64-apple-darwin")
+        os.isLinux && arch.isArm64 -> Host(linuxArm64(), "aarch64-unknown-linux-gnu")
+        os.isLinux && arch.isAmd64 -> Host(linuxX64(), "x86_64-unknown-linux-gnu")
         os.isWindows && arch.isAmd64 -> Host(mingwX64())
         else -> throw GradleException("OS: $os and architecture: $arch is not supported in script configuration.")
     }
@@ -72,6 +64,10 @@ kotlin {
                             "--manifest-path", projectFile("rust_lib/Cargo.toml"),
                             "--package", "rust_lib",
                             "--lib",
+                            // Had to specify manually here.
+                            // When running/building from IntelliJ the arch is amd64 (not arm64),
+                            // but cargo runs with arm64.
+                            host.rustTarget?.let { "--target=$it" } ?: "",
                             "--release"
                         )
                     }
@@ -86,7 +82,12 @@ kotlin {
         binaries.executable {
             entryPoint = "main"
             baseName = "sqlx4k"
-            linkerOpts += rustLibAbsolutePath
+            linkerOpts += projectFile(
+                path = when {
+                    os.isWindows -> "rust_lib/target/${host.rustTarget}/release/rust_lib.lib"
+                    else -> "rust_lib/target/${host.rustTarget}/release/librust_lib.a"
+                }
+            )
         }
     }
     sourceSets {
@@ -98,10 +99,11 @@ kotlin {
 }
 
 class Host(
-    val target: KotlinNativeTargetWithHostTests,
+    val target: KotlinNativeTarget,
+    val rustTarget: String? = null
 ) {
 
-    fun target(configure: KotlinNativeTargetWithHostTests.() -> Unit): Unit =
+    fun target(configure: KotlinNativeTarget.() -> Unit): Unit =
         target.run(configure)
 
     fun renameBinaries() {
