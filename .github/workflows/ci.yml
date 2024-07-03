@@ -8,7 +8,8 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+#    runs-on: ubuntu-latest
+    runs-on: macos-14
     environment: Maven Central
     permissions:
       contents: read
@@ -28,6 +29,12 @@ jobs:
 
       - name: Setup Rust & cargo
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+
+      - name: Cache rust build
+        uses: actions/cache@v4
+        with:
+          path: rust_lib/target
+
       - name: Gradle Build
         run: ./gradlew build
 
