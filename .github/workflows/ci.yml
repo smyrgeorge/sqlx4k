@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: macos-14
     environment: Maven Central
     permissions:
       contents: read
@@ -37,18 +37,3 @@ jobs:
 #          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
 #          MAVEN_SIGNING_KEY: ${{ secrets.MAVEN_SIGNING_KEY }}
 #          MAVEN_SIGNING_PASSWORD: ${{ secrets.MAVEN_SIGNING_PASSWORD }}
-
-#      - name: Gradle Bundle
-#        run: ./scripts/bundle.sh
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
-#          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
-#          MAVEN_SIGNING_KEY: ${{ secrets.MAVEN_SIGNING_KEY }}
-#          MAVEN_SIGNING_PASSWORD: ${{ secrets.MAVEN_SIGNING_PASSWORD }}
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bundle
-          path: ./.gradle/bundle/
