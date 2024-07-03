@@ -3,7 +3,6 @@ package io.github.smyrgeorge.sqlx4k.driver.impl
 import io.github.smyrgeorge.sqlx4k.driver.Driver.Companion.idx
 import io.github.smyrgeorge.sqlx4k.driver.Driver.Companion.map
 import io.github.smyrgeorge.sqlx4k.driver.Driver.Companion.mutexMap
-import io.github.smyrgeorge.sqlx4k.driver.Transaction.Companion.arr
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.runBlocking
@@ -13,7 +12,7 @@ import kotlin.coroutines.Continuation
 import kotlin.coroutines.suspendCoroutine
 
 @OptIn(ExperimentalForeignApi::class)
-suspend inline fun sqlx(crossinline f: (idx: ULong) -> Unit): CPointer<Sqlx4kResult>? =
+internal suspend inline fun sqlx(crossinline f: (idx: ULong) -> Unit): CPointer<Sqlx4kResult>? =
     suspendCoroutine { c: Continuation<CPointer<Sqlx4kResult>?> ->
         val idx = runBlocking {
             // The [runBlocking] it totally fine at this level.
@@ -23,11 +22,4 @@ suspend inline fun sqlx(crossinline f: (idx: ULong) -> Unit): CPointer<Sqlx4kRes
             idx
         }
         f(idx)
-    }
-
-@OptIn(ExperimentalForeignApi::class)
-suspend inline fun sqlx(id: Int, crossinline f: () -> Unit): CPointer<Sqlx4kResult>? =
-    suspendCoroutine { c: Continuation<CPointer<Sqlx4kResult>?> ->
-        arr[id] = c
-        f()
     }

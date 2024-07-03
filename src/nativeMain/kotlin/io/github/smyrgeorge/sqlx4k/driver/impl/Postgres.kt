@@ -30,11 +30,11 @@ class Postgres(
             password = password,
             database = database,
             max_connections = maxConnections
-        ).orThrow()
+        ).throwIfError()
     }
 
     override suspend fun query(sql: String): Result<Unit> = runCatching {
-        sqlx { idx -> sqlx4k_query(idx, sql, fn) }.orThrow()
+        sqlx { idx -> sqlx4k_query(idx, sql, fn) }.throwIfError()
     }
 
     override suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>> = runCatching {

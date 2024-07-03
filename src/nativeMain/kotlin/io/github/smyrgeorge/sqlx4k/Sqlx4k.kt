@@ -8,8 +8,8 @@ import librust_lib.Sqlx4kColumn
 import librust_lib.Sqlx4kRow
 
 @OptIn(ExperimentalForeignApi::class)
-@Suppress("unused", "MemberVisibilityCanBePrivate", "SpellCheckingInspection")
-class Sqlx4k {
+@Suppress("unused", "MemberVisibilityCanBePrivate", "SpellCheckingInspection", "CanBeParameter")
+interface Sqlx4k {
     class Row(
         private val row: Sqlx4kRow
     ) {
@@ -79,13 +79,20 @@ class Sqlx4k {
     }
 
     class Error(
-        val code: Int,
+        val code: Code,
         message: String? = null,
     ) : RuntimeException("[$code] $message") {
         fun ex(): Nothing = throw this
-        fun isError(): Boolean = code > 0
-        fun throwIfError() {
-            if (isError()) throw this
+
+        enum class Code {
+            // Error from the underlying driver:
+            Database,
+            PoolTimedOut,
+            PoolClosed,
+            WorkerCrashed,
+            // Other errors:
+            NamedParameterTypeNotSupported,
+            NamedParameterValueNotSupplied
         }
     }
 }
