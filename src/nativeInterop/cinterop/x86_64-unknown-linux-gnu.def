@@ -1,0 +1,5 @@
+headers = rust_lib.h
+package = librust_lib
+
+compilerOpts = -I./rust_lib/target
+linkerOpts = -L./rust_lib/target/x86_64-unknown-linux-gnu/release/librust_lib.a

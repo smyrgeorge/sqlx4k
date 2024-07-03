@@ -1,6 +1,7 @@
 # Sqlx4k
 
 ![Build](https://github.com/smyrgeorge/sqlx4k/actions/workflows/ci.yml/badge.svg)
+![Maven Central](https://img.shields.io/maven-central/v/io.github.smyrgeorge/sqlx4k)
 ![GitHub License](https://img.shields.io/github/license/smyrgeorge/sqlx4k)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/w/smyrgeorge/sqlx4k)
 ![GitHub issues](https://img.shields.io/github/issues/smyrgeorge/sqlx4k)
@@ -77,7 +78,7 @@ tx1.commit().getOrThrow()
 - [x] Transactions
 - [x] Named parameters
 - [ ] Transaction isolation level
-- [ ] Publish to maven central
+- [x] Publish to maven central
 - [x] Better error handling (in progress)
 - [x] Check for memory leaks
 - [ ] Testing
