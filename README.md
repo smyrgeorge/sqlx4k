@@ -15,11 +15,21 @@ The project is in a very early stage; thus, breaking changes and bugs should be 
 
 Currently, the driver only supports the `PostgreSQL` database.
 
+## Usage
+
+You can found the latest published version [here](https://central.sonatype.com/artifact/io.github.smyrgeorge/sqlx4k).
+
+```kotlin
+implementation("io.github.smyrgeorge:sqlx4k:x.y.z")
+```
+
 ## Features
 
 ### Async-io
 
 The drivers fully supports non-blocking io.
+
+All the "magic" happens thanks to the build in kotlin function `suspendCoroutine`, take a look [here](https://kotlinlang.org/api/latest/jvm/stdlib/kotlin.coroutines/suspend-coroutine.html).
 
 ### Connection pool
 
@@ -52,7 +62,7 @@ You can also pass your own parameter mapper (in case that you want to use non bu
 ```kotlin
 pg.query("drop table if exists :table;", mapOf("table" to "sqlx4k")) { v: Any? ->
     //  Map the value here.
-    "MAPPED_VALUE"
+    "sqlx4k"
 }.getOrThrow()
 ```
 
@@ -92,8 +102,33 @@ tx1.commit().getOrThrow()
 You will need the rust toolchain to build this project.
 Check here: https://rustup.rs/
 
+Also, make sure that you have installed all the necessary compile targets:
+
+```text
+rustup target add aarch64-apple-darwin
+rustup target add x86_64-apple-darwin
+rustup target add aarch64-unknown-linux-gnu
+rustup target add x86_64-unknown-linux-gnu
+```
+
+Then, run the build.
+
 ```shell
-./gradlew binaries
+./gradlew build
+```
+
+## Run
+
+First you need to run start-up the postgres instance.
+
+```shell
+docker compose up -d
+```
+
+Then run the `main` method.
+
+```shell
+./build/bin/macosArm64/releaseExecutable/sqlx4k.kexe
 ```
 
 ## Examples
@@ -123,23 +158,9 @@ pg.fetchAll("select * from sqlx4k;") {
 }
 ```
 
-## Run
-
-First you need to run start-up the postgres instance.
-
-```shell
-docker compose up -d
-```
-
-Then run the `main` method.
-
-```shell
-./build/bin/macosArm64/releaseExecutable/sqlx4k
-```
-
 ## Checking for memory leaks
 
-### MacOs
+### macOS (using leaks tool)
 
 Check for memory leaks with the `leaks` tool.
 First sign you binary:
@@ -152,20 +173,20 @@ codesign -s - -v -f --entitlements =(echo -n '<?xml version="1.0" encoding="UTF-
         <key>com.apple.security.get-task-allow</key>
         <true/>
     </dict>
-</plist>') ./build/bin/macosArm64/releaseExecutable/sqlx4k
+</plist>') ./build/bin/macosArm64/releaseExecutable/sqlx4k.kexe
 ```
 
 Then run the tool:
 
 ```shell
-leaks -atExit -- ./build/bin/macosArm64/releaseExecutable/sqlx4k
+leaks -atExit -- ./build/bin/macosArm64/releaseExecutable/sqlx4k.kexe
 ```
 
 Sample output:
 
 ```text
 Process:         sqlx4k [36668]
-Path:            /Users/USER/*/sqlx4k
+Path:            /Users/USER/*/sqlx4k.kexe
 Load Address:    0x10011c000
 Identifier:      sqlx4k
 Version:         0
@@ -201,3 +222,4 @@ Process 36668: 0 leaks for 0 total leaked bytes.
 - https://stackoverflow.com/questions/76706784/why-stdmemforget-cannot-be-used-for-creating-static-references
 - https://stackoverflow.com/questions/66412090/proper-way-of-dealing-with-blocking-code-using-kotling-coroutines
 - https://github.com/square/retrofit/blob/fbf1225e28e2094bec35f587b8933748b705d167/retrofit/src/main/java/retrofit2/KotlinExtensions.kt#L31
+- https://www.droidcon.com/2024/04/18/publishing-kotlin-multiplatform-libraries-with-sonatype-central/
