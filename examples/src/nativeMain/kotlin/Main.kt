@@ -10,13 +10,13 @@ import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.measureTime
 
-@Suppress("unused")
 fun main() {
     runBlocking {
-        suspend fun <A, B> Iterable<A>.mapParallel(
-            context: CoroutineContext = Dispatchers.IO,
-            f: suspend (A) -> B
-        ): List<B> = withContext(context) { map { async { f(it) } }.awaitAll() }
+//        @Suppress("unused")
+//        suspend fun <A, B> Iterable<A>.mapParallel(
+//            context: CoroutineContext = Dispatchers.IO,
+//            f: suspend (A) -> B
+//        ): List<B> = withContext(context) { map { async { f(it) } }.awaitAll() }
 
         suspend fun <A> Iterable<A>.forEachParallel(
             context: CoroutineContext = Dispatchers.IO,

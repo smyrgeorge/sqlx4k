@@ -128,12 +128,12 @@ docker compose up -d
 Then run the `main` method.
 
 ```shell
-./build/bin/macosArm64/releaseExecutable/sqlx4k.kexe
+./examples/build/bin/macosArm64/releaseExecutable/examples.kexe
 ```
 
 ## Examples
 
-See `Main.kt` file for more examples.
+See `Main.kt` file for more examples (examples module).
 
 ```kotlin
 // Initialize the connection pool.
@@ -173,13 +173,13 @@ codesign -s - -v -f --entitlements =(echo -n '<?xml version="1.0" encoding="UTF-
         <key>com.apple.security.get-task-allow</key>
         <true/>
     </dict>
-</plist>') ./build/bin/macosArm64/releaseExecutable/sqlx4k.kexe
+</plist>') ./examples/build/bin/macosArm64/releaseExecutable/examples.kexe
 ```
 
 Then run the tool:
 
 ```shell
-leaks -atExit -- ./build/bin/macosArm64/releaseExecutable/sqlx4k.kexe
+leaks -atExit -- ./examples/build/bin/macosArm64/releaseExecutable/examples.kexe
 ```
 
 Sample output:
