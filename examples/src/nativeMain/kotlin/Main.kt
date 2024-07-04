@@ -1,6 +1,7 @@
 import io.github.smyrgeorge.sqlx4k.Sqlx4k
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.impl.Postgres
+import io.github.smyrgeorge.sqlx4k.impl.errorOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.async
@@ -12,12 +13,6 @@ import kotlin.time.measureTime
 
 fun main() {
     runBlocking {
-//        @Suppress("unused")
-//        suspend fun <A, B> Iterable<A>.mapParallel(
-//            context: CoroutineContext = Dispatchers.IO,
-//            f: suspend (A) -> B
-//        ): List<B> = withContext(context) { map { async { f(it) } }.awaitAll() }
-
         suspend fun <A> Iterable<A>.forEachParallel(
             context: CoroutineContext = Dispatchers.IO,
             f: suspend (A) -> Unit
@@ -37,6 +32,9 @@ fun main() {
             //  Map the value here.
             "MAPPED_VALUE"
         }.getOrThrow()
+        val error: Sqlx4k.Error = pg.query("select * from sqlx4kk").errorOrNull()
+        println(error)
+
         pg.query("create table if not exists sqlx4k(id integer);").getOrThrow()
         pg.query("insert into sqlx4k (id) values (65);").getOrThrow()
         pg.query("insert into sqlx4k (id) values (66);").getOrThrow()

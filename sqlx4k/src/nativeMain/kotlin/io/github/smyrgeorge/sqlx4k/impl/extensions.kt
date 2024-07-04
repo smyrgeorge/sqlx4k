@@ -3,6 +3,7 @@ package io.github.smyrgeorge.sqlx4k.impl
 import io.github.smyrgeorge.sqlx4k.Driver.Companion.idx
 import io.github.smyrgeorge.sqlx4k.Driver.Companion.map
 import io.github.smyrgeorge.sqlx4k.Driver.Companion.mutexMap
+import io.github.smyrgeorge.sqlx4k.Sqlx4k
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.runBlocking
@@ -23,3 +24,8 @@ internal suspend inline fun sqlx(crossinline f: (idx: ULong) -> Unit): CPointer<
         }
         f(idx)
     }
+
+
+inline fun Result<*>.errorOrNull(): Sqlx4k.Error =
+    exceptionOrNull() as Sqlx4k.Error
+

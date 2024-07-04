@@ -81,7 +81,7 @@ interface Sqlx4k {
     class Error(
         val code: Code,
         message: String? = null,
-    ) : RuntimeException("[$code] $message") {
+    ) : RuntimeException("[$code] :: $message") {
         fun ex(): Nothing = throw this
 
         enum class Code {
