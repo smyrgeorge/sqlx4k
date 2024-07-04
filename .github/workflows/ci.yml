@@ -33,7 +33,7 @@ jobs:
       - name: Cache rust build
         uses: actions/cache@v4
         with:
-          path: rust_lib/target
+          path: sqlx4k/rust_lib/target
           key: rust_lib
 
       - name: Gradle Build

@@ -1,6 +1,5 @@
-package io.github.smyrgeorge.sqlx4k.driver
+package io.github.smyrgeorge.sqlx4k
 
-import io.github.smyrgeorge.sqlx4k.Sqlx4k
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.get
@@ -56,9 +55,9 @@ interface Driver {
         if (isError()) toError().ex()
     }
 
-    fun CPointer<Sqlx4kResult>?.tx(): Transaction = use { result ->
+    fun CPointer<Sqlx4kResult>?.tx(): Int = use { result ->
         result.throwIfError()
-        Transaction(result.tx)
+        result.tx
     }
 
     fun <T> CPointer<Sqlx4kResult>?.map(f: Sqlx4k.Row.() -> T): List<T> = use { result ->

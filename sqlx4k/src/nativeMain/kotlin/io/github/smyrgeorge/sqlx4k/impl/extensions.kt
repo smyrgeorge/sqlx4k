@@ -1,8 +1,8 @@
-package io.github.smyrgeorge.sqlx4k.driver.impl
+package io.github.smyrgeorge.sqlx4k.impl
 
-import io.github.smyrgeorge.sqlx4k.driver.Driver.Companion.idx
-import io.github.smyrgeorge.sqlx4k.driver.Driver.Companion.map
-import io.github.smyrgeorge.sqlx4k.driver.Driver.Companion.mutexMap
+import io.github.smyrgeorge.sqlx4k.Driver.Companion.idx
+import io.github.smyrgeorge.sqlx4k.Driver.Companion.map
+import io.github.smyrgeorge.sqlx4k.Driver.Companion.mutexMap
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.runBlocking

@@ -1,6 +1,6 @@
 import io.github.smyrgeorge.sqlx4k.Sqlx4k
-import io.github.smyrgeorge.sqlx4k.driver.Transaction
-import io.github.smyrgeorge.sqlx4k.driver.impl.Postgres
+import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.impl.Postgres
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.async
