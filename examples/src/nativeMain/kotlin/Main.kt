@@ -32,7 +32,7 @@ fun main() {
             //  Map the value here.
             "MAPPED_VALUE"
         }.getOrThrow()
-        val error: Sqlx4k.Error = pg.query("select * from sqlx4kk").errorOrNull()
+        val error = pg.query("select * from sqlx4kk").errorOrNull()
         println(error)
 
         pg.query("create table if not exists sqlx4k(id integer);").getOrThrow()

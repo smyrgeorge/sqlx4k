@@ -26,6 +26,6 @@ internal suspend inline fun sqlx(crossinline f: (idx: ULong) -> Unit): CPointer<
     }
 
 
-fun Result<*>.errorOrNull(): Sqlx4k.Error =
-    exceptionOrNull() as Sqlx4k.Error
+fun Result<*>.errorOrNull(): Sqlx4k.Error? =
+    exceptionOrNull() as? Sqlx4k.Error
 

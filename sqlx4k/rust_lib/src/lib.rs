@@ -390,7 +390,7 @@ pub extern "C" fn sqlx4k_tx_fetch_all(
 pub extern "C" fn sqlx4k_free_result(ptr: *mut Sqlx4kResult) {
     let ptr: Sqlx4kResult = unsafe { *Box::from_raw(ptr) };
 
-    if ptr.error > 0 {
+    if ptr.error >= 0 {
         let error_message = unsafe { CString::from_raw(ptr.error_message) };
         std::mem::drop(error_message);
     }
