@@ -4,7 +4,11 @@ import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.Driver.Companion.fn
 import io.github.smyrgeorge.sqlx4k.Sqlx4k
 import io.github.smyrgeorge.sqlx4k.Transaction
+import kotlinx.cinterop.CPointed
+import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import librust_lib.sqlx4k_fetch_all
 import librust_lib.sqlx4k_of
 import librust_lib.sqlx4k_query
@@ -24,8 +28,6 @@ class Postgres(
     maxConnections: Int
 ) : Driver, Driver.Tx {
     init {
-        Driver.init(maxConnections)
-
         sqlx4k_of(
             host = host,
             port = port,
@@ -37,33 +39,46 @@ class Postgres(
     }
 
     override suspend fun query(sql: String): Result<Unit> = runCatching {
-        sqlx { idx -> sqlx4k_query(idx, sql, fn) }.throwIfError()
+        sqlx { c -> sqlx4k_query(sql, c, fn) }.throwIfError()
     }
 
     override suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>> = runCatching {
-        sqlx { idx -> sqlx4k_fetch_all(idx, sql, fn) }.map { mapper(this) }
+        sqlx { c -> sqlx4k_fetch_all(sql, c, fn) }.map { mapper(this) }
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
-        val tx = sqlx { idx -> sqlx4k_tx_begin(idx, fn) }.tx()
+        val tx = sqlx { c -> sqlx4k_tx_begin(c, fn) }.tx()
         Tx(tx)
     }
 
-    class Tx(override val id: Int) : Transaction {
+    class Tx(override var tx: CPointer<out CPointed>) : Transaction {
+        private val mutex = Mutex()
+
         override suspend fun commit(): Result<Unit> = runCatching {
-            sqlx { idx -> sqlx4k_tx_commit(idx, id, fn) }.throwIfError()
+            mutex.withLock {
+                sqlx { c -> sqlx4k_tx_commit(tx, c, fn) }.throwIfError()
+            }
         }
 
         override suspend fun rollback(): Result<Unit> = runCatching {
-            sqlx { idx -> sqlx4k_tx_rollback(idx, id, fn) }.throwIfError()
+            mutex.withLock {
+                sqlx { c -> sqlx4k_tx_rollback(tx, c, fn) }.throwIfError()
+            }
         }
 
         override suspend fun query(sql: String): Result<Unit> = runCatching {
-            sqlx { idx -> sqlx4k_tx_query(idx, id, sql, fn) }.throwIfError()
+            mutex.withLock {
+                tx = sqlx { c -> sqlx4k_tx_query(tx, sql, c, fn) }.tx()
+            }
         }
 
         override suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>> = runCatching {
-            sqlx { idx -> sqlx4k_tx_fetch_all(idx, id, sql, fn) }.map { mapper(this) }
+            mutex.withLock {
+                sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, fn) }
+                    .txMap { mapper(this) }
+                    .also { tx = it.first }
+                    .second
+            }
         }
     }
 }

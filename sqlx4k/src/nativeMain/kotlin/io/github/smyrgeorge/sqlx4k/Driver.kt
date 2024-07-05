@@ -1,14 +1,16 @@
 package io.github.smyrgeorge.sqlx4k
 
+import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
+import kotlinx.cinterop.CValue
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.asStableRef
 import kotlinx.cinterop.get
 import kotlinx.cinterop.pointed
 import kotlinx.cinterop.staticCFunction
 import kotlinx.cinterop.toKString
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.cinterop.useContents
+import librust_lib.Ptr
 import librust_lib.Sqlx4kResult
 import librust_lib.sqlx4k_free_result
 import kotlin.coroutines.Continuation
@@ -55,45 +57,37 @@ interface Driver {
         if (isError()) toError().ex()
     }
 
-    fun CPointer<Sqlx4kResult>?.tx(): Int = use { result ->
-        result.throwIfError()
-        result.tx
-    }
-
-    fun <T> CPointer<Sqlx4kResult>?.map(f: Sqlx4k.Row.() -> T): List<T> = use { result ->
-        result.throwIfError()
+    private fun <T> Sqlx4kResult.map(f: Sqlx4k.Row.() -> T): List<T> {
+        throwIfError()
         val rows = mutableListOf<T>()
-        repeat(result.size) { index ->
-            val scope = Sqlx4k.Row(result.rows!![index])
+        repeat(size) { index ->
+            val scope = Sqlx4k.Row(this.rows!![index])
             val row = f(scope)
             rows.add(row)
         }
-        rows
+        return rows
     }
+
+    fun <T> CPointer<Sqlx4kResult>?.map(f: Sqlx4k.Row.() -> T): List<T> =
+        use { result -> result.map(f) }
+
+    fun CPointer<Sqlx4kResult>?.tx(): CPointer<out CPointed> = use { result ->
+        result.throwIfError()
+        result.tx!!
+    }
+
+    fun <T> CPointer<Sqlx4kResult>?.txMap(f: Sqlx4k.Row.() -> T): Pair<CPointer<out CPointed>, List<T>> =
+        use { result -> result.tx!! to result.map(f) }
 
     interface Tx {
         suspend fun begin(): Result<Transaction>
     }
 
     companion object {
-        private var idx: ULong = ULong.MIN_VALUE
-        private lateinit var mutexIdx: Mutex
-        suspend fun idx(): ULong = mutexIdx.withLock {
-            // At some point is going to overflow, thus it will start from 0.
-            // It's the expected behaviour.
-            idx++
-        }
-
-        lateinit var mutexMap: Mutex
-        lateinit var map: HashMap<ULong, Continuation<CPointer<Sqlx4kResult>?>>
-        internal val fn = staticCFunction<ULong, CPointer<Sqlx4kResult>?, Unit> { idx, it ->
-            runBlocking { mutexMap.withLock { map.remove(idx) } }!!.resume(it)
-        }
-
-        fun init(maxConnections: Int) {
-            mutexIdx = Mutex()
-            mutexMap = Mutex()
-            map = HashMap(maxConnections)
+        internal val fn = staticCFunction<CValue<Ptr>, CPointer<Sqlx4kResult>?, Unit> { c, r ->
+            val ref = c.useContents { ptr }!!.asStableRef<Continuation<CPointer<Sqlx4kResult>?>>()
+            ref.get().resume(r)
+            ref.dispose()
         }
 
         private val nameParameterRegex = Regex("""(?<!:):(?!:)[a-zA-Z]\w+""")

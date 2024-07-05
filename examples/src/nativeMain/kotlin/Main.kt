@@ -68,6 +68,7 @@ fun main() {
         println("\n\n\n::: TX :::")
 
         val tx1: Transaction = pg.begin().getOrThrow()
+        println(tx1)
         tx1.query("delete from sqlx4k;").getOrThrow()
         tx1.fetchAll("select * from sqlx4k;") {
             println(debug())

@@ -185,30 +185,30 @@ leaks -atExit -- ./examples/build/bin/macosArm64/releaseExecutable/examples.kexe
 Sample output:
 
 ```text
-Process:         examples.kexe [47305]
+Process:         examples.kexe [32353]
 Path:            /Users/USER/*/examples.kexe
-Load Address:    0x102968000
+Load Address:    0x102904000
 Identifier:      examples.kexe
 Version:         0
 Code Type:       ARM64
 Platform:        macOS
-Parent Process:  leaks [47304]
+Parent Process:  leaks [32351]
 
-Date/Time:       2024-07-05 00:01:28.058 +0200
-Launch Time:     2024-07-05 00:01:09.909 +0200
+Date/Time:       2024-07-05 16:14:03.515 +0200
+Launch Time:     2024-07-05 16:13:45.848 +0200
 OS Version:      macOS 14.5 (23F79)
 Report Version:  7
 Analysis Tool:   /Applications/Xcode.app/Contents/Developer/usr/bin/leaks
 Analysis Tool Version:  Xcode 15.4 (15F31d)
 
-Physical footprint:         300.5M
-Physical footprint (peak):  300.5M
+Physical footprint:         213.8M
+Physical footprint (peak):  213.8M
 Idle exit:                  untracked
 ----
 
 leaks Report Version: 4.0, multi-line stacks
-Process 47305: 188498 nodes malloced for 18565 KB
-Process 47305: 0 leaks for 0 total leaked bytes.
+Process 32353: 125349 nodes malloced for 8520 KB
+Process 32353: 0 leaks for 0 total leaked bytes.
 ```
 
 ## References
