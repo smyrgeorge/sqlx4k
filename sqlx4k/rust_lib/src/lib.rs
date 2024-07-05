@@ -8,6 +8,7 @@ use std::{
 };
 use tokio::runtime::Runtime;
 
+pub const OK: c_int = -1;
 pub const ERROR_DATABASE: c_int = 0;
 pub const ERROR_POOL_TIMED_OUT: c_int = 1;
 pub const ERROR_POOL_CLOSED: c_int = 2;
@@ -35,13 +36,63 @@ pub const TYPE_JSONB: c_int = 17;
 static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 static mut SQLX4K: OnceLock<Sqlx4k> = OnceLock::new();
 
+#[repr(C)]
+pub struct Sqlx4kResult {
+    pub error: c_int,
+    pub error_message: *mut c_char,
+    pub tx: *mut c_void,
+    pub size: c_int,
+    pub rows: *mut Sqlx4kRow,
+}
+
+impl Sqlx4kResult {
+    fn leak(self) -> *mut Sqlx4kResult {
+        let result = Box::new(self);
+        let result = Box::leak(result);
+        result
+    }
+}
+
+impl Default for Sqlx4kResult {
+    fn default() -> Self {
+        Self {
+            error: OK,
+            error_message: null_mut(),
+            tx: null_mut(),
+            size: 0,
+            rows: null_mut(),
+        }
+    }
+}
+
+#[repr(C)]
+pub struct Sqlx4kRow {
+    pub size: c_int,
+    pub columns: *mut Sqlx4kColumn,
+}
+
+impl Default for Sqlx4kRow {
+    fn default() -> Self {
+        Self {
+            size: 0,
+            columns: null_mut(),
+        }
+    }
+}
+
+#[repr(C)]
+pub struct Sqlx4kColumn {
+    pub ordinal: c_int,
+    pub name: *mut c_char,
+    pub kind: c_int,
+    pub size: c_int,
+    pub value: *mut c_void,
+}
+
 #[derive(Debug)]
 struct Sqlx4k {
     pool: PgPool,
 }
-
-unsafe impl<'a> Sync for Sqlx4k {}
-unsafe impl<'a> Send for Sqlx4k {}
 
 impl Sqlx4k {
     async fn query(&self, sql: &str) -> *mut Sqlx4kResult {
@@ -79,25 +130,21 @@ impl Sqlx4k {
     async fn tx_commit(&mut self, tx: Ptr) -> *mut Sqlx4kResult {
         let tx = unsafe { &mut *(tx.ptr as *mut sqlx::Transaction<'_, sqlx::Postgres>) };
         let tx = unsafe { *Box::from_raw(tx) };
-        match tx.commit().await {
-            Ok(_) => (),
-            Err(err) => {
-                return sqlx4k_error_result_of(err).leak();
-            }
+        let result = match tx.commit().await {
+            Ok(_) => Sqlx4kResult::default(),
+            Err(err) => sqlx4k_error_result_of(err),
         };
-        Sqlx4kResult::default().leak()
+        result.leak()
     }
 
     async fn tx_rollback(&mut self, tx: Ptr) -> *mut Sqlx4kResult {
         let tx = unsafe { &mut *(tx.ptr as *mut sqlx::Transaction<'_, sqlx::Postgres>) };
         let tx = unsafe { *Box::from_raw(tx) };
-        match tx.rollback().await {
-            Ok(_) => (),
-            Err(err) => {
-                return sqlx4k_error_result_of(err).leak();
-            }
+        let result = match tx.rollback().await {
+            Ok(_) => Sqlx4kResult::default(),
+            Err(err) => sqlx4k_error_result_of(err),
         };
-        Sqlx4kResult::default().leak()
+        result.leak()
     }
 
     async fn tx_query(&mut self, tx: Ptr, sql: &str) -> *mut Sqlx4kResult {
@@ -130,59 +177,6 @@ impl Sqlx4k {
         };
         result.leak()
     }
-}
-
-#[repr(C)]
-pub struct Sqlx4kResult {
-    pub error: c_int,
-    pub error_message: *mut c_char,
-    pub tx: *mut c_void,
-    pub size: c_int,
-    pub rows: *mut Sqlx4kRow,
-}
-
-impl Sqlx4kResult {
-    fn leak(self) -> *mut Sqlx4kResult {
-        let result = Box::new(self);
-        let result = Box::leak(result);
-        result
-    }
-}
-
-impl Default for Sqlx4kResult {
-    fn default() -> Self {
-        Self {
-            error: -1,
-            error_message: null_mut(),
-            tx: null_mut(),
-            size: 0,
-            rows: null_mut(),
-        }
-    }
-}
-
-#[repr(C)]
-pub struct Sqlx4kRow {
-    pub size: c_int,
-    pub columns: *mut Sqlx4kColumn,
-}
-
-impl Default for Sqlx4kRow {
-    fn default() -> Self {
-        Self {
-            size: 0,
-            columns: null_mut(),
-        }
-    }
-}
-
-#[repr(C)]
-pub struct Sqlx4kColumn {
-    pub ordinal: c_int,
-    pub name: *mut c_char,
-    pub kind: c_int,
-    pub size: c_int,
-    pub value: *mut c_void,
 }
 
 #[no_mangle]
@@ -513,7 +507,6 @@ fn sqlx4k_value_of(value: &PgValueRef) -> (c_int, usize, *mut c_void) {
     };
 
     let size: usize = bytes.len();
-    // TODO: clone under the hood here.
     let bytes: Vec<u8> = bytes.iter().cloned().collect();
     let bytes: Box<[u8]> = bytes.into_boxed_slice();
     let bytes: &mut [u8] = Box::leak(bytes);

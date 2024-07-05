@@ -33,7 +33,7 @@ interface Driver {
         mapper: Sqlx4k.Row.() -> T,
     ): Result<List<T>> = fetchAll(sql.withNamedParameters(params, paramsMapper), mapper)
 
-    private fun <T> CPointer<Sqlx4kResult>?.use(f: (it: Sqlx4kResult) -> T): T {
+    private inline fun <T> CPointer<Sqlx4kResult>?.use(f: (it: Sqlx4kResult) -> T): T {
         return try {
             this?.pointed?.let { f(it) }
                 ?: error("Could not extract the value from the raw pointer (null).")
@@ -42,8 +42,8 @@ interface Driver {
         }
     }
 
-    private fun Sqlx4kResult.isError(): Boolean = error >= 0
-    private fun Sqlx4kResult.toError(): Sqlx4k.Error {
+    private inline fun Sqlx4kResult.isError(): Boolean = error >= 0
+    private inline fun Sqlx4kResult.toError(): Sqlx4k.Error {
         val code = Sqlx4k.Error.Code.entries[error]
         val message = error_message?.toKString()
         return Sqlx4k.Error(code, message)
@@ -57,7 +57,7 @@ interface Driver {
         if (isError()) toError().ex()
     }
 
-    private fun <T> Sqlx4kResult.map(f: Sqlx4k.Row.() -> T): List<T> {
+    private inline fun <T> Sqlx4kResult.map(f: Sqlx4k.Row.() -> T): List<T> {
         throwIfError()
         val rows = mutableListOf<T>()
         repeat(size) { index ->
