@@ -8,13 +8,13 @@ import librust_lib.Sqlx4kColumn
 import librust_lib.Sqlx4kRow
 
 @OptIn(ExperimentalForeignApi::class)
-@Suppress("unused", "MemberVisibilityCanBePrivate", "SpellCheckingInspection", "CanBeParameter")
+@Suppress("unused", "MemberVisibilityCanBePrivate", "SpellCheckingInspection")
 interface Sqlx4k {
     class Row(
         private val row: Sqlx4kRow
     ) {
 
-        val columns: Map<String, Column> = run {
+        val columns: Map<String, Column> by lazy {
             val map = mutableMapOf<String, Column>()
             repeat(row.size) { index ->
                 val raw = row.columns!![index]
