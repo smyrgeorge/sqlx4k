@@ -42,8 +42,8 @@ interface Driver {
         }
     }
 
-    private inline fun Sqlx4kResult.isError(): Boolean = error >= 0
-    private inline fun Sqlx4kResult.toError(): Sqlx4k.Error {
+    private fun Sqlx4kResult.isError(): Boolean = error >= 0
+    private fun Sqlx4kResult.toError(): Sqlx4k.Error {
         val code = Sqlx4k.Error.Code.entries[error]
         val message = error_message?.toKString()
         return Sqlx4k.Error(code, message)

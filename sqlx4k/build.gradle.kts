@@ -7,6 +7,8 @@ plugins {
     kotlin("multiplatform")
     // https://github.com/vanniktech/gradle-maven-publish-plugin
     id("com.vanniktech.maven.publish") version "0.28.0"
+    // https://plugins.gradle.org/plugin/org.jetbrains.dokka
+    id("org.jetbrains.dokka") version "1.9.20"
 }
 
 repositories {
