@@ -23,13 +23,27 @@ You can found the latest published version [here](https://central.sonatype.com/a
 implementation("io.github.smyrgeorge:sqlx4k:x.y.z")
 ```
 
+## Why not a pure kotlin implementation?
+
+First of all, I wanted to experiment with the Kotlin FFI.
+Additionally, I really like the Rust programming language,
+so I also wanted to experiment with the Rust FFI.
+
+I think it's a quite nice solution (at least for now).
+The Kotlin Native ecosystem is in a very early stage,
+so I believe it’s a great opportunity to make use of other libraries using the FFI layer.
+It makes it easier (at least for now) to create some wrappers
+around well-tested libraries to provide the necessary functionality to the ecosystem.
+
 ## Features
 
 ### Async-io
 
-The drivers fully supports non-blocking io.
+The driver fully supports non-blocking io.
+Bridges the kotlin-async (coroutines) with the rust-async (tokio) without blocking. 
 
-All the "magic" happens thanks to the build in kotlin function `suspendCoroutine`, take a look [here](https://kotlinlang.org/api/latest/jvm/stdlib/kotlin.coroutines/suspend-coroutine.html).
+All the "magic" happens thanks to the build in kotlin function `suspendCoroutine`, take a
+look [here](https://kotlinlang.org/api/latest/jvm/stdlib/kotlin.coroutines/suspend-coroutine.html).
 
 ### Connection pool
 
@@ -89,20 +103,21 @@ tx1.commit().getOrThrow()
 - [x] Named parameters
 - [ ] Transaction isolation level
 - [x] Publish to maven central
-- [x] Better error handling (in progress)
+- [x] Better error handling
 - [x] Check for memory leaks
 - [ ] Testing
 - [ ] Documentation
 - [ ] Benchmark
 - [ ] MySql
 - [ ] SQLite
+- [ ] Windows support
 
 ## Compilation
 
 You will need the rust toolchain to build this project.
 Check here: https://rustup.rs/
 
-Also, make sure that you have installed all the necessary compile targets:
+Also, make sure that you have installed all the necessary targets:
 
 ```text
 rustup target add aarch64-apple-darwin
