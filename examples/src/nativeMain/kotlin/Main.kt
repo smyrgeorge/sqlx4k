@@ -46,8 +46,18 @@ fun main() {
             val id: Sqlx4k.Row.Column = get("id")
             Test(id = id.value.toInt())
         }
-
         println(r1)
+
+        val r2 = pg.fetchAll("select * from sqlx4k;") {
+            val id: Sqlx4k.Row.Column = get(0)
+            Test(id = id.value.toInt())
+        }
+        println(r2)
+        val r3 = pg.fetchAll("select * from sqlx4k;") {
+            val id: Sqlx4k.Row.Column = get(1)
+            Test(id = id.value.toInt())
+        }
+        println(r3)
 
         pg.fetchAll("select * from :table;", mapOf("table" to "sqlx4k")) {
             val id: Sqlx4k.Row.Column = get("id")

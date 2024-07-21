@@ -26,6 +26,11 @@ interface Sqlx4k {
 
         val size get() = row.size
         fun get(name: String): Column = columns[name]!!
+        fun get(ordinal: Int): Column {
+            if (ordinal < 0 || ordinal >= columns.size) error("Columns :: Out of bounds (index $ordinal)")
+            val raw = row.columns!![ordinal]
+            return Column(raw.name!!.toKString(), raw)
+        }
         fun debug(): String = row.debug()
 
         @OptIn(ExperimentalForeignApi::class)
