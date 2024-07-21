@@ -76,11 +76,11 @@ class Postgres(
         Tx(tx)
     }
 
-    suspend fun <T> listen(channel: String, f: (PgNotification) -> T) {
+    suspend fun listen(channel: String, f: (PgNotification) -> Unit) {
         listen(listOf(channel), f)
     }
 
-    suspend fun <T> listen(channels: List<String>, f: (PgNotification) -> T) {
+    suspend fun listen(channels: List<String>, f: (PgNotification) -> Unit) {
         val channelId: Long = listenerId()
         val channel = Channel<PgNotification>(capacity = Channel.UNLIMITED)
 
