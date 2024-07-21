@@ -101,6 +101,7 @@ tx1.commit().getOrThrow()
 - [x] Use non-blocking io end to end, using the `suspendCoroutine` function
 - [x] Transactions
 - [x] Named parameters
+- [ ] Listen/Notify Postgres commands.
 - [ ] Transaction isolation level
 - [x] Publish to maven central
 - [x] Better error handling
