@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
@@ -63,6 +64,17 @@ fun main() {
 
         pg.fetchAll("select 'testtest', 'test1';") {
             println(debug())
+        }
+
+        println("Connections: ${pg.poolSize()}, Idle: ${pg.poolIdleSize()}")
+        println("\n\n\n::: LISTEN/NOTIFY :::")
+        pg.listen("chan0") { notification: Postgres.PgNotification ->
+            println(notification)
+        }
+
+        (1..10).forEach {
+            pg.notify("chan0", "Hello $it")
+            delay(1000)
         }
 
         println("\n\n\n::: TX :::")
@@ -133,5 +145,12 @@ fun main() {
 //      9.385897375s
 //      9.351138833s
         println(t2)
+
+        println("Connections: ${pg.poolSize()}, Idle: ${pg.poolIdleSize()}")
+        (1..10).forEach {
+            println("Notify: $it")
+            pg.notify("chan0", "Hello $it")
+            delay(1000)
+        }
     }
 }

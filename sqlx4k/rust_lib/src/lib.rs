@@ -1,6 +1,10 @@
-use sqlx::postgres::{PgPool, PgPoolOptions, PgRow, PgValueFormat, PgValueRef};
+use futures::StreamExt;
+use sqlx::postgres::{
+    PgListener, PgNotification, PgPool, PgPoolOptions, PgRow, PgValueFormat, PgValueRef,
+};
 use sqlx::{Column, Error, Executor};
 use sqlx::{Row, TypeInfo, ValueRef};
+use std::ffi::c_long;
 use std::ptr::null_mut;
 use std::{
     ffi::{c_char, c_int, c_void, CStr, CString},
@@ -348,6 +352,39 @@ pub extern "C" fn sqlx4k_tx_fetch_all(
 }
 
 #[no_mangle]
+pub extern "C" fn sqlx4k_listen(
+    channels: *const c_char,
+    notify_id: c_long,
+    notify: unsafe extern "C" fn(c_long, *mut Sqlx4kResult),
+    callback: *mut c_void,
+    fun: unsafe extern "C" fn(Ptr, *mut Sqlx4kResult),
+) {
+    let callback = Ptr { ptr: callback };
+    let channels = unsafe { c_chars_to_str(channels).to_owned() };
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
+    runtime.spawn(async move {
+        let mut listener = PgListener::connect_with(&sqlx4k.pool).await.unwrap();
+        let channels: Vec<&str> = channels.split(',').collect();
+        listener.listen_all(channels).await.unwrap();
+        let mut stream = listener.into_stream();
+
+        // Return OK as soon as the stream is ready.
+        let result = Sqlx4kResult::default().leak();
+        unsafe { fun(callback, result) }
+
+        while let Some(item) = stream.next().await {
+            let item: PgNotification = item.unwrap();
+            let result = sqlx4k_result_of_pg_notification(item).leak();
+            unsafe { notify(notify_id, result) }
+        }
+
+        // TODO: remove this.
+        panic!("Consume from channel stoped.");
+    });
+}
+
+#[no_mangle]
 pub extern "C" fn sqlx4k_free_result(ptr: *mut Sqlx4kResult) {
     let ptr: Sqlx4kResult = unsafe { *Box::from_raw(ptr) };
 
@@ -372,6 +409,46 @@ pub extern "C" fn sqlx4k_free_result(ptr: *mut Sqlx4kResult) {
                 unsafe { Vec::from_raw_parts(col.value, col.size as usize, col.size as usize) };
             std::mem::drop(value);
         }
+    }
+}
+
+fn sqlx4k_result_of_pg_notification(item: PgNotification) -> Sqlx4kResult {
+    let bytes: &[u8] = item.payload().as_bytes();
+    let size: usize = bytes.len();
+    let bytes: Vec<u8> = bytes.iter().cloned().collect();
+    let bytes: Box<[u8]> = bytes.into_boxed_slice();
+    let bytes: &mut [u8] = Box::leak(bytes);
+    let bytes: *mut u8 = bytes.as_mut_ptr();
+    let value: *mut c_void = bytes as *mut c_void;
+
+    let column = Sqlx4kColumn {
+        ordinal: 0,
+        name: CString::new(item.channel()).unwrap().into_raw(),
+        kind: TYPE_TEXT,
+        size: size as c_int,
+        value,
+    };
+    let mut columns = vec![column];
+    // Make sure we're not wasting space.
+    columns.shrink_to_fit();
+    assert!(columns.len() == columns.capacity());
+    let columns: Box<[Sqlx4kColumn]> = columns.into_boxed_slice();
+    let columns: &mut [Sqlx4kColumn] = Box::leak(columns);
+    let columns: *mut Sqlx4kColumn = columns.as_mut_ptr();
+
+    let row = Sqlx4kRow { size: 1, columns };
+    let mut rows = vec![row];
+    // Make sure we're not wasting space.
+    rows.shrink_to_fit();
+    assert!(rows.len() == rows.capacity());
+    let rows: Box<[Sqlx4kRow]> = rows.into_boxed_slice();
+    let rows: &mut [Sqlx4kRow] = Box::leak(rows);
+    let rows: *mut Sqlx4kRow = rows.as_mut_ptr();
+
+    Sqlx4kResult {
+        size: 1,
+        rows,
+        ..Default::default()
     }
 }
 

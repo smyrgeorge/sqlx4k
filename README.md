@@ -40,7 +40,7 @@ around well-tested libraries to provide the necessary functionality to the ecosy
 ### Async-io
 
 The driver fully supports non-blocking io.
-Bridges the kotlin-async (coroutines) with the rust-async (tokio) without blocking. 
+Bridges the kotlin-async (coroutines) with the rust-async (tokio) without blocking.
 
 All the "magic" happens thanks to the build in kotlin function `suspendCoroutine`, take a
 look [here](https://kotlinlang.org/api/latest/jvm/stdlib/kotlin.coroutines/suspend-coroutine.html).
@@ -94,6 +94,19 @@ pg.fetchAll("select * from sqlx4k;") {
 tx1.commit().getOrThrow()
 ```
 
+### Listen/Notify
+
+```kotlin
+pg.listen("chan0") { notification: Postgres.PgNotification ->
+    println(notification)
+}
+
+(1..10).forEach {
+    pg.notify("chan0", "Hello $it")
+    delay(1000)
+}
+```
+
 ## Todo
 
 - [x] PostgresSQL
@@ -101,7 +114,7 @@ tx1.commit().getOrThrow()
 - [x] Use non-blocking io end to end, using the `suspendCoroutine` function
 - [x] Transactions
 - [x] Named parameters
-- [ ] Listen/Notify Postgres commands.
+- [ ] Listen/Notify Postgres (in progress).
 - [ ] Transaction isolation level
 - [x] Publish to maven central
 - [x] Better error handling
