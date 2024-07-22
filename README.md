@@ -114,6 +114,7 @@ pg.listen("chan0") { notification: Postgres.PgNotification ->
 - [x] Use non-blocking io end to end, using the `suspendCoroutine` function
 - [x] Transactions
 - [x] Named parameters
+- [ ] Check for SQL injections
 - [ ] Listen/Notify Postgres (in progress).
 - [ ] Transaction isolation level
 - [x] Publish to maven central
