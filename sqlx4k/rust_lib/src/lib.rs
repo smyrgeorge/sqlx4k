@@ -1,4 +1,3 @@
-use futures::StreamExt;
 use sqlx::postgres::{
     PgListener, PgNotification, PgPool, PgPoolOptions, PgRow, PgValueFormat, PgValueRef,
 };
@@ -367,20 +366,18 @@ pub extern "C" fn sqlx4k_listen(
         let mut listener = PgListener::connect_with(&sqlx4k.pool).await.unwrap();
         let channels: Vec<&str> = channels.split(',').collect();
         listener.listen_all(channels).await.unwrap();
-        let mut stream = listener.into_stream();
 
         // Return OK as soon as the stream is ready.
         let result = Sqlx4kResult::default().leak();
         unsafe { fun(callback, result) }
 
-        while let Some(item) = stream.next().await {
-            let item: PgNotification = item.unwrap();
-            let result = sqlx4k_result_of_pg_notification(item).leak();
-            unsafe { notify(notify_id, result) }
+        loop {
+            while let Some(item) = listener.try_recv().await.unwrap() {
+                let result = sqlx4k_result_of_pg_notification(item).leak();
+                unsafe { notify(notify_id, result) }
+            }
+            // Automatically reconnect if connection closes.
         }
-
-        // TODO: remove this.
-        panic!("Consume from channel stoped.");
     });
 }
 

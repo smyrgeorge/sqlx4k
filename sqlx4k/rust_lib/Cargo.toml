@@ -15,8 +15,6 @@ panic = "abort"
 [dependencies]
 # https://crates.io/crates/once_cell
 once_cell = { version = "1.19.0" }
-# https://crates.io/crates/futures
-futures = "0.3.30"
 # https://crates.io/crates/tokio
 tokio = { version = "1.38.0", features = ["rt-multi-thread"] }
 # https://crates.io/crates/sqlx
