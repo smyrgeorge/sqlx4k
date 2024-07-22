@@ -78,7 +78,7 @@ fun main() {
 
         println("Connections: ${pg.poolSize()}, Idle: ${pg.poolIdleSize()}")
         println("\n\n\n::: LISTEN/NOTIFY :::")
-        pg.listen("chan0") { notification: Postgres.PgNotification ->
+        pg.listen("chan0") { notification: Postgres.Notification ->
             println(notification)
         }
 

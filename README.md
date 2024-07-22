@@ -97,7 +97,7 @@ tx1.commit().getOrThrow()
 ### Listen/Notify
 
 ```kotlin
-pg.listen("chan0") { notification: Postgres.PgNotification ->
+pg.listen("chan0") { notification: Postgres.Notification ->
     println(notification)
 }
 

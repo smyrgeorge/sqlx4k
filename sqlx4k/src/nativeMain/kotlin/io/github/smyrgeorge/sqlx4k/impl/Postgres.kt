@@ -76,13 +76,13 @@ class Postgres(
         Tx(tx)
     }
 
-    suspend fun listen(channel: String, f: (PgNotification) -> Unit) {
+    suspend fun listen(channel: String, f: (Notification) -> Unit) {
         listen(listOf(channel), f)
     }
 
-    suspend fun listen(channels: List<String>, f: (PgNotification) -> Unit) {
+    suspend fun listen(channels: List<String>, f: (Notification) -> Unit) {
         val channelId: Long = listenerId()
-        val channel = Channel<PgNotification>(capacity = Channel.UNLIMITED)
+        val channel = Channel<Notification>(capacity = Channel.UNLIMITED)
 
         // Store the channel.
         Postgres.channels[channelId] = channel
@@ -146,13 +146,13 @@ class Postgres(
         }
     }
 
-    data class PgNotification(
+    data class Notification(
         val channel: String,
         val value: String,
     )
 
     companion object {
-        private val channels: MutableMap<Long, Channel<PgNotification>> by lazy { mutableMapOf() }
+        private val channels: MutableMap<Long, Channel<Notification>> by lazy { mutableMapOf() }
         private val listenerMutex = Mutex()
         private var listenerId: Long = 0
         private suspend fun listenerId(): Long = listenerMutex.withLock {
@@ -160,7 +160,7 @@ class Postgres(
             listenerId
         }
 
-        private fun CPointer<Sqlx4kResult>?.notify(): PgNotification {
+        private fun CPointer<Sqlx4kResult>?.notify(): Notification {
             return try {
                 val result: Sqlx4kResult =
                     this?.pointed ?: error("Could not extract the value from the raw pointer (null).")
@@ -171,7 +171,7 @@ class Postgres(
                 val column = row.columns!![0]
                 assert(column.kind == TYPE_TEXT)
 
-                PgNotification(
+                Notification(
                     channel = column.name!!.toKString(),
                     value = column.value!!.readBytes(column.size).toKString()
                 )
@@ -182,7 +182,7 @@ class Postgres(
 
         private val notify = staticCFunction<Long, CPointer<Sqlx4kResult>?, Unit> { c, r ->
             channels[c]?.let {
-                val notification: PgNotification = r.notify()
+                val notification: Notification = r.notify()
                 runBlocking { it.send(notification) }
             }
         }
