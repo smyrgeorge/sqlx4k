@@ -1,5 +1,5 @@
 group = "io.github.smyrgeorge"
-version = "0.4.0"
+version = "0.4.1"
 
 plugins {
     // https://plugins.gradle.org/plugin/org.jetbrains.kotlin.multiplatform
