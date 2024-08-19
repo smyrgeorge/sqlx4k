@@ -38,7 +38,7 @@ private val cargo: String
         ?: throw GradleException("Rust cargo binary is required to build project but it wasn't found.")
 
 val chosenTargets = (properties["targets"] as? String)?.split(",")
-    ?: listOf("macosArm64", "macosX64", "linuxArm64", "linuxX64")
+    ?: listOf("iosArm64", "androidNativeX64", "macosArm64", "macosX64", "linuxArm64", "linuxX64")
 
 kotlin {
     fun KotlinNativeTarget.rust(target: String) {
@@ -68,9 +68,11 @@ kotlin {
     }
 
     val availableTargets = mapOf(
+        Pair("iosArm64") { iosArm64 { rust("aarch64-apple-ios") } },
+        Pair("androidNativeX64") { androidNativeX64 { rust("aarch64-linux-android") } },
         Pair("macosArm64") { macosArm64 { rust("aarch64-apple-darwin") } },
-        Pair("macosX64") { macosX64 { rust("x86_64-apple-darwin") } },
         Pair("linuxArm64") { linuxArm64 { rust("aarch64-unknown-linux-gnu") } },
+        Pair("macosX64") { macosX64 { rust("x86_64-apple-darwin") } },
         Pair("linuxX64") { linuxX64 { rust("x86_64-unknown-linux-gnu") } },
     )
     chosenTargets.forEach {
