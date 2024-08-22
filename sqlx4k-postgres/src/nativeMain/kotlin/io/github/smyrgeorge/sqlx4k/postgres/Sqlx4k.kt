@@ -2,13 +2,12 @@ package io.github.smyrgeorge.sqlx4k.postgres
 
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.get
-import kotlinx.cinterop.readBytes
 import kotlinx.cinterop.toKString
 import librust_lib.Sqlx4kColumn
 import librust_lib.Sqlx4kRow
 
 @OptIn(ExperimentalForeignApi::class)
-@Suppress("unused", "MemberVisibilityCanBePrivate", "SpellCheckingInspection")
+@Suppress("unused", "MemberVisibilityCanBePrivate")
 interface Sqlx4k {
     class Row(
         private val row: Sqlx4kRow
@@ -46,10 +45,9 @@ interface Sqlx4k {
         private fun Sqlx4kColumn.debug(prefix: String = ""): String = buildString {
             append("\n$prefix[Sqlx4kPgColumn]")
             append("\n${prefix}ordinal: $ordinal")
-            append("\n${prefix}name: ${name?.toKString()}")
-            append("\n${prefix}kind: $kind")
-            append("\n${prefix}size: $size")
-            append("\n${prefix}value: ${value?.readBytes(size)?.toKString()}")
+            append("\n${prefix}name: ${name?.toKString() ?: "<EMPTY>"}")
+            append("\n${prefix}kind: ${kind?.toKString() ?: "<EMPTY>"}")
+            append("\n${prefix}value: ${value?.toKString() ?: "<EMPTY>"}")
         }
 
         class Column(
@@ -57,29 +55,13 @@ interface Sqlx4k {
             private val column: Sqlx4kColumn
         ) {
             val ordinal: Int get() = column.ordinal
-            val type: Type get() = Type.entries[column.kind]
-            val value: String get() = column.value!!.readBytes(column.size).toKString()
+            val type: String get() = column.kind!!.toKString()
+            val value: String get() = column.value!!.toKString()
 
-            enum class Type {
-                BOOL,
-                INT2,
-                INT4,
-                INT8,
-                FLOAT4,
-                FLOAT8,
-                NUMERIC,
-                CHAR,
-                VARCHAR,
-                TEXT,
-                TIMESTAMP,
-                TIMESTAMPTZ,
-                DATE,
-                TIME,
-                BYTEA,
-                UUID,
-                JSON,
-                JSONB
-            }
+            @OptIn(ExperimentalStdlibApi::class)
+            fun valueAsByteArray(): ByteArray = column.value!!.toKString()
+                .removePrefix("\\x")
+                .hexToByteArray()
         }
     }
 
@@ -95,6 +77,7 @@ interface Sqlx4k {
             PoolTimedOut,
             PoolClosed,
             WorkerCrashed,
+
             // Other errors:
             NamedParameterTypeNotSupported,
             NamedParameterValueNotSupplied

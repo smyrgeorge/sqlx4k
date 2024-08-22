@@ -135,6 +135,8 @@ Check here: https://rustup.rs/
 Also, make sure that you have installed all the necessary targets:
 
 ```text
+rustup target add aarch64-apple-ios
+rustup target add aarch64-linux-android
 rustup target add aarch64-apple-darwin
 rustup target add x86_64-apple-darwin
 rustup target add aarch64-unknown-linux-gnu
@@ -158,7 +160,7 @@ docker compose up -d
 Then run the `main` method.
 
 ```shell
-./examples/build/bin/macosArm64/releaseExecutable/examples.kexe
+./sqlx4k-postgres-examples/build/bin/macosArm64/releaseExecutable/sqlx4k-postgres-examples.kexe
 ```
 
 ## Examples
@@ -203,20 +205,20 @@ codesign -s - -v -f --entitlements =(echo -n '<?xml version="1.0" encoding="UTF-
         <key>com.apple.security.get-task-allow</key>
         <true/>
     </dict>
-</plist>') ./examples/build/bin/macosArm64/releaseExecutable/examples.kexe
+</plist>') ./sqlx4k-postgres-examples/build/bin/macosArm64/releaseExecutable/sqlx4k-postgres-examples.kexe
 ```
 
 Then run the tool:
 
 ```shell
-leaks -atExit -- ./examples/build/bin/macosArm64/releaseExecutable/examples.kexe
+leaks -atExit -- ./sqlx4k-postgres-examples/build/bin/macosArm64/releaseExecutable/sqlx4k-postgres-examples.kexe
 ```
 
 Sample output:
 
 ```text
-Process:         examples.kexe [32353]
-Path:            /Users/USER/*/examples.kexe
+Process:         sqlx4k-postgres-examples.kexe [32353]
+Path:            /Users/USER/*/sqlx4k-postgres-examples.kexe
 Load Address:    0x102904000
 Identifier:      examples.kexe
 Version:         0

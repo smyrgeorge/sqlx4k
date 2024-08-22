@@ -7,8 +7,6 @@ plugins {
     kotlin("multiplatform")
     // https://github.com/vanniktech/gradle-maven-publish-plugin
     id("com.vanniktech.maven.publish") version "0.28.0"
-    // https://plugins.gradle.org/plugin/org.jetbrains.dokka
-    id("org.jetbrains.dokka") version "1.9.20"
 }
 
 repositories {
@@ -102,7 +100,7 @@ mavenPublishing {
     )
 
     pom {
-        name = "sqlx4k"
+        name = "sqlx4k-postgres"
         description = "A non-blocking PostgreSQL database driver written in Kotlin for the Native platform."
         url = "https://github.com/smyrgeorge/sqlx4k"
 

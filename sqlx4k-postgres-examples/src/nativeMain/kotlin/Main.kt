@@ -42,6 +42,37 @@ fun main() {
 
         data class Test(val id: Int)
 
+        val types = """
+            select
+                   true::bool,
+                   1::int2,
+                   1::int4,
+                   1::int8,
+                   1::float4,
+                   1::float8,
+                   1::numeric(10,2),
+                   'a'::char,
+                   'aa'::varchar,
+                   'aa'::text,
+                   now()::timestamp as timestamp,
+                   now()::timestamptz as timestampz,
+                   now()::date as date,
+                   now()::time as time,
+                   '22d64ef8-f6b3-43da-8869-2ee9d31be9d5'::uuid,
+                   '{"a": 5}'::json,
+                   '{"a": 5}'::jsonb,
+                   'aa'::bytea
+            ;
+        """.trimIndent()
+        val r0 = pg.fetchAll(types) {
+            columns.forEach {
+                val v = it.value
+                val res = v.value
+                println("${it.key} :: $res")
+            }
+        }
+        println(r0)
+
         val r1 = pg.fetchAll("select * from sqlx4k;") {
             val id: Sqlx4k.Row.Column = get("id")
             Test(id = id.value.toInt())

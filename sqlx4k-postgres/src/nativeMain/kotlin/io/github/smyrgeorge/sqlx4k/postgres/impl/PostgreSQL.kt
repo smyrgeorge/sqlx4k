@@ -9,7 +9,6 @@ import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.get
 import kotlinx.cinterop.pointed
-import kotlinx.cinterop.readBytes
 import kotlinx.cinterop.staticCFunction
 import kotlinx.cinterop.toKString
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -24,19 +23,18 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import librust_lib.Sqlx4kResult
 import librust_lib.Sqlx4kRow
-import librust_lib.TYPE_TEXT
 import librust_lib.sqlx4k_fetch_all
 import librust_lib.sqlx4k_free_result
 import librust_lib.sqlx4k_listen
 import librust_lib.sqlx4k_of
+import librust_lib.sqlx4k_pool_idle_size
+import librust_lib.sqlx4k_pool_size
 import librust_lib.sqlx4k_query
 import librust_lib.sqlx4k_tx_begin
 import librust_lib.sqlx4k_tx_commit
 import librust_lib.sqlx4k_tx_fetch_all
 import librust_lib.sqlx4k_tx_query
 import librust_lib.sqlx4k_tx_rollback
-import librust_lib.sqlx4k_pool_size
-import librust_lib.sqlx4k_pool_idle_size
 import kotlin.experimental.ExperimentalNativeApi
 
 @Suppress("MemberVisibilityCanBePrivate")
@@ -169,11 +167,11 @@ class PostgreSQL(
                 val row: Sqlx4kRow = result.rows!![0]
                 assert(row.size == 1)
                 val column = row.columns!![0]
-                assert(column.kind == TYPE_TEXT)
+                assert(column.kind!!.toKString() == "TEXT")
 
                 Notification(
                     channel = column.name!!.toKString(),
-                    value = column.value!!.readBytes(column.size).toKString()
+                    value = column.value!!.toKString()
                 )
             } finally {
                 sqlx4k_free_result(this)

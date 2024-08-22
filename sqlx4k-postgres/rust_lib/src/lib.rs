@@ -1,7 +1,7 @@
 use sqlx::postgres::{
-    PgListener, PgNotification, PgPool, PgPoolOptions, PgRow, PgTypeInfo, PgValueFormat, PgValueRef,
+    PgListener, PgNotification, PgPool, PgPoolOptions, PgRow, PgTypeInfo, PgValueRef,
 };
-use sqlx::{Column, Error, Executor, Row, TypeInfo, ValueRef};
+use sqlx::{Column, Error, Executor, Postgres, Row, Transaction, TypeInfo, ValueRef};
 use std::{
     ffi::{c_char, c_int, c_long, c_void, CStr, CString},
     ptr::null_mut,
@@ -14,25 +14,6 @@ pub const ERROR_DATABASE: c_int = 0;
 pub const ERROR_POOL_TIMED_OUT: c_int = 1;
 pub const ERROR_POOL_CLOSED: c_int = 2;
 pub const ERROR_WORKER_CRASHED: c_int = 3;
-
-pub const TYPE_BOOL: c_int = 0;
-pub const TYPE_INT2: c_int = 1;
-pub const TYPE_INT4: c_int = 2;
-pub const TYPE_INT8: c_int = 3;
-pub const TYPE_FLOAT4: c_int = 4;
-pub const TYPE_FLOAT8: c_int = 5;
-pub const TYPE_NUMERIC: c_int = 6;
-pub const TYPE_CHAR: c_int = 7;
-pub const TYPE_VARCHAR: c_int = 8;
-pub const TYPE_TEXT: c_int = 9;
-pub const TYPE_TIMESTAMP: c_int = 10;
-pub const TYPE_TIMESTAMPTZ: c_int = 11;
-pub const TYPE_DATE: c_int = 12;
-pub const TYPE_TIME: c_int = 13;
-pub const TYPE_BYTEA: c_int = 14;
-pub const TYPE_UUID: c_int = 15;
-pub const TYPE_JSON: c_int = 16;
-pub const TYPE_JSONB: c_int = 17;
 
 static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 static mut SQLX4K: OnceLock<Sqlx4k> = OnceLock::new();
@@ -85,9 +66,8 @@ impl Default for Sqlx4kRow {
 pub struct Sqlx4kColumn {
     pub ordinal: c_int,
     pub name: *mut c_char,
-    pub kind: c_int,
-    pub size: c_int,
-    pub value: *mut c_void,
+    pub kind: *mut c_char,
+    pub value: *mut c_char,
 }
 
 #[derive(Debug)]
@@ -129,7 +109,7 @@ impl Sqlx4k {
     }
 
     async fn tx_commit(&mut self, tx: Ptr) -> *mut Sqlx4kResult {
-        let tx = unsafe { &mut *(tx.ptr as *mut sqlx::Transaction<'_, sqlx::Postgres>) };
+        let tx = unsafe { &mut *(tx.ptr as *mut Transaction<'_, Postgres>) };
         let tx = unsafe { *Box::from_raw(tx) };
         let result = match tx.commit().await {
             Ok(_) => Sqlx4kResult::default(),
@@ -139,7 +119,7 @@ impl Sqlx4k {
     }
 
     async fn tx_rollback(&mut self, tx: Ptr) -> *mut Sqlx4kResult {
-        let tx = unsafe { &mut *(tx.ptr as *mut sqlx::Transaction<'_, sqlx::Postgres>) };
+        let tx = unsafe { &mut *(tx.ptr as *mut Transaction<'_, Postgres>) };
         let tx = unsafe { *Box::from_raw(tx) };
         let result = match tx.rollback().await {
             Ok(_) => Sqlx4kResult::default(),
@@ -149,7 +129,7 @@ impl Sqlx4k {
     }
 
     async fn tx_query(&mut self, tx: Ptr, sql: &str) -> *mut Sqlx4kResult {
-        let tx = unsafe { &mut *(tx.ptr as *mut sqlx::Transaction<'_, sqlx::Postgres>) };
+        let tx = unsafe { &mut *(tx.ptr as *mut Transaction<'_, Postgres>) };
         let mut tx = unsafe { *Box::from_raw(tx) };
         let result = tx.fetch_optional(sql).await;
         let tx = Box::new(tx);
@@ -166,7 +146,7 @@ impl Sqlx4k {
     }
 
     async fn tx_fetch_all(&mut self, tx: Ptr, sql: &str) -> *mut Sqlx4kResult {
-        let tx = unsafe { &mut *(tx.ptr as *mut sqlx::Transaction<'_, sqlx::Postgres>) };
+        let tx = unsafe { &mut *(tx.ptr as *mut Transaction<'_, Postgres>) };
         let mut tx = unsafe { *Box::from_raw(tx) };
         let result = tx.fetch_all(sql).await;
         let tx = Box::new(tx);
@@ -400,29 +380,22 @@ pub extern "C" fn sqlx4k_free_result(ptr: *mut Sqlx4kResult) {
         for col in columns {
             let name = unsafe { CString::from_raw(col.name) };
             std::mem::drop(name);
-            let value =
-                unsafe { Vec::from_raw_parts(col.value, col.size as usize, col.size as usize) };
+            let kind = unsafe { CString::from_raw(col.kind) };
+            std::mem::drop(kind);
+            let value = unsafe { CString::from_raw(col.value) };
             std::mem::drop(value);
         }
     }
 }
 
 fn sqlx4k_result_of_pg_notification(item: PgNotification) -> Sqlx4kResult {
-    let bytes: &[u8] = item.payload().as_bytes();
-    let size: usize = bytes.len();
-    let bytes: Vec<u8> = bytes.iter().cloned().collect();
-    let bytes: Box<[u8]> = bytes.into_boxed_slice();
-    let bytes: &mut [u8] = Box::leak(bytes);
-    let bytes: *mut u8 = bytes.as_mut_ptr();
-    let value: *mut c_void = bytes as *mut c_void;
-
     let column = Sqlx4kColumn {
         ordinal: 0,
         name: CString::new(item.channel()).unwrap().into_raw(),
-        kind: TYPE_TEXT,
-        size: size as c_int,
-        value,
+        kind: CString::new("TEXT").unwrap().into_raw(),
+        value: CString::new(item.payload()).unwrap().into_raw(),
     };
+
     let mut columns = vec![column];
     // Make sure we're not wasting space.
     columns.shrink_to_fit();
@@ -520,14 +493,16 @@ fn sqlx4k_row_of(row: &PgRow) -> Sqlx4kRow {
             .columns()
             .iter()
             .map(|c| {
+                let name: &str = c.name();
                 let value_ref: PgValueRef = row.try_get_raw(c.ordinal()).unwrap();
-                let (kind, size, value) = sqlx4k_value_of(value_ref);
+                let info: std::borrow::Cow<PgTypeInfo> = value_ref.type_info();
+                let kind: &str = info.name();
+                let value: &str = row.get_unchecked(c.ordinal());
                 Sqlx4kColumn {
                     ordinal: c.ordinal() as c_int,
-                    name: CString::new(c.name()).unwrap().into_raw(),
-                    kind,
-                    size: size as c_int,
-                    value,
+                    name: CString::new(name).unwrap().into_raw(),
+                    kind: CString::new(kind).unwrap().into_raw(),
+                    value: CString::new(value).unwrap().into_raw(),
                 }
             })
             .collect();
@@ -546,45 +521,6 @@ fn sqlx4k_row_of(row: &PgRow) -> Sqlx4kRow {
             columns,
         }
     }
-}
-
-fn sqlx4k_value_of(value_ref: PgValueRef) -> (c_int, usize, *mut c_void) {
-    let info: std::borrow::Cow<PgTypeInfo> = value_ref.type_info();
-    let kind: c_int = match info.name() {
-        "BOOL" => TYPE_BOOL,
-        "INT2" => TYPE_INT2,
-        "INT4" => TYPE_INT4,
-        "INT8" => TYPE_INT8,
-        "FLOAT4" => TYPE_FLOAT4,
-        "FLOAT8" => TYPE_FLOAT8,
-        "NUMERIC" => TYPE_NUMERIC,
-        "CHAR" => TYPE_CHAR,
-        "VARCHAR" => TYPE_VARCHAR,
-        "TEXT" => TYPE_TEXT,
-        "TIMESTAMP" => TYPE_TIMESTAMP,
-        "TIMESTAMPTZ" => TYPE_TIMESTAMPTZ,
-        "DATE" => TYPE_DATE,
-        "TIME" => TYPE_TIME,
-        "BYTEA" => TYPE_BYTEA,
-        "UUID" => TYPE_UUID,
-        "JSON" => TYPE_JSON,
-        "JSONB" => TYPE_JSONB,
-        _ => panic!("Unsupported type value {}.", info.name()),
-    };
-
-    let bytes: &[u8] = match value_ref.format() {
-        PgValueFormat::Text => value_ref.as_str().unwrap().as_bytes(),
-        PgValueFormat::Binary => todo!("Binary format is not implemented yet."),
-        // PgValueFormat::Binary => value.as_bytes().unwrap(),
-    };
-
-    let size: usize = bytes.len();
-    let bytes: Vec<u8> = bytes.iter().cloned().collect();
-    let bytes: Box<[u8]> = bytes.into_boxed_slice();
-    let bytes: &mut [u8] = Box::leak(bytes);
-    let bytes: *mut u8 = bytes.as_mut_ptr();
-    let value: *mut c_void = bytes as *mut c_void;
-    (kind, size, value)
 }
 
 unsafe fn c_chars_to_str<'a>(c_chars: *const c_char) -> &'a str {

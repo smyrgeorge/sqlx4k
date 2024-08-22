@@ -19,7 +19,7 @@ kotlin {
     sourceSets {
         val nativeMain by getting {
             dependencies {
-                implementation(project(":sqlx4k"))
+                implementation(project(":sqlx4k-postgres"))
                 // https://github.com/Kotlin/kotlinx.coroutines
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
             }
