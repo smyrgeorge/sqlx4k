@@ -50,7 +50,7 @@ look [here](https://kotlinlang.org/api/latest/jvm/stdlib/kotlin.coroutines/suspe
 You can set the `maxConnections` from the driver constructor:
 
 ```kotlin
-val pg = Postgres(
+val pg = PostgreSQL(
     host = "localhost",
     port = 15432,
     username = "postgres",

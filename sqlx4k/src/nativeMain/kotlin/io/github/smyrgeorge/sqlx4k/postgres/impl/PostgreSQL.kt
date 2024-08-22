@@ -1,9 +1,9 @@
-package io.github.smyrgeorge.sqlx4k.impl
+package io.github.smyrgeorge.sqlx4k.postgres.impl
 
-import io.github.smyrgeorge.sqlx4k.Driver
-import io.github.smyrgeorge.sqlx4k.Driver.Companion.fn
-import io.github.smyrgeorge.sqlx4k.Sqlx4k
-import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.postgres.Driver
+import io.github.smyrgeorge.sqlx4k.postgres.Driver.Companion.fn
+import io.github.smyrgeorge.sqlx4k.postgres.Sqlx4k
+import io.github.smyrgeorge.sqlx4k.postgres.Transaction
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -41,7 +41,7 @@ import kotlin.experimental.ExperimentalNativeApi
 
 @Suppress("MemberVisibilityCanBePrivate")
 @OptIn(ExperimentalForeignApi::class, ExperimentalNativeApi::class)
-class Postgres(
+class PostgreSQL(
     host: String,
     port: Int,
     username: String,
@@ -85,7 +85,7 @@ class Postgres(
         val channel = Channel<Notification>(capacity = Channel.UNLIMITED)
 
         // Store the channel.
-        Postgres.channels[channelId] = channel
+        Companion.channels[channelId] = channel
 
         // Start the channel consumer.
         @OptIn(DelicateCoroutinesApi::class)

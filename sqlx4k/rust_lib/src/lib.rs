@@ -1,12 +1,10 @@
 use sqlx::postgres::{
-    PgListener, PgNotification, PgPool, PgPoolOptions, PgRow, PgValueFormat, PgValueRef,
+    PgListener, PgNotification, PgPool, PgPoolOptions, PgRow, PgTypeInfo, PgValueFormat, PgValueRef,
 };
-use sqlx::{Column, Error, Executor};
-use sqlx::{Row, TypeInfo, ValueRef};
-use std::ffi::c_long;
-use std::ptr::null_mut;
+use sqlx::{Column, Error, Executor, Row, TypeInfo, ValueRef};
 use std::{
-    ffi::{c_char, c_int, c_void, CStr, CString},
+    ffi::{c_char, c_int, c_long, c_void, CStr, CString},
+    ptr::null_mut,
     sync::OnceLock,
 };
 use tokio::runtime::Runtime;
@@ -522,8 +520,8 @@ fn sqlx4k_row_of(row: &PgRow) -> Sqlx4kRow {
             .columns()
             .iter()
             .map(|c| {
-                let v: &PgValueRef = &row.try_get_raw(c.ordinal()).unwrap();
-                let (kind, size, value) = sqlx4k_value_of(v);
+                let value_ref: PgValueRef = row.try_get_raw(c.ordinal()).unwrap();
+                let (kind, size, value) = sqlx4k_value_of(value_ref);
                 Sqlx4kColumn {
                     ordinal: c.ordinal() as c_int,
                     name: CString::new(c.name()).unwrap().into_raw(),
@@ -550,8 +548,8 @@ fn sqlx4k_row_of(row: &PgRow) -> Sqlx4kRow {
     }
 }
 
-fn sqlx4k_value_of(value: &PgValueRef) -> (c_int, usize, *mut c_void) {
-    let info: std::borrow::Cow<sqlx::postgres::PgTypeInfo> = value.type_info();
+fn sqlx4k_value_of(value_ref: PgValueRef) -> (c_int, usize, *mut c_void) {
+    let info: std::borrow::Cow<PgTypeInfo> = value_ref.type_info();
     let kind: c_int = match info.name() {
         "BOOL" => TYPE_BOOL,
         "INT2" => TYPE_INT2,
@@ -574,8 +572,8 @@ fn sqlx4k_value_of(value: &PgValueRef) -> (c_int, usize, *mut c_void) {
         _ => panic!("Unsupported type value {}.", info.name()),
     };
 
-    let bytes: &[u8] = match value.format() {
-        PgValueFormat::Text => value.as_str().unwrap().as_bytes(),
+    let bytes: &[u8] = match value_ref.format() {
+        PgValueFormat::Text => value_ref.as_str().unwrap().as_bytes(),
         PgValueFormat::Binary => todo!("Binary format is not implemented yet."),
         // PgValueFormat::Binary => value.as_bytes().unwrap(),
     };

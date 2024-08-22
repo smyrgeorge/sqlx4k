@@ -1,7 +1,7 @@
-import io.github.smyrgeorge.sqlx4k.Sqlx4k
-import io.github.smyrgeorge.sqlx4k.Transaction
-import io.github.smyrgeorge.sqlx4k.impl.Postgres
-import io.github.smyrgeorge.sqlx4k.impl.errorOrNull
+import io.github.smyrgeorge.sqlx4k.postgres.Sqlx4k
+import io.github.smyrgeorge.sqlx4k.postgres.Transaction
+import io.github.smyrgeorge.sqlx4k.postgres.impl.PostgreSQL
+import io.github.smyrgeorge.sqlx4k.postgres.impl.errorOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.async
@@ -19,7 +19,7 @@ fun main() {
             f: suspend (A) -> Unit
         ): Unit = withContext(context) { map { async { f(it) } }.awaitAll() }
 
-        val pg = Postgres(
+        val pg = PostgreSQL(
             host = "localhost",
             port = 15432,
             username = "postgres",
@@ -29,7 +29,7 @@ fun main() {
         )
 
         pg.query("drop table if exists :table;", mapOf("table" to "sqlx4k")).getOrThrow()
-        pg.query("drop table if exists :table;", mapOf("table" to "sqlx4k")) { v: Any? ->
+        pg.query("drop table if exists :table;", mapOf("table" to "sqlx4k")) { _: Any? ->
             //  Map the value here.
             "MAPPED_VALUE"
         }.getOrThrow()
@@ -78,7 +78,7 @@ fun main() {
 
         println("Connections: ${pg.poolSize()}, Idle: ${pg.poolIdleSize()}")
         println("\n\n\n::: LISTEN/NOTIFY :::")
-        pg.listen("chan0") { notification: Postgres.Notification ->
+        pg.listen("chan0") { notification: PostgreSQL.Notification ->
             println(notification)
         }
 

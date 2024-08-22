@@ -1,4 +1,4 @@
-package io.github.smyrgeorge.sqlx4k
+package io.github.smyrgeorge.sqlx4k.postgres
 
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.get
