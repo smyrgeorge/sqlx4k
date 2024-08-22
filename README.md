@@ -20,7 +20,9 @@ Currently, the driver only supports the `PostgreSQL` database.
 You can found the latest published version [here](https://central.sonatype.com/artifact/io.github.smyrgeorge/sqlx4k).
 
 ```kotlin
-implementation("io.github.smyrgeorge:sqlx4k:x.y.z")
+// x.y.z is the sqlx version
+// h is the project minor version
+implementation("io.github.smyrgeorge:sqlx4k:x.y.z.h")
 ```
 
 ## Why not a pure kotlin implementation?
