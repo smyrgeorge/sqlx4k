@@ -1,12 +1,11 @@
-import io.github.smyrgeorge.sqlx4k.postgres.Sqlx4k
-import io.github.smyrgeorge.sqlx4k.postgres.Transaction
-import io.github.smyrgeorge.sqlx4k.postgres.impl.PostgreSQL
-import io.github.smyrgeorge.sqlx4k.postgres.impl.errorOrNull
+import io.github.smyrgeorge.sqlx4k.mysql.Sqlx4k
+import io.github.smyrgeorge.sqlx4k.mysql.Transaction
+import io.github.smyrgeorge.sqlx4k.mysql.impl.MySQL
+import io.github.smyrgeorge.sqlx4k.mysql.impl.errorOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
@@ -19,13 +18,13 @@ fun main() {
             f: suspend (A) -> Unit
         ): Unit = withContext(context) { map { async { f(it) } }.awaitAll() }
 
-        val db = PostgreSQL(
+        val db = MySQL(
             host = "localhost",
-            port = 15432,
-            username = "postgres",
-            password = "postgres",
+            port = 13306,
+            username = "mysql",
+            password = "mysql",
             database = "test",
-            maxConnections = 11
+            maxConnections = 10
         )
 
         db.query("drop table if exists :table;", mapOf("table" to "sqlx4k")).getOrThrow()
@@ -41,37 +40,6 @@ fun main() {
         db.query("insert into sqlx4k (id) values (66);").getOrThrow()
 
         data class Test(val id: Int)
-
-        val types = """
-            select
-                   true::bool,
-                   1::int2,
-                   1::int4,
-                   1::int8,
-                   1::float4,
-                   1::float8,
-                   1::numeric(10,2),
-                   'a'::char,
-                   'aa'::varchar,
-                   'aa'::text,
-                   now()::timestamp as timestamp,
-                   now()::timestamptz as timestampz,
-                   now()::date as date,
-                   now()::time as time,
-                   '22d64ef8-f6b3-43da-8869-2ee9d31be9d5'::uuid,
-                   '{"a": 5}'::json,
-                   '{"a": 5}'::jsonb,
-                   'aa'::bytea
-            ;
-        """.trimIndent()
-        val r0 = db.fetchAll(types) {
-            columns.forEach {
-                val v = it.value
-                val res = v.value
-                println("${it.key} :: $res")
-            }
-        }
-        println(r0)
 
         val r1 = db.fetchAll("select * from sqlx4k;") {
             val id: Sqlx4k.Row.Column = get("id")
@@ -108,18 +76,8 @@ fun main() {
         }
 
         println("Connections: ${db.poolSize()}, Idle: ${db.poolIdleSize()}")
-        println("\n\n\n::: LISTEN/NOTIFY :::")
-        db.listen("chan0") { notification: PostgreSQL.Notification ->
-            println(notification)
-        }
-
-        (1..10).forEach {
-            db.notify("chan0", "Hello $it")
-            delay(1000)
-        }
 
         println("\n\n\n::: TX :::")
-
         val tx1: Transaction = db.begin().getOrThrow()
         println(tx1)
         tx1.query("delete from sqlx4k;").getOrThrow()
@@ -188,10 +146,5 @@ fun main() {
         println(t2)
 
         println("Connections: ${db.poolSize()}, Idle: ${db.poolIdleSize()}")
-        (1..10).forEach {
-            println("Notify: $it")
-            db.notify("chan0", "Hello $it")
-            delay(1000)
-        }
     }
 }

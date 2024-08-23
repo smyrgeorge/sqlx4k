@@ -1,0 +1,6 @@
+package = librust_lib
+headers = rust_lib.h
+compilerOpts = -I./rust_lib/target
+
+staticLibraries = librust_lib.a
+libraryPaths = ./rust_lib/target/aarch64-linux-android/release

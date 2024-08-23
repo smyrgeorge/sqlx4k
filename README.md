@@ -13,7 +13,10 @@ _In the future, we may provide a pure Kotlin driver implementation._
 
 The project is in a very early stage; thus, breaking changes and bugs should be expected.
 
-Currently, the driver only supports the `PostgreSQL` database.
+Currently, the driver only supports
+- `PostgreSQL`
+- `MySQL`
+- `SQLite` (in progress)
 
 ## Usage
 
@@ -22,7 +25,9 @@ You can found the latest published version [here](https://central.sonatype.com/a
 ```kotlin
 // x.y.z is the sqlx version
 // h is the project minor version
-implementation("io.github.smyrgeorge:sqlx4k:x.y.z.h")
+implementation("io.github.smyrgeorge:sqlx4k-postgres:x.y.z.h")
+// or for MySQL
+implementation("io.github.smyrgeorge:sqlx4k-mysql:x.y.z.h")
 ```
 
 ## Why not a pure kotlin implementation?
@@ -52,11 +57,20 @@ look [here](https://kotlinlang.org/api/latest/jvm/stdlib/kotlin.coroutines/suspe
 You can set the `maxConnections` from the driver constructor:
 
 ```kotlin
-val pg = PostgreSQL(
+val db = PostgreSQL(
     host = "localhost",
     port = 15432,
     username = "postgres",
     password = "postgres",
+    database = "test",
+    maxConnections = 10 // set the max-pool-size here
+)
+
+val db = MySQL(
+    host = "localhost",
+    port = 13306,
+    username = "mysql",
+    password = "mysql",
     database = "test",
     maxConnections = 10 // set the max-pool-size here
 )
@@ -65,9 +79,9 @@ val pg = PostgreSQL(
 ### Named parameters
 
 ```kotlin
-pg.query("drop table if exists :table;", mapOf("table" to "sqlx4k")).getOrThrow()
+db.query("drop table if exists :table;", mapOf("table" to "sqlx4k")).getOrThrow()
 
-pg.fetchAll("select * from :table;", mapOf("table" to "sqlx4k")) {
+db.fetchAll("select * from :table;", mapOf("table" to "sqlx4k")) {
     val id: Sqlx4k.Row.Column = get("id")
     Test(id = id.value.toInt())
 }
@@ -76,7 +90,7 @@ pg.fetchAll("select * from :table;", mapOf("table" to "sqlx4k")) {
 You can also pass your own parameter mapper (in case that you want to use non built in types)
 
 ```kotlin
-pg.query("drop table if exists :table;", mapOf("table" to "sqlx4k")) { v: Any? ->
+db.query("drop table if exists :table;", mapOf("table" to "sqlx4k")) { v: Any? ->
     //  Map the value here.
     "sqlx4k"
 }.getOrThrow()
@@ -85,48 +99,43 @@ pg.query("drop table if exists :table;", mapOf("table" to "sqlx4k")) { v: Any? -
 ### Transactions
 
 ```kotlin
-val tx1: Transaction = pg.begin().getOrThrow()
+val tx1: Transaction = db.begin().getOrThrow()
 tx1.query("delete from sqlx4k;").getOrThrow()
 tx1.fetchAll("select * from sqlx4k;") {
     println(debug())
 }
-pg.fetchAll("select * from sqlx4k;") {
+db.fetchAll("select * from sqlx4k;") {
     println(debug())
 }
 tx1.commit().getOrThrow()
 ```
 
-### Listen/Notify
+### Listen/Notify (only for PostgreSQL)
 
 ```kotlin
-pg.listen("chan0") { notification: Postgres.Notification ->
+db.listen("chan0") { notification: Postgres.Notification ->
     println(notification)
 }
 
 (1..10).forEach {
-    pg.notify("chan0", "Hello $it")
+    db.notify("chan0", "Hello $it")
     delay(1000)
 }
 ```
 
 ## Todo
 
-- [x] PostgresSQL
-- [x] Try to "bridge" the 2 async worlds (kotlin-rust)
-- [x] Use non-blocking io end to end, using the `suspendCoroutine` function
+- [x] PostgreSQL
+- [x] MySQL
+- [ ] SQLite
 - [x] Transactions
 - [x] Named parameters
 - [ ] Check for SQL injections
-- [ ] Listen/Notify Postgres (in progress).
+- [x] Listen/Notify Postgres.
 - [ ] Transaction isolation level
-- [x] Publish to maven central
-- [x] Better error handling
-- [x] Check for memory leaks
 - [ ] Testing
 - [ ] Documentation
 - [ ] Benchmark
-- [ ] MySql
-- [ ] SQLite
 - [ ] Windows support
 
 ## Compilation
@@ -167,11 +176,11 @@ Then run the `main` method.
 
 ## Examples
 
-See `Main.kt` file for more examples (examples module).
+See `Main.kt` file for more examples (examples modules).
 
 ```kotlin
 // Initialize the connection pool.
-val pg = Postgres(
+val db = Postgres(
     host = "localhost",
     port = 15432,
     username = "postgres",
@@ -180,11 +189,11 @@ val pg = Postgres(
     maxConnections = 10 // set the max-pool-size here
 )
 
-pg.query("drop table if exists sqlx4k;")
+db.query("drop table if exists sqlx4k;")
 
 // Make a simple query.
 data class Test(val id: Int)
-pg.fetchAll("select * from sqlx4k;") {
+db.fetchAll("select * from sqlx4k;") {
     val id: Sqlx4k.Row.Column = get("id")
     val test = Test(id = id.value.toInt())
     println(test)
