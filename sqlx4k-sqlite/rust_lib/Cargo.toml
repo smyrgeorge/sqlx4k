@@ -1,0 +1,28 @@
+[package]
+name = "rust_lib"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["staticlib"]
+
+[profile.release]
+opt-level = "z"
+strip = true
+lto = true
+panic = "abort"
+
+[dependencies]
+# https://crates.io/crates/once_cell
+once_cell = { version = "1.19.0" }
+# https://crates.io/crates/tokio
+tokio = { version = "1.39.3", features = ["rt-multi-thread"] }
+# https://crates.io/crates/sqlx
+sqlx = { version = "0.8.0", features = [
+    "runtime-tokio", # Use the tokio runtime without enabling a TLS backend.
+    "sqlite",        # Add support for the Postgres database server.
+] }
+
+[build-dependencies]
+# https://crates.io/crates/cbindgen
+cbindgen = "0.26.0"
