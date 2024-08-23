@@ -14,13 +14,12 @@ _In the future, we may provide a pure Kotlin driver implementation._
 The project is in a very early stage; thus, breaking changes and bugs should be expected.
 
 Currently, the driver only supports
+
 - `PostgreSQL`
 - `MySQL`
 - `SQLite` (in progress)
 
 ## Usage
-
-You can found the latest published version [here](https://central.sonatype.com/artifact/io.github.smyrgeorge/sqlx4k).
 
 ```kotlin
 // x.y.z is the sqlx version
