@@ -1,9 +1,9 @@
 group = "io.github.smyrgeorge"
-version = "0.8.0.0"
+version = "0.8.0"
 
 plugins {
     // https://plugins.gradle.org/plugin/org.jetbrains.kotlin.multiplatform
-    kotlin("multiplatform") version "2.0.0" apply false
+    kotlin("multiplatform") version "2.0.20" apply false
 }
 
 repositories {

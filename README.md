@@ -5,7 +5,7 @@
 ![GitHub License](https://img.shields.io/github/license/smyrgeorge/sqlx4k)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/w/smyrgeorge/sqlx4k)
 ![GitHub issues](https://img.shields.io/github/issues/smyrgeorge/sqlx4k)
-[![Kotlin](https://img.shields.io/badge/kotlin-2.0.0-blue.svg?logo=kotlin)](http://kotlinlang.org)
+[![Kotlin](https://img.shields.io/badge/kotlin-2.0.20-blue.svg?logo=kotlin)](http://kotlinlang.org)
 
 A small non-blocking database driver written in Kotlin for the Native platform.
 Under the hood, it uses the sqlx library from the Rust ecosystem.
@@ -22,11 +22,9 @@ Currently, the driver only supports
 ## Usage
 
 ```kotlin
-// x.y.z is the sqlx version
-// h is the project minor version
-implementation("io.github.smyrgeorge:sqlx4k-postgres:x.y.z.h")
+implementation("io.github.smyrgeorge:sqlx4k-postgres:x.y.z")
 // or for MySQL
-implementation("io.github.smyrgeorge:sqlx4k-mysql:x.y.z.h")
+implementation("io.github.smyrgeorge:sqlx4k-mysql:x.y.z")
 ```
 
 ## Why not a pure kotlin implementation?

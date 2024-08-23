@@ -30,7 +30,22 @@ interface Sqlx4k {
             val raw = row.columns!![ordinal]
             return Column(raw.name!!.toKString(), raw)
         }
+
         fun debug(): String = row.debug()
+
+        class Column(
+            val name: String,
+            private val column: Sqlx4kColumn
+        ) {
+            val ordinal: Int get() = column.ordinal
+            val type: String get() = column.kind!!.toKString()
+            val value: String get() = column.value!!.toKString()
+
+            @OptIn(ExperimentalStdlibApi::class)
+            fun valueAsByteArray(): ByteArray = column.value!!.toKString()
+                .removePrefix("\\x")
+                .hexToByteArray()
+        }
 
         @OptIn(ExperimentalForeignApi::class)
         private fun Sqlx4kRow.debug(prefix: String = ""): String = buildString {
@@ -48,20 +63,6 @@ interface Sqlx4k {
             append("\n${prefix}name: ${name?.toKString() ?: "<EMPTY>"}")
             append("\n${prefix}kind: ${kind?.toKString() ?: "<EMPTY>"}")
             append("\n${prefix}value: ${value?.toKString() ?: "<EMPTY>"}")
-        }
-
-        class Column(
-            val name: String,
-            private val column: Sqlx4kColumn
-        ) {
-            val ordinal: Int get() = column.ordinal
-            val type: String get() = column.kind!!.toKString()
-            val value: String get() = column.value!!.toKString()
-
-            @OptIn(ExperimentalStdlibApi::class)
-            fun valueAsByteArray(): ByteArray = column.value!!.toKString()
-                .removePrefix("\\x")
-                .hexToByteArray()
         }
     }
 

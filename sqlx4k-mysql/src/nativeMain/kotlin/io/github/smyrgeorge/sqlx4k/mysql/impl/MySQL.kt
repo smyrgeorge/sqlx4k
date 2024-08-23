@@ -19,10 +19,9 @@ import librust_lib.sqlx4k_tx_commit
 import librust_lib.sqlx4k_tx_fetch_all
 import librust_lib.sqlx4k_tx_query
 import librust_lib.sqlx4k_tx_rollback
-import kotlin.experimental.ExperimentalNativeApi
 
 @Suppress("MemberVisibilityCanBePrivate")
-@OptIn(ExperimentalForeignApi::class, ExperimentalNativeApi::class)
+@OptIn(ExperimentalForeignApi::class)
 class MySQL(
     host: String,
     port: Int,
