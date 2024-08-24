@@ -32,8 +32,10 @@ jobs:
 #          ndk-version: r27
 
       - name: Gradle Build
-        run: ./gradlew build -Ptargets=linuxArm64,linuxX64
-#        run: ./gradlew build -Ptargets=androidNativeX64,linuxArm64,linuxX64
+#        run: ./gradlew build -Ptargets=linuxArm64,linuxX64
+        run: ./gradlew build -Ptargets=androidNativeX64,linuxArm64,linuxX64
+        env:
+          CC: clang
 
   build-apple:
     runs-on: macos-14
