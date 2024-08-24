@@ -36,16 +36,19 @@ private val cargo: String
         ?: throw GradleException("Rust cargo binary is required to build project but it wasn't found.")
 
 val chosenTargets = (properties["targets"] as? String)?.split(",")
-    ?: listOf("iosArm64", "macosArm64", "macosX64")
-//    ?: listOf("iosArm64", "androidNativeX64", "macosArm64", "macosX64", "linuxArm64", "linuxX64")
+    ?: listOf("iosArm64", "androidNativeX64", "macosArm64", "macosX64", "linuxArm64", "linuxX64")
 
 kotlin {
-    fun KotlinNativeTarget.rust(target: String) {
+    fun KotlinNativeTarget.rust(target: String, useCross: Boolean = false) {
         compilations.getByName("main").cinterops {
             create("librust_lib") {
                 val cargo = tasks.create("cargo-$target") {
+                    if (useCross) {
+                        exec { commandLine("cargo", "install", "cross", "--git", "https://github.com/cross-rs/cross") }
+                    }
+
                     exec {
-                        executable = cargo
+                        executable = if (useCross) "cross" else cargo
                         args(
                             "build",
                             "--manifest-path", projectDir.resolve("rust_lib/Cargo.toml").absolutePath,
@@ -68,11 +71,11 @@ kotlin {
 
     val availableTargets = mapOf(
         Pair("iosArm64") { iosArm64 { rust("aarch64-apple-ios") } },
-        Pair("androidNativeX64") { androidNativeX64 { rust("aarch64-linux-android") } },
+        Pair("androidNativeX64") { androidNativeX64 { rust("aarch64-linux-android", true) } },
         Pair("macosArm64") { macosArm64 { rust("aarch64-apple-darwin") } },
-        Pair("linuxArm64") { linuxArm64 { rust("aarch64-unknown-linux-gnu") } },
+        Pair("linuxArm64") { linuxArm64 { rust("aarch64-unknown-linux-gnu", true) } },
         Pair("macosX64") { macosX64 { rust("x86_64-apple-darwin") } },
-        Pair("linuxX64") { linuxX64 { rust("x86_64-unknown-linux-gnu") } },
+        Pair("linuxX64") { linuxX64 { rust("x86_64-unknown-linux-gnu", true) } },
     )
     chosenTargets.forEach {
         println("Enabling target $it")
