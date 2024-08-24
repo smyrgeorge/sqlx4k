@@ -7,7 +7,34 @@ on:
     branches: [ main ]
 
 jobs:
-  build-on-apple:
+  build-on-linux:
+    runs-on: ubuntu-latest
+    environment: Maven Central
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Setup Rust & cargo
+        run: rustup target add aarch64-linux-android aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+
+      - name: Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27
+
+      - name: Gradle Build
+        run: ./gradlew build -Ptargets=androidNativeX64,linuxArm64,linuxX64
+
+  build-apple:
     runs-on: macos-14
     environment: Maven Central
     steps:
@@ -24,10 +51,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Setup Rust & cargo
-        run: rustup target add aarch64-linux-android aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu aarch64-apple-ios aarch64-apple-darwin x86_64-apple-darwin
+        run: rustup target add aarch64-apple-ios aarch64-apple-darwin x86_64-apple-darwin
 
       - name: Gradle Build
-        run: ./gradlew build
+        run: ./gradlew build -Ptargets=iosArm64,macosArm64,macosX64
 
 #      - name: Gradle Publish
 #        run: ./gradlew publish
