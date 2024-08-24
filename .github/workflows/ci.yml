@@ -7,43 +7,9 @@ on:
     branches: [ main ]
 
 jobs:
-  build-linux:
-    runs-on: ubuntu-latest
-    environment: Maven Central
-#    permissions:
-#      contents: read
-#      packages: write
-    steps:
-      - name: Checkout Project
-        uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: corretto
-          java-version: 17
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Setup Rust & cargo
-        run: rustup target add aarch64-linux-android-clang aarch64-linux-android aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
-
-#      - name: Cache rust build
-#        uses: actions/cache@v4
-#        with:
-#          path: sqlx4k/rust_lib/target
-#          key: rust_lib
-
-      - name: Gradle Build
-        run: ./gradlew build -Ptargets=androidNativeX64,linuxArm64,linuxX64
-
-  build-apple:
+  build-on-apple:
     runs-on: macos-14
     environment: Maven Central
-#    permissions:
-#      contents: read
-#      packages: write
     steps:
       - name: Checkout Project
         uses: actions/checkout@v4
@@ -58,16 +24,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Setup Rust & cargo
-        run: rustup target add aarch64-apple-ios aarch64-apple-darwin x86_64-apple-darwin
-
-#      - name: Cache rust build
-#        uses: actions/cache@v4
-#        with:
-#          path: sqlx4k/rust_lib/target
-#          key: rust_lib
+        run: rustup target add aarch64-linux-android aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu aarch64-apple-ios aarch64-apple-darwin x86_64-apple-darwin
 
       - name: Gradle Build
-        run: ./gradlew build -Ptargets=iosArm64,macosArm64,macosX64
+        run: ./gradlew build
 
 #      - name: Gradle Publish
 #        run: ./gradlew publish

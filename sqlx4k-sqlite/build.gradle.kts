@@ -35,10 +35,9 @@ private val cargo: String
         ?.absolutePath
         ?: throw GradleException("Rust cargo binary is required to build project but it wasn't found.")
 
-//val chosenTargets = (properties["targets"] as? String)?.split(",")
+val chosenTargets = (properties["targets"] as? String)?.split(",")
+    ?: listOf("iosArm64", "macosArm64", "macosX64")
 //    ?: listOf("iosArm64", "androidNativeX64", "macosArm64", "macosX64", "linuxArm64", "linuxX64")
-
-val chosenTargets = (properties["targets"] as? String)?.split(",") ?: listOf("macosArm64")
 
 kotlin {
     fun KotlinNativeTarget.rust(target: String) {
@@ -102,8 +101,8 @@ mavenPublishing {
     )
 
     pom {
-        name = "sqlx4k-mysql"
-        description = "A non-blocking MySQL database driver written in Kotlin for the Native platform."
+        name = "sqlx4k-sqlite"
+        description = "A non-blocking SQLite database driver written in Kotlin for the Native platform."
         url = "https://github.com/smyrgeorge/sqlx4k"
 
         licenses {
