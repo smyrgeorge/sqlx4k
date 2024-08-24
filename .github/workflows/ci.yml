@@ -32,7 +32,7 @@ jobs:
 #          ndk-version: r27
 
       - name: Linux libraries
-        run: apt install -y gcc-multilib
+        run: sudo apt-get install -y gcc-multilib
 
       - name: Gradle Build
 #        run: ./gradlew build -Ptargets=linuxArm64,linuxX64
