@@ -25,15 +25,23 @@ jobs:
 
       - name: Setup Rust & cargo
         run: rustup target add x86_64-unknown-linux-gnu
-#        run: rustup target add aarch64-linux-android aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+#
+#      - name: Linux libraries
+#        run: sudo apt-get install -y gcc-multilib
 
-      - name: Linux libraries
-        run: sudo apt-get install -y gcc-multilib
+      - name: Setup Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            sqlx4k-mysql/rust_lib/target
+            sqlx4k-postgres/rust_lib/target
+            sqlx4k-sqlite/rust_lib/target
+          key: rust-lib-cache-linux
 
       - name: Gradle Build
         run: ./gradlew build -Ptargets=androidNativeX64,linuxArm64,linuxX64
-        env:
-          CC: clang
+#        env:
+#          CC: clang
 
   build-apple:
     runs-on: macos-14
@@ -53,6 +61,15 @@ jobs:
 
       - name: Setup Rust & cargo
         run: rustup target add aarch64-apple-ios aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Setup Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            sqlx4k-mysql/rust_lib/target
+            sqlx4k-postgres/rust_lib/target
+            sqlx4k-sqlite/rust_lib/target
+          key: rust-lib-cache-linux
 
       - name: Gradle Build
         run: ./gradlew build -Ptargets=iosArm64,macosArm64,macosX64
