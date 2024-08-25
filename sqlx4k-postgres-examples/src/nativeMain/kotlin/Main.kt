@@ -28,17 +28,18 @@ fun main() {
             maxConnections = 11
         )
 
-        db.query("drop table if exists :table;", mapOf("table" to "sqlx4k")).getOrThrow()
-        db.query("drop table if exists :table;", mapOf("table" to "sqlx4k")) { _: Any? ->
+        db.execute("drop table if exists :table;", mapOf("table" to "sqlx4k")).getOrThrow()
+        db.execute("drop table if exists :table;", mapOf("table" to "sqlx4k")) { _: Any? ->
             //  Map the value here.
             "MAPPED_VALUE"
         }.getOrThrow()
-        val error = db.query("select * from sqlx4kk").errorOrNull()
+        val error = db.execute("select * from sqlx4kk").errorOrNull()
         println(error)
 
-        db.query("create table if not exists sqlx4k(id integer);").getOrThrow()
-        db.query("insert into sqlx4k (id) values (65);").getOrThrow()
-        db.query("insert into sqlx4k (id) values (66);").getOrThrow()
+        db.execute("create table if not exists sqlx4k(id integer);").getOrThrow()
+        db.execute("insert into sqlx4k (id) values (65);").getOrThrow()
+        val affected = db.execute("insert into sqlx4k (id) values (66);").getOrThrow()
+        println("AFFECTED: $affected")
 
         data class Test(val id: Int)
 
@@ -122,7 +123,7 @@ fun main() {
 
         val tx1: Transaction = db.begin().getOrThrow()
         println(tx1)
-        tx1.query("delete from sqlx4k;").getOrThrow()
+        tx1.execute("delete from sqlx4k;").getOrThrow()
         tx1.fetchAll("select * from sqlx4k;") {
             println(debug())
         }
@@ -134,8 +135,8 @@ fun main() {
             println(debug())
         }
 
-        db.query("insert into sqlx4k (id) values (65);").getOrThrow()
-        db.query("insert into sqlx4k (id) values (66);").getOrThrow()
+        db.execute("insert into sqlx4k (id) values (65);").getOrThrow()
+        db.execute("insert into sqlx4k (id) values (66);").getOrThrow()
 
         val test = db.fetchAll("select * from sqlx4k;") {
             val id: Sqlx4k.Row.Column = get("id")
@@ -168,8 +169,8 @@ fun main() {
                 (1..20).forEachParallel {
                     repeat(1_000) {
                         val tx2 = db.begin().getOrThrow()
-                        tx2.query("insert into sqlx4k (id) values (65);").getOrThrow()
-                        tx2.query("insert into sqlx4k (id) values (66);").getOrThrow()
+                        tx2.execute("insert into sqlx4k (id) values (65);").getOrThrow()
+                        tx2.execute("insert into sqlx4k (id) values (66);").getOrThrow()
                         tx2.fetchAll("select * from sqlx4k;") {
                             val id: Sqlx4k.Row.Column = get("id")
                             Test(id = id.value.toInt())

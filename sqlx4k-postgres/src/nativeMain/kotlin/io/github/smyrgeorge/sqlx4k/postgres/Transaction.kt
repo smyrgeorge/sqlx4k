@@ -10,6 +10,6 @@ interface Transaction : Driver {
     var tx: CPointer<out CPointed>
     suspend fun commit(): Result<Unit>
     suspend fun rollback(): Result<Unit>
-    override suspend fun query(sql: String): Result<Unit>
+    override suspend fun execute(sql: String): Result<ULong>
     override suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>>
 }

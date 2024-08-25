@@ -83,7 +83,7 @@ val db = SQLite(
 ### Named parameters
 
 ```kotlin
-db.query("drop table if exists :table;", mapOf("table" to "sqlx4k")).getOrThrow()
+db.execute("drop table if exists :table;", mapOf("table" to "sqlx4k")).getOrThrow()
 
 db.fetchAll("select * from :table;", mapOf("table" to "sqlx4k")) {
     val id: Sqlx4k.Row.Column = get("id")
@@ -94,7 +94,7 @@ db.fetchAll("select * from :table;", mapOf("table" to "sqlx4k")) {
 You can also pass your own parameter mapper (in case that you want to use non built in types)
 
 ```kotlin
-db.query("drop table if exists :table;", mapOf("table" to "sqlx4k")) { v: Any? ->
+db.execute("drop table if exists :table;", mapOf("table" to "sqlx4k")) { v: Any? ->
     //  Map the value here.
     "sqlx4k"
 }.getOrThrow()
@@ -104,7 +104,7 @@ db.query("drop table if exists :table;", mapOf("table" to "sqlx4k")) { v: Any? -
 
 ```kotlin
 val tx1: Transaction = db.begin().getOrThrow()
-tx1.query("delete from sqlx4k;").getOrThrow()
+tx1.execute("delete from sqlx4k;").getOrThrow()
 tx1.fetchAll("select * from sqlx4k;") {
     println(debug())
 }
@@ -212,7 +212,7 @@ val db = Postgres(
     maxConnections = 10 // set the max-pool-size here
 )
 
-db.query("drop table if exists sqlx4k;")
+db.execute("drop table if exists sqlx4k;")
 
 // Make a simple query.
 data class Test(val id: Int)

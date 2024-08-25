@@ -36,8 +36,8 @@ class SQLite(
     fun poolSize(): Int = sqlx4k_pool_size()
     fun poolIdleSize(): Int = sqlx4k_pool_idle_size()
 
-    override suspend fun query(sql: String): Result<Unit> = runCatching {
-        sqlx { c -> sqlx4k_query(sql, c, fn) }.throwIfError()
+    override suspend fun execute(sql: String): Result<ULong> = runCatching {
+        sqlx { c -> sqlx4k_query(sql, c, fn) }.rowsAffectedOrError()
     }
 
     override suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>> = runCatching {
@@ -46,7 +46,7 @@ class SQLite(
 
     override suspend fun begin(): Result<Transaction> = runCatching {
         val tx = sqlx { c -> sqlx4k_tx_begin(c, fn) }.tx()
-        Tx(tx)
+        Tx(tx.first)
     }
 
     class Tx(override var tx: CPointer<out CPointed>) : Transaction {
@@ -64,9 +64,12 @@ class SQLite(
             }
         }
 
-        override suspend fun query(sql: String): Result<Unit> = runCatching {
+        override suspend fun execute(sql: String): Result<ULong> = runCatching {
             mutex.withLock {
-                tx = sqlx { c -> sqlx4k_tx_query(tx, sql, c, fn) }.tx()
+                val res =
+                    sqlx { c -> sqlx4k_tx_query(tx, sql, c, fn) }.tx()
+                tx = res.first
+                res.second
             }
         }
 

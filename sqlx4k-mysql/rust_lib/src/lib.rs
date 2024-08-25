@@ -1,7 +1,7 @@
 use sqlx::mysql::{MySqlPool, MySqlPoolOptions, MySqlRow, MySqlTypeInfo, MySqlValueRef};
 use sqlx::{Column, Error, Executor, MySql, Row, Transaction, TypeInfo, ValueRef};
 use std::{
-    ffi::{c_char, c_int, c_void, CStr, CString},
+    ffi::{c_char, c_int, c_ulonglong, c_void, CStr, CString},
     ptr::null_mut,
     sync::OnceLock,
 };
@@ -20,6 +20,7 @@ static mut SQLX4K: OnceLock<Sqlx4k> = OnceLock::new();
 pub struct Sqlx4kResult {
     pub error: c_int,
     pub error_message: *mut c_char,
+    pub rows_affected: c_ulonglong,
     pub tx: *mut c_void,
     pub size: c_int,
     pub rows: *mut Sqlx4kRow,
@@ -38,6 +39,7 @@ impl Default for Sqlx4kResult {
         Self {
             error: OK,
             error_message: null_mut(),
+            rows_affected: 0,
             tx: null_mut(),
             size: 0,
             rows: null_mut(),
@@ -75,9 +77,15 @@ struct Sqlx4k {
 
 impl Sqlx4k {
     async fn query(&self, sql: &str) -> *mut Sqlx4kResult {
-        let result = self.pool.fetch_optional(sql).await;
+        let result = self.pool.execute(sql).await;
         let result = match result {
-            Ok(_) => Sqlx4kResult::default(),
+            Ok(res) => {
+                res.rows_affected();
+                Sqlx4kResult {
+                    rows_affected: res.rows_affected(),
+                    ..Default::default()
+                }
+            }
             Err(err) => sqlx4k_error_result_of(err),
         };
         result.leak()
@@ -129,11 +137,17 @@ impl Sqlx4k {
     async fn tx_query(&mut self, tx: Ptr, sql: &str) -> *mut Sqlx4kResult {
         let tx = unsafe { &mut *(tx.ptr as *mut Transaction<'_, MySql>) };
         let mut tx = unsafe { *Box::from_raw(tx) };
-        let result = tx.fetch_optional(sql).await;
+        let result = tx.execute(sql).await;
         let tx = Box::new(tx);
         let tx = Box::leak(tx);
         let result = match result {
-            Ok(_) => Sqlx4kResult::default(),
+            Ok(res) => {
+                res.rows_affected();
+                Sqlx4kResult {
+                    rows_affected: res.rows_affected(),
+                    ..Default::default()
+                }
+            }
             Err(err) => sqlx4k_error_result_of(err),
         };
         let result = Sqlx4kResult {

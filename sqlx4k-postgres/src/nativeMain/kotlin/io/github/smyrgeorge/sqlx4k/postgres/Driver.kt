@@ -18,12 +18,12 @@ import kotlin.coroutines.resume
 
 @OptIn(ExperimentalForeignApi::class)
 interface Driver {
-    suspend fun query(sql: String): Result<Unit>
-    suspend fun query(
+    suspend fun execute(sql: String): Result<ULong>
+    suspend fun execute(
         sql: String,
         params: Map<String, Any?>,
         paramsMapper: ((v: Any?) -> String?)? = null
-    ): Result<Unit> = query(sql.withNamedParameters(params, paramsMapper))
+    ): Result<ULong> = execute(sql.withNamedParameters(params, paramsMapper))
 
     suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>>
     suspend fun <T> fetchAll(
@@ -49,6 +49,11 @@ interface Driver {
         return Sqlx4k.Error(code, message)
     }
 
+    fun CPointer<Sqlx4kResult>?.rowsAffectedOrError(): ULong = use {
+        it.throwIfError()
+        it.rows_affected
+    }
+
     fun CPointer<Sqlx4kResult>?.throwIfError() {
         use { it.throwIfError() }
     }
@@ -71,9 +76,9 @@ interface Driver {
     fun <T> CPointer<Sqlx4kResult>?.map(f: Sqlx4k.Row.() -> T): List<T> =
         use { result -> result.map(f) }
 
-    fun CPointer<Sqlx4kResult>?.tx(): CPointer<out CPointed> = use { result ->
+    fun CPointer<Sqlx4kResult>?.tx(): Pair<CPointer<out CPointed>, ULong> = use { result ->
         result.throwIfError()
-        result.tx!!
+        result.tx!! to result.rows_affected
     }
 
     fun <T> CPointer<Sqlx4kResult>?.txMap(f: Sqlx4k.Row.() -> T): Pair<CPointer<out CPointed>, List<T>> =
