@@ -13,11 +13,11 @@ _In the future, we may provide a pure Kotlin driver implementation._
 
 The project is in a very early stage; thus, breaking changes and bugs should be expected.
 
-Currently, the driver only supports
+Currently, the driver supports:
 
 - `PostgreSQL`
 - `MySQL`
-- `SQLite` (in progress)
+- `SQLite`
 
 ## Usage
 
@@ -25,6 +25,8 @@ Currently, the driver only supports
 implementation("io.github.smyrgeorge:sqlx4k-postgres:x.y.z")
 // or for MySQL
 implementation("io.github.smyrgeorge:sqlx4k-mysql:x.y.z")
+// or for SQLite
+implementation("io.github.smyrgeorge:sqlx4k-sqlite:x.y.z")
 ```
 
 ## Why not a pure kotlin implementation?
@@ -70,6 +72,11 @@ val db = MySQL(
     password = "mysql",
     database = "test",
     maxConnections = 10 // set the max-pool-size here
+)
+
+val db = SQLite(
+    database = "test.db",
+    maxConnections = 10
 )
 ```
 
@@ -124,7 +131,7 @@ db.listen("chan0") { notification: Postgres.Notification ->
 
 - [x] PostgreSQL
 - [x] MySQL
-- [ ] SQLite
+- [x] SQLite
 - [x] Transactions
 - [x] Named parameters
 - [ ] Check for SQL injections
@@ -154,7 +161,26 @@ rustup target add x86_64-unknown-linux-gnu
 Then, run the build.
 
 ```shell
+# will build only for macosArm64 target
 ./gradlew build
+```
+
+You can also build for specific targets.
+
+```shell
+./gradlew build -Ptargets=macosArm64,macosArm64
+```
+
+To build for all available target run:
+
+```shell
+./gradlew build -Ptargets=all
+```
+
+## Publishing
+
+```shell
+./gradlew publishAllPublicationsToMavenCentralRepository -Ptargets=all
 ```
 
 ## Run
