@@ -69,7 +69,7 @@ jobs:
             sqlx4k-mysql/rust_lib/target
             sqlx4k-postgres/rust_lib/target
             sqlx4k-sqlite/rust_lib/target
-          key: rust-lib-cache-linux
+          key: rust-lib-cache-apple
 
       - name: Gradle Build
         run: ./gradlew build -Ptargets=iosArm64,macosArm64,macosX64
