@@ -36,7 +36,7 @@ private val cargo: String
         ?: throw GradleException("Rust cargo binary is required to build project but it wasn't found.")
 
 val chosenTargets = (properties["targets"] as? String)?.split(",")
-    ?: listOf("iosArm64", "androidNativeX64", "macosArm64", "macosX64", "linuxArm64", "linuxX64")
+    ?: listOf("macosArm64") // For local development.
 
 kotlin {
     fun KotlinNativeTarget.rust(target: String, useCross: Boolean = false) {
