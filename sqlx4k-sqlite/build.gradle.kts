@@ -70,12 +70,12 @@ kotlin {
     }
 
     val availableTargets = mapOf(
-        Pair("iosArm64") { iosArm64 { rust("aarch64-apple-ios") } },
+        Pair("iosArm64") { iosArm64 { rust("aarch64-apple-ios", !os.isMacOsX) } },
+        Pair("macosArm64") { macosArm64 { rust("aarch64-apple-darwin", !os.isMacOsX) } },
+        Pair("macosX64") { macosX64 { rust("x86_64-apple-darwin", !os.isMacOsX) } },
         Pair("androidNativeX64") { androidNativeX64 { rust("aarch64-linux-android", true) } },
-        Pair("macosArm64") { macosArm64 { rust("aarch64-apple-darwin") } },
-        Pair("linuxArm64") { linuxArm64 { rust("aarch64-unknown-linux-gnu", true) } },
-        Pair("macosX64") { macosX64 { rust("x86_64-apple-darwin") } },
-        Pair("linuxX64") { linuxX64 { rust("x86_64-unknown-linux-gnu", true) } },
+        Pair("linuxArm64") { linuxArm64 { rust("aarch64-unknown-linux-gnu", !os.isLinux || !arch.isArm64) } },
+        Pair("linuxX64") { linuxX64 { rust("x86_64-unknown-linux-gnu", !os.isLinux) } },
     )
     chosenTargets.forEach {
         println("Enabling target $it")

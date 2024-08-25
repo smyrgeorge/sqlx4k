@@ -39,12 +39,16 @@ val chosenTargets = (properties["targets"] as? String)?.split(",")
     ?: listOf("iosArm64", "androidNativeX64", "macosArm64", "macosX64", "linuxArm64", "linuxX64")
 
 kotlin {
-    fun KotlinNativeTarget.rust(target: String) {
+    fun KotlinNativeTarget.rust(target: String, useCross: Boolean = false) {
         compilations.getByName("main").cinterops {
             create("librust_lib") {
                 val cargo = tasks.create("cargo-$target") {
+                    if (useCross) {
+                        exec { commandLine("cargo", "install", "cross", "--git", "https://github.com/cross-rs/cross") }
+                    }
+
                     exec {
-                        executable = cargo
+                        executable = if (useCross) "cross" else cargo
                         args(
                             "build",
                             "--manifest-path", projectDir.resolve("rust_lib/Cargo.toml").absolutePath,
@@ -66,12 +70,12 @@ kotlin {
     }
 
     val availableTargets = mapOf(
-        Pair("iosArm64") { iosArm64 { rust("aarch64-apple-ios") } },
-        Pair("androidNativeX64") { androidNativeX64 { rust("aarch64-linux-android") } },
-        Pair("macosArm64") { macosArm64 { rust("aarch64-apple-darwin") } },
-        Pair("linuxArm64") { linuxArm64 { rust("aarch64-unknown-linux-gnu") } },
-        Pair("macosX64") { macosX64 { rust("x86_64-apple-darwin") } },
-        Pair("linuxX64") { linuxX64 { rust("x86_64-unknown-linux-gnu") } },
+        Pair("iosArm64") { iosArm64 { rust("aarch64-apple-ios", !os.isMacOsX) } },
+        Pair("macosArm64") { macosArm64 { rust("aarch64-apple-darwin", !os.isMacOsX) } },
+        Pair("macosX64") { macosX64 { rust("x86_64-apple-darwin", !os.isMacOsX) } },
+        Pair("androidNativeX64") { androidNativeX64 { rust("aarch64-linux-android", true) } },
+        Pair("linuxArm64") { linuxArm64 { rust("aarch64-unknown-linux-gnu", !os.isLinux || !arch.isArm64) } },
+        Pair("linuxX64") { linuxX64 { rust("x86_64-unknown-linux-gnu", !os.isLinux) } },
     )
     chosenTargets.forEach {
         println("Enabling target $it")
