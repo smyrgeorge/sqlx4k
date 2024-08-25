@@ -133,9 +133,9 @@ db.listen("chan0") { notification: Postgres.Notification ->
 - [x] MySQL
 - [x] SQLite
 - [x] Transactions
-- [x] Named parameters
-- [ ] Check for SQL injections
 - [x] Listen/Notify Postgres.
+- [x] Named parameters (needs enhancements)
+- [ ] SQLDelight (in progress)
 - [ ] Transaction isolation level
 - [ ] Testing
 - [ ] Documentation
