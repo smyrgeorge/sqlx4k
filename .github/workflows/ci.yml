@@ -38,7 +38,7 @@ jobs:
           key: rust-lib-cache-linux
 
       - name: Gradle Build
-        run: ./gradlew build -Ptargets=androidNativeX64,linuxArm64,linuxX64
+        run: ./gradlew build -Ptargets=androidNativeX64,androidNativeArm64,linuxArm64,linuxX64
 
   build-apple:
     runs-on: macos-14
