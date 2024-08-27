@@ -8,7 +8,7 @@ on:
     branches: [ main ]
 
 jobs:
-  build-linux:
+  build-linux-x64:
     runs-on: ubuntu-latest
     environment: Maven Central
     steps:
@@ -24,8 +24,34 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Setup Rust & cargo
-        run: rustup target add x86_64-unknown-linux-gnu
+      - name: Setup Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            /home/runner/.konan
+            sqlx4k-mysql/rust_lib/target
+            sqlx4k-postgres/rust_lib/target
+            sqlx4k-sqlite/rust_lib/target
+          key: rust-lib-cache-linux
+
+      - name: Gradle Build
+        run: ./gradlew build -Ptargets=androidNativeX64,linuxX64
+#        run: ./gradlew build -Ptargets=androidNativeX64,linuxX64,mingwX64
+  build-linux-arm64:
+    runs-on: ubuntu-latest
+    environment: Maven Central
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
       - name: Setup Cache
         uses: actions/cache@v4
@@ -38,7 +64,7 @@ jobs:
           key: rust-lib-cache-linux
 
       - name: Gradle Build
-        run: ./gradlew build -Ptargets=androidNativeX64,androidNativeArm64,linuxArm64,linuxX64,mingwX64
+        run: ./gradlew build -Ptargets=androidNativeArm64,linuxArm64
 
   build-apple:
     runs-on: macos-14
