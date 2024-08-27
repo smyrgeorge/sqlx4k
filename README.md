@@ -71,7 +71,7 @@ val db = MySQL(
     username = "mysql",
     password = "mysql",
     database = "test",
-    maxConnections = 10 // set the max-pool-size here
+    maxConnections = 10
 )
 
 val db = SQLite(
@@ -81,6 +81,9 @@ val db = SQLite(
 ```
 
 ### Named parameters
+
+_**IMPORTANT: this feature is in a very early stage, thus use it with caution.
+The code does not check for SQL injections.**_
 
 ```kotlin
 db.execute("drop table if exists :table;", mapOf("table" to "sqlx4k")).getOrThrow()
@@ -135,12 +138,11 @@ db.listen("chan0") { notification: Postgres.Notification ->
 - [x] Transactions
 - [x] Listen/Notify Postgres.
 - [x] Named parameters (needs enhancements)
+- [ ] Reduce duplicate code (in progress)
 - [ ] SQLDelight (in progress)
 - [ ] Transaction isolation level
 - [ ] Testing
 - [ ] Documentation
-- [ ] Benchmark
-- [ ] Windows support
 
 ## Compilation
 
@@ -151,11 +153,13 @@ Also, make sure that you have installed all the necessary targets:
 
 ```text
 rustup target add aarch64-apple-ios
-rustup target add aarch64-linux-android
 rustup target add aarch64-apple-darwin
 rustup target add x86_64-apple-darwin
+rustup target add x86_64-linux-android
+rustup target add aarch64-linux-android
 rustup target add aarch64-unknown-linux-gnu
 rustup target add x86_64-unknown-linux-gnu
+rustup target add x86_64-pc-windows-gnu
 ```
 
 Then, run the build.
@@ -203,13 +207,13 @@ See `Main.kt` file for more examples (examples modules).
 
 ```kotlin
 // Initialize the connection pool.
-val db = Postgres(
+val db = PostgreSQL(
     host = "localhost",
     port = 15432,
     username = "postgres",
     password = "postgres",
     database = "test",
-    maxConnections = 10 // set the max-pool-size here
+    maxConnections = 10
 )
 
 db.execute("drop table if exists sqlx4k;")

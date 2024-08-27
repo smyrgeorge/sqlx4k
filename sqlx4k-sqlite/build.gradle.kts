@@ -38,7 +38,17 @@ private val cargo: String
 val chosenTargets = (properties["targets"] as? String)
     ?.let {
         when (it) {
-            "all" -> listOf("iosArm64", "androidNativeX64", "androidNativeArm64", "macosArm64", "macosX64", "linuxArm64", "linuxX64")
+            "all" -> listOf(
+                "iosArm64",
+                "androidNativeX64",
+                "androidNativeArm64",
+                "macosArm64",
+                "macosX64",
+                "linuxArm64",
+                "linuxX64",
+                "mingwX64"
+            )
+
             else -> it.split(",").map { t -> t.trim() }
         }
     } ?: listOf("macosArm64") // For local development.
@@ -82,6 +92,7 @@ kotlin {
         Pair("androidNativeArm64") { androidNativeArm64 { rust("aarch64-linux-android", true) } },
         Pair("linuxArm64") { linuxArm64 { rust("aarch64-unknown-linux-gnu", !os.isLinux || !arch.isArm64) } },
         Pair("linuxX64") { linuxX64 { rust("x86_64-unknown-linux-gnu", !os.isLinux) } },
+        Pair("mingwX64") { mingwX64 { rust("x86_64-pc-windows-gnu", true) } },
     )
     chosenTargets.forEach {
         println("Enabling target $it")
