@@ -1,0 +1,13 @@
+[versions]
+kotlin = "2.0.20"
+publish = "0.29.0"
+
+[libraries]
+gradle-kotlin-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+gradle-publish-plugin = { module = "com.vanniktech:gradle-maven-publish-plugin", version.ref = "publish" }
+
+[plugins]
+# https://plugins.gradle.org/plugin/org.jetbrains.kotlin.multiplatform
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+# https://github.com/vanniktech/gradle-maven-publish-plugin
+pubhish = { id = "com.vanniktech.maven.publish", version.ref = "publish" }
