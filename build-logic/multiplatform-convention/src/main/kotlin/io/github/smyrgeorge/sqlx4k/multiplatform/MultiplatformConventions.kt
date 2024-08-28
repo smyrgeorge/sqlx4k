@@ -105,7 +105,7 @@ class MultiplatformConventions : Plugin<Project> {
 
     private fun KotlinNativeTarget.rust(target: String, useCross: Boolean = false) {
         val tasks = project.tasks
-        val projectDir = project.projectDir
+        fun file(path: String) = project.projectDir.resolve(path)
 
         compilations["main"].cinterops {
             create("librust_lib") {
@@ -125,7 +125,7 @@ class MultiplatformConventions : Plugin<Project> {
                         executable = if (useCross) cross else cargo
                         args(
                             "build",
-                            "--manifest-path", projectDir.resolve("rust_lib/Cargo.toml").absolutePath,
+                            "--manifest-path", file("rust_lib/Cargo.toml").absolutePath,
                             "--target=$target",
                             "--release"
                         )
@@ -133,7 +133,7 @@ class MultiplatformConventions : Plugin<Project> {
                 }
 
                 tasks.getByName(interopProcessingTaskName) { dependsOn(cargo) }
-                definitionFile.set(projectDir.resolve("src/nativeInterop/cinterop/$target.def"))
+                definitionFile.set(file("src/nativeInterop/cinterop/$target.def"))
             }
         }
     }
