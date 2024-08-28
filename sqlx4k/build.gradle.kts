@@ -1,6 +1,5 @@
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
 
-
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
 }
