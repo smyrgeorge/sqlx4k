@@ -1,6 +1,6 @@
 import io.github.smyrgeorge.sqlx4k.sqlite.ResultSet
-import io.github.smyrgeorge.sqlx4k.sqlite.Transaction
 import io.github.smyrgeorge.sqlx4k.sqlite.SQLite
+import io.github.smyrgeorge.sqlx4k.sqlite.Transaction
 import io.github.smyrgeorge.sqlx4k.sqlite.errorOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -23,11 +23,7 @@ fun main() {
             maxConnections = 10
         )
 
-        db.execute("drop table if exists :table;", mapOf("table" to "sqlx4k")).getOrThrow()
-        db.execute("drop table if exists :table;", mapOf("table" to "sqlx4k")) { _: Any? ->
-            //  Map the value here.
-            "MAPPED_VALUE"
-        }.getOrThrow()
+        db.execute("drop table if exists sqlx4k;").getOrThrow()
         val error = db.execute("select * from sqlx4kk").errorOrNull()
         println(error)
 

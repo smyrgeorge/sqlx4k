@@ -82,13 +82,11 @@ val db = SQLite(
 
 ### Named parameters
 
-_**IMPORTANT: this feature is in a very early stage, thus use it with caution.
-The code does not check for SQL injections.**_
+IMPORTANT: this feature is in a very early stage, thus use it with caution.
+The code does not check for SQL injections.
 
 ```kotlin
-db.execute("drop table if exists :table;", mapOf("table" to "sqlx4k")).getOrThrow()
-
-db.fetchAll("select * from :table;", mapOf("table" to "sqlx4k")) {
+db.fetchAll("select * from sqlx4k where id = :id;", mapOf("id" to "66")) {
     val id: ResultSet.Row.Column = get("id")
     Test(id = id.value.toInt())
 }
@@ -97,9 +95,9 @@ db.fetchAll("select * from :table;", mapOf("table" to "sqlx4k")) {
 You can also pass your own parameter mapper (in case that you want to use non built in types)
 
 ```kotlin
-db.execute("drop table if exists :table;", mapOf("table" to "sqlx4k")) { v: Any? ->
+db.execute("drop table if exists sqlx4k where id = :id;", mapOf("id" to 66)) { v: Any? ->
     //  Map the value here.
-    "sqlx4k"
+    "$v" // mapped to 66 (no change)
 }.getOrThrow()
 ```
 
@@ -142,7 +140,7 @@ db.listen("chan0") { notification: Postgres.Notification ->
 - [ ] SQLDelight (in progress)
 - [ ] Transaction isolation level
 - [ ] Testing
-- [ ] Documentation
+- [ ] Documentation (in progress)
 
 ## Compilation
 

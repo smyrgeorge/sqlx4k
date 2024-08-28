@@ -1,23 +1,43 @@
 package io.github.smyrgeorge.sqlx4k
 
+/**
+ * The [NamedParameters] object provides utility functions for rendering SQL strings with named parameters.
+ *
+ * @suppress Unused
+ */
 @Suppress("unused")
 object NamedParameters {
-    private val nameParameterRegex = Regex("""(?<!:):(?!:)[a-zA-Z]\w+""")
-    private fun extractNamedParamsIndexes(sql: String): Map<String, List<IntRange>> =
-        nameParameterRegex.findAll(sql)
-            .mapIndexed { index, group -> Pair(group, index) }
-            .groupBy({ it.first.value.substring(1) }, { it.first.range })
 
+    /**
+     * Regular expression pattern used for validating and extracting named parameters from a string.
+     *
+     * The pattern is used to match named parameters in the format ":parameterName",
+     * where "parameterName" starts with a letter and is followed by alphanumeric characters.
+     */
+    private val nameParameterRegex = Regex("""(?<!:):(?!:)[a-zA-Z]\w+""")
+
+    /**
+     * Renders the given SQL string by replacing named parameters with their corresponding values
+     * from the provided `params` map. Optionally, a `paramsMapper` function can be provided to perform
+     * additional transformation or mapping of the parameter values.
+     *
+     * @param sql The SQL string with named parameters.
+     * @param parameters The map of parameter names and their corresponding values.
+     * @param mapper An optional function to transform or map the parameter values.
+     * @return The rendered SQL string with the named parameters replaced with their values.
+     * @throws Sqlx4k.Error if a named parameter value is not supplied or if the type of the named parameter
+     * is not supported.
+     */
     fun render(
         sql: String,
-        params: Map<String, Any?>,
-        paramsMapper: ((v: Any?) -> String?)?
+        parameters: Map<String, Any?>,
+        mapper: ((v: Any?) -> String?)?
     ): String {
         fun Any?.toValueString(): String {
-            if (paramsMapper != null) paramsMapper(this)?.let { return it }
+            if (mapper != null) mapper(this)?.let { return it }
             return when (this) {
                 null -> "null"
-                is String -> this
+                is String -> "\'$this\'"
                 is Byte, is Boolean, is Int, is Long, is Short, is Double, is Float -> toString()
                 else -> Sqlx4k.Error(
                     code = Sqlx4k.Error.Code.NamedParameterTypeNotSupported,
@@ -26,15 +46,20 @@ object NamedParameters {
             }
         }
 
+        fun extractNamedParamsIndexes(sql: String): Map<String, List<IntRange>> =
+            nameParameterRegex.findAll(sql)
+                .mapIndexed { index, group -> Pair(group, index) }
+                .groupBy({ it.first.value.substring(1) }, { it.first.range })
+
         var res: String = sql
         extractNamedParamsIndexes(sql).entries.forEach { (name, ranges) ->
-            if (!params.containsKey(name)) {
+            if (!parameters.containsKey(name)) {
                 Sqlx4k.Error(
                     code = Sqlx4k.Error.Code.NamedParameterValueNotSupplied,
                     message = "Value for named parameter '$name' was not supplied"
                 ).ex()
             }
-            ranges.forEach { res = res.replaceRange(it, params[name].toValueString()) }
+            ranges.forEach { res = res.replaceRange(it, parameters[name].toValueString()) }
         }
         return res
     }
