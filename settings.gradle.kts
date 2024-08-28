@@ -1,5 +1,6 @@
 rootProject.name = "sqlx4k"
 
+include("sqlx4k")
 include("sqlx4k-postgres")
 include("sqlx4k-postgres-examples")
 include("sqlx4k-mysql")

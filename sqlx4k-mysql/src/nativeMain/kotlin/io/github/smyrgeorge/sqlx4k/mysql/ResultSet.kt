@@ -1,4 +1,4 @@
-package io.github.smyrgeorge.sqlx4k.sqlite
+package io.github.smyrgeorge.sqlx4k.mysql
 
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.get
@@ -8,7 +8,7 @@ import librust_lib.Sqlx4kRow
 
 @OptIn(ExperimentalForeignApi::class)
 @Suppress("unused", "MemberVisibilityCanBePrivate")
-interface Sqlx4k {
+interface ResultSet {
     class Row(
         private val row: Sqlx4kRow
     ) {
@@ -63,25 +63,6 @@ interface Sqlx4k {
             append("\n${prefix}name: ${name?.toKString() ?: "<EMPTY>"}")
             append("\n${prefix}kind: ${kind?.toKString() ?: "<EMPTY>"}")
             append("\n${prefix}value: ${value?.toKString() ?: "<EMPTY>"}")
-        }
-    }
-
-    class Error(
-        val code: Code,
-        message: String? = null,
-    ) : RuntimeException("[$code] :: $message") {
-        fun ex(): Nothing = throw this
-
-        enum class Code {
-            // Error from the underlying driver:
-            Database,
-            PoolTimedOut,
-            PoolClosed,
-            WorkerCrashed,
-
-            // Other errors:
-            NamedParameterTypeNotSupported,
-            NamedParameterValueNotSupplied
         }
     }
 }

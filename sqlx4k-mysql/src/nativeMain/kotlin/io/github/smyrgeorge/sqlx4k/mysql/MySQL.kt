@@ -1,9 +1,6 @@
-package io.github.smyrgeorge.sqlx4k.sqlite.impl
+package io.github.smyrgeorge.sqlx4k.mysql
 
-import io.github.smyrgeorge.sqlx4k.sqlite.Driver
-import io.github.smyrgeorge.sqlx4k.sqlite.Driver.Companion.fn
-import io.github.smyrgeorge.sqlx4k.sqlite.Sqlx4k
-import io.github.smyrgeorge.sqlx4k.sqlite.Transaction
+import io.github.smyrgeorge.sqlx4k.mysql.Driver.Companion.fn
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -22,12 +19,20 @@ import librust_lib.sqlx4k_tx_rollback
 
 @Suppress("MemberVisibilityCanBePrivate")
 @OptIn(ExperimentalForeignApi::class)
-class SQLite(
+class MySQL(
+    host: String,
+    port: Int,
+    username: String,
+    password: String,
     database: String,
     maxConnections: Int
 ) : Driver, Driver.Tx {
     init {
         sqlx4k_of(
+            host = host,
+            port = port,
+            username = username,
+            password = password,
             database = database,
             max_connections = maxConnections
         ).throwIfError()
@@ -40,7 +45,7 @@ class SQLite(
         sqlx { c -> sqlx4k_query(sql, c, fn) }.rowsAffectedOrError()
     }
 
-    override suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>> = runCatching {
+    override suspend fun <T> fetchAll(sql: String, mapper: ResultSet.Row.() -> T): Result<List<T>> = runCatching {
         sqlx { c -> sqlx4k_fetch_all(sql, c, fn) }.map { mapper(this) }
     }
 
@@ -73,7 +78,7 @@ class SQLite(
             }
         }
 
-        override suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>> = runCatching {
+        override suspend fun <T> fetchAll(sql: String, mapper: ResultSet.Row.() -> T): Result<List<T>> = runCatching {
             mutex.withLock {
                 sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, fn) }
                     .txMap { mapper(this) }

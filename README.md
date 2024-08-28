@@ -89,7 +89,7 @@ The code does not check for SQL injections.**_
 db.execute("drop table if exists :table;", mapOf("table" to "sqlx4k")).getOrThrow()
 
 db.fetchAll("select * from :table;", mapOf("table" to "sqlx4k")) {
-    val id: Sqlx4k.Row.Column = get("id")
+    val id: ResultSet.Row.Column = get("id")
     Test(id = id.value.toInt())
 }
 ```
@@ -221,7 +221,7 @@ db.execute("drop table if exists sqlx4k;")
 // Make a simple query.
 data class Test(val id: Int)
 db.fetchAll("select * from sqlx4k;") {
-    val id: Sqlx4k.Row.Column = get("id")
+    val id: ResultSet.Row.Column = get("id")
     val test = Test(id = id.value.toInt())
     println(test)
     test

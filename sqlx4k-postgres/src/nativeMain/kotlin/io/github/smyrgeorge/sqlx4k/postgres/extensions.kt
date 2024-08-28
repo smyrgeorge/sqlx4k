@@ -1,6 +1,5 @@
-package io.github.smyrgeorge.sqlx4k.sqlite.impl
+package io.github.smyrgeorge.sqlx4k.postgres
 
-import io.github.smyrgeorge.sqlx4k.sqlite.Sqlx4k
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -17,6 +16,6 @@ internal suspend inline fun sqlx(crossinline f: (c: CPointer<out CPointed>) -> U
         f(ptr)
     }
 
-fun Result<*>.errorOrNull(): Sqlx4k.Error? =
-    exceptionOrNull() as? Sqlx4k.Error
+fun Result<*>.errorOrNull(): ResultSet.Error? =
+    exceptionOrNull() as? ResultSet.Error
 

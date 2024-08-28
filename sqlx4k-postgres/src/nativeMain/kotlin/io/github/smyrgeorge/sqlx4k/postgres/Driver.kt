@@ -1,5 +1,6 @@
 package io.github.smyrgeorge.sqlx4k.postgres
 
+import io.github.smyrgeorge.sqlx4k.NamedParameters
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.CValue
@@ -23,15 +24,15 @@ interface Driver {
         sql: String,
         params: Map<String, Any?>,
         paramsMapper: ((v: Any?) -> String?)? = null
-    ): Result<ULong> = execute(sql.withNamedParameters(params, paramsMapper))
+    ): Result<ULong> = execute(NamedParameters.render(sql, params, paramsMapper))
 
-    suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>>
+    suspend fun <T> fetchAll(sql: String, mapper: ResultSet.Row.() -> T): Result<List<T>>
     suspend fun <T> fetchAll(
         sql: String,
         params: Map<String, Any?>,
         paramsMapper: ((v: Any?) -> String?)? = null,
-        mapper: Sqlx4k.Row.() -> T,
-    ): Result<List<T>> = fetchAll(sql.withNamedParameters(params, paramsMapper), mapper)
+        mapper: ResultSet.Row.() -> T,
+    ): Result<List<T>> = fetchAll(NamedParameters.render(sql, params, paramsMapper), mapper)
 
     private inline fun <T> CPointer<Sqlx4kResult>?.use(f: (it: Sqlx4kResult) -> T): T {
         return try {
@@ -43,10 +44,10 @@ interface Driver {
     }
 
     private fun Sqlx4kResult.isError(): Boolean = error >= 0
-    private fun Sqlx4kResult.toError(): Sqlx4k.Error {
-        val code = Sqlx4k.Error.Code.entries[error]
+    private fun Sqlx4kResult.toError(): ResultSet.Error {
+        val code = ResultSet.Error.Code.entries[error]
         val message = error_message?.toKString()
-        return Sqlx4k.Error(code, message)
+        return ResultSet.Error(code, message)
     }
 
     fun CPointer<Sqlx4kResult>?.rowsAffectedOrError(): ULong = use {
@@ -62,18 +63,18 @@ interface Driver {
         if (isError()) toError().ex()
     }
 
-    private inline fun <T> Sqlx4kResult.map(f: Sqlx4k.Row.() -> T): List<T> {
+    private inline fun <T> Sqlx4kResult.map(f: ResultSet.Row.() -> T): List<T> {
         throwIfError()
         val rows = mutableListOf<T>()
         repeat(size) { index ->
-            val scope = Sqlx4k.Row(this.rows!![index])
+            val scope = ResultSet.Row(this.rows!![index])
             val row = f(scope)
             rows.add(row)
         }
         return rows
     }
 
-    fun <T> CPointer<Sqlx4kResult>?.map(f: Sqlx4k.Row.() -> T): List<T> =
+    fun <T> CPointer<Sqlx4kResult>?.map(f: ResultSet.Row.() -> T): List<T> =
         use { result -> result.map(f) }
 
     fun CPointer<Sqlx4kResult>?.tx(): Pair<CPointer<out CPointed>, ULong> = use { result ->
@@ -81,7 +82,7 @@ interface Driver {
         result.tx!! to result.rows_affected
     }
 
-    fun <T> CPointer<Sqlx4kResult>?.txMap(f: Sqlx4k.Row.() -> T): Pair<CPointer<out CPointed>, List<T>> =
+    fun <T> CPointer<Sqlx4kResult>?.txMap(f: ResultSet.Row.() -> T): Pair<CPointer<out CPointed>, List<T>> =
         use { result -> result.tx!! to result.map(f) }
 
     interface Tx {
@@ -93,42 +94,6 @@ interface Driver {
             val ref = c.useContents { ptr }!!.asStableRef<Continuation<CPointer<Sqlx4kResult>?>>()
             ref.get().resume(r)
             ref.dispose()
-        }
-
-        private val nameParameterRegex = Regex("""(?<!:):(?!:)[a-zA-Z]\w+""")
-        private fun extractNamedParamsIndexes(sql: String): Map<String, List<IntRange>> =
-            nameParameterRegex.findAll(sql)
-                .mapIndexed { index, group -> Pair(group, index) }
-                .groupBy({ it.first.value.substring(1) }, { it.first.range })
-
-        private fun String.withNamedParameters(
-            params: Map<String, Any?>,
-            paramsMapper: ((v: Any?) -> String?)?
-        ): String {
-            fun Any?.toValueString(): String {
-                if (paramsMapper != null) paramsMapper(this)?.let { return it }
-                return when (this) {
-                    null -> "null"
-                    is String -> this
-                    is Byte, is Boolean, is Int, is Long, is Short, is Double, is Float -> toString()
-                    else -> Sqlx4k.Error(
-                        code = Sqlx4k.Error.Code.NamedParameterTypeNotSupported,
-                        message = "Could not map named parameter of type ${this::class.qualifiedName}"
-                    ).ex()
-                }
-            }
-
-            var res = this
-            extractNamedParamsIndexes(this).entries.forEach { (name, ranges) ->
-                if (!params.containsKey(name)) {
-                    Sqlx4k.Error(
-                        code = Sqlx4k.Error.Code.NamedParameterValueNotSupplied,
-                        message = "Value for named parameter '$name' was not supplied"
-                    ).ex()
-                }
-                ranges.forEach { res = res.replaceRange(it, params[name].toValueString()) }
-            }
-            return res
         }
     }
 }

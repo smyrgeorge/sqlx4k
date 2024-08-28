@@ -1,4 +1,4 @@
-package io.github.smyrgeorge.sqlx4k.mysql
+package io.github.smyrgeorge.sqlx4k.postgres
 
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.get
@@ -8,7 +8,7 @@ import librust_lib.Sqlx4kRow
 
 @OptIn(ExperimentalForeignApi::class)
 @Suppress("unused", "MemberVisibilityCanBePrivate")
-interface Sqlx4k {
+interface ResultSet {
     class Row(
         private val row: Sqlx4kRow
     ) {

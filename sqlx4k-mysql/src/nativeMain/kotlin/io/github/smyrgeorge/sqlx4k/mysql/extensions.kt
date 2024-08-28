@@ -1,6 +1,6 @@
-package io.github.smyrgeorge.sqlx4k.mysql.impl
+package io.github.smyrgeorge.sqlx4k.mysql
 
-import io.github.smyrgeorge.sqlx4k.mysql.Sqlx4k
+import io.github.smyrgeorge.sqlx4k.Sqlx4k
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi

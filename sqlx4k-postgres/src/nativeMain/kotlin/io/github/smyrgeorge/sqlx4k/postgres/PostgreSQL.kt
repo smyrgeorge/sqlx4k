@@ -1,9 +1,6 @@
-package io.github.smyrgeorge.sqlx4k.postgres.impl
+package io.github.smyrgeorge.sqlx4k.postgres
 
-import io.github.smyrgeorge.sqlx4k.postgres.Driver
 import io.github.smyrgeorge.sqlx4k.postgres.Driver.Companion.fn
-import io.github.smyrgeorge.sqlx4k.postgres.Sqlx4k
-import io.github.smyrgeorge.sqlx4k.postgres.Transaction
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -65,7 +62,7 @@ class PostgreSQL(
         sqlx { c -> sqlx4k_query(sql, c, fn) }.rowsAffectedOrError()
     }
 
-    override suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>> = runCatching {
+    override suspend fun <T> fetchAll(sql: String, mapper: ResultSet.Row.() -> T): Result<List<T>> = runCatching {
         sqlx { c -> sqlx4k_fetch_all(sql, c, fn) }.map { mapper(this) }
     }
 
@@ -137,7 +134,7 @@ class PostgreSQL(
             }
         }
 
-        override suspend fun <T> fetchAll(sql: String, mapper: Sqlx4k.Row.() -> T): Result<List<T>> = runCatching {
+        override suspend fun <T> fetchAll(sql: String, mapper: ResultSet.Row.() -> T): Result<List<T>> = runCatching {
             mutex.withLock {
                 sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, fn) }
                     .txMap { mapper(this) }
