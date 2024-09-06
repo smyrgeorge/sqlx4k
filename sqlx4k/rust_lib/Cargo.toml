@@ -1,0 +1,21 @@
+[package]
+name = "sqlx4k"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["lib", "staticlib"]
+
+[profile.release]
+opt-level = "z"
+strip = true
+lto = true
+panic = "abort"
+
+[dependencies]
+# https://crates.io/crates/sqlx
+sqlx = { version = "0.8.2", features = [] }
+
+[build-dependencies]
+# https://crates.io/crates/cbindgen
+cbindgen = "0.27.0"

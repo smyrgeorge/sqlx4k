@@ -13,6 +13,7 @@ lto = true
 panic = "abort"
 
 [dependencies]
+sqlx4k = { path = "../../sqlx4k/rust_lib" }
 # https://crates.io/crates/once_cell
 once_cell = { version = "1.19.0" }
 # https://crates.io/crates/tokio

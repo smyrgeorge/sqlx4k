@@ -1,0 +1,6 @@
+package = librust_lib
+headers = sqlx4k.h
+compilerOpts = -I./rust_lib/target
+
+staticLibraries = libsqlx4k.a
+libraryPaths = ./rust_lib/target/x86_64-unknown-linux-gnu/release

@@ -1,74 +1,14 @@
 use sqlx::mysql::{MySqlPool, MySqlPoolOptions, MySqlRow, MySqlTypeInfo, MySqlValueRef};
-use sqlx::{Column, Error, Executor, MySql, Row, Transaction, TypeInfo, ValueRef};
+use sqlx::{Column, Executor, MySql, Row, Transaction, TypeInfo, ValueRef};
+use sqlx4k::{c_chars_to_str, sqlx4k_error_result_of, Ptr, Sqlx4kColumn, Sqlx4kResult, Sqlx4kRow};
 use std::{
-    ffi::{c_char, c_int, c_ulonglong, c_void, CStr, CString},
-    ptr::null_mut,
+    ffi::{c_char, c_int, c_void, CString},
     sync::OnceLock,
 };
 use tokio::runtime::Runtime;
 
-pub const OK: c_int = -1;
-pub const ERROR_DATABASE: c_int = 0;
-pub const ERROR_POOL_TIMED_OUT: c_int = 1;
-pub const ERROR_POOL_CLOSED: c_int = 2;
-pub const ERROR_WORKER_CRASHED: c_int = 3;
-
 static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 static mut SQLX4K: OnceLock<Sqlx4k> = OnceLock::new();
-
-#[repr(C)]
-pub struct Sqlx4kResult {
-    pub error: c_int,
-    pub error_message: *mut c_char,
-    pub rows_affected: c_ulonglong,
-    pub tx: *mut c_void,
-    pub size: c_int,
-    pub rows: *mut Sqlx4kRow,
-}
-
-impl Sqlx4kResult {
-    fn leak(self) -> *mut Sqlx4kResult {
-        let result = Box::new(self);
-        let result = Box::leak(result);
-        result
-    }
-}
-
-impl Default for Sqlx4kResult {
-    fn default() -> Self {
-        Self {
-            error: OK,
-            error_message: null_mut(),
-            rows_affected: 0,
-            tx: null_mut(),
-            size: 0,
-            rows: null_mut(),
-        }
-    }
-}
-
-#[repr(C)]
-pub struct Sqlx4kRow {
-    pub size: c_int,
-    pub columns: *mut Sqlx4kColumn,
-}
-
-impl Default for Sqlx4kRow {
-    fn default() -> Self {
-        Self {
-            size: 0,
-            columns: null_mut(),
-        }
-    }
-}
-
-#[repr(C)]
-pub struct Sqlx4kColumn {
-    pub ordinal: c_int,
-    pub name: *mut c_char,
-    pub kind: *mut c_char,
-    pub value: *mut c_char,
-}
 
 #[derive(Debug)]
 struct Sqlx4k {
@@ -181,10 +121,10 @@ pub extern "C" fn sqlx4k_of(
     database: *const c_char,
     max_connections: c_int,
 ) -> *mut Sqlx4kResult {
-    let host = unsafe { c_chars_to_str(host) };
-    let username = unsafe { c_chars_to_str(username) };
-    let password = unsafe { c_chars_to_str(password) };
-    let database = unsafe { c_chars_to_str(database) };
+    let host = c_chars_to_str(host);
+    let username = c_chars_to_str(username);
+    let password = c_chars_to_str(password);
+    let database = c_chars_to_str(database);
 
     let url = format!(
         "mysql://{}:{}@{}:{}/{}",
@@ -219,13 +159,6 @@ pub extern "C" fn sqlx4k_pool_idle_size() -> c_int {
     unsafe { SQLX4K.get().unwrap() }.pool.num_idle() as c_int
 }
 
-#[repr(C)]
-pub struct Ptr {
-    ptr: *mut c_void,
-}
-unsafe impl Send for Ptr {}
-unsafe impl Sync for Ptr {}
-
 #[no_mangle]
 pub extern "C" fn sqlx4k_query(
     sql: *const c_char,
@@ -233,7 +166,7 @@ pub extern "C" fn sqlx4k_query(
     fun: unsafe extern "C" fn(Ptr, *mut Sqlx4kResult),
 ) {
     let callback = Ptr { ptr: callback };
-    let sql = unsafe { c_chars_to_str(sql).to_owned() };
+    let sql = c_chars_to_str(sql).to_owned();
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get().unwrap() };
     runtime.spawn(async move {
@@ -249,7 +182,7 @@ pub extern "C" fn sqlx4k_fetch_all(
     fun: unsafe extern "C" fn(Ptr, *mut Sqlx4kResult),
 ) {
     let callback = Ptr { ptr: callback };
-    let sql = unsafe { c_chars_to_str(sql).to_owned() };
+    let sql = c_chars_to_str(sql).to_owned();
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get().unwrap() };
     runtime.spawn(async move {
@@ -313,7 +246,7 @@ pub extern "C" fn sqlx4k_tx_query(
 ) {
     let tx = Ptr { ptr: tx };
     let callback = Ptr { ptr: callback };
-    let sql = unsafe { c_chars_to_str(sql).to_owned() };
+    let sql = c_chars_to_str(sql).to_owned();
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
     runtime.spawn(async move {
@@ -331,42 +264,13 @@ pub extern "C" fn sqlx4k_tx_fetch_all(
 ) {
     let tx = Ptr { ptr: tx };
     let callback = Ptr { ptr: callback };
-    let sql = unsafe { c_chars_to_str(sql).to_owned() };
+    let sql = c_chars_to_str(sql).to_owned();
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
     runtime.spawn(async move {
         let result = sqlx4k.tx_fetch_all(tx, &sql).await;
         unsafe { fun(callback, result) }
     });
-}
-
-#[no_mangle]
-pub extern "C" fn sqlx4k_free_result(ptr: *mut Sqlx4kResult) {
-    let ptr: Sqlx4kResult = unsafe { *Box::from_raw(ptr) };
-
-    if ptr.error >= 0 {
-        let error_message = unsafe { CString::from_raw(ptr.error_message) };
-        std::mem::drop(error_message);
-    }
-
-    if ptr.rows == null_mut() {
-        return;
-    }
-
-    let rows: Vec<Sqlx4kRow> =
-        unsafe { Vec::from_raw_parts(ptr.rows, ptr.size as usize, ptr.size as usize) };
-    for row in rows {
-        let columns: Vec<Sqlx4kColumn> =
-            unsafe { Vec::from_raw_parts(row.columns, row.size as usize, row.size as usize) };
-        for col in columns {
-            let name = unsafe { CString::from_raw(col.name) };
-            std::mem::drop(name);
-            let kind = unsafe { CString::from_raw(col.kind) };
-            std::mem::drop(kind);
-            let value = unsafe { CString::from_raw(col.value) };
-            std::mem::drop(value);
-        }
-    }
 }
 
 fn sqlx4k_result_of(result: Result<Vec<MySqlRow>, sqlx::Error>) -> Sqlx4kResult {
@@ -390,46 +294,6 @@ fn sqlx4k_result_of(result: Result<Vec<MySqlRow>, sqlx::Error>) -> Sqlx4kResult 
             }
         }
         Err(err) => sqlx4k_error_result_of(err),
-    }
-}
-
-fn sqlx4k_error_result_of(err: sqlx::Error) -> Sqlx4kResult {
-    let (code, message) = match err {
-        Error::Configuration(_) => panic!("Unexpected error occurred."),
-        Error::Database(e) => match e.code() {
-            Some(code) => (ERROR_DATABASE, format!("[{}] {}", code, e.to_string())),
-            None => (ERROR_DATABASE, format!("{}", e.to_string())),
-        },
-        Error::Io(_) => panic!("Io :: Unexpected error occurred."),
-        Error::Tls(_) => panic!("Tls :: Unexpected error occurred."),
-        Error::Protocol(_) => panic!("Protocol :: Unexpected error occurred."),
-        Error::RowNotFound => panic!("RowNotFound :: Unexpected error occurred."),
-        Error::TypeNotFound { type_name: _ } => {
-            panic!("TypeNotFound :: Unexpected error occurred.")
-        }
-        Error::ColumnIndexOutOfBounds { index: _, len: _ } => {
-            panic!("ColumnIndexOutOfBounds :: Unexpected error occurred.")
-        }
-        Error::ColumnNotFound(_) => panic!("ColumnNotFound :: Unexpected error occurred."),
-        Error::ColumnDecode {
-            index: _,
-            source: _,
-        } => {
-            panic!("ColumnDecode :: Unexpected error occurred.")
-        }
-        Error::Decode(_) => panic!("Decode :: Unexpected error occurred."),
-        Error::AnyDriverError(_) => panic!("AnyDriverError :: Unexpected error occurred."),
-        Error::PoolTimedOut => (ERROR_POOL_TIMED_OUT, "PoolTimedOut".to_string()),
-        Error::PoolClosed => (ERROR_POOL_CLOSED, "PoolClosed".to_string()),
-        Error::WorkerCrashed => (ERROR_WORKER_CRASHED, "WorkerCrashed".to_string()),
-        Error::Migrate(_) => panic!("Migrate :: Unexpected error occurred."),
-        _ => panic!("Unexpected error occurred."),
-    };
-
-    Sqlx4kResult {
-        error: code,
-        error_message: CString::new(message).unwrap().into_raw(),
-        ..Default::default()
     }
 }
 
@@ -470,8 +334,4 @@ fn sqlx4k_row_of(row: &MySqlRow) -> Sqlx4kRow {
             columns,
         }
     }
-}
-
-unsafe fn c_chars_to_str<'a>(c_chars: *const c_char) -> &'a str {
-    CStr::from_ptr(c_chars).to_str().unwrap()
 }
