@@ -2,7 +2,6 @@ import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
 
 plugins {
     id("io.github.smyrgeorge.sqlx4k.multiplatform")
-//    alias(libs.plugins.kotlin.multiplatform)
 }
 
 repositories {
