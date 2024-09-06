@@ -1,7 +1,7 @@
+import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.impl.errorOrNull
 import io.github.smyrgeorge.sqlx4k.mysql.MySQL
-import io.github.smyrgeorge.sqlx4k.mysql.ResultSet
-import io.github.smyrgeorge.sqlx4k.mysql.Transaction
-import io.github.smyrgeorge.sqlx4k.mysql.errorOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.async

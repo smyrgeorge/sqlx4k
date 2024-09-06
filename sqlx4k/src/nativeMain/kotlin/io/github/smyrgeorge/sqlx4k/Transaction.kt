@@ -1,4 +1,4 @@
-package io.github.smyrgeorge.sqlx4k.mysql
+package io.github.smyrgeorge.sqlx4k
 
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer

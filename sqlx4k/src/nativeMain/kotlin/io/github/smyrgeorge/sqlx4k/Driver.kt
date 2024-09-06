@@ -1,6 +1,6 @@
-package io.github.smyrgeorge.sqlx4k.postgres
+package io.github.smyrgeorge.sqlx4k
 
-import io.github.smyrgeorge.sqlx4k.NamedParameters
+import io.github.smyrgeorge.sqlx4k.impl.NamedParameters
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.CValue
@@ -90,7 +90,7 @@ interface Driver {
     }
 
     companion object {
-        internal val fn = staticCFunction<CValue<Ptr>, CPointer<Sqlx4kResult>?, Unit> { c, r ->
+        val fn = staticCFunction<CValue<Ptr>, CPointer<Sqlx4kResult>?, Unit> { c, r ->
             val ref = c.useContents { ptr }!!.asStableRef<Continuation<CPointer<Sqlx4kResult>?>>()
             ref.get().resume(r)
             ref.dispose()

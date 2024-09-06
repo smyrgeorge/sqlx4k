@@ -1,4 +1,4 @@
-package io.github.smyrgeorge.sqlx4k
+package io.github.smyrgeorge.sqlx4k.impl
 
 class Sqlx4k {
     class Error(

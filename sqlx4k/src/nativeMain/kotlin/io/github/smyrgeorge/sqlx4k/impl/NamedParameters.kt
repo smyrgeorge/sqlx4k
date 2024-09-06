@@ -1,4 +1,4 @@
-package io.github.smyrgeorge.sqlx4k
+package io.github.smyrgeorge.sqlx4k.impl
 
 /**
  * The [NamedParameters] object provides utility functions for rendering SQL strings with named parameters.
