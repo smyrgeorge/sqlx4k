@@ -29,11 +29,9 @@ implementation("io.github.smyrgeorge:sqlx4k-mysql:x.y.z")
 implementation("io.github.smyrgeorge:sqlx4k-sqlite:x.y.z")
 ```
 
-## No JVM support
+## Supported targets
 
-This project **does not target JVM** and probably will not offer support in the future either.
-If you are looking for a JVM implementation, it's easy to find several solutions that also work really well with kotlin.
-Currently, we support the following targets:
+We support the following targets:
 
 - iosArm64
 - androidNativeX64
