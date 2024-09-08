@@ -40,7 +40,7 @@ We support the following targets:
 - macosX64
 - linuxArm64
 - linuxX64
-- mingwX64
+- mingwX64 (soon)
 - wasmWasi (potential future support)
 
 ## Why not a pure kotlin implementation?
