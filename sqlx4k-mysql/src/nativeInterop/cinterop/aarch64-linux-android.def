@@ -1,6 +1,6 @@
 package = librust_lib
-headers = rust_lib.h
+headers = sqlx4k_mysql.h
 compilerOpts = -I./rust_lib/target
 
-staticLibraries = librust_lib.a
+staticLibraries = libsqlx4k_mysql.a
 libraryPaths = ./rust_lib/target/aarch64-linux-android/release

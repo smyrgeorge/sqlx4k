@@ -1,6 +1,6 @@
 package = librust_lib
-headers = rust_lib.h
+headers = sqlx4k_postgres.h
 compilerOpts = -I./rust_lib/target
 
-staticLibraries = librust_lib.a
+staticLibraries = libsqlx4k_postgres.a
 libraryPaths = ./rust_lib/target/x86_64-linux-android/release

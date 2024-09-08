@@ -1,5 +1,5 @@
 [package]
-name = "rust_lib"
+name = "sqlx4k_mysql"
 version = "0.1.0"
 edition = "2021"
 
