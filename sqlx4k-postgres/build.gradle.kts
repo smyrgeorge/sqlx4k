@@ -20,7 +20,7 @@ kotlin {
         }
         val nativeMain by getting {
             dependencies {
-                implementation(project(":sqlx4k"))
+                api(project(":sqlx4k"))
                 implementation(libs.kotlinx.coroutines.core)
             }
         }
