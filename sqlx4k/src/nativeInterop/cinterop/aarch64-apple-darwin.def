@@ -1,4 +1,4 @@
-package = librust_lib
+package = sqlx4k
 headers = sqlx4k.h
 compilerOpts = -I./rust_lib/target
 

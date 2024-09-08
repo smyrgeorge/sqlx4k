@@ -3,8 +3,8 @@ package io.github.smyrgeorge.sqlx4k
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.get
 import kotlinx.cinterop.toKString
-import librust_lib.Sqlx4kColumn
-import librust_lib.Sqlx4kRow
+import sqlx4k.Sqlx4kColumn
+import sqlx4k.Sqlx4kRow
 
 @OptIn(ExperimentalForeignApi::class)
 @Suppress("unused", "MemberVisibilityCanBePrivate")

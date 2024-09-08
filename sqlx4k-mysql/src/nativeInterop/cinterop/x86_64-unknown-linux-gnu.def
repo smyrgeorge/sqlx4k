@@ -1,4 +1,4 @@
-package = librust_lib
+package = sqlx4k.impl
 headers = sqlx4k_mysql.h
 compilerOpts = -I./rust_lib/target
 

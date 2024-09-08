@@ -11,9 +11,9 @@ import kotlinx.cinterop.pointed
 import kotlinx.cinterop.staticCFunction
 import kotlinx.cinterop.toKString
 import kotlinx.cinterop.useContents
-import librust_lib.Ptr
-import librust_lib.Sqlx4kResult
-import librust_lib.sqlx4k_free_result
+import sqlx4k.Ptr
+import sqlx4k.Sqlx4kResult
+import sqlx4k.sqlx4k_free_result
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 

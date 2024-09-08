@@ -5,7 +5,7 @@ import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.StableRef
-import librust_lib.Sqlx4kResult
+import sqlx4k.Sqlx4kResult
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.suspendCoroutine
 
