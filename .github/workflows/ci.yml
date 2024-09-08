@@ -35,8 +35,7 @@ jobs:
           key: rust-lib-cache-linux
 
       - name: Gradle Build
-        run: ./gradlew build -Ptargets=androidNativeX64,linuxX64
-#        run: ./gradlew build -Ptargets=androidNativeX64,linuxX64,mingwX64
+        run: ./scripts/build-linux-x64.sh
   build-linux-arm64:
     runs-on: ubuntu-latest
     environment: Maven Central
@@ -64,7 +63,7 @@ jobs:
           key: rust-lib-cache-linux
 
       - name: Gradle Build
-        run: ./gradlew build -Ptargets=androidNativeArm64,linuxArm64
+        run: ./scripts/build-linux-arm64.sh
 
   build-apple:
     runs-on: macos-14
@@ -96,7 +95,7 @@ jobs:
           key: rust-lib-cache-apple
 
       - name: Gradle Build
-        run: ./gradlew build -Ptargets=iosArm64,macosArm64,macosX64
+        run: ./scripts/build-apple.sh
 
 #      - name: Gradle Publish
 #        run: ./gradlew publish

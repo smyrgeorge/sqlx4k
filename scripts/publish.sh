@@ -9,7 +9,6 @@ cat local.properties >> gradle.properties
 ./gradlew publishAllPublicationsToMavenCentralRepository -Ptargets=macosX64
 ./gradlew publishAllPublicationsToMavenCentralRepository -Ptargets=linuxArm64
 ./gradlew publishAllPublicationsToMavenCentralRepository -Ptargets=linuxX64
-#./gradlew publishAllPublicationsToMavenCentralRepository -Ptargets=mingwX64
 
 
 git checkout .
