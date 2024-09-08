@@ -5,7 +5,9 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.get
+import org.gradle.kotlin.dsl.support.serviceOf
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
+import org.gradle.process.ExecOperations
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import java.io.File
@@ -123,21 +125,24 @@ class MultiplatformConventions : Plugin<Project> {
         compilations["main"].cinterops {
             create("librust_lib") {
                 val cargo = tasks.create("cargo-$target") {
-                    if (useCross) {
-                        project.exec {
-                            executable = cargo
-                            args("install", "cross", "--git", "https://github.com/cross-rs/cross")
+                    val exec = project.serviceOf<ExecOperations>()
+                    doLast {
+                        if (useCross) {
+                            project.exec {
+                                executable = cargo
+                                args("install", "cross", "--git", "https://github.com/cross-rs/cross")
+                            }
                         }
-                    }
 
-                    project.exec {
-                        executable = if (useCross) cross else cargo
-                        args(
-                            "build",
-                            "--manifest-path", file("rust_lib/Cargo.toml").absolutePath,
-                            "--target=$target",
-                            "--release"
-                        )
+                        exec.exec {
+                            executable = if (useCross) cross else cargo
+                            args(
+                                "build",
+                                "--manifest-path", file("rust_lib/Cargo.toml").absolutePath,
+                                "--target=$target",
+                                "--release"
+                            )
+                        }
                     }
                 }
 
