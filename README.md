@@ -184,7 +184,7 @@ Then, run the build.
 You can also build for specific targets.
 
 ```shell
-./gradlew build -Ptargets=macosArm64,macosArm64
+./gradlew build -Ptargets=macosArm64,macosX64
 ```
 
 To build for all available target run:
