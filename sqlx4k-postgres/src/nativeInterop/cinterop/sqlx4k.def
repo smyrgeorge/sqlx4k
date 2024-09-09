@@ -1,7 +1,6 @@
 package = sqlx4k
 headers = sqlx4k_postgres.h
 compilerOpts = -I./rust_lib/target
-
 staticLibraries = libsqlx4k_postgres.a
 libraryPaths.ios_arm64 = ./rust_lib/target/aarch64-apple-ios/release
 libraryPaths.android_x64 = ./rust_lib/target/aarch64-linux-android/release
