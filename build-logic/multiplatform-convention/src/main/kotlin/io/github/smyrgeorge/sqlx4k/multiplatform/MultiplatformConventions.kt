@@ -123,8 +123,8 @@ class MultiplatformConventions : Plugin<Project> {
         fun file(path: String) = project.projectDir.resolve(path)
 
         compilations["main"].cinterops {
-            create("rust-lib") {
-                definitionFile.set(file("src/nativeInterop/cinterop/$target.def"))
+            create("ffi") {
+                definitionFile.set(file("src/nativeInterop/cinterop/sqlx4k.def"))
                 if (project.name == "sqlx4k") return@create
 
                 val cargo = tasks.create("cargo-$target") {
