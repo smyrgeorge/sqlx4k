@@ -123,7 +123,7 @@ class MultiplatformConventions : Plugin<Project> {
         fun file(path: String) = project.projectDir.resolve(path)
 
         compilations["main"].cinterops {
-            create(project.name) {
+            create("rust-lib") {
                 definitionFile.set(file("src/nativeInterop/cinterop/$target.def"))
                 if (project.name == "sqlx4k") return@create
 
