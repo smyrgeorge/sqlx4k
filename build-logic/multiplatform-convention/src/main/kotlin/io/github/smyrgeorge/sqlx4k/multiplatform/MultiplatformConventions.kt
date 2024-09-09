@@ -123,7 +123,10 @@ class MultiplatformConventions : Plugin<Project> {
         fun file(path: String) = project.projectDir.resolve(path)
 
         compilations["main"].cinterops {
-            create("librust_lib") {
+            create(project.name) {
+                definitionFile.set(file("src/nativeInterop/cinterop/$target.def"))
+                if (project.name == "sqlx4k") return@create
+
                 val cargo = tasks.create("cargo-$target") {
                     val exec = project.serviceOf<ExecOperations>()
                     doLast {
@@ -145,9 +148,7 @@ class MultiplatformConventions : Plugin<Project> {
                         }
                     }
                 }
-
                 tasks.getByName(interopProcessingTaskName) { dependsOn(cargo) }
-                definitionFile.set(file("src/nativeInterop/cinterop/$target.def"))
             }
         }
     }

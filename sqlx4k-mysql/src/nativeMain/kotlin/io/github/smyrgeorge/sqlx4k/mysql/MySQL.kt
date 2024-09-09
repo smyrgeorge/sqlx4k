@@ -9,16 +9,16 @@ import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import sqlx4k.impl.sqlx4k_fetch_all
-import sqlx4k.impl.sqlx4k_of
-import sqlx4k.impl.sqlx4k_pool_idle_size
-import sqlx4k.impl.sqlx4k_pool_size
-import sqlx4k.impl.sqlx4k_query
-import sqlx4k.impl.sqlx4k_tx_begin
-import sqlx4k.impl.sqlx4k_tx_commit
-import sqlx4k.impl.sqlx4k_tx_fetch_all
-import sqlx4k.impl.sqlx4k_tx_query
-import sqlx4k.impl.sqlx4k_tx_rollback
+import sqlx4k.sqlx4k_fetch_all
+import sqlx4k.sqlx4k_of
+import sqlx4k.sqlx4k_pool_idle_size
+import sqlx4k.sqlx4k_pool_size
+import sqlx4k.sqlx4k_query
+import sqlx4k.sqlx4k_tx_begin
+import sqlx4k.sqlx4k_tx_commit
+import sqlx4k.sqlx4k_tx_fetch_all
+import sqlx4k.sqlx4k_tx_query
+import sqlx4k.sqlx4k_tx_rollback
 
 @Suppress("MemberVisibilityCanBePrivate")
 @OptIn(ExperimentalForeignApi::class)

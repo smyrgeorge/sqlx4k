@@ -1,4 +1,4 @@
-package = sqlx4k.impl
+package = sqlx4k
 headers = sqlx4k_sqlite.h
 compilerOpts = -I./rust_lib/target
 
