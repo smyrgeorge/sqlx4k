@@ -70,8 +70,8 @@ class MultiplatformConventions : Plugin<Project> {
         project.extensions.configure<KotlinMultiplatformExtension> {
             val availableTargets = mapOf(
                 Pair("iosArm64") { iosArm64 { rust("aarch64-apple-ios", !os.isMacOsX) } },
-                Pair("androidNativeX64") { androidNativeX64 { rust("x86_64-linux-android", true) } },
                 Pair("androidNativeArm64") { androidNativeArm64 { rust("aarch64-linux-android", true) } },
+                Pair("androidNativeX64") { androidNativeX64 { rust("x86_64-linux-android", true) } },
                 Pair("macosArm64") { macosArm64 { rust("aarch64-apple-darwin", !os.isMacOsX) } },
                 Pair("macosX64") { macosX64 { rust("x86_64-apple-darwin", !os.isMacOsX) } },
                 Pair("linuxArm64") { linuxArm64 { rust("aarch64-unknown-linux-gnu", !os.isLinux || !arch.isArm64) } },
@@ -111,7 +111,7 @@ class MultiplatformConventions : Plugin<Project> {
                     "macosX64",
                     "linuxArm64",
                     "linuxX64",
-//                "mingwX64"
+                    "mingwX64"
                 )
 
                 else -> it.split(",").map { t -> t.trim() }
