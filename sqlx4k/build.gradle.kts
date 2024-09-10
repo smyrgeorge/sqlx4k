@@ -34,8 +34,8 @@ mavenPublishing {
     )
 
     pom {
-        name = "sqlx4k-postgres"
-        description = "A non-blocking PostgreSQL database driver written in Kotlin for the Native platform."
+        name = "sqlx4k"
+        description = "A non-blocking database driver written in Kotlin for the Native platform."
         url = "https://github.com/smyrgeorge/sqlx4k"
 
         licenses {
