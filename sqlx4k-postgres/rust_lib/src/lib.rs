@@ -4,7 +4,7 @@ use sqlx::postgres::{
 use sqlx::{Column, Executor, Postgres, Row, Transaction, TypeInfo, ValueRef};
 use sqlx4k::{c_chars_to_str, sqlx4k_error_result_of, Ptr, Sqlx4kColumn, Sqlx4kResult, Sqlx4kRow};
 use std::{
-    ffi::{c_char, c_int, c_long, c_void, CString},
+    ffi::{c_char, c_int, c_void, CString},
     sync::OnceLock,
 };
 use tokio::runtime::Runtime;
@@ -278,8 +278,8 @@ pub extern "C" fn sqlx4k_tx_fetch_all(
 #[no_mangle]
 pub extern "C" fn sqlx4k_listen(
     channels: *const c_char,
-    notify_id: c_long,
-    notify: unsafe extern "C" fn(c_long, *mut Sqlx4kResult),
+    notify_id: c_int,
+    notify: unsafe extern "C" fn(c_int, *mut Sqlx4kResult),
     callback: *mut c_void,
     fun: unsafe extern "C" fn(Ptr, *mut Sqlx4kResult),
 ) {

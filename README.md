@@ -40,8 +40,8 @@ We support the following targets:
 - macosX64
 - linuxArm64
 - linuxX64
-- mingwX64 (soon)
-- wasmWasi (potential future support)
+- mingwX64
+- wasmJs (in progress)
 
 ## Why not a pure kotlin implementation?
 
@@ -150,11 +150,10 @@ db.listen("chan0") { notification: Postgres.Notification ->
 - [x] Transactions
 - [x] Listen/Notify Postgres.
 - [x] Named parameters (needs enhancements)
-- [ ] Reduce duplicate code (in progress)
-- [ ] SQLDelight (in progress)
+- [ ] Documentation (in progress)
+- [ ] SQLDelight
 - [ ] Transaction isolation level
 - [ ] Testing
-- [ ] Documentation (in progress)
 
 ## Compilation
 
@@ -163,7 +162,7 @@ Check here: https://rustup.rs/
 
 Also, make sure that you have installed all the necessary targets:
 
-```text
+```shell
 rustup target add aarch64-apple-ios
 rustup target add aarch64-apple-darwin
 rustup target add x86_64-apple-darwin
@@ -172,6 +171,12 @@ rustup target add aarch64-linux-android
 rustup target add aarch64-unknown-linux-gnu
 rustup target add x86_64-unknown-linux-gnu
 rustup target add x86_64-pc-windows-gnu
+```
+
+We also need to install `cross` (tool that helps with cross-compiling)
+
+```shell
+cargo install cross --git https://github.com/cross-rs/cross
 ```
 
 Then, run the build.

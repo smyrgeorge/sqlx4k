@@ -79,7 +79,7 @@ class PostgreSQL(
     }
 
     suspend fun listen(channels: List<String>, f: (Notification) -> Unit) {
-        val channelId: Long = listenerId()
+        val channelId: Int = listenerId()
         val channel = Channel<Notification>(capacity = Channel.UNLIMITED)
 
         // Store the channel.
@@ -153,10 +153,11 @@ class PostgreSQL(
     )
 
     companion object {
-        private val channels: MutableMap<Long, Channel<Notification>> by lazy { mutableMapOf() }
+        private val channels: MutableMap<Int, Channel<Notification>> by lazy { mutableMapOf() }
         private val listenerMutex = Mutex()
-        private var listenerId: Long = 0
-        private suspend fun listenerId(): Long = listenerMutex.withLock {
+        private var listenerId: Int = 0
+        private suspend fun listenerId(): Int = listenerMutex.withLock {
+            // Will eventually overflow, but it doesn't matter, is the desired behaviour.
             listenerId += 1
             listenerId
         }
@@ -181,7 +182,7 @@ class PostgreSQL(
             }
         }
 
-        private val notify = staticCFunction<Long, CPointer<Sqlx4kResult>?, Unit> { c, r ->
+        private val notify = staticCFunction<Int, CPointer<Sqlx4kResult>?, Unit> { c, r ->
             channels[c]?.let {
                 val notification: Notification = r.notify()
                 runBlocking { it.send(notification) }

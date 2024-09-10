@@ -61,7 +61,7 @@ class MultiplatformConventions : Plugin<Project> {
         else -> getenv("HOME")
     }?.let(::File)
         ?.resolve(".cargo/bin/cross$exeExt")?.absolutePath
-        ?: throw GradleException("Rust cargo binary is required to build project but it wasn't found.")
+        ?: throw GradleException("Rust cross binary is required to build project but it wasn't found.")
 
 
     override fun apply(project: Project) {
@@ -111,7 +111,7 @@ class MultiplatformConventions : Plugin<Project> {
                     "macosX64",
                     "linuxArm64",
                     "linuxX64",
-//                    "mingwX64"
+                    "mingwX64"
                 )
 
                 else -> it.split(",").map { t -> t.trim() }
@@ -124,19 +124,21 @@ class MultiplatformConventions : Plugin<Project> {
 
         compilations["main"].cinterops {
             create("ffi") {
-                definitionFile.set(file("src/nativeInterop/cinterop/sqlx4k.def"))
-                if (project.name == "sqlx4k") return@create
+
+                if (project.name == "sqlx4k") {
+                    definitionFile.set(file("src/nativeInterop/cinterop/sqlx4k.def"))
+                    return@create
+                }
+
+                if (target == "x86_64-pc-windows-gnu") {
+                    definitionFile.set(file("src/nativeInterop/cinterop/sqlx4k-mingwX64.def"))
+                } else {
+                    definitionFile.set(file("src/nativeInterop/cinterop/sqlx4k.def"))
+                }
 
                 val cargo = tasks.create("cargo-$target") {
                     val exec = project.serviceOf<ExecOperations>()
                     doLast {
-                        if (useCross) {
-                            project.exec {
-                                executable = cargo
-                                args("install", "cross", "--git", "https://github.com/cross-rs/cross")
-                            }
-                        }
-
                         exec.exec {
                             executable = if (useCross) cross else cargo
                             args(
