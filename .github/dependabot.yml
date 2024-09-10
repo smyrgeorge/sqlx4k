@@ -17,7 +17,25 @@ updates:
     assignees:
       - "smyrgeorge"
   - package-ecosystem: "cargo"
-    directory: "/"
+    directory: "/sqlx4k/rust_lib"
+    schedule:
+      interval: "weekly"
+    assignees:
+      - "smyrgeorge"
+  - package-ecosystem: "cargo"
+    directory: "/sqlx4k-mysql/rust_lib"
+    schedule:
+      interval: "weekly"
+    assignees:
+      - "smyrgeorge"
+  - package-ecosystem: "cargo"
+    directory: "/sqlx4k-postgres/rust_lib"
+    schedule:
+      interval: "weekly"
+    assignees:
+      - "smyrgeorge"
+  - package-ecosystem: "cargo"
+    directory: "/sqlx4k-sqlite/rust_lib"
     schedule:
       interval: "weekly"
     assignees:
