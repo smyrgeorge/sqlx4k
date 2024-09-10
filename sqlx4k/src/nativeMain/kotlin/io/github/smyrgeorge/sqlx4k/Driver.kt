@@ -85,8 +85,16 @@ interface Driver {
     fun <T> CPointer<Sqlx4kResult>?.txMap(f: ResultSet.Row.() -> T): Pair<CPointer<out CPointed>, List<T>> =
         use { result -> result.tx!! to result.map(f) }
 
-    interface Tx {
+    /**
+     *
+     */
+    interface Transactional {
         suspend fun begin(): Result<Transaction>
+    }
+
+    interface Pool {
+        fun poolSize(): Int
+        fun poolIdleSize(): Int
     }
 
     companion object {

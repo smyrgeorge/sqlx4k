@@ -24,6 +24,7 @@ import kotlinx.coroutines.sync.withLock
 import sqlx4k.Sqlx4kResult
 import sqlx4k.Sqlx4kRow
 import sqlx4k.sqlx4k_fetch_all
+import sqlx4k.sqlx4k_free_result
 import sqlx4k.sqlx4k_listen
 import sqlx4k.sqlx4k_of
 import sqlx4k.sqlx4k_pool_idle_size
@@ -34,10 +35,8 @@ import sqlx4k.sqlx4k_tx_commit
 import sqlx4k.sqlx4k_tx_fetch_all
 import sqlx4k.sqlx4k_tx_query
 import sqlx4k.sqlx4k_tx_rollback
-import sqlx4k.sqlx4k_free_result
 import kotlin.experimental.ExperimentalNativeApi
 
-@Suppress("MemberVisibilityCanBePrivate")
 @OptIn(ExperimentalForeignApi::class, ExperimentalNativeApi::class)
 class PostgreSQL(
     host: String,
@@ -46,7 +45,7 @@ class PostgreSQL(
     password: String,
     database: String,
     maxConnections: Int
-) : Driver, Driver.Tx {
+) : Driver, Driver.Pool, Driver.Transactional {
     init {
         sqlx4k_of(
             host = host,
@@ -58,8 +57,8 @@ class PostgreSQL(
         ).throwIfError()
     }
 
-    fun poolSize(): Int = sqlx4k_pool_size()
-    fun poolIdleSize(): Int = sqlx4k_pool_idle_size()
+    override fun poolSize(): Int = sqlx4k_pool_size()
+    override fun poolIdleSize(): Int = sqlx4k_pool_idle_size()
 
     override suspend fun execute(sql: String): Result<ULong> = runCatching {
         sqlx { c -> sqlx4k_query(sql, c, Driver.fn) }.rowsAffectedOrError()

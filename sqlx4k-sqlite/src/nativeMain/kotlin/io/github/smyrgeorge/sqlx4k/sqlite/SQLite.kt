@@ -20,12 +20,11 @@ import sqlx4k.sqlx4k_tx_fetch_all
 import sqlx4k.sqlx4k_tx_query
 import sqlx4k.sqlx4k_tx_rollback
 
-@Suppress("MemberVisibilityCanBePrivate")
 @OptIn(ExperimentalForeignApi::class)
 class SQLite(
     database: String,
     maxConnections: Int
-) : Driver, Driver.Tx {
+) : Driver, Driver.Pool, Driver.Transactional {
     init {
         sqlx4k_of(
             database = database,
@@ -33,8 +32,8 @@ class SQLite(
         ).throwIfError()
     }
 
-    fun poolSize(): Int = sqlx4k_pool_size()
-    fun poolIdleSize(): Int = sqlx4k_pool_idle_size()
+    override fun poolSize(): Int = sqlx4k_pool_size()
+    override fun poolIdleSize(): Int = sqlx4k_pool_idle_size()
 
     override suspend fun execute(sql: String): Result<ULong> = runCatching {
         sqlx { c -> sqlx4k_query(sql, c, Driver.fn) }.rowsAffectedOrError()
