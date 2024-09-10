@@ -41,7 +41,8 @@ We support the following targets:
 - linuxArm64
 - linuxX64
 - mingwX64
-- wasmJs (in progress)
+- wasmJs (potential future candidate)
+- jvm (not thinking about it at the moment)
 
 ## Why not a pure kotlin implementation?
 
@@ -151,8 +152,8 @@ db.listen("chan0") { notification: Postgres.Notification ->
 - [x] Listen/Notify Postgres.
 - [x] Named parameters (needs enhancements)
 - [ ] Documentation (in progress)
-- [ ] SQLDelight
 - [ ] Transaction isolation level
+- [ ] SQLDelight
 - [ ] Testing
 
 ## Compilation
