@@ -151,9 +151,9 @@ db.listen("chan0") { notification: Postgres.Notification ->
 - [x] Transactions
 - [x] Listen/Notify Postgres.
 - [x] Named parameters (needs enhancements)
+- [ ] SQLDelight (in progress)
 - [ ] Documentation (in progress)
 - [ ] Transaction isolation level
-- [ ] SQLDelight
 - [ ] Testing
 
 ## Compilation

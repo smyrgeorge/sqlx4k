@@ -7,10 +7,13 @@ import app.cash.sqldelight.db.SqlCursor
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.db.SqlPreparedStatement
 import io.github.smyrgeorge.sqlx4k.postgres.PostgreSQL
+import kotlinx.cinterop.ExperimentalForeignApi
+import sqlx4k.Sqlx4kResult
 
+@OptIn(ExperimentalForeignApi::class)
 class SqldelightPostgreSQL(
-    val driver: PostgreSQL
-): SqlDriver {
+    private val driver: PostgreSQL
+) : SqlDriver {
     override fun addListener(vararg queryKeys: String, listener: Query.Listener) {
         TODO("Not yet implemented")
     }
@@ -57,25 +60,54 @@ class SqldelightPostgreSQL(
         TODO("Not yet implemented")
     }
 
-   class Sqlx4kPreparedStatement : SqlPreparedStatement {
-       override fun bindBoolean(index: Int, boolean: Boolean?) {
-           TODO("Not yet implemented")
-       }
+    class Sqlx4kPreparedStatement : SqlPreparedStatement {
+        override fun bindBoolean(index: Int, boolean: Boolean?) {
+            TODO("Not yet implemented")
+        }
 
-       override fun bindBytes(index: Int, bytes: ByteArray?) {
-           TODO("Not yet implemented")
-       }
+        override fun bindBytes(index: Int, bytes: ByteArray?) {
+            TODO("Not yet implemented")
+        }
 
-       override fun bindDouble(index: Int, double: Double?) {
-           TODO("Not yet implemented")
-       }
+        override fun bindDouble(index: Int, double: Double?) {
+            TODO("Not yet implemented")
+        }
 
-       override fun bindLong(index: Int, long: Long?) {
-           TODO("Not yet implemented")
-       }
+        override fun bindLong(index: Int, long: Long?) {
+            TODO("Not yet implemented")
+        }
 
-       override fun bindString(index: Int, string: String?) {
-           TODO("Not yet implemented")
-       }
-   }
+        override fun bindString(index: Int, string: String?) {
+            TODO("Not yet implemented")
+        }
+    }
+
+    class Sqlx4kCursor(
+        private val result: Sqlx4kResult
+    ) : SqlCursor {
+        
+        override fun getBoolean(index: Int): Boolean? {
+            TODO("Not yet implemented")
+        }
+
+        override fun getBytes(index: Int): ByteArray? {
+            TODO("Not yet implemented")
+        }
+
+        override fun getDouble(index: Int): Double? {
+            TODO("Not yet implemented")
+        }
+
+        override fun getLong(index: Int): Long? {
+            TODO("Not yet implemented")
+        }
+
+        override fun getString(index: Int): String? {
+            TODO("Not yet implemented")
+        }
+
+        override fun next(): QueryResult<Boolean> {
+            TODO("Not yet implemented")
+        }
+    }
 }
