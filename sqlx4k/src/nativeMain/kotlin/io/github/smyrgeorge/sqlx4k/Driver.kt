@@ -1,6 +1,8 @@
 package io.github.smyrgeorge.sqlx4k
 
 import io.github.smyrgeorge.sqlx4k.impl.NamedParameters
+import io.github.smyrgeorge.sqlx4k.impl.isError
+import io.github.smyrgeorge.sqlx4k.impl.toError
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.CValue
@@ -9,7 +11,6 @@ import kotlinx.cinterop.asStableRef
 import kotlinx.cinterop.get
 import kotlinx.cinterop.pointed
 import kotlinx.cinterop.staticCFunction
-import kotlinx.cinterop.toKString
 import kotlinx.cinterop.useContents
 import sqlx4k.Ptr
 import sqlx4k.Sqlx4kResult
@@ -17,6 +18,7 @@ import sqlx4k.sqlx4k_free_result
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 
+@Suppress("KDocUnresolvedReference")
 @OptIn(ExperimentalForeignApi::class)
 interface Driver {
     suspend fun execute(sql: String): Result<ULong>
@@ -26,7 +28,9 @@ interface Driver {
         paramsMapper: ((v: Any?) -> String?)? = null
     ): Result<ULong> = execute(NamedParameters.render(sql, params, paramsMapper))
 
+    suspend fun fetchAll(sql: String): ResultSet
     suspend fun <T> fetchAll(sql: String, mapper: ResultSet.Row.() -> T): Result<List<T>>
+
     suspend fun <T> fetchAll(
         sql: String,
         params: Map<String, Any?>,
@@ -41,13 +45,6 @@ interface Driver {
         } finally {
             sqlx4k_free_result(this)
         }
-    }
-
-    private fun Sqlx4kResult.isError(): Boolean = error >= 0
-    private fun Sqlx4kResult.toError(): ResultSet.Error {
-        val code = ResultSet.Error.Code.entries[error]
-        val message = error_message?.toKString()
-        return ResultSet.Error(code, message)
     }
 
     fun CPointer<Sqlx4kResult>?.rowsAffectedOrError(): ULong = use {
@@ -85,9 +82,6 @@ interface Driver {
     fun <T> CPointer<Sqlx4kResult>?.txMap(f: ResultSet.Row.() -> T): Pair<CPointer<out CPointed>, List<T>> =
         use { result -> result.tx!! to result.map(f) }
 
-    /**
-     *
-     */
     interface Transactional {
         suspend fun begin(): Result<Transaction>
     }
@@ -98,6 +92,17 @@ interface Driver {
     }
 
     companion object {
+        /**
+         * A static C function pointer used with SQLx4k for handling SQL operation results.
+         *
+         * This function is used as a callback to process results of SQL operations executed
+         * by SQLx4k. It handles the continuation of a suspended function by resuming it with
+         * the result provided and properly disposing of the continuation reference.
+         *
+         * The function takes two parameters:
+         * @param c - A pointer to the continuation that needs to be resumed.
+         * @param r - A pointer to the Sqlx4kResult.
+         */
         val fn = staticCFunction<CValue<Ptr>, CPointer<Sqlx4kResult>?, Unit> { c, r ->
             val ref = c.useContents { ptr }!!.asStableRef<Continuation<CPointer<Sqlx4kResult>?>>()
             ref.get().resume(r)

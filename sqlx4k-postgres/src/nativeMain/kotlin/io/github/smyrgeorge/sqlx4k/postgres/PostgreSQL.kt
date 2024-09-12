@@ -37,6 +37,7 @@ import sqlx4k.sqlx4k_tx_query
 import sqlx4k.sqlx4k_tx_rollback
 import kotlin.experimental.ExperimentalNativeApi
 
+@Suppress("MemberVisibilityCanBePrivate")
 @OptIn(ExperimentalForeignApi::class, ExperimentalNativeApi::class)
 class PostgreSQL(
     host: String,
@@ -62,6 +63,11 @@ class PostgreSQL(
 
     override suspend fun execute(sql: String): Result<ULong> = runCatching {
         sqlx { c -> sqlx4k_query(sql, c, Driver.fn) }.rowsAffectedOrError()
+    }
+
+    override suspend fun fetchAll(sql: String): ResultSet {
+        val res = sqlx { c -> sqlx4k_fetch_all(sql, c, Driver.fn) }
+        return ResultSet(res)
     }
 
     override suspend fun <T> fetchAll(sql: String, mapper: ResultSet.Row.() -> T): Result<List<T>> = runCatching {
@@ -134,6 +140,16 @@ class PostgreSQL(
                 tx = res.first
                 res.second
             }
+        }
+
+        override suspend fun fetchAll(sql: String): ResultSet {
+            val res = mutex.withLock {
+                val r = sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, Driver.fn) }
+                ResultSet(r)
+            }
+
+            tx = res.getRaw().tx!!
+            return res
         }
 
         override suspend fun <T> fetchAll(sql: String, mapper: ResultSet.Row.() -> T): Result<List<T>> = runCatching {

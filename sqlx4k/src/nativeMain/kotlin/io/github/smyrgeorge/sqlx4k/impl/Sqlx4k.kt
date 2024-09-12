@@ -1,5 +1,6 @@
 package io.github.smyrgeorge.sqlx4k.impl
 
+@Suppress("unused")
 class Sqlx4k {
     class Error(
         val code: Code,

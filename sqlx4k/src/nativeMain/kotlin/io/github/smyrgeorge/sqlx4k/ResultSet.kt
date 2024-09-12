@@ -1,14 +1,32 @@
 package io.github.smyrgeorge.sqlx4k
 
+import io.github.smyrgeorge.sqlx4k.impl.isError
+import io.github.smyrgeorge.sqlx4k.impl.toError
+import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.get
+import kotlinx.cinterop.pointed
 import kotlinx.cinterop.toKString
 import sqlx4k.Sqlx4kColumn
+import sqlx4k.Sqlx4kResult
 import sqlx4k.Sqlx4kRow
+import sqlx4k.sqlx4k_free_result
 
 @OptIn(ExperimentalForeignApi::class)
-@Suppress("unused", "MemberVisibilityCanBePrivate")
-interface ResultSet {
+@Suppress("unused", "MemberVisibilityCanBePrivate", "CanBeParameter")
+class ResultSet(private var ptr: CPointer<Sqlx4kResult>?) : Iterator<ResultSet.Row>, AutoCloseable {
+
+    private var result: Sqlx4kResult? = ptr?.pointed
+        ?: error("Could not extract the value from the raw pointer (null).")
+
+    fun isError(): Boolean = result!!.isError()
+    fun toError(): Error = result!!.toError()
+
+    fun getRaw(): Sqlx4kResult = result
+        ?: error("Resulted already freed (null).")
+    fun getRawPtr(): CPointer<Sqlx4kResult> = ptr
+        ?: error("Resulted already freed (null).")
+
     class Row(
         private val row: Sqlx4kRow
     ) {
@@ -83,5 +101,19 @@ interface ResultSet {
             NamedParameterTypeNotSupported,
             NamedParameterValueNotSupplied
         }
+    }
+
+    override fun hasNext(): Boolean {
+        TODO("Not yet implemented")
+    }
+
+    override fun next(): Row {
+        TODO("Not yet implemented")
+    }
+
+    override fun close() {
+        result = null
+        sqlx4k_free_result(ptr)
+        ptr = null
     }
 }

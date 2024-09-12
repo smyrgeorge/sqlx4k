@@ -39,6 +39,11 @@ class SQLite(
         sqlx { c -> sqlx4k_query(sql, c, Driver.fn) }.rowsAffectedOrError()
     }
 
+    override suspend fun fetchAll(sql: String): ResultSet {
+        val res = sqlx { c -> sqlx4k_fetch_all(sql, c, Driver.fn) }
+        return ResultSet(res)
+    }
+
     override suspend fun <T> fetchAll(sql: String, mapper: ResultSet.Row.() -> T): Result<List<T>> = runCatching {
         sqlx { c -> sqlx4k_fetch_all(sql, c, Driver.fn) }.map { mapper(this) }
     }
@@ -70,6 +75,16 @@ class SQLite(
                 tx = res.first
                 res.second
             }
+        }
+
+        override suspend fun fetchAll(sql: String): ResultSet {
+            val res = mutex.withLock {
+                val r = sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, Driver.fn) }
+                ResultSet(r)
+            }
+
+            tx = res.getRaw().tx!!
+            return res
         }
 
         override suspend fun <T> fetchAll(sql: String, mapper: ResultSet.Row.() -> T): Result<List<T>> = runCatching {
