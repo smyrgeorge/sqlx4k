@@ -3,7 +3,12 @@ package io.github.smyrgeorge.sqlx4k.postgres
 import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.impl.map
+import io.github.smyrgeorge.sqlx4k.impl.rowsAffectedOrError
 import io.github.smyrgeorge.sqlx4k.impl.sqlx
+import io.github.smyrgeorge.sqlx4k.impl.throwIfError
+import io.github.smyrgeorge.sqlx4k.impl.tx
+import io.github.smyrgeorge.sqlx4k.impl.txMap
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi

@@ -1,23 +1,24 @@
 package io.github.smyrgeorge.sqlx4k
 
 import io.github.smyrgeorge.sqlx4k.impl.NamedParameters
-import io.github.smyrgeorge.sqlx4k.impl.isError
-import io.github.smyrgeorge.sqlx4k.impl.toError
-import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.CValue
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.asStableRef
-import kotlinx.cinterop.get
-import kotlinx.cinterop.pointed
 import kotlinx.cinterop.staticCFunction
 import kotlinx.cinterop.useContents
 import sqlx4k.Ptr
 import sqlx4k.Sqlx4kResult
-import sqlx4k.sqlx4k_free_result
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 
+/**
+ * Represents an interface for executing SQL statements and managing their results.
+ *
+ * This interface provides methods for executing SQL queries, fetching results, and handling
+ * transactions. It abstracts the underlying database operations and offers a coroutine-based
+ * API for asynchronous execution.
+ */
 @Suppress("KDocUnresolvedReference")
 @OptIn(ExperimentalForeignApi::class)
 interface Driver {
@@ -38,57 +39,23 @@ interface Driver {
         mapper: ResultSet.Row.() -> T,
     ): Result<List<T>> = fetchAll(NamedParameters.render(sql, params, paramsMapper), mapper)
 
-    private inline fun <T> CPointer<Sqlx4kResult>?.use(f: (it: Sqlx4kResult) -> T): T {
-        return try {
-            this?.pointed?.let { f(it) }
-                ?: error("Could not extract the value from the raw pointer (null).")
-        } finally {
-            sqlx4k_free_result(this)
-        }
-    }
-
-    fun CPointer<Sqlx4kResult>?.rowsAffectedOrError(): ULong = use {
-        it.throwIfError()
-        it.rows_affected
-    }
-
-    fun CPointer<Sqlx4kResult>?.throwIfError() {
-        use { it.throwIfError() }
-    }
-
-    private fun Sqlx4kResult.throwIfError() {
-        if (isError()) toError().ex()
-    }
-
-    private inline fun <T> Sqlx4kResult.map(f: ResultSet.Row.() -> T): List<T> {
-        throwIfError()
-        val rows = mutableListOf<T>()
-        repeat(size) { index ->
-            val scope = ResultSet.Row(this.rows!![index])
-            val row = f(scope)
-            rows.add(row)
-        }
-        return rows
-    }
-
-    fun <T> CPointer<Sqlx4kResult>?.map(f: ResultSet.Row.() -> T): List<T> =
-        use { result -> result.map(f) }
-
-    fun CPointer<Sqlx4kResult>?.tx(): Pair<CPointer<out CPointed>, ULong> = use { result ->
-        result.throwIfError()
-        result.tx!! to result.rows_affected
-    }
-
-    fun <T> CPointer<Sqlx4kResult>?.txMap(f: ResultSet.Row.() -> T): Pair<CPointer<out CPointed>, List<T>> =
-        use { result -> result.tx!! to result.map(f) }
-
-    interface Transactional {
-        suspend fun begin(): Result<Transaction>
-    }
-
+    /**
+     * Represents a general interface for managing connection pools.
+     */
     interface Pool {
         fun poolSize(): Int
         fun poolIdleSize(): Int
+    }
+
+    /**
+     * Represents a transactional interface providing methods for handling transactions.
+     *
+     * This interface offers a method to begin a transaction. Implementers of this
+     * interface are expected to handle the initialization and starting of database
+     * transactions.
+     */
+    interface Transactional {
+        suspend fun begin(): Result<Transaction>
     }
 
     companion object {
