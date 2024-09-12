@@ -39,6 +39,12 @@ fun main() {
 
         data class Test(val id: Int)
 
+        db.fetchAll("select * from sqlx4k;").forEach {
+            val id: ResultSet.Row.Column = it.get("id")
+            val t = Test(id = id.value.toInt())
+            println("TEST: $t")
+        }
+
         val types = """
             select
                    true::bool,

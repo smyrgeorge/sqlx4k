@@ -22,7 +22,7 @@ fun Sqlx4kResult.toError(): ResultSet.Error {
     return ResultSet.Error(code, message)
 }
 
-private fun Sqlx4kResult.throwIfError() {
+fun Sqlx4kResult.throwIfError() {
     if (isError()) toError().ex()
 }
 

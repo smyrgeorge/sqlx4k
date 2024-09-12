@@ -1,6 +1,7 @@
 package io.github.smyrgeorge.sqlx4k
 
 import io.github.smyrgeorge.sqlx4k.impl.isError
+import io.github.smyrgeorge.sqlx4k.impl.throwIfError
 import io.github.smyrgeorge.sqlx4k.impl.toError
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -16,6 +17,7 @@ import sqlx4k.sqlx4k_free_result
 @Suppress("unused", "MemberVisibilityCanBePrivate", "CanBeParameter")
 class ResultSet(private var ptr: CPointer<Sqlx4kResult>?) : Iterator<ResultSet.Row>, AutoCloseable {
 
+    private var current: Int = 0
     private var result: Sqlx4kResult? = ptr?.pointed
         ?: error("Could not extract the value from the raw pointer (null).")
 
@@ -24,6 +26,7 @@ class ResultSet(private var ptr: CPointer<Sqlx4kResult>?) : Iterator<ResultSet.R
 
     fun getRaw(): Sqlx4kResult = result
         ?: error("Resulted already freed (null).")
+
     fun getRawPtr(): CPointer<Sqlx4kResult> = ptr
         ?: error("Resulted already freed (null).")
 
@@ -104,14 +107,20 @@ class ResultSet(private var ptr: CPointer<Sqlx4kResult>?) : Iterator<ResultSet.R
     }
 
     override fun hasNext(): Boolean {
-        TODO("Not yet implemented")
+        if (current == 0) getRaw().throwIfError()
+        val hasNext = current < getRaw().size
+        if (!hasNext) close()
+        return hasNext
     }
 
     override fun next(): Row {
-        TODO("Not yet implemented")
+        if (current == 0) getRaw().throwIfError()
+        if (current < 0 || current >= getRaw().size) error("Rows :: Out of bounds (index $current)")
+        return Row(getRaw().rows!![current++])
     }
 
     override fun close() {
+        if (result == null) return
         result = null
         sqlx4k_free_result(ptr)
         ptr = null
