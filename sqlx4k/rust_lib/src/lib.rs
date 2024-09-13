@@ -99,8 +99,10 @@ pub extern "C" fn sqlx4k_free_result(ptr: *mut Sqlx4kResult) {
             std::mem::drop(name);
             let kind = unsafe { CString::from_raw(col.kind) };
             std::mem::drop(kind);
-            let value = unsafe { CString::from_raw(col.value) };
-            std::mem::drop(value);
+            if col.value != null_mut() {
+                let value = unsafe { CString::from_raw(col.value) };
+                std::mem::drop(value);
+            }
         }
     }
 }

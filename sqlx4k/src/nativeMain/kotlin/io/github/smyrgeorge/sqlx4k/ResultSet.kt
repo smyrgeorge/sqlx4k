@@ -1,5 +1,6 @@
 package io.github.smyrgeorge.sqlx4k
 
+import io.github.smyrgeorge.sqlx4k.impl.debug
 import io.github.smyrgeorge.sqlx4k.impl.isError
 import io.github.smyrgeorge.sqlx4k.impl.throwIfError
 import io.github.smyrgeorge.sqlx4k.impl.toError
@@ -35,6 +36,7 @@ class ResultSet(
      * @return True if the result represents an error, false otherwise.
      */
     fun isError(): Boolean = result!!.isError()
+
     /**
      * Converts the current result of the `ResultSet` to a `DbError`.
      *
@@ -67,14 +69,37 @@ class ResultSet(
             map
         }
 
-        val size get() = row.size
+        /**
+         * The number of columns in the SQL row.
+         */
+        val size: Int get() = row.size
+
+        /**
+         * Retrieves a column from the row by its name.
+         *
+         * @param name The name of the column.
+         * @return The column corresponding to the given name.
+         */
         fun get(name: String): Column = columns[name]!!
+
+        /**
+         * Retrieves a column from the row by its ordinal index.
+         *
+         * @param ordinal The ordinal position of the column in the row.
+         * @return The column corresponding to the provided ordinal index.
+         * @throws IllegalArgumentException if the ordinal is out of bounds.
+         */
         fun get(ordinal: Int): Column {
             if (ordinal < 0 || ordinal >= columns.size) error("Columns :: Out of bounds (index $ordinal)")
             val raw = row.columns!![ordinal]
             return Column(raw.name!!.toKString(), raw)
         }
 
+        /**
+         * Provides a debug representation of the current row.
+         *
+         * @return A debug string detailing the row's structure and content.
+         */
         fun debug(): String = row.debug()
 
         /**
@@ -87,32 +112,46 @@ class ResultSet(
             val name: String,
             private val column: Sqlx4kColumn
         ) {
+            /**
+             * Retrieves the ordinal position of this column within the database table.
+             *
+             * The ordinal position is a zero-based index that indicates the column's
+             * position among other columns in the table schema.
+             */
             val ordinal: Int get() = column.ordinal
+
+            /**
+             * Retrieves the type of the column as a String.
+             *
+             * This property fetches the `kind` of the internal column representation
+             * and converts it to a Kotlin String.
+             *
+             * @return The type of the column in String format.
+             */
             val type: String get() = column.kind!!.toKString()
-            val value: String get() = column.value!!.toKString()
 
+            /**
+             * Retrieves the value of the column as a nullable String.
+             *
+             * This property accesses the internal `value` of the SQL column
+             * provided by the `Sqlx4k` library and converts it to a Kotlin string.
+             *
+             * @return The value of the column, or null if the column's value is null.
+             */
+            val value: String? get() = column.value?.toKString()
+
+            /**
+             * Converts the column value to a ByteArray by interpreting it as a hexadecimal string.
+             *
+             * This function assumes that the column value (if present) is prefixed with "\\x", which is removed before conversion.
+             * The remaining string is then processed as a hexadecimal representation and converted into a ByteArray.
+             *
+             * @return The byte array representation of the column value, or null if the value is absent.
+             */
             @OptIn(ExperimentalStdlibApi::class)
-            fun valueAsByteArray(): ByteArray = column.value!!.toKString()
-                .removePrefix("\\x")
-                .hexToByteArray()
-        }
-
-        @OptIn(ExperimentalForeignApi::class)
-        private fun Sqlx4kRow.debug(prefix: String = ""): String = buildString {
-            append("\n$prefix[Sqlx4kPgRow]")
-            append("\n${prefix}size: $size")
-            columns?.let {
-                repeat(size) { index -> append(it[index].debug(prefix = "$prefix    ")) }
-            }
-        }
-
-        @OptIn(ExperimentalForeignApi::class)
-        private fun Sqlx4kColumn.debug(prefix: String = ""): String = buildString {
-            append("\n$prefix[Sqlx4kPgColumn]")
-            append("\n${prefix}ordinal: $ordinal")
-            append("\n${prefix}name: ${name?.toKString() ?: "<EMPTY>"}")
-            append("\n${prefix}kind: ${kind?.toKString() ?: "<EMPTY>"}")
-            append("\n${prefix}value: ${value?.toKString() ?: "<EMPTY>"}")
+            fun valueAsByteArray(): ByteArray? = column.value?.toKString()
+                ?.removePrefix("\\x")
+                ?.hexToByteArray()
         }
     }
 

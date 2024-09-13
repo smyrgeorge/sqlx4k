@@ -3,6 +3,7 @@ use sqlx::{Column, Executor, Row, Sqlite, Transaction, TypeInfo, ValueRef};
 use sqlx4k::{c_chars_to_str, sqlx4k_error_result_of, Ptr, Sqlx4kColumn, Sqlx4kResult, Sqlx4kRow};
 use std::{
     ffi::{c_char, c_int, c_void, CString},
+    ptr::null_mut,
     sync::OnceLock,
 };
 use tokio::runtime::Runtime;
@@ -297,12 +298,16 @@ fn sqlx4k_row_of(row: &SqliteRow) -> Sqlx4kRow {
                 let value_ref: SqliteValueRef = row.try_get_raw(c.ordinal()).unwrap();
                 let info: std::borrow::Cow<SqliteTypeInfo> = value_ref.type_info();
                 let kind: &str = info.name();
-                let value: &str = row.get_unchecked(c.ordinal());
+                let value: Option<&str> = row.get_unchecked(c.ordinal());
                 Sqlx4kColumn {
                     ordinal: c.ordinal() as c_int,
                     name: CString::new(name).unwrap().into_raw(),
                     kind: CString::new(kind).unwrap().into_raw(),
-                    value: CString::new(value).unwrap().into_raw(),
+                    value: if value.is_none() {
+                        null_mut()
+                    } else {
+                        CString::new(value.unwrap()).unwrap().into_raw()
+                    },
                 }
             })
             .collect();

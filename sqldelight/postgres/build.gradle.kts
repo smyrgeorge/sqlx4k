@@ -10,7 +10,7 @@ group = rootProject.group
 version = rootProject.version
 
 kotlin {
-    macosArm64 { binaries { executable() } }
+    macosArm64()
 
     applyDefaultHierarchyTemplate()
     sourceSets {

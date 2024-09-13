@@ -41,12 +41,13 @@ fun main() {
 
         val res = db.fetchAll("select * from sqlx4k;").map {
             val id: ResultSet.Row.Column = it.get("id")
-            Test(id = id.value.toInt())
+            Test(id = id.value!!.toInt())
         }
         println(res)
 
         val types = """
             select
+                   null,
                    true::bool,
                    1::int2,
                    1::int4,
@@ -69,33 +70,31 @@ fun main() {
         """.trimIndent()
         val r0 = db.fetchAll(types) {
             columns.forEach {
-                val v = it.value
-                val res = v.value
-                println("${it.key} :: $res")
+                println("${it.key} :: ${it.value.name} ${it.value.type} ${it.value.value}")
             }
         }
         println(r0)
 
         val r1 = db.fetchAll("select * from sqlx4k;") {
             val id: ResultSet.Row.Column = get("id")
-            Test(id = id.value.toInt())
+            Test(id = id.value!!.toInt())
         }
         println(r1)
 
         val r2 = db.fetchAll("select * from sqlx4k;") {
             val id: ResultSet.Row.Column = get(0)
-            Test(id = id.value.toInt())
+            Test(id = id.value!!.toInt())
         }
         println(r2)
         val r3 = db.fetchAll("select * from sqlx4k;") {
             val id: ResultSet.Row.Column = get(1)
-            Test(id = id.value.toInt())
+            Test(id = id.value!!.toInt())
         }
         println(r3)
 
         db.fetchAll("select * from :table;", mapOf("table" to "sqlx4k")) {
             val id: ResultSet.Row.Column = get("id")
-            Test(id = id.value.toInt())
+            Test(id = id.value!!.toInt())
         }
 
         db.fetchAll("select 1;") {
@@ -142,7 +141,7 @@ fun main() {
 
         val test = db.fetchAll("select * from sqlx4k;") {
             val id: ResultSet.Row.Column = get("id")
-            Test(id = id.value.toInt())
+            Test(id = id.value!!.toInt())
         }
         println(test)
 
@@ -152,11 +151,11 @@ fun main() {
                     repeat(1_000) {
                         db.fetchAll("select * from sqlx4k limit 1000;") {
                             val id: ResultSet.Row.Column = get("id")
-                            Test(id = id.value.toInt())
+                            Test(id = id.value!!.toInt())
                         }
                         db.fetchAll("select * from sqlx4k;") {
                             val id: ResultSet.Row.Column = get("id")
-                            Test(id = id.value.toInt())
+                            Test(id = id.value!!.toInt())
                         }
                     }
                 }
@@ -175,12 +174,12 @@ fun main() {
                         tx2.execute("insert into sqlx4k (id) values (66);").getOrThrow()
                         tx2.fetchAll("select * from sqlx4k;") {
                             val id: ResultSet.Row.Column = get("id")
-                            Test(id = id.value.toInt())
+                            Test(id = id.value!!.toInt())
                         }
                         tx2.rollback().getOrThrow()
                         db.fetchAll("select * from sqlx4k;") {
                             val id: ResultSet.Row.Column = get("id")
-                            Test(id = id.value.toInt())
+                            Test(id = id.value!!.toInt())
                         }
                     }
                 }

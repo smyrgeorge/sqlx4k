@@ -11,10 +11,30 @@ import kotlinx.cinterop.StableRef
 import kotlinx.cinterop.get
 import kotlinx.cinterop.pointed
 import kotlinx.cinterop.toKString
+import sqlx4k.Sqlx4kColumn
 import sqlx4k.Sqlx4kResult
+import sqlx4k.Sqlx4kRow
 import sqlx4k.sqlx4k_free_result
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.suspendCoroutine
+
+@OptIn(ExperimentalForeignApi::class)
+fun Sqlx4kRow.debug(prefix: String = ""): String = buildString {
+    append("\n$prefix[Sqlx4kPgRow]")
+    append("\n${prefix}size: $size")
+    columns?.let {
+        repeat(size) { index -> append(it[index].debug(prefix = "$prefix    ")) }
+    }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+fun Sqlx4kColumn.debug(prefix: String = ""): String = buildString {
+    append("\n$prefix[Sqlx4kPgColumn]")
+    append("\n${prefix}ordinal: $ordinal")
+    append("\n${prefix}name: ${name?.toKString() ?: "<EMPTY>"}")
+    append("\n${prefix}kind: ${kind?.toKString() ?: "<EMPTY>"}")
+    append("\n${prefix}value: ${value?.toKString() ?: "<EMPTY>"}")
+}
 
 fun Sqlx4kResult.isError(): Boolean = error >= 0
 fun Sqlx4kResult.toError(): DbError {
