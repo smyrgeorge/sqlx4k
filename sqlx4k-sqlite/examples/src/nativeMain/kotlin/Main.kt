@@ -34,11 +34,11 @@ fun main() {
 
         data class Test(val id: Int)
 
-        db.fetchAll("select * from sqlx4k;").forEach {
+        val res = db.fetchAll("select * from sqlx4k;").map {
             val id: ResultSet.Row.Column = it.get("id")
-            val t = Test(id = id.value.toInt())
-            println("TEST: $t")
+            Test(id = id.value.toInt())
         }
+        println(res)
 
         val r1 = db.fetchAll("select * from sqlx4k;") {
             val id: ResultSet.Row.Column = get("id")

@@ -22,6 +22,12 @@ import kotlin.coroutines.resume
 @Suppress("KDocUnresolvedReference")
 @OptIn(ExperimentalForeignApi::class)
 interface Driver {
+    /**
+     * Executes the given SQL statement asynchronously.
+     *
+     * @param sql the SQL statement to be executed.
+     * @return a result containing the number of affected rows.
+     */
     suspend fun execute(sql: String): Result<ULong>
     suspend fun execute(
         sql: String,
@@ -29,6 +35,12 @@ interface Driver {
         paramsMapper: ((v: Any?) -> String?)? = null
     ): Result<ULong> = execute(NamedParameters.render(sql, params, paramsMapper))
 
+    /**
+     * Fetches all results of the given SQL query asynchronously.
+     *
+     * @param sql the SQL query to be executed.
+     * @return the result set containing all rows retrieved by the query.
+     */
     suspend fun fetchAll(sql: String): ResultSet
     suspend fun <T> fetchAll(sql: String, mapper: ResultSet.Row.() -> T): Result<List<T>>
 
@@ -43,7 +55,18 @@ interface Driver {
      * Represents a general interface for managing connection pools.
      */
     interface Pool {
+        /**
+         * Retrieves the current size of the connection pool.
+         *
+         * @return the number of connections currently in the pool
+         */
         fun poolSize(): Int
+
+        /**
+         * Retrieves the number of idle connections in the connection pool.
+         *
+         * @return the number of idle connections in the pool
+         */
         fun poolIdleSize(): Int
     }
 
@@ -55,6 +78,15 @@ interface Driver {
      * transactions.
      */
     interface Transactional {
+        /**
+         * Begins a new transaction asynchronously.
+         *
+         * This method initializes and starts a new transaction with the underlying database.
+         * It suspends until the transaction has started and returns a result containing
+         * the transaction instance.
+         *
+         * @return a result containing the started transaction
+         */
         suspend fun begin(): Result<Transaction>
     }
 

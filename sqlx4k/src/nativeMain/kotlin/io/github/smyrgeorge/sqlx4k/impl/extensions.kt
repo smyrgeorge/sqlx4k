@@ -2,6 +2,7 @@
 
 package io.github.smyrgeorge.sqlx4k.impl
 
+import io.github.smyrgeorge.sqlx4k.DbError
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
@@ -16,10 +17,10 @@ import kotlin.coroutines.Continuation
 import kotlin.coroutines.suspendCoroutine
 
 fun Sqlx4kResult.isError(): Boolean = error >= 0
-fun Sqlx4kResult.toError(): ResultSet.Error {
-    val code = ResultSet.Error.Code.entries[error]
+fun Sqlx4kResult.toError(): DbError {
+    val code = DbError.Code.entries[error]
     val message = error_message?.toKString()
-    return ResultSet.Error(code, message)
+    return DbError(code, message)
 }
 
 fun Sqlx4kResult.throwIfError() {
@@ -73,6 +74,6 @@ suspend inline fun sqlx(crossinline f: (c: CPointer<out CPointed>) -> Unit): CPo
         f(ptr)
     }
 
-fun Result<*>.errorOrNull(): ResultSet.Error? =
-    exceptionOrNull() as? ResultSet.Error
+fun Result<*>.errorOrNull(): DbError? =
+    exceptionOrNull() as? DbError
 

@@ -1,5 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.impl
 
+import io.github.smyrgeorge.sqlx4k.DbError
+
 /**
  * The [NamedParameters] object provides utility functions for rendering SQL strings with named parameters.
  *
@@ -39,8 +41,8 @@ object NamedParameters {
                 null -> "null"
                 is String -> "\'$this\'"
                 is Byte, is Boolean, is Int, is Long, is Short, is Double, is Float -> toString()
-                else -> Sqlx4k.Error(
-                    code = Sqlx4k.Error.Code.NamedParameterTypeNotSupported,
+                else -> DbError(
+                    code = DbError.Code.NamedParameterTypeNotSupported,
                     message = "Could not map named parameter of type ${this::class.qualifiedName}"
                 ).ex()
             }
@@ -54,8 +56,8 @@ object NamedParameters {
         var res: String = sql
         extractNamedParamsIndexes(sql).entries.forEach { (name, ranges) ->
             if (!parameters.containsKey(name)) {
-                Sqlx4k.Error(
-                    code = Sqlx4k.Error.Code.NamedParameterValueNotSupplied,
+                DbError(
+                    code = DbError.Code.NamedParameterValueNotSupplied,
                     message = "Value for named parameter '$name' was not supplied"
                 ).ex()
             }
