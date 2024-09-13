@@ -121,12 +121,8 @@ db.execute("drop table if exists sqlx4k where id = :id;", mapOf("id" to 66)) { v
 ```kotlin
 val tx1: Transaction = db.begin().getOrThrow()
 tx1.execute("delete from sqlx4k;").getOrThrow()
-tx1.fetchAll("select * from sqlx4k;") {
-    println(debug())
-}
-db.fetchAll("select * from sqlx4k;") {
-    println(debug())
-}
+val res: ResultSet = tx1.fetchAll("select * from sqlx4k;")
+res.forEach { println(debug()) }
 tx1.commit().getOrThrow()
 ```
 
