@@ -22,13 +22,10 @@ impl Sqlx4k {
     async fn query(&self, sql: &str) -> *mut Sqlx4kResult {
         let result = self.pool.execute(sql).await;
         let result = match result {
-            Ok(res) => {
-                res.rows_affected();
-                Sqlx4kResult {
-                    rows_affected: res.rows_affected(),
-                    ..Default::default()
-                }
-            }
+            Ok(res) => Sqlx4kResult {
+                rows_affected: res.rows_affected(),
+                ..Default::default()
+            },
             Err(err) => sqlx4k_error_result_of(err),
         };
         result.leak()

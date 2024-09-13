@@ -21,7 +21,6 @@ impl Sqlx4k {
         let result = self.pool.execute(sql).await;
         let result = match result {
             Ok(res) => {
-                res.rows_affected();
                 Sqlx4kResult {
                     rows_affected: res.rows_affected(),
                     ..Default::default()
