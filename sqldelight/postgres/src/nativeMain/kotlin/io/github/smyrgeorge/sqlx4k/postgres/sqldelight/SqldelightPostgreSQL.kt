@@ -6,11 +6,9 @@ import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlCursor
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.db.SqlPreparedStatement
+import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.postgres.PostgreSQL
-import kotlinx.cinterop.ExperimentalForeignApi
-import sqlx4k.Sqlx4kResult
 
-@OptIn(ExperimentalForeignApi::class)
 class SqldelightPostgreSQL(
     private val driver: PostgreSQL
 ) : SqlDriver {
@@ -33,7 +31,7 @@ class SqldelightPostgreSQL(
         binders: (SqlPreparedStatement.() -> Unit)?
     ): QueryResult<Long> {
         return QueryResult.AsyncValue {
-            val prepared = Sqlx4kPreparedStatement().apply { binders?.invoke(this) }
+            val prepared = PreparedStatement().apply { binders?.invoke(this) }
             driver.execute(sql).getOrThrow().toLong()
         }
     }
@@ -45,7 +43,11 @@ class SqldelightPostgreSQL(
         parameters: Int,
         binders: (SqlPreparedStatement.() -> Unit)?
     ): QueryResult<R> {
-        TODO("Not yet implemented")
+        return QueryResult.AsyncValue {
+            val prepared = PreparedStatement().apply { binders?.invoke(this) }
+            val result = driver.fetchAll(sql)
+            return@AsyncValue mapper(Cursor(result)).await()
+        }
     }
 
     override fun newTransaction(): QueryResult<Transacter.Transaction> {
@@ -60,7 +62,7 @@ class SqldelightPostgreSQL(
         TODO("Not yet implemented")
     }
 
-    class Sqlx4kPreparedStatement : SqlPreparedStatement {
+    private class PreparedStatement : SqlPreparedStatement {
         override fun bindBoolean(index: Int, boolean: Boolean?) {
             TODO("Not yet implemented")
         }
@@ -82,32 +84,21 @@ class SqldelightPostgreSQL(
         }
     }
 
-    class Sqlx4kCursor(
-        private val result: Sqlx4kResult
+    private class Cursor(
+        private val result: ResultSet
     ) : SqlCursor {
-        
-        override fun getBoolean(index: Int): Boolean? {
-            TODO("Not yet implemented")
+        private lateinit var current: ResultSet.Row
+
+        override fun next(): QueryResult.AsyncValue<Boolean> = QueryResult.AsyncValue {
+            if (!result.hasNext()) return@AsyncValue false
+            current = result.next()
+            true
         }
 
-        override fun getBytes(index: Int): ByteArray? {
-            TODO("Not yet implemented")
-        }
-
-        override fun getDouble(index: Int): Double? {
-            TODO("Not yet implemented")
-        }
-
-        override fun getLong(index: Int): Long? {
-            TODO("Not yet implemented")
-        }
-
-        override fun getString(index: Int): String? {
-            TODO("Not yet implemented")
-        }
-
-        override fun next(): QueryResult<Boolean> {
-            TODO("Not yet implemented")
-        }
+        override fun getBoolean(index: Int): Boolean? = current.get(index).value?.toBoolean()
+        override fun getBytes(index: Int): ByteArray? = current.get(index).valueAsByteArray()
+        override fun getDouble(index: Int): Double? = current.get(index).value?.toDouble()
+        override fun getLong(index: Int): Long? = current.get(index).value?.toLong()
+        override fun getString(index: Int): String? = current.get(index).value
     }
 }
