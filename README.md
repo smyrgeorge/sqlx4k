@@ -7,9 +7,8 @@
 ![GitHub issues](https://img.shields.io/github/issues/smyrgeorge/sqlx4k)
 [![Kotlin](https://img.shields.io/badge/kotlin-2.0.20-blue.svg?logo=kotlin)](http://kotlinlang.org)
 
-A small non-blocking database driver written in Kotlin for the Native platform.
-Under the hood, it uses the sqlx library from the Rust ecosystem.
-_In the future, we may provide a pure Kotlin driver implementation._
+A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLite, written in Kotlin Native.
+Looking to build efficient, cross-platform applications with Kotlin Native.
 
 The project is in a very early stage; thus, breaking changes and bugs should be expected.
 
@@ -44,27 +43,11 @@ We support the following targets:
 - wasmJs (potential future candidate)
 - jvm (not thinking about it at the moment)
 
-## Why not a pure kotlin implementation?
-
-First of all, I wanted to experiment with the Kotlin FFI.
-Additionally, I really like the Rust programming language,
-so I also wanted to experiment with the Rust FFI.
-
-I think it's a quite nice solution (at least for now).
-The Kotlin Native ecosystem is in a very early stage,
-so I believe it’s a great opportunity to make use of other libraries using the FFI layer.
-It makes it easier (at least for now) to create some wrappers
-around well-tested libraries to provide the necessary functionality to the ecosystem.
-
 ## Features
 
 ### Async-io
 
 The driver fully supports non-blocking io.
-Bridges the kotlin-async (coroutines) with the rust-async (tokio) without blocking.
-
-All the "magic" happens thanks to the build in kotlin function `suspendCoroutine`, take a
-look [here](https://kotlinlang.org/api/latest/jvm/stdlib/kotlin.coroutines/suspend-coroutine.html).
 
 ### Connection pool
 
