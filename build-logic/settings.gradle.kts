@@ -18,5 +18,4 @@ dependencyResolutionManagement {
     }
 }
 
-include(":multiplatform-convention")
-//include(":publishing-convention")
+include("plugins")
