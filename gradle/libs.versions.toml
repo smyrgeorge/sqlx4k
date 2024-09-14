@@ -2,12 +2,16 @@
 kotlin = "2.0.20"
 publish = "0.29.0"
 coroutines = "1.8.1"
+sqldeligh = "2.0.2"
 
 [libraries]
+# https://plugins.gradle.org/plugin/org.jetbrains.kotlin.jvm
 gradle-kotlin-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 gradle-publish-plugin = { module = "com.vanniktech:gradle-maven-publish-plugin", version.ref = "publish" }
 # https://github.com/Kotlin/kotlinx.coroutines
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+# https://github.com/cashapp/sqldelight
+sqldeligh = { module = "app.cash.sqldelight:runtime", version.ref = "sqldeligh" }
 
 [plugins]
 # https://plugins.gradle.org/plugin/org.jetbrains.kotlin.multiplatform

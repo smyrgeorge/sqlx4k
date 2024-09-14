@@ -16,9 +16,8 @@ kotlin {
     sourceSets {
         val nativeMain by getting {
             dependencies {
-                implementation(project(":sqlx4k-postgres"))
-                implementation("app.cash.sqldelight:runtime:2.0.2")
-//                implementation(libs.kotlinx.coroutines.core)
+                implementation(project(":sqlx4k"))
+                api(libs.sqldeligh)
             }
         }
     }

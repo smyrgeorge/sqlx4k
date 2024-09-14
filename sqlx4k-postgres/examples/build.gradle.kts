@@ -17,7 +17,6 @@ kotlin {
         val nativeMain by getting {
             dependencies {
                 implementation(project(":sqlx4k-postgres"))
-                implementation(libs.kotlinx.coroutines.core)
             }
         }
     }

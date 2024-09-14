@@ -21,7 +21,6 @@ kotlin {
         val nativeMain by getting {
             dependencies {
                 api(project(":sqlx4k"))
-                implementation(libs.kotlinx.coroutines.core)
             }
         }
     }
@@ -36,7 +35,7 @@ mavenPublishing {
 
     pom {
         name = "sqlx4k-sqlite"
-        description = "A non-blocking SQLite database driver written in Kotlin for the Native platform."
+        description = "A high-performance Kotlin Native database driver for SQLite."
         url = "https://github.com/smyrgeorge/sqlx4k"
 
         licenses {

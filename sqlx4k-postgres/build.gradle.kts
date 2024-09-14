@@ -21,7 +21,6 @@ kotlin {
         val nativeMain by getting {
             dependencies {
                 api(project(":sqlx4k"))
-                implementation(libs.kotlinx.coroutines.core)
             }
         }
     }
@@ -36,7 +35,7 @@ mavenPublishing {
 
     pom {
         name = "sqlx4k-postgres"
-        description = "A non-blocking PostgreSQL database driver written in Kotlin for the Native platform."
+        description = "A high-performance Kotlin Native database driver for PostgreSQL."
         url = "https://github.com/smyrgeorge/sqlx4k"
 
         licenses {
