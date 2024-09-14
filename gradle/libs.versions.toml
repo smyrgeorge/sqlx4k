@@ -3,6 +3,7 @@ kotlin = "2.0.20"
 publish = "0.29.0"
 coroutines = "1.8.1"
 sqldeligh = "2.0.2"
+dokka = "1.9.20"
 
 [libraries]
 # https://plugins.gradle.org/plugin/org.jetbrains.kotlin.jvm
@@ -18,3 +19,5 @@ sqldeligh = { module = "app.cash.sqldelight:runtime", version.ref = "sqldeligh" 
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 # https://github.com/vanniktech/gradle-maven-publish-plugin
 pubhish = { id = "com.vanniktech.maven.publish", version.ref = "publish" }
+# https://github.com/Kotlin/dokka
+dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
