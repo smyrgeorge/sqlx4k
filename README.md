@@ -11,7 +11,7 @@ A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLi
 Looking to build efficient, cross-platform applications with Kotlin Native.
 
 > [!IMPORTANT]  
-> The project is in a very early stage; thus, breaking changes and bugs should be expected.
+> The project is in a very early stage; thus, breaking changes should be expected.
 
 📖 [Documentation](https://smyrgeorge.github.io/sqlx4k/)
 
