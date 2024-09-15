@@ -18,6 +18,44 @@ class MultiplatformConventions : Plugin<Project> {
     private val arch = DefaultNativePlatform.getCurrentArchitecture()
 
     /**
+     * A string representation of the operating system.
+     *
+     * Determined by checking the `os` object's properties to identify the current OS.
+     * Possible values are:
+     * - "linux" for Linux-based OS
+     * - "macos" for macOS
+     * - "mingw" for Windows
+     *
+     * Throws a `GradleException` if the operating system is unsupported.
+     */
+    private val osString = when {
+        os.isLinux -> "linux"
+        os.isMacOsX -> "macos"
+        os.isWindows -> "mingw"
+        else -> throw GradleException("Unsupported operating system: $os")
+    }
+
+    /**
+     * Represents the architecture string corresponding to the current system architecture.
+     *
+     * This variable evaluates the architecture type and returns a string indicating whether the system architecture
+     * is Arm64 or X64. If the architecture is unsupported, a `GradleException` is thrown.
+     *
+     * @throws GradleException if the architecture is unsupported.
+     */
+    private val archString = when {
+        arch.isArm64 -> "Arm64"
+        arch.isAmd64 -> "X64"
+        else -> throw GradleException("Unsupported architecture: $arch")
+    }
+
+    /**
+     * This variable holds the concatenated string of the operating system identifier and
+     * architecture identifier for the target platform.
+     */
+    private val defaultTarget = "$osString$archString"
+
+    /**
      * Represents the file extension used for executable files.
      *
      * The value of this property is determined based on the operating system. If the operating
@@ -116,8 +154,14 @@ class MultiplatformConventions : Plugin<Project> {
 
                 else -> it.split(",").map { t -> t.trim() }
             }
-        } ?: listOf("macosArm64") // For local development.
+        } ?: listOf(defaultTarget) // Default for local development.
 
+    /**
+     * Configures Rust integration for the given Kotlin Native Target.
+     *
+     * @param target Specifies the target triple for the Rust compilation (e.g., "x86_64-pc-windows-gnu").
+     * @param useCross Indicates whether to use the cross-compilation tool (default is false).
+     */
     private fun KotlinNativeTarget.rust(target: String, useCross: Boolean = false) {
         val tasks = project.tasks
         fun file(path: String) = project.projectDir.resolve(path)

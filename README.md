@@ -7,10 +7,17 @@
 ![GitHub issues](https://img.shields.io/github/issues/smyrgeorge/sqlx4k)
 [![Kotlin](https://img.shields.io/badge/kotlin-2.0.20-blue.svg?logo=kotlin)](http://kotlinlang.org)
 
-A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLite, written in Kotlin Native.
+A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLite, written for Kotlin Native.
 Looking to build efficient, cross-platform applications with Kotlin Native.
 
-The project is in a very early stage; thus, breaking changes and bugs should be expected.
+> [!IMPORTANT]  
+> The project is in a very early stage; thus, breaking changes and bugs should be expected.
+
+📖 [Documentation](https://smyrgeorge.github.io/sqlx4k/)
+
+🏠 [Homepage](https://smyrgeorge.github.io/) (under construction)
+
+## Databases
 
 Currently, the driver supports:
 
@@ -41,7 +48,7 @@ We support the following targets:
 - linuxX64
 - mingwX64
 - wasmJs (potential future candidate)
-- jvm (not thinking about it at the moment)
+- jvm (potential future candidate)
 
 ## Features
 
@@ -129,25 +136,27 @@ db.listen("chan0") { notification: Postgres.Notification ->
 - [x] SQLite
 - [x] Transactions
 - [x] Listen/Notify Postgres.
-- [x] Named parameters (needs enhancements)
+- [ ] Re-write NamedParameters, introduce `PreparedStatement` API (in progress)
 - [ ] SQLDelight (in progress)
-- [ ] Documentation (in progress)
 - [ ] Transaction isolation level
 - [ ] Testing
 
 ## Compilation
 
-You will need the rust toolchain to build this project.
+You will need the `Rust` toolchain to build this project.
 Check here: https://rustup.rs/
 
-Also, make sure that you have installed all the necessary targets:
+> [!NOTE]  
+> By default the project will build only for your system architecture-os (e.g. `macosArm64`, `linuxArm64`, etc.)
+
+Also, make sure that you have installed all the necessary targets (only if you want to build for all targets):
 
 ```shell
 rustup target add aarch64-apple-ios
-rustup target add aarch64-apple-darwin
-rustup target add x86_64-apple-darwin
 rustup target add x86_64-linux-android
 rustup target add aarch64-linux-android
+rustup target add aarch64-apple-darwin
+rustup target add x86_64-apple-darwin
 rustup target add aarch64-unknown-linux-gnu
 rustup target add x86_64-unknown-linux-gnu
 rustup target add x86_64-pc-windows-gnu
