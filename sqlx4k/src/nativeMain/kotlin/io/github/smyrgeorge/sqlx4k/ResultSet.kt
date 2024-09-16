@@ -1,9 +1,5 @@
 package io.github.smyrgeorge.sqlx4k
 
-import io.github.smyrgeorge.sqlx4k.impl.debug
-import io.github.smyrgeorge.sqlx4k.impl.isError
-import io.github.smyrgeorge.sqlx4k.impl.throwIfError
-import io.github.smyrgeorge.sqlx4k.impl.toError
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.get
@@ -44,9 +40,34 @@ class ResultSet(
      */
     fun toError(): DbError = result!!.toError()
 
+    /**
+     * Converts the current `ResultSet` into a Kotlin `Result` object.
+     * If the result is an error, it returns a failed `Result` with the error.
+     * If the result is successful, it returns a successful `Result` containing the `ResultSet` itself.
+     *
+     * @return A successful `Result` containing the current `ResultSet` if no error,
+     *         or a failed `Result` with the appropriate `DbError`.
+     */
+    fun toKotlinResult(): Result<ResultSet> =
+        if (isError()) {
+            val error = toError()
+            close()
+            Result.failure(error)
+        } else Result.success(this)
+
+    /**
+     * Retrieves the raw `Sqlx4kResult` associated with the `ResultSet`.
+     *
+     * @return The raw `Sqlx4kResult` if it has not been freed, or throws an error if it has.
+     */
     fun getRaw(): Sqlx4kResult = result
         ?: error("Resulted already freed (null).")
 
+    /**
+     * Retrieves the raw pointer to the `Sqlx4kResult` associated with the `ResultSet`.
+     *
+     * @return The raw `CPointer<Sqlx4kResult>` if it has not been freed, or throws an error if it has.
+     */
     fun getRawPtr(): CPointer<Sqlx4kResult> = ptr
         ?: error("Resulted already freed (null).")
 

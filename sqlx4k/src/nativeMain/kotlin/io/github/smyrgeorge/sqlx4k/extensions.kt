@@ -1,9 +1,7 @@
 @file:OptIn(ExperimentalForeignApi::class)
 
-package io.github.smyrgeorge.sqlx4k.impl
+package io.github.smyrgeorge.sqlx4k
 
-import io.github.smyrgeorge.sqlx4k.DbError
-import io.github.smyrgeorge.sqlx4k.ResultSet
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -60,32 +58,15 @@ private inline fun <T> CPointer<Sqlx4kResult>?.use(f: (it: Sqlx4kResult) -> T): 
     }
 }
 
-fun CPointer<Sqlx4kResult>?.rowsAffectedOrError(): ULong = use {
+fun CPointer<Sqlx4kResult>?.rowsAffectedOrError(): Long = use {
     it.throwIfError()
-    it.rows_affected
+    it.rows_affected.toLong()
 }
-
-private inline fun <T> Sqlx4kResult.map(f: ResultSet.Row.() -> T): List<T> {
-    throwIfError()
-    val rows = mutableListOf<T>()
-    repeat(size) { index ->
-        val scope = ResultSet.Row(this.rows!![index])
-        val row = f(scope)
-        rows.add(row)
-    }
-    return rows
-}
-
-fun <T> CPointer<Sqlx4kResult>?.map(f: ResultSet.Row.() -> T): List<T> =
-    use { result -> result.map(f) }
 
 fun CPointer<Sqlx4kResult>?.tx(): Pair<CPointer<out CPointed>, ULong> = use { result ->
     result.throwIfError()
     result.tx!! to result.rows_affected
 }
-
-fun <T> CPointer<Sqlx4kResult>?.txMap(f: ResultSet.Row.() -> T): Pair<CPointer<out CPointed>, List<T>> =
-    use { result -> result.tx!! to result.map(f) }
 
 suspend inline fun sqlx(crossinline f: (c: CPointer<out CPointed>) -> Unit): CPointer<Sqlx4kResult>? =
     suspendCoroutine { c: Continuation<CPointer<Sqlx4kResult>?> ->

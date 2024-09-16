@@ -4,15 +4,19 @@ publish = "0.29.0"
 coroutines = "1.9.0"
 sqldeligh = "2.0.2"
 dokka = "1.9.20"
+assertk = "0.28.1"
 
 [libraries]
 # https://plugins.gradle.org/plugin/org.jetbrains.kotlin.jvm
 gradle-kotlin-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 gradle-publish-plugin = { module = "com.vanniktech:gradle-maven-publish-plugin", version.ref = "publish" }
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 # https://github.com/Kotlin/kotlinx.coroutines
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 # https://github.com/cashapp/sqldelight
 sqldeligh = { module = "app.cash.sqldelight:runtime", version.ref = "sqldeligh" }
+# https://github.com/willowtreeapps/assertk
+assertk = { module = "com.willowtreeapps.assertk:assertk", version.ref = "assertk" }
 
 [plugins]
 # https://plugins.gradle.org/plugin/org.jetbrains.kotlin.multiplatform

@@ -1,6 +1,5 @@
 package io.github.smyrgeorge.sqlx4k
 
-import io.github.smyrgeorge.sqlx4k.impl.NamedParameters
 import kotlinx.cinterop.*
 import sqlx4k.Ptr
 import sqlx4k.Sqlx4kResult
@@ -23,14 +22,16 @@ interface Driver {
      * @param sql the SQL statement to be executed.
      * @return a result containing the number of affected rows.
      */
-    suspend fun execute(sql: String): Result<ULong>
+    suspend fun execute(sql: String): Result<Long>
 
-    @Deprecated("Will be repalce from the new prepared statement api.")
-    suspend fun execute(
-        sql: String,
-        params: Map<String, Any?>,
-        paramsMapper: ((v: Any?) -> String?)? = null
-    ): Result<ULong> = execute(NamedParameters.render(sql, params, paramsMapper))
+    /**
+     * Executes the given SQL statement asynchronously.
+     *
+     * @param statement the SQL statement to be executed.
+     * @return a result containing the number of affected rows.
+     */
+    suspend fun execute(statement: Statement): Result<Long> =
+        execute(statement.render())
 
     /**
      * Fetches all results of the given SQL query asynchronously.
@@ -38,18 +39,16 @@ interface Driver {
      * @param sql the SQL query to be executed.
      * @return the result set containing all rows retrieved by the query.
      */
-    suspend fun fetchAll(sql: String): ResultSet
+    suspend fun fetchAll(sql: String): Result<ResultSet>
 
-    @Deprecated("Will be repalce from the new prepared statement api.")
-    suspend fun <T> fetchAll(sql: String, mapper: ResultSet.Row.() -> T): Result<List<T>>
-
-    @Deprecated("Will be repalce from the new prepared statement api.")
-    suspend fun <T> fetchAll(
-        sql: String,
-        params: Map<String, Any?>,
-        paramsMapper: ((v: Any?) -> String?)? = null,
-        mapper: ResultSet.Row.() -> T,
-    ): Result<List<T>> = fetchAll(NamedParameters.render(sql, params, paramsMapper), mapper)
+    /**
+     * Fetches all results of the given SQL query asynchronously.
+     *
+     * @param statement the SQL statement to be executed.
+     * @return the result set containing all rows retrieved by the query.
+     */
+    suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+        fetchAll(statement.render())
 
     /**
      * Represents a general interface for managing connection pools.

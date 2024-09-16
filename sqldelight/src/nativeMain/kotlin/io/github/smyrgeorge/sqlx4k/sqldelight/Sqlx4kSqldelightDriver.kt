@@ -8,6 +8,7 @@ import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.db.SqlPreparedStatement
 import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 
 class Sqlx4kSqldelightDriver<T>(private val driver: T) :
@@ -16,8 +17,8 @@ class Sqlx4kSqldelightDriver<T>(private val driver: T) :
     override fun execute(
         identifier: Int?, sql: String, parameters: Int, binders: (SqlPreparedStatement.() -> Unit)?
     ): QueryResult<Long> = QueryResult.AsyncValue {
-        val prepared = SqlDelightPreparedStatement().apply { binders?.invoke(this) }
-        driver.execute(sql).getOrThrow().toLong()
+        val prepared = SqlDelightPreparedStatement(sql).apply { binders?.invoke(this) }
+        driver.execute(prepared.statement).getOrThrow().toLong()
     }
 
     override fun <R> executeQuery(
@@ -27,8 +28,8 @@ class Sqlx4kSqldelightDriver<T>(private val driver: T) :
         parameters: Int,
         binders: (SqlPreparedStatement.() -> Unit)?
     ): QueryResult<R> = QueryResult.AsyncValue {
-        val prepared = SqlDelightPreparedStatement().apply { binders?.invoke(this) }
-        val result = driver.fetchAll(sql)
+        val prepared = SqlDelightPreparedStatement(sql).apply { binders?.invoke(this) }
+        val result = driver.fetchAll(prepared.statement).getOrThrow()
         return@AsyncValue mapper(SqlDelightCursor(result)).await()
     }
 
@@ -65,9 +66,11 @@ class Sqlx4kSqldelightDriver<T>(private val driver: T) :
         }
     }
 
-    private inner class SqlDelightPreparedStatement : SqlPreparedStatement {
+    private inner class SqlDelightPreparedStatement(sql: String) : SqlPreparedStatement {
+        var statement = Statement(sql)
+
         override fun bindBoolean(index: Int, boolean: Boolean?) {
-            TODO("Not yet implemented")
+            statement = statement.bind(index, boolean)
         }
 
         override fun bindBytes(index: Int, bytes: ByteArray?) {
@@ -75,15 +78,15 @@ class Sqlx4kSqldelightDriver<T>(private val driver: T) :
         }
 
         override fun bindDouble(index: Int, double: Double?) {
-            TODO("Not yet implemented")
+            statement = statement.bind(index, double)
         }
 
         override fun bindLong(index: Int, long: Long?) {
-            TODO("Not yet implemented")
+            statement = statement.bind(index, long)
         }
 
         override fun bindString(index: Int, string: String?) {
-            TODO("Not yet implemented")
+            statement = statement.bind(index, string)
         }
     }
 

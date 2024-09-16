@@ -32,8 +32,14 @@ class DbError(
         PoolClosed,
         WorkerCrashed,
 
+        // Prepared Statement:
+        CannotMixPositionalWithNamedParameters,
+        PositionalParameterOutOfBounds,
+        NamedParameterNotFound,
+
         // Other errors:
         NamedParameterTypeNotSupported,
-        NamedParameterValueNotSupplied
+        PositionalParameterValueNotSupplied,
+        NamedParameterValueNotSupplied,
     }
 }

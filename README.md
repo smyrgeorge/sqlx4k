@@ -85,25 +85,28 @@ val db = SQLite(
 )
 ```
 
-### Named parameters
-
-IMPORTANT: this feature is in a very early stage, thus use it with caution.
-The code does not check for SQL injections.
+### Prepared Statements
 
 ```kotlin
-db.fetchAll("select * from sqlx4k where id = :id;", mapOf("id" to "66")) {
-    val id: ResultSet.Row.Column = get("id")
+// With named parameters:
+val st1 = Statement
+    .create("select * from sqlx4k where id = :id")
+    .bind("id", 65)
+
+db.fetchAll(st1).getOrThrow().map {
+    val id: ResultSet.Row.Column = it.get("id")
     Test(id = id.value.toInt())
 }
-```
 
-You can also pass your own parameter mapper (in case that you want to use non built in types)
+// With positional parameters:
+val st2 = Statement
+    .create("select * from sqlx4k where id = ?")
+    .bind(0, 65)
 
-```kotlin
-db.execute("drop table if exists sqlx4k where id = :id;", mapOf("id" to 66)) { v: Any? ->
-    //  Map the value here.
-    "$v" // mapped to 66 (no change)
-}.getOrThrow()
+db.fetchAll(st2).getOrThrow().map {
+    val id: ResultSet.Row.Column = it.get("id")
+    Test(id = id.value.toInt())
+}
 ```
 
 ### Transactions
@@ -111,8 +114,9 @@ db.execute("drop table if exists sqlx4k where id = :id;", mapOf("id" to 66)) { v
 ```kotlin
 val tx1: Transaction = db.begin().getOrThrow()
 tx1.execute("delete from sqlx4k;").getOrThrow()
-val res: ResultSet = tx1.fetchAll("select * from sqlx4k;")
-res.forEach { println(debug()) }
+val res: ResultSet = tx1.fetchAll("select * from sqlx4k;").getOrThrow().forEach {
+    println(debug())
+}
 tx1.commit().getOrThrow()
 ```
 

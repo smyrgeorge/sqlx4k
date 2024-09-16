@@ -23,6 +23,13 @@ kotlin {
                 api(libs.kotlinx.coroutines.core)
             }
         }
+
+        val nativeTest by getting {
+            dependencies {
+                implementation(libs.kotlin.test)
+                implementation(libs.assertk)
+            }
+        }
     }
 }
 

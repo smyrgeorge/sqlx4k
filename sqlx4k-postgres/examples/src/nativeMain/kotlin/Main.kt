@@ -1,6 +1,7 @@
 import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
-import io.github.smyrgeorge.sqlx4k.impl.errorOrNull
+import io.github.smyrgeorge.sqlx4k.errorOrNull
 import io.github.smyrgeorge.sqlx4k.postgres.PostgreSQL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -37,9 +38,25 @@ fun main() {
         val affected = db.execute("insert into sqlx4k (id) values (66);").getOrThrow()
         println("AFFECTED: $affected")
 
+        runCatching {
+            val st = Statement("select * from sqlx4k where id = ?")
+                .bind(0, 66)
+                .render()
+            println("Statement: $st")
+
+//            val st1 = Statement("?")
+//                .bind(0, "test")
+//                .bind(1, "'test'")
+//                .bind(2, "';select *;--")
+//                .render()
+//            println("Statement: $st1")
+        }.onFailure {
+            println("Statement error: ${it.message}")
+        }
+
         data class Test(val id: Int)
 
-        val res = db.fetchAll("select * from sqlx4k;").map {
+        val res = db.fetchAll("select * from sqlx4k;").getOrThrow().map {
             val id: ResultSet.Row.Column = it.get("id")
             Test(id = id.value!!.toInt())
         }
@@ -68,45 +85,40 @@ fun main() {
                    'aa'::bytea
             ;
         """.trimIndent()
-        val r0 = db.fetchAll(types) {
-            columns.forEach {
-                println("${it.key} :: ${it.value.name} ${it.value.type} ${it.value.value}")
+        val r0 = db.fetchAll(types).getOrThrow().map {
+            it.columns.forEach { c ->
+                println("${c.key} :: ${c.value.name} ${c.value.type} ${c.value.value}")
             }
         }
         println(r0)
 
-        val r1 = db.fetchAll("select * from sqlx4k;") {
-            val id: ResultSet.Row.Column = get("id")
+        val r1 = db.fetchAll("select * from sqlx4k;").getOrThrow().map {
+            val id: ResultSet.Row.Column = it.get("id")
             Test(id = id.value!!.toInt())
         }
         println(r1)
 
-        val r2 = db.fetchAll("select * from sqlx4k;") {
-            val id: ResultSet.Row.Column = get(0)
+        val r2 = db.fetchAll("select * from sqlx4k;").getOrThrow().map {
+            val id: ResultSet.Row.Column = it.get(0)
             Test(id = id.value!!.toInt())
         }
         println(r2)
-        val r3 = db.fetchAll("select * from sqlx4k;") {
-            val id: ResultSet.Row.Column = get(1)
-            Test(id = id.value!!.toInt())
-        }
-        println(r3)
+//        val r3 = db.fetchAll("select * from sqlx4k;").map {
+//            val id: ResultSet.Row.Column = it.get(1)
+//            Test(id = id.value!!.toInt())
+//        }
+//        println(r3)
 
-        db.fetchAll("select * from :table;", mapOf("table" to "sqlx4k")) {
-            val id: ResultSet.Row.Column = get("id")
-            Test(id = id.value!!.toInt())
-        }
-
-        db.fetchAll("select 1;") {
-            println(debug())
+        db.fetchAll("select 1;").getOrThrow().forEach {
+            println(it.debug())
         }
 
-        db.fetchAll("select now();") {
-            println(debug())
+        db.fetchAll("select now();").getOrThrow().forEach {
+            println(it.debug())
         }
 
-        db.fetchAll("select 'testtest', 'test1';") {
-            println(debug())
+        db.fetchAll("select 'testtest', 'test1';").getOrThrow().forEach {
+            println(it.debug())
         }
 
         println("Connections: ${db.poolSize()}, Idle: ${db.poolIdleSize()}")
@@ -125,22 +137,22 @@ fun main() {
         val tx1: Transaction = db.begin().getOrThrow()
         println(tx1)
         tx1.execute("delete from sqlx4k;").getOrThrow()
-        tx1.fetchAll("select * from sqlx4k;") {
-            println(debug())
+        tx1.fetchAll("select * from sqlx4k;").getOrThrow().forEach {
+            println(it.debug())
         }
-        db.fetchAll("select * from sqlx4k;") {
-            println(debug())
+        db.fetchAll("select * from sqlx4k;").getOrThrow().forEach {
+            println(it.debug())
         }
         tx1.commit().getOrThrow()
-        db.fetchAll("select * from sqlx4k;") {
-            println(debug())
+        db.fetchAll("select * from sqlx4k;").getOrThrow().forEach {
+            println(it.debug())
         }
 
         db.execute("insert into sqlx4k (id) values (65);").getOrThrow()
         db.execute("insert into sqlx4k (id) values (66);").getOrThrow()
 
-        val test = db.fetchAll("select * from sqlx4k;") {
-            val id: ResultSet.Row.Column = get("id")
+        val test = db.fetchAll("select * from sqlx4k;").getOrThrow().map {
+            val id: ResultSet.Row.Column = it.get("id")
             Test(id = id.value!!.toInt())
         }
         println(test)
@@ -149,12 +161,12 @@ fun main() {
             runBlocking {
                 (1..20).forEachParallel {
                     repeat(1_000) {
-                        db.fetchAll("select * from sqlx4k limit 1000;") {
-                            val id: ResultSet.Row.Column = get("id")
+                        db.fetchAll("select * from sqlx4k limit 1000;").getOrThrow().map {
+                            val id: ResultSet.Row.Column = it.get("id")
                             Test(id = id.value!!.toInt())
                         }
-                        db.fetchAll("select * from sqlx4k;") {
-                            val id: ResultSet.Row.Column = get("id")
+                        db.fetchAll("select * from sqlx4k;").getOrThrow().map {
+                            val id: ResultSet.Row.Column = it.get("id")
                             Test(id = id.value!!.toInt())
                         }
                     }
@@ -172,13 +184,13 @@ fun main() {
                         val tx2 = db.begin().getOrThrow()
                         tx2.execute("insert into sqlx4k (id) values (65);").getOrThrow()
                         tx2.execute("insert into sqlx4k (id) values (66);").getOrThrow()
-                        tx2.fetchAll("select * from sqlx4k;") {
-                            val id: ResultSet.Row.Column = get("id")
+                        tx2.fetchAll("select * from sqlx4k;").getOrThrow().map {
+                            val id: ResultSet.Row.Column = it.get("id")
                             Test(id = id.value!!.toInt())
                         }
                         tx2.rollback().getOrThrow()
-                        db.fetchAll("select * from sqlx4k;") {
-                            val id: ResultSet.Row.Column = get("id")
+                        db.fetchAll("select * from sqlx4k;").getOrThrow().map {
+                            val id: ResultSet.Row.Column = it.get("id")
                             Test(id = id.value!!.toInt())
                         }
                     }

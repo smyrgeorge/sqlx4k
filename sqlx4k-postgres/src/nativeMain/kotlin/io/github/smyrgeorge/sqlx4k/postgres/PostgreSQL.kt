@@ -3,12 +3,10 @@ package io.github.smyrgeorge.sqlx4k.postgres
 import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.Transaction
-import io.github.smyrgeorge.sqlx4k.impl.map
-import io.github.smyrgeorge.sqlx4k.impl.rowsAffectedOrError
-import io.github.smyrgeorge.sqlx4k.impl.sqlx
-import io.github.smyrgeorge.sqlx4k.impl.throwIfError
-import io.github.smyrgeorge.sqlx4k.impl.tx
-import io.github.smyrgeorge.sqlx4k.impl.txMap
+import io.github.smyrgeorge.sqlx4k.rowsAffectedOrError
+import io.github.smyrgeorge.sqlx4k.sqlx
+import io.github.smyrgeorge.sqlx4k.throwIfError
+import io.github.smyrgeorge.sqlx4k.tx
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -42,7 +40,7 @@ import sqlx4k.sqlx4k_tx_query
 import sqlx4k.sqlx4k_tx_rollback
 import kotlin.experimental.ExperimentalNativeApi
 
-@Suppress("MemberVisibilityCanBePrivate")
+@Suppress("MemberVisibilityCanBePrivate", "unused")
 @OptIn(ExperimentalForeignApi::class, ExperimentalNativeApi::class)
 class PostgreSQL(
     host: String,
@@ -66,17 +64,13 @@ class PostgreSQL(
     override fun poolSize(): Int = sqlx4k_pool_size()
     override fun poolIdleSize(): Int = sqlx4k_pool_idle_size()
 
-    override suspend fun execute(sql: String): Result<ULong> = runCatching {
+    override suspend fun execute(sql: String): Result<Long> = runCatching {
         sqlx { c -> sqlx4k_query(sql, c, Driver.fn) }.rowsAffectedOrError()
     }
 
-    override suspend fun fetchAll(sql: String): ResultSet {
+    override suspend fun fetchAll(sql: String): Result<ResultSet> {
         val res = sqlx { c -> sqlx4k_fetch_all(sql, c, Driver.fn) }
-        return ResultSet(res)
-    }
-
-    override suspend fun <T> fetchAll(sql: String, mapper: ResultSet.Row.() -> T): Result<List<T>> = runCatching {
-        sqlx { c -> sqlx4k_fetch_all(sql, c, Driver.fn) }.map { mapper(this) }
+        return ResultSet(res).toKotlinResult()
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
@@ -138,32 +132,22 @@ class PostgreSQL(
             }
         }
 
-        override suspend fun execute(sql: String): Result<ULong> = runCatching {
+        override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
-                val res =
-                    sqlx { c -> sqlx4k_tx_query(tx, sql, c, Driver.fn) }.tx()
+                val res = sqlx { c -> sqlx4k_tx_query(tx, sql, c, Driver.fn) }.tx()
                 tx = res.first
-                res.second
+                res.second.toLong()
             }
         }
 
-        override suspend fun fetchAll(sql: String): ResultSet {
+        override suspend fun fetchAll(sql: String): Result<ResultSet> {
             val res = mutex.withLock {
                 val r = sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, Driver.fn) }
                 ResultSet(r)
             }
 
             tx = res.getRaw().tx!!
-            return res
-        }
-
-        override suspend fun <T> fetchAll(sql: String, mapper: ResultSet.Row.() -> T): Result<List<T>> = runCatching {
-            mutex.withLock {
-                sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, Driver.fn) }
-                    .txMap { mapper(this) }
-                    .also { tx = it.first }
-                    .second
-            }
+            return res.toKotlinResult()
         }
     }
 
