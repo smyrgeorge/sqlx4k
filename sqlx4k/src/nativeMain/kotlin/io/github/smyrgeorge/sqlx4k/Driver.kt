@@ -1,12 +1,7 @@
 package io.github.smyrgeorge.sqlx4k
 
 import io.github.smyrgeorge.sqlx4k.impl.NamedParameters
-import kotlinx.cinterop.CPointer
-import kotlinx.cinterop.CValue
-import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.asStableRef
-import kotlinx.cinterop.staticCFunction
-import kotlinx.cinterop.useContents
+import kotlinx.cinterop.*
 import sqlx4k.Ptr
 import sqlx4k.Sqlx4kResult
 import kotlin.coroutines.Continuation
@@ -29,6 +24,8 @@ interface Driver {
      * @return a result containing the number of affected rows.
      */
     suspend fun execute(sql: String): Result<ULong>
+
+    @Deprecated("Will be repalce from the new prepared statement api.")
     suspend fun execute(
         sql: String,
         params: Map<String, Any?>,
@@ -42,8 +39,11 @@ interface Driver {
      * @return the result set containing all rows retrieved by the query.
      */
     suspend fun fetchAll(sql: String): ResultSet
+
+    @Deprecated("Will be repalce from the new prepared statement api.")
     suspend fun <T> fetchAll(sql: String, mapper: ResultSet.Row.() -> T): Result<List<T>>
 
+    @Deprecated("Will be repalce from the new prepared statement api.")
     suspend fun <T> fetchAll(
         sql: String,
         params: Map<String, Any?>,

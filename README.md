@@ -226,7 +226,9 @@ db.execute("drop table if exists sqlx4k;")
 
 // Make a simple query.
 data class Test(val id: Int)
-db.fetchAll("select * from sqlx4k;") {
+
+val res: ResultSet = db.fetchAll("select * from sqlx4k;")
+res.forEach {
     val id: ResultSet.Row.Column = get("id")
     val test = Test(id = id.value.toInt())
     println(test)
