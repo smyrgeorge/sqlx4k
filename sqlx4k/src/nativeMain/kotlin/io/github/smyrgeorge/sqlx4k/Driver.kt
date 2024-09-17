@@ -36,16 +36,16 @@ interface Driver {
     /**
      * Fetches all results of the given SQL query asynchronously.
      *
-     * @param sql the SQL query to be executed.
-     * @return the result set containing all rows retrieved by the query.
+     * @param sql the SQL statement to be executed.
+     * @return a result containing the retrieved result set.
      */
     suspend fun fetchAll(sql: String): Result<ResultSet>
 
     /**
-     * Fetches all results of the given SQL query asynchronously.
+     * Fetches all results of the given SQL statement asynchronously.
      *
-     * @param statement the SQL statement to be executed.
-     * @return the result set containing all rows retrieved by the query.
+     * @param statement The SQL statement to be executed.
+     * @return A result containing the retrieved result set.
      */
     suspend fun fetchAll(statement: Statement): Result<ResultSet> =
         fetchAll(statement.render())
