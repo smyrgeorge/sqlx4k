@@ -18,4 +18,4 @@ include("sqlx4k-sqlite")
 include("sqlx4k-sqlite:examples")
 
 include("sqlx4k-sqldelight")
-include("sqlx4k-sqldelight:examples")
+//include("sqlx4k-sqldelight:examples")
