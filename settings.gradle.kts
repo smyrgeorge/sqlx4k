@@ -17,4 +17,5 @@ include("sqlx4k-postgres:examples")
 include("sqlx4k-sqlite")
 include("sqlx4k-sqlite:examples")
 
-include("sqldelight")
+include("sqlx4k-sqldelight")
+include("sqlx4k-sqldelight:examples")

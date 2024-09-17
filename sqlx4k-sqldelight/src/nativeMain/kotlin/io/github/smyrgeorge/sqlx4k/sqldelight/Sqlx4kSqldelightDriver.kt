@@ -39,11 +39,11 @@ class Sqlx4kSqldelightDriver<T>(private val driver: T) :
     }
 
     override fun currentTransaction(): Transacter.Transaction? {
-        TODO("Not yet implemented")
+        TODO("Not yet implemented: Sqlx4kSqldelightDriver.currentTransaction")
     }
 
     override fun close() {
-        TODO("Not yet implemented")
+        TODO("Not yet implemented: Sqlx4kSqldelightDriver.close")
     }
 
     override fun addListener(vararg queryKeys: String, listener: Query.Listener) = Unit

@@ -1,27 +1,28 @@
 [versions]
+# https://plugins.gradle.org/plugin/org.jetbrains.kotlin.jvm
 kotlin = "2.0.20"
+# https://github.com/vanniktech/gradle-maven-publish-plugin
 publish = "0.29.0"
+# https://github.com/Kotlin/kotlinx.coroutines
 coroutines = "1.9.0"
-sqldeligh = "2.0.2"
+# https://github.com/cashapp/sqldelight
+sqldelight = "2.0.2"
+# https://github.com/Kotlin/dokka
 dokka = "1.9.20"
+# https://github.com/willowtreeapps/assertk
 assertk = "0.28.1"
 
 [libraries]
-# https://plugins.gradle.org/plugin/org.jetbrains.kotlin.jvm
 gradle-kotlin-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 gradle-publish-plugin = { module = "com.vanniktech:gradle-maven-publish-plugin", version.ref = "publish" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
-# https://github.com/Kotlin/kotlinx.coroutines
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
-# https://github.com/cashapp/sqldelight
-sqldeligh = { module = "app.cash.sqldelight:runtime", version.ref = "sqldeligh" }
-# https://github.com/willowtreeapps/assertk
+sqldeligh = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
+sqldelight-postgresql-dialect = { module = "app.cash.sqldelight:postgresql-dialect", version.ref = "sqldelight" }
 assertk = { module = "com.willowtreeapps.assertk:assertk", version.ref = "assertk" }
 
 [plugins]
-# https://plugins.gradle.org/plugin/org.jetbrains.kotlin.multiplatform
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
-# https://github.com/vanniktech/gradle-maven-publish-plugin
 pubhish = { id = "com.vanniktech.maven.publish", version.ref = "publish" }
-# https://github.com/Kotlin/dokka
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
+sqldeligh = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
