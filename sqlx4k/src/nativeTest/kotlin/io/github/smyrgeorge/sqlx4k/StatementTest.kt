@@ -65,4 +65,38 @@ class StatementTest {
 
         assertThat(res).contains("id = 'this is a test'")
     }
+
+    @Test
+    fun `Missing parameter value renderer`() {
+        @Suppress("unused")
+        class Test(val id: Int)
+
+        val sql = "select * from sqlx4k where id = :id"
+        assertFails {
+            Statement(sql)
+                .bind("id", Test(65))
+                .render()
+        }
+    }
+
+    @Test
+    fun `Register custom parameter value renderer`() {
+        @Suppress("unused")
+        class Test(val id: Int)
+
+        class TestRenderer : Statement.ValueRenderer<Test> {
+            override fun <T> render(value: T): Any {
+                value as Test
+                return value.id
+            }
+        }
+
+        Statement.ValueRenderers.register(Test::class, TestRenderer())
+
+        val sql = "select * from sqlx4k where id = :id"
+        val res = Statement(sql)
+            .bind("id", Test(65))
+            .render()
+        assertThat(res).contains("id = 65")
+    }
 }
