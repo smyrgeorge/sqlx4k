@@ -1,5 +1,6 @@
 package io.github.smyrgeorge.sqlx4k
 
+import io.github.smyrgeorge.sqlx4k.ResultSet.Row.Column
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.get
@@ -23,8 +24,17 @@ class ResultSet(
 ) : Iterator<ResultSet.Row>, Iterable<ResultSet.Row>, AutoCloseable {
 
     private var current: Int = 0
+    private var closed: Boolean = false
     private var result: Sqlx4kResult? = ptr?.pointed
         ?: error("Could not extract the value from the raw pointer (null).")
+
+    /**
+     * Returns the size of the current result.
+     *
+     * This value is equivalent to the number of rows or elements
+     * in the underlying raw `Sqlx4kResult` associated with this `ResultSet`.
+     */
+    val size: Int get() = getRaw().size
 
     /**
      * Checks if the current result is an error.
@@ -60,8 +70,9 @@ class ResultSet(
      *
      * @return The raw `Sqlx4kResult` if it has not been freed, or throws an error if it has.
      */
-    fun getRaw(): Sqlx4kResult = result
-        ?: error("Resulted already freed (null).")
+    fun getRaw(): Sqlx4kResult =
+        if (closed) error("Resulted already closed (null).")
+        else result ?: error("Resulted already freed (null).")
 
     /**
      * Retrieves the raw pointer to the `Sqlx4kResult` associated with the `ResultSet`.
@@ -210,6 +221,7 @@ class ResultSet(
      */
     override fun close() {
         if (result == null) return
+        closed = true
         result = null
         sqlx4k_free_result(ptr)
         ptr = null
@@ -221,4 +233,77 @@ class ResultSet(
      * @return Iterator<Row> for the result set.
      */
     override fun iterator(): Iterator<Row> = this
+
+    /**
+     * The `Metadata` class provides an interface to extract and manage metadata from a `ResultSet`.
+     *
+     * @property result The `ResultSet` from which metadata is to be extracted.
+     */
+    @Suppress("DuplicatedCode")
+    class Metadata(
+        private val result: ResultSet
+    ) {
+        private val columnsByName: Map<String, ColumnMetadata> by lazy {
+            val row = getFirstRow()
+            // <name, ColumnMetadata>
+            val map = mutableMapOf<String, ColumnMetadata>()
+            repeat(row.size) { index ->
+                val raw = row.columns!![index]
+                val col = Column(raw.name!!.toKString(), raw)
+                map[col.name] = ColumnMetadata(col.ordinal, col.name, col.type)
+            }
+            map
+        }
+
+        private val columnsByOrdinal: Map<Int, ColumnMetadata> by lazy {
+            val row = getFirstRow()
+            // <ordinal, ColumnMetadata>>
+            val map = mutableMapOf<Int, ColumnMetadata>()
+            repeat(row.size) { index ->
+                val raw = row.columns!![index]
+                val col = Column(raw.name!!.toKString(), raw)
+                map[col.ordinal] = ColumnMetadata(col.ordinal, col.name, col.type)
+            }
+            map
+        }
+
+        /**
+         * Retrieves the number of columns of the result set.
+         *
+         * @return the number of columns in the first row.
+         */
+        fun getColumnCount(): Int = getFirstRow().size
+
+        /**
+         * Retrieves the metadata for the column at the specified index.
+         *
+         * @param index The zero-based index of the column.
+         * @return `ColumnMetadata` object containing details about the column.
+         * @throws NoSuchElementException If no column exists at the specified index.
+         */
+        fun getColumn(index: Int): ColumnMetadata =
+            columnsByOrdinal[index]
+                ?: throw NoSuchElementException("Cannot extract metadata: no column with index '$index'.")
+
+        /**
+         * Retrieves the metadata for the column with the specified name.
+         *
+         * @param name The name of the column.
+         * @return `ColumnMetadata` object containing details about the column.
+         * @throws NoSuchElementException If no column exists with the specified name.
+         */
+        fun getColumn(name: String): ColumnMetadata =
+            columnsByName[name]
+                ?: throw NoSuchElementException("Cannot extract metadata: no column with name '$name'.")
+
+        private fun getFirstRow(): Sqlx4kRow =
+            result.getRaw().getFirstRow()
+                ?: throw NoSuchElementException("Cannot extract metadata: no rows found.")
+
+        data class ColumnMetadata(
+            val ordinal: Int,
+            val name: String,
+            val type: String
+        )
+    }
 }
