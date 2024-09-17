@@ -1,5 +1,7 @@
 package io.github.smyrgeorge.sqlx4k
 
+import kotlin.reflect.KClass
+
 @Suppress("unused")
 class Statement(
     private val sql: String
@@ -146,12 +148,43 @@ class Statement(
     private fun Any?.toValueString(): String {
         return when (this) {
             null -> "null"
-            is String -> "'${replace("'", "\'")}'"
+            is String -> {
+                // https://stackoverflow.com/questions/12316953/insert-text-with-single-quotes-in-postgresql
+                // https://stackoverflow.com/questions/9596652/how-to-escape-apostrophe-a-single-quote-in-mysql
+                // https://stackoverflow.com/questions/603572/escape-single-quote-character-for-use-in-an-sqlite-query
+                "'${replace("'", "''")}'"
+            }
+
             is Byte, is Boolean, is Int, is Long, is Short, is Double, is Float -> toString()
-            else -> DbError(
-                code = DbError.Code.NamedParameterTypeNotSupported,
-                message = "Could not map named parameter of type ${this::class.qualifiedName}"
-            ).ex()
+            else -> {
+                val error = DbError(
+                    code = DbError.Code.NamedParameterTypeNotSupported,
+                    message = "Could not map named parameter of type ${this::class.simpleName}"
+                )
+
+                val renderer = ValueRenderers.get(this::class) ?: error.ex()
+                renderer.render(this).toValueString()
+            }
+        }
+    }
+
+    interface ValueRenderer<T> {
+        fun <T> render(value: T): Any
+    }
+
+    class ValueRenderers {
+        companion object {
+            private val renderers: MutableMap<KClass<*>, ValueRenderer<*>> = mutableMapOf()
+
+            fun get(type: KClass<*>): ValueRenderer<*>? = renderers[type]
+
+            fun register(type: KClass<*>, renderer: ValueRenderer<*>) {
+                renderers[type] = renderer
+            }
+
+            fun unregister(type: KClass<*>) {
+                renderers.remove(type)
+            }
         }
     }
 
