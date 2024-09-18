@@ -37,6 +37,20 @@ class StatementTest {
     }
 
     @Test
+    fun `Positional parameter basic test for integers out of order`() {
+        val sql = "select * from sqlx4k where id > ? and id < ?"
+        val res = Statement(sql)
+            .bind(1, 66)
+            .bind(0, 65)
+            .render()
+
+        assertThat(res).all {
+            contains("id > 65")
+            contains("id < 66")
+        }
+    }
+
+    @Test
     fun `Positional parameter basic test for strings`() {
         val sql = "select * from sqlx4k where id = ?"
         val res = Statement(sql)

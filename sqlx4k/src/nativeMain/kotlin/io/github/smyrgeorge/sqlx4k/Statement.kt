@@ -73,7 +73,7 @@ class Statement(
 
     private fun String.renderPositionalParameters(): String {
         var res: String = this
-        positionalParameters.forEachIndexed { index, _ ->
+        positionalParameters.forEach { index ->
             if (!positionalParametersValues.containsKey(index)) {
                 DbError(
                     code = DbError.Code.PositionalParameterValueNotSupplied,
