@@ -28,6 +28,6 @@ sqldelight {
     databases.register("Database") {
         generateAsync = true
         dialect(libs.sqldelight.postgresql.dialect)
-        packageName = "io.github.smyrgeorge.sqlx4k.sqldelight.example"
+        packageName = "db.entities"
     }
 }

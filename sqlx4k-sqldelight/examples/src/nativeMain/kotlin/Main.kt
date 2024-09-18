@@ -1,7 +1,7 @@
 import db.entities.Customer
+import db.entities.Database
 import io.github.smyrgeorge.sqlx4k.postgres.PostgreSQL
 import io.github.smyrgeorge.sqlx4k.sqldelight.Sqlx4kSqldelightDriver
-import io.github.smyrgeorge.sqlx4k.sqldelight.example.Database
 
 fun main() {
     val postgres = PostgreSQL(
