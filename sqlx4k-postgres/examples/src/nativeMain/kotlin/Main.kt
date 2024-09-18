@@ -44,12 +44,12 @@ fun main() {
                 .render()
             println("Statement: $st")
 
-//            val st1 = Statement("?")
-//                .bind(0, "test")
-//                .bind(1, "'test'")
-//                .bind(2, "';select *;--")
-//                .render()
-//            println("Statement: $st1")
+            val st1 = Statement("? ? ?")
+                .bind(0, "test")
+                .bind(1, "'test'")
+                .bind(2, "';select *;--")
+                .render()
+            println("Statement: $st1")
         }.onFailure {
             println("Statement error: ${it.message}")
         }
