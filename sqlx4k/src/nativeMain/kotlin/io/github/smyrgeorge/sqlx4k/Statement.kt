@@ -162,14 +162,16 @@ class Statement(
     }
 
     interface ValueRenderer<T> {
-        fun <T> render(value: T): Any
+        fun render(value: T): Any
     }
 
     class ValueRenderers {
         companion object {
             private val renderers: MutableMap<KClass<*>, ValueRenderer<*>> = mutableMapOf()
 
-            fun get(type: KClass<*>): ValueRenderer<*>? = renderers[type]
+            @Suppress("UNCHECKED_CAST")
+            fun get(type: KClass<*>): ValueRenderer<Any>? =
+                renderers[type] as ValueRenderer<Any>?
 
             fun register(type: KClass<*>, renderer: ValueRenderer<*>) {
                 renderers[type] = renderer

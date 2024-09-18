@@ -102,8 +102,7 @@ class StatementTest {
         class Test(val id: Int)
 
         class TestRenderer : Statement.ValueRenderer<Test> {
-            override fun <T> render(value: T): Any {
-                value as Test
+            override fun render(value: Test): Any {
                 return value.id
             }
         }
