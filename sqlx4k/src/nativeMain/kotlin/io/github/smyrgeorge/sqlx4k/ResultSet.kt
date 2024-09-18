@@ -6,6 +6,9 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.get
 import kotlinx.cinterop.pointed
 import kotlinx.cinterop.toKString
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import sqlx4k.Sqlx4kColumn
 import sqlx4k.Sqlx4kResult
 import sqlx4k.Sqlx4kRow
@@ -22,6 +25,15 @@ import sqlx4k.sqlx4k_free_result
 class ResultSet(
     private var ptr: CPointer<Sqlx4kResult>?
 ) : Iterator<ResultSet.Row>, Iterable<ResultSet.Row>, AutoCloseable {
+
+    /**
+     * A mutex used to ensure thread-safe operations when closing the ResultSet.
+     *
+     * This mutex is utilized within the `close` method to synchronize and safely
+     * manage the closing of the ResultSet instance, preventing race conditions
+     * and concurrent access issues.
+     */
+    private val closeMutex = Mutex()
 
     private var current: Int = 0
     private var closed: Boolean = false
@@ -212,16 +224,22 @@ class ResultSet(
     }
 
     /**
-     * Closes the current `ResultSet`, freeing any resources associated with it.
+     * Closes the `ResultSet` and releases any associated resources.
      *
-     * This method releases the resources allocated for the `ResultSet`. Specifically, it sets the
-     * internal result and pointer to null and frees the native SQLx4k result object.
-     *
-     * If the result has already been closed (i.e., it's already null), calling this method has no effect.
+     * This method ensures the `ResultSet` is properly closed and any native resources are freed.
+     * It is thread-safe and can be accessed concurrently.
+     * If the `ResultSet` is already closed, subsequent calls to this method will have no effect.
      */
     override fun close() {
-        if (result == null) return
-        closed = true
+        val alreadyClosed: Boolean = runBlocking {
+            closeMutex.withLock {
+                val c = closed
+                closed = true
+                c
+            }
+        }
+        if (alreadyClosed) return
+
         result = null
         sqlx4k_free_result(ptr)
         ptr = null
