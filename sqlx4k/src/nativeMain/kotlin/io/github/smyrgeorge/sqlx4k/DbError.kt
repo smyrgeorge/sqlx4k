@@ -33,7 +33,6 @@ class DbError(
         WorkerCrashed,
 
         // Prepared Statement:
-        CannotMixPositionalWithNamedParameters,
         PositionalParameterOutOfBounds,
         NamedParameterNotFound,
 

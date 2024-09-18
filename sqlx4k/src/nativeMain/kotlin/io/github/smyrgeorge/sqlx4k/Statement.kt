@@ -7,12 +7,12 @@ class Statement(
     private val sql: String
 ) {
 
-    private val namedParameterIndexes: Map<String, List<IntRange>> by lazy {
-        extractNamedParametersIndexes(sql)
+    private val namedParameters: List<String> by lazy {
+        extractNamedParameters(sql)
     }
 
-    private val positionalParameterIndexes: List<IntRange> by lazy {
-        extractPositionalParametersIndexes(sql)
+    private val positionalParameters: List<Int> by lazy {
+        extractPositionalParameters(sql)
     }
 
     private val namedParametersValues: MutableMap<String, Any?> = mutableMapOf()
@@ -27,7 +27,7 @@ class Statement(
      * @throws DbError if the given index is out of bounds for the available positional parameters.
      */
     fun bind(index: Int, value: Any?): Statement {
-        if (index < 0 || index >= positionalParameterIndexes.size) {
+        if (index < 0 || index >= positionalParameters.size) {
             DbError(
                 code = DbError.Code.PositionalParameterOutOfBounds,
                 message = "Index '$index' out of bounds."
@@ -46,7 +46,7 @@ class Statement(
      * @throws DbError if the specified named parameter is not found.
      */
     fun bind(parameter: String, value: Any?): Statement {
-        if (!namedParameterIndexes.containsKey(parameter)) {
+        if (!namedParameters.contains(parameter)) {
             DbError(
                 code = DbError.Code.NamedParameterNotFound,
                 message = "Parameter '$parameter' not found."
@@ -57,28 +57,23 @@ class Statement(
     }
 
     /**
-     * Renders the SQL statement by either substituting positional or named parameters.
+     * Renders the SQL statement by replacing placeholders for positional and named parameters
+     * with their respective bound values.
      *
-     * @return The SQL statement with the appropriate parameters substituted.
-     * @throws DbError if both named and positional parameters are mixed in the statement.
+     * This function first processes positional parameters, replacing each positional marker
+     * with its corresponding value. It subsequently processes named parameters, replacing each
+     * named marker (e.g., `:name`) with its corresponding value.
+     *
+     * @return A string representing the rendered SQL statement with all positional and named
+     * parameters substituted by their bound values.
      */
-    fun render(): String {
-        if (namedParameterIndexes.isNotEmpty() && positionalParameterIndexes.isNotEmpty()) {
-            DbError(
-                code = DbError.Code.CannotMixPositionalWithNamedParameters,
-                message = "Cannot mix named parameters (:name) with positional parameters (?)"
-            ).ex()
-        }
+    fun render(): String = sql
+        .renderPositionalParameters()
+        .renderNamedParameters()
 
-        return when {
-            positionalParametersValues.isNotEmpty() -> renderPositionalParameters()
-            else -> renderNamedParameters()
-        }
-    }
-
-    private fun renderPositionalParameters(): String {
-        var res: String = sql
-        positionalParameterIndexes.forEachIndexed { index, _ ->
+    private fun String.renderPositionalParameters(): String {
+        var res: String = this
+        positionalParameters.forEachIndexed { index, _ ->
             if (!positionalParametersValues.containsKey(index)) {
                 DbError(
                     code = DbError.Code.PositionalParameterValueNotSupplied,
@@ -86,7 +81,7 @@ class Statement(
                 ).ex()
             }
             val value = positionalParametersValues[index].toValueString()
-            val range = extractFirstPositionalParametersIndex(res) ?: DbError(
+            val range = positionalParametersRegex.find(res)?.range ?: DbError(
                 code = DbError.Code.PositionalParameterValueNotSupplied,
                 message = "Value for positional parameter index '$index' was not supplied."
             ).ex()
@@ -95,23 +90,17 @@ class Statement(
         return res
     }
 
-    private fun renderNamedParameters(): String {
-        var res: String = sql
-        namedParameterIndexes.entries.forEach { (name, ranges) ->
+    private fun String.renderNamedParameters(): String {
+        var res: String = this
+        namedParameters.forEach { name ->
             if (!namedParametersValues.containsKey(name)) {
                 DbError(
                     code = DbError.Code.NamedParameterValueNotSupplied,
                     message = "Value for named parameter '$name' was not supplied."
                 ).ex()
             }
-            repeat(ranges.size) {
-                val value = namedParametersValues[name].toValueString()
-                val range = extractFirstNamedParametersIndex(res) ?: DbError(
-                    code = DbError.Code.PositionalParameterValueNotSupplied,
-                    message = "Value for named parameter '$name' was not supplied."
-                ).ex()
-                res = res.replaceRange(range, value)
-            }
+            val value = namedParametersValues[name].toValueString()
+            res = res.replace(":$name", value)
         }
         return res
     }
@@ -123,13 +112,8 @@ class Statement(
      * where "parameterName" starts with a letter and is followed by alphanumeric characters.
      */
     private val nameParameterRegex = """(?<!:):(?!:)[a-zA-Z]\w+""".toRegex()
-    private fun extractNamedParametersIndexes(sql: String): Map<String, List<IntRange>> =
-        nameParameterRegex.findAll(sql)
-            .mapIndexed { index, group -> Pair(group, index) }
-            .groupBy({ it.first.value.substring(1) }, { it.first.range })
-
-    private fun extractFirstNamedParametersIndex(sql: String): IntRange? =
-        nameParameterRegex.find(sql)?.range
+    private fun extractNamedParameters(sql: String): List<String> =
+        nameParameterRegex.findAll(sql).map { it.value.substring(1) }.toList()
 
     /**
      * A regular expression used to match positional parameters in SQL queries.
@@ -139,12 +123,21 @@ class Statement(
      * within a given SQL query string.
      */
     private val positionalParametersRegex = "\\?".toRegex()
-    private fun extractPositionalParametersIndexes(sql: String): List<IntRange> =
-        positionalParametersRegex.findAll(sql).map { it.range }.toList()
+    private fun extractPositionalParameters(sql: String): List<Int> =
+        positionalParametersRegex.findAll(sql).mapIndexed { idx, _ -> idx }.toList()
 
-    private fun extractFirstPositionalParametersIndex(sql: String): IntRange? =
-        positionalParametersRegex.find(sql)?.range
-
+    /**
+     * Converts the value of the receiver to a string representation suitable for database operations.
+     *
+     * This method handles various types:
+     * - `null` is represented as the string "null".
+     * - `String` values are wrapped in single quotes and any single quotes within the string are escaped.
+     * - Numeric and boolean values are converted to their string representation using `toString()`.
+     * - For other types, it attempts to use a custom renderer. If no renderer is found, it throws a `DbError`.
+     *
+     * @return A string representation of the receiver suitable for database operations.
+     * @throws DbError if the type of the receiver is unsupported and no appropriate renderer is found.
+     */
     private fun Any?.toValueString(): String {
         return when (this) {
             null -> "null"

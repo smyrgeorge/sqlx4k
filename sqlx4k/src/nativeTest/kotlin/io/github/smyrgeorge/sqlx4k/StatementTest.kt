@@ -9,13 +9,16 @@ import kotlin.test.assertFails
 class StatementTest {
 
     @Test
-    fun `Do not mix named and positional parameters`() {
+    fun `Mix named and positional parameters`() {
         val sql = "select * from sqlx4k where id > ? and id < :id"
-        assertFails {
-            Statement(sql)
-                .bind(0, 65)
-                .bind("id", 66)
-                .render()
+        val res = Statement(sql)
+            .bind(0, 65)
+            .bind("id", 66)
+            .render()
+
+        assertThat(res).all {
+            contains("id > 65")
+            contains("id < 66")
         }
     }
 
