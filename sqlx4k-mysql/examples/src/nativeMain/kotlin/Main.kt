@@ -144,5 +144,9 @@ fun main() {
         println(t2)
 
         println("Connections: ${db.poolSize()}, Idle: ${db.poolIdleSize()}")
+
+        db.close().getOrThrow()
+        val e = db.execute("drop table if exists sqlx4k;").errorOrNull()
+        println("DB CLOSED: $e")
     }
 }

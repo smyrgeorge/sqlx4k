@@ -134,7 +134,7 @@ pub fn sqlx4k_error_result_of(err: sqlx::Error) -> Sqlx4kResult {
         Error::Decode(_) => panic!("Decode :: Unexpected error occurred."),
         Error::AnyDriverError(_) => panic!("AnyDriverError :: Unexpected error occurred."),
         Error::PoolTimedOut => (ERROR_POOL_TIMED_OUT, "PoolTimedOut".to_string()),
-        Error::PoolClosed => (ERROR_POOL_CLOSED, "PoolClosed".to_string()),
+        Error::PoolClosed => (ERROR_POOL_CLOSED, "The connection pool is already closed".to_string()),
         Error::WorkerCrashed => (ERROR_WORKER_CRASHED, "WorkerCrashed".to_string()),
         Error::Migrate(_) => panic!("Migrate :: Unexpected error occurred."),
         _ => panic!("Unexpected error occurred."),

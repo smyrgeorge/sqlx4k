@@ -67,6 +67,13 @@ interface Driver {
          * @return the number of idle connections in the pool
          */
         fun poolIdleSize(): Int
+
+        /**
+         * Closes the connection pool, releasing all resources.
+         *
+         * @return A Result object indicating the success or failure of the operation.
+         */
+        suspend fun close(): Result<Unit>
     }
 
     /**

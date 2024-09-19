@@ -207,5 +207,9 @@ fun main() {
             db.notify("chan0", "Hello $it")
             delay(1000)
         }
+
+        db.close().getOrThrow()
+        val e = db.execute("drop table if exists sqlx4k;").errorOrNull()
+        println("DB CLOSED: $e")
     }
 }

@@ -47,6 +47,8 @@ int sqlx4k_pool_size(void);
 
 int sqlx4k_pool_idle_size(void);
 
+void sqlx4k_close(void *callback, void (*fun)(Ptr, Sqlx4kResult*));
+
 void sqlx4k_query(const char *sql, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
 
 void sqlx4k_fetch_all(const char *sql, void *callback, void (*fun)(Ptr, Sqlx4kResult*));

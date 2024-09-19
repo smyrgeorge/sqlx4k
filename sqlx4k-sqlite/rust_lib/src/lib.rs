@@ -20,12 +20,10 @@ impl Sqlx4k {
     async fn query(&self, sql: &str) -> *mut Sqlx4kResult {
         let result = self.pool.execute(sql).await;
         let result = match result {
-            Ok(res) => {
-                Sqlx4kResult {
-                    rows_affected: res.rows_affected(),
-                    ..Default::default()
-                }
-            }
+            Ok(res) => Sqlx4kResult {
+                rows_affected: res.rows_affected(),
+                ..Default::default()
+            },
             Err(err) => sqlx4k_error_result_of(err),
         };
         result.leak()
@@ -36,7 +34,7 @@ impl Sqlx4k {
         sqlx4k_result_of(result).leak()
     }
 
-    async fn tx_begin(&mut self) -> *mut Sqlx4kResult {
+    async fn tx_begin(&self) -> *mut Sqlx4kResult {
         let tx = self.pool.begin().await;
         let tx = match tx {
             Ok(tx) => tx,
@@ -54,7 +52,7 @@ impl Sqlx4k {
         result.leak()
     }
 
-    async fn tx_commit(&mut self, tx: Ptr) -> *mut Sqlx4kResult {
+    async fn tx_commit(&self, tx: Ptr) -> *mut Sqlx4kResult {
         let tx = unsafe { &mut *(tx.ptr as *mut Transaction<'_, Sqlite>) };
         let tx = unsafe { *Box::from_raw(tx) };
         let result = match tx.commit().await {
@@ -64,7 +62,7 @@ impl Sqlx4k {
         result.leak()
     }
 
-    async fn tx_rollback(&mut self, tx: Ptr) -> *mut Sqlx4kResult {
+    async fn tx_rollback(&self, tx: Ptr) -> *mut Sqlx4kResult {
         let tx = unsafe { &mut *(tx.ptr as *mut Transaction<'_, Sqlite>) };
         let tx = unsafe { *Box::from_raw(tx) };
         let result = match tx.rollback().await {
@@ -74,7 +72,7 @@ impl Sqlx4k {
         result.leak()
     }
 
-    async fn tx_query(&mut self, tx: Ptr, sql: &str) -> *mut Sqlx4kResult {
+    async fn tx_query(&self, tx: Ptr, sql: &str) -> *mut Sqlx4kResult {
         let tx = unsafe { &mut *(tx.ptr as *mut Transaction<'_, Sqlite>) };
         let mut tx = unsafe { *Box::from_raw(tx) };
         let result = tx.execute(sql).await;
@@ -97,7 +95,7 @@ impl Sqlx4k {
         result.leak()
     }
 
-    async fn tx_fetch_all(&mut self, tx: Ptr, sql: &str) -> *mut Sqlx4kResult {
+    async fn tx_fetch_all(&self, tx: Ptr, sql: &str) -> *mut Sqlx4kResult {
         let tx = unsafe { &mut *(tx.ptr as *mut Transaction<'_, Sqlite>) };
         let mut tx = unsafe { *Box::from_raw(tx) };
         let result = tx.fetch_all(sql).await;
@@ -109,6 +107,11 @@ impl Sqlx4k {
             ..result
         };
         result.leak()
+    }
+
+    async fn close(&self) -> *mut Sqlx4kResult {
+        self.pool.close().await;
+        Sqlx4kResult::default().leak()
     }
 }
 
@@ -144,6 +147,20 @@ pub extern "C" fn sqlx4k_pool_size() -> c_int {
 #[no_mangle]
 pub extern "C" fn sqlx4k_pool_idle_size() -> c_int {
     unsafe { SQLX4K.get().unwrap() }.pool.num_idle() as c_int
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_close(
+    callback: *mut c_void,
+    fun: unsafe extern "C" fn(Ptr, *mut Sqlx4kResult),
+) {
+    let callback = Ptr { ptr: callback };
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { SQLX4K.get().unwrap() };
+    runtime.spawn(async move {
+        let result = sqlx4k.close().await;
+        unsafe { fun(callback, result) }
+    });
 }
 
 #[no_mangle]

@@ -26,6 +26,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import sqlx4k.Sqlx4kResult
 import sqlx4k.Sqlx4kRow
+import sqlx4k.sqlx4k_close
 import sqlx4k.sqlx4k_fetch_all
 import sqlx4k.sqlx4k_free_result
 import sqlx4k.sqlx4k_listen
@@ -59,6 +60,11 @@ class PostgreSQL(
             database = database,
             max_connections = maxConnections
         ).throwIfError()
+    }
+
+    override suspend fun close(): Result<Unit> = runCatching {
+        sqlx { c -> sqlx4k_close(c, Driver.fn) }.throwIfError()
+        Result.success(Unit)
     }
 
     override fun poolSize(): Int = sqlx4k_pool_size()
