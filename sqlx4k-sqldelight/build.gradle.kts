@@ -18,6 +18,7 @@ kotlin {
             dependencies {
                 implementation(project(":sqlx4k"))
                 api(libs.sqldeligh)
+                api(libs.stately.concurrency)
             }
         }
     }

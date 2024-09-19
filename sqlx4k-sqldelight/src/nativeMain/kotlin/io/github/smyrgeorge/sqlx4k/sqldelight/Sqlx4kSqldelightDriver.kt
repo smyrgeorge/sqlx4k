@@ -6,11 +6,22 @@ import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlCursor
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.db.SqlPreparedStatement
+import co.touchlab.stately.concurrency.ThreadLocalRef
 import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 
+/**
+ * A driver implementation for SQLDelight using an underlying driver that supports
+ * connection pooling and transactions.
+ *
+ * Implementation based on:
+ * https://github.com/cashapp/sqldelight/blob/master/drivers/r2dbc-driver/src/main/kotlin/app/cash/sqldelight/driver/r2dbc/R2dbcDriver.kt
+ *
+ * @param T The type of the underlying driver, which must implement the [Driver], [Driver.Pool], and [Driver.Transactional] interfaces.
+ * @property driver The underlying driver instance used to execute SQL statements.
+ */
 class Sqlx4kSqldelightDriver<T>(private val driver: T) :
     SqlDriver where T : Driver, T : Driver.Pool, T : Driver.Transactional {
 
@@ -33,14 +44,20 @@ class Sqlx4kSqldelightDriver<T>(private val driver: T) :
         return@AsyncValue mapper(SqlDelightCursor(result)).await()
     }
 
+    private val threadLocal = ThreadLocalRef<SqlDelightTransaction>()
+    private var transaction: SqlDelightTransaction?
+        get() = threadLocal.get()
+        set(value) {
+            threadLocal.set(value)
+        }
+
     override fun newTransaction(): QueryResult<Transacter.Transaction> = QueryResult.AsyncValue {
-        val transaction = driver.begin().getOrThrow()
-        SqlDelightTransaction(null, transaction)
+        transaction
+            ?: SqlDelightTransaction(null, driver.begin().getOrThrow())
+                .also { transaction = it }
     }
 
-    override fun currentTransaction(): Transacter.Transaction? {
-        TODO("Not yet implemented: Sqlx4kSqldelightDriver.currentTransaction")
-    }
+    override fun currentTransaction(): Transacter.Transaction? = transaction
 
     override fun close() {
         TODO("Not yet implemented: Sqlx4kSqldelightDriver.close")
@@ -51,7 +68,7 @@ class Sqlx4kSqldelightDriver<T>(private val driver: T) :
     override fun notifyListeners(vararg queryKeys: String) = Unit
 
     private inner class SqlDelightTransaction(
-        override val enclosingTransaction: Transacter.Transaction?,
+        override val enclosingTransaction: SqlDelightTransaction?,
         private val transaction: Transaction
     ) : Transacter.Transaction() {
         override fun endTransaction(successful: Boolean): QueryResult<Unit> = QueryResult.AsyncValue {
@@ -62,7 +79,7 @@ class Sqlx4kSqldelightDriver<T>(private val driver: T) :
                     transaction.rollback()
                 }
             }
-//            transaction = enclosingTransaction
+            this@Sqlx4kSqldelightDriver.transaction = enclosingTransaction
         }
     }
 

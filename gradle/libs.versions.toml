@@ -11,6 +11,8 @@ sqldelight = "2.0.2"
 dokka = "1.9.20"
 # https://github.com/willowtreeapps/assertk
 assertk = "0.28.1"
+# https://github.com/touchlab/Stately
+stately = "2.1.0"
 
 [libraries]
 gradle-kotlin-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
@@ -20,6 +22,7 @@ kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-c
 sqldeligh = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
 sqldelight-postgresql-dialect = { module = "app.cash.sqldelight:postgresql-dialect", version.ref = "sqldelight" }
 assertk = { module = "com.willowtreeapps.assertk:assertk", version.ref = "assertk" }
+stately-concurrency = { module = "co.touchlab:stately-concurrency", version.ref = "stately" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
