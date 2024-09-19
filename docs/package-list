@@ -2,14 +2,13 @@ $dokka.format:html-v1
 $dokka.linkExtension:html
 $dokka.location:////PointingToDeclaration/examples/[root]/index.html
 $dokka.location://main/#/PointingToDeclaration/examples/[root]/main.html
-module:sqldelight
-io.github.smyrgeorge.sqlx4k.sqldelight
 module:sqlx4k
 io.github.smyrgeorge.sqlx4k
-io.github.smyrgeorge.sqlx4k.impl
 module:sqlx4k-mysql
 io.github.smyrgeorge.sqlx4k.mysql
 module:sqlx4k-postgres
 io.github.smyrgeorge.sqlx4k.postgres
+module:sqlx4k-sqldelight
+io.github.smyrgeorge.sqlx4k.sqldelight
 module:sqlx4k-sqlite
 io.github.smyrgeorge.sqlx4k.sqlite
