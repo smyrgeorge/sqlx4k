@@ -11,6 +11,7 @@ import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
+import kotlinx.coroutines.runBlocking
 
 /**
  * A driver implementation for SQLDelight using an underlying driver that supports
@@ -60,7 +61,7 @@ class Sqlx4kSqldelightDriver<T>(private val driver: T) :
     override fun currentTransaction(): Transacter.Transaction? = transaction
 
     override fun close() {
-        TODO("Not yet implemented: Sqlx4kSqldelightDriver.close")
+        runBlocking { driver.close().getOrThrow() }
     }
 
     override fun addListener(vararg queryKeys: String, listener: Query.Listener) = Unit
