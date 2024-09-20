@@ -1,7 +1,11 @@
-CREATE TABLE customer (
+CREATE TABLE IF NOT EXISTS customer (
   id SERIAL PRIMARY KEY NOT NULL,
   name VARCHAR(255) NOT NULL
 );
+
+insert:
+INSERT INTO customer(id, name)
+VALUES (?, ?);
 
 getAllCustomers:
 SELECT * FROM customer;

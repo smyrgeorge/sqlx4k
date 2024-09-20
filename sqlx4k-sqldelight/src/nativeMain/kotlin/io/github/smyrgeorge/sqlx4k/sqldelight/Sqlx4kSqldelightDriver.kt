@@ -8,8 +8,6 @@ import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.db.SqlPreparedStatement
 import co.touchlab.stately.concurrency.ThreadLocalRef
 import io.github.smyrgeorge.sqlx4k.Driver
-import io.github.smyrgeorge.sqlx4k.ResultSet
-import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import kotlinx.coroutines.runBlocking
 
@@ -82,47 +80,5 @@ class Sqlx4kSqldelightDriver<T>(private val driver: T) :
             }
             this@Sqlx4kSqldelightDriver.transaction = enclosingTransaction
         }
-    }
-
-    private inner class SqlDelightPreparedStatement(sql: String) : SqlPreparedStatement {
-        var statement = Statement(sql)
-
-        override fun bindBoolean(index: Int, boolean: Boolean?) {
-            statement = statement.bind(index, boolean)
-        }
-
-        override fun bindBytes(index: Int, bytes: ByteArray?) {
-            TODO("Not yet implemented")
-        }
-
-        override fun bindDouble(index: Int, double: Double?) {
-            statement = statement.bind(index, double)
-        }
-
-        override fun bindLong(index: Int, long: Long?) {
-            statement = statement.bind(index, long)
-        }
-
-        override fun bindString(index: Int, string: String?) {
-            statement = statement.bind(index, string)
-        }
-    }
-
-    private inner class SqlDelightCursor(
-        private val result: ResultSet
-    ) : SqlCursor {
-        private lateinit var current: ResultSet.Row
-
-        override fun next(): QueryResult.AsyncValue<Boolean> = QueryResult.AsyncValue {
-            if (!result.hasNext()) return@AsyncValue false
-            current = result.next()
-            true
-        }
-
-        override fun getBoolean(index: Int): Boolean? = current.get(index).value?.toBoolean()
-        override fun getBytes(index: Int): ByteArray? = current.get(index).valueAsByteArray()
-        override fun getDouble(index: Int): Double? = current.get(index).value?.toDouble()
-        override fun getLong(index: Int): Long? = current.get(index).value?.toLong()
-        override fun getString(index: Int): String? = current.get(index).value
     }
 }

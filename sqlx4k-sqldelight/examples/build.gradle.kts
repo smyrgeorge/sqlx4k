@@ -27,7 +27,7 @@ kotlin {
 sqldelight {
     databases.register("Database") {
         generateAsync = true
-        dialect(libs.sqldelight.postgresql.dialect)
         packageName = "db.entities"
+        dialect(project(":sqlx4k-sqldelight-dialect-postgres"))
     }
 }
