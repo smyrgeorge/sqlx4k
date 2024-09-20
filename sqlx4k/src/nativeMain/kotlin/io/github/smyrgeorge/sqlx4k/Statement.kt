@@ -7,7 +7,7 @@ class Statement(
     private val sql: String
 ) {
 
-    private val namedParameters: List<String> by lazy {
+    private val namedParameters: Set<String> by lazy {
         extractNamedParameters(sql)
     }
 
@@ -112,8 +112,8 @@ class Statement(
      * where "parameterName" starts with a letter and is followed by alphanumeric characters.
      */
     private val nameParameterRegex = """(?<!:):(?!:)[a-zA-Z]\w+""".toRegex()
-    private fun extractNamedParameters(sql: String): List<String> =
-        nameParameterRegex.findAll(sql).map { it.value.substring(1) }.toList()
+    private fun extractNamedParameters(sql: String): Set<String> =
+        nameParameterRegex.findAll(sql).map { it.value.substring(1) }.toHashSet()
 
     /**
      * A regular expression used to match positional parameters in SQL queries.
