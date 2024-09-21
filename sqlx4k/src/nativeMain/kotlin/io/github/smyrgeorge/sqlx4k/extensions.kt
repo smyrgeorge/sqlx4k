@@ -16,7 +16,6 @@ import sqlx4k.sqlx4k_free_result
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.suspendCoroutine
 
-@OptIn(ExperimentalForeignApi::class)
 fun Sqlx4kRow.debug(prefix: String = ""): String = buildString {
     append("\n$prefix[Sqlx4kPgRow]")
     append("\n${prefix}size: $size")
@@ -25,7 +24,6 @@ fun Sqlx4kRow.debug(prefix: String = ""): String = buildString {
     }
 }
 
-@OptIn(ExperimentalForeignApi::class)
 fun Sqlx4kColumn.debug(prefix: String = ""): String = buildString {
     append("\n$prefix[Sqlx4kPgColumn]")
     append("\n${prefix}ordinal: $ordinal")

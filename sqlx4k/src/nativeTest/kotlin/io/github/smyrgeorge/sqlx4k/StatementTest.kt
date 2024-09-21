@@ -11,7 +11,7 @@ class StatementTest {
     @Test
     fun `Mix named and positional parameters`() {
         val sql = "select * from sqlx4k where id > ? and id < :id"
-        val res = Statement(sql)
+        val res = Statement.create(sql)
             .bind(0, 65)
             .bind("id", 66)
             .render()
@@ -25,7 +25,7 @@ class StatementTest {
     @Test
     fun `Positional parameter basic test for integers`() {
         val sql = "select * from sqlx4k where id > ? and id < ?"
-        val res = Statement(sql)
+        val res = Statement.create(sql)
             .bind(0, 65)
             .bind(1, 66)
             .render()
@@ -39,7 +39,7 @@ class StatementTest {
     @Test
     fun `Positional parameter basic test for integers out of order`() {
         val sql = "select * from sqlx4k where id > ? and id < ?"
-        val res = Statement(sql)
+        val res = Statement.create(sql)
             .bind(1, 66)
             .bind(0, 65)
             .render()
@@ -53,7 +53,7 @@ class StatementTest {
     @Test
     fun `Positional parameter basic test for strings`() {
         val sql = "select * from sqlx4k where id = ?"
-        val res = Statement(sql)
+        val res = Statement.create(sql)
             .bind(0, "this is a test")
             .render()
 
@@ -63,7 +63,7 @@ class StatementTest {
     @Test
     fun `Named parameter basic test for integers`() {
         val sql = "select * from sqlx4k where id > :id and id < :id"
-        val res = Statement(sql)
+        val res = Statement.create(sql)
             .bind("id", 65)
             .render()
 
@@ -76,7 +76,7 @@ class StatementTest {
     @Test
     fun `Named parameter basic test for strings`() {
         val sql = "select * from sqlx4k where id = :id"
-        val res = Statement(sql)
+        val res = Statement.create(sql)
             .bind("id", "this is a test")
             .render()
 
@@ -90,7 +90,7 @@ class StatementTest {
 
         val sql = "select * from sqlx4k where id = :id"
         assertFails {
-            Statement(sql)
+            Statement.create(sql)
                 .bind("id", Test(65))
                 .render()
         }
@@ -110,7 +110,7 @@ class StatementTest {
         Statement.ValueRenderers.register(Test::class, TestRenderer())
 
         val sql = "select * from sqlx4k where id = :id"
-        val res = Statement(sql)
+        val res = Statement.create(sql)
             .bind("id", Test(65))
             .render()
         assertThat(res).contains("id = 65")

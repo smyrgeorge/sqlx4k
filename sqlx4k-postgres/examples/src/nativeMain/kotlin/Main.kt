@@ -39,12 +39,12 @@ fun main() {
         println("AFFECTED: $affected")
 
         runCatching {
-            val st = Statement("select * from sqlx4k where id = ?")
+            val st = Statement.create("select * from sqlx4k where id = ?")
                 .bind(0, 66)
                 .render()
             println("Statement: $st")
 
-            val st1 = Statement("? ? ?")
+            val st1 = Statement.create("? ? ?")
                 .bind(0, "test")
                 .bind(1, "'test'")
                 .bind(2, "';select *;--")

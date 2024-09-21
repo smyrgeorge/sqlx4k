@@ -19,14 +19,12 @@ import com.squareup.kotlinpoet.LONG
 import com.squareup.kotlinpoet.SHORT
 import com.squareup.kotlinpoet.TypeName
 
-public class PostgresNativeDialect : SqlDelightDialect by PostgreSqlDialect() {
+public open class PostgresNativeDialect : SqlDelightDialect by PostgreSqlDialect() {
 
     override fun setup() {
         SqlParserUtil.reset()
         PostgreSqlParserUtil.reset()
         PostgreSqlParserUtil.overrideSqlParser()
-//        PostgreSqlNativeParserUtil.reset()
-//        PostgreSqlNativeParserUtil.overrideSqlParser()
     }
 
     override val runtimeTypes: RuntimeTypes

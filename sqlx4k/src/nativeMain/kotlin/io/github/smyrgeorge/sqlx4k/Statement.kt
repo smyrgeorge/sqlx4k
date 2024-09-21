@@ -1,22 +1,14 @@
 package io.github.smyrgeorge.sqlx4k
 
+import io.github.smyrgeorge.sqlx4k.impl.SimpleStatement
 import kotlin.reflect.KClass
 
-@Suppress("unused")
-class Statement(
-    private val sql: String
-) {
-
-    private val namedParameters: Set<String> by lazy {
-        extractNamedParameters(sql)
-    }
-
-    private val positionalParameters: List<Int> by lazy {
-        extractPositionalParameters(sql)
-    }
-
-    private val namedParametersValues: MutableMap<String, Any?> = mutableMapOf()
-    private val positionalParametersValues: MutableMap<Int, Any?> = mutableMapOf()
+/**
+ * Represents a statement that allows binding of positional and named parameters.
+ * Provides methods to bind values to parameters and render the statement as a
+ * complete SQL query.
+ */
+interface Statement {
 
     /**
      * Binds a value to a positional parameter in the statement based on the given index.
@@ -24,18 +16,8 @@ class Statement(
      * @param index The zero-based index of the positional parameter to bind the value to.
      * @param value The value to bind to the specified positional parameter.
      * @return The current `Statement` instance to allow for method chaining.
-     * @throws DbError if the given index is out of bounds for the available positional parameters.
      */
-    fun bind(index: Int, value: Any?): Statement {
-        if (index < 0 || index >= positionalParameters.size) {
-            DbError(
-                code = DbError.Code.PositionalParameterOutOfBounds,
-                message = "Index '$index' out of bounds."
-            ).ex()
-        }
-        positionalParametersValues[index] = value
-        return this
-    }
+    fun bind(index: Int, value: Any?): Statement
 
     /**
      * Binds a value to a named parameter in the statement.
@@ -43,18 +25,8 @@ class Statement(
      * @param parameter The name of the parameter to bind the value to.
      * @param value The value to bind to the specified named parameter. May be null.
      * @return The current `Statement` instance to allow for method chaining.
-     * @throws DbError if the specified named parameter is not found.
      */
-    fun bind(parameter: String, value: Any?): Statement {
-        if (!namedParameters.contains(parameter)) {
-            DbError(
-                code = DbError.Code.NamedParameterNotFound,
-                message = "Parameter '$parameter' not found."
-            ).ex()
-        }
-        namedParametersValues[parameter] = value
-        return this
-    }
+    fun bind(parameter: String, value: Any?): Statement
 
     /**
      * Renders the SQL statement by replacing placeholders for positional and named parameters
@@ -67,64 +39,7 @@ class Statement(
      * @return A string representing the rendered SQL statement with all positional and named
      * parameters substituted by their bound values.
      */
-    fun render(): String = sql
-        .renderPositionalParameters()
-        .renderNamedParameters()
-
-    private fun String.renderPositionalParameters(): String {
-        var res: String = this
-        positionalParameters.forEach { index ->
-            if (!positionalParametersValues.containsKey(index)) {
-                DbError(
-                    code = DbError.Code.PositionalParameterValueNotSupplied,
-                    message = "Value for positional parameter index '$index' was not supplied."
-                ).ex()
-            }
-            val value = positionalParametersValues[index].toValueString()
-            val range = positionalParametersRegex.find(res)?.range ?: DbError(
-                code = DbError.Code.PositionalParameterValueNotSupplied,
-                message = "Value for positional parameter index '$index' was not supplied."
-            ).ex()
-            res = res.replaceRange(range, value)
-        }
-        return res
-    }
-
-    private fun String.renderNamedParameters(): String {
-        var res: String = this
-        namedParameters.forEach { name ->
-            if (!namedParametersValues.containsKey(name)) {
-                DbError(
-                    code = DbError.Code.NamedParameterValueNotSupplied,
-                    message = "Value for named parameter '$name' was not supplied."
-                ).ex()
-            }
-            val value = namedParametersValues[name].toValueString()
-            res = res.replace(":$name", value)
-        }
-        return res
-    }
-
-    /**
-     * Regular expression pattern used for validating and extracting named parameters from a string.
-     *
-     * The pattern is used to match named parameters in the format ":parameterName",
-     * where "parameterName" starts with a letter and is followed by alphanumeric characters.
-     */
-    private val nameParameterRegex = """(?<!:):(?!:)[a-zA-Z]\w+""".toRegex()
-    private fun extractNamedParameters(sql: String): Set<String> =
-        nameParameterRegex.findAll(sql).map { it.value.substring(1) }.toHashSet()
-
-    /**
-     * A regular expression used to match positional parameters in SQL queries.
-     *
-     * The positional parameter is represented by a question mark ("?").
-     * This regex is utilized to locate all instances of positional parameters
-     * within a given SQL query string.
-     */
-    private val positionalParametersRegex = "\\?".toRegex()
-    private fun extractPositionalParameters(sql: String): List<Int> =
-        positionalParametersRegex.findAll(sql).mapIndexed { idx, _ -> idx }.toList()
+    fun render(): String
 
     /**
      * Converts the value of the receiver to a string representation suitable for database operations.
@@ -138,7 +53,7 @@ class Statement(
      * @return A string representation of the receiver suitable for database operations.
      * @throws DbError if the type of the receiver is unsupported and no appropriate renderer is found.
      */
-    private fun Any?.toValueString(): String {
+    fun Any?.renderValue(): String {
         return when (this) {
             null -> "null"
             is String -> {
@@ -155,28 +70,58 @@ class Statement(
                     message = "Could not map named parameter of type ${this::class.simpleName}"
                 )
 
-                val renderer = ValueRenderers.get(this::class) ?: error.ex()
-                renderer.render(this).toValueString()
+                val renderer = Statement.ValueRenderers.get(this::class) ?: error.ex()
+                renderer.render(this).renderValue()
             }
         }
     }
 
+    /**
+     * An interface for rendering values of type `T` into a format suitable for
+     * usage in database statements. Implementations of this interface will define
+     * how to convert a value of type `T` into a type that can be safely and
+     * correctly used within a SQL statement.
+     *
+     * @param T The type of the value to be rendered.
+     */
     interface ValueRenderer<T> {
         fun render(value: T): Any
     }
 
+    /**
+     * A singleton class responsible for managing a collection of `ValueRenderer` instances.
+     * Each renderer is associated with a specific data type and is used to convert that type
+     * into a format suitable for use in database statements.
+     */
+    @Suppress("unused", "UNCHECKED_CAST")
     class ValueRenderers {
         companion object {
             private val renderers: MutableMap<KClass<*>, ValueRenderer<*>> = mutableMapOf()
 
-            @Suppress("UNCHECKED_CAST")
+            /**
+             * Retrieves a `ValueRenderer` associated with the specified type.
+             *
+             * @param type The `KClass` of the type for which to get the renderer.
+             * @return The `ValueRenderer` instance associated with the specified type, or null if none is found.
+             */
             fun get(type: KClass<*>): ValueRenderer<Any>? =
                 renderers[type] as ValueRenderer<Any>?
 
+            /**
+             * Registers a `ValueRenderer` for a specified type.
+             *
+             * @param type The `KClass` of the type for which to register the renderer.
+             * @param renderer The `ValueRenderer` instance to be associated with the specified type.
+             */
             fun register(type: KClass<*>, renderer: ValueRenderer<*>) {
                 renderers[type] = renderer
             }
 
+            /**
+             * Unregisters the `ValueRenderer` associated with a specified type.
+             *
+             * @param type The `KClass` of the type for which to unregister the renderer.
+             */
             fun unregister(type: KClass<*>) {
                 renderers.remove(type)
             }
@@ -184,6 +129,12 @@ class Statement(
     }
 
     companion object {
-        fun create(sql: String): Statement = Statement(sql)
+        /**
+         * Creates and returns a new `SimpleStatement` based on the provided SQL string.
+         *
+         * @param sql The SQL statement as a string.
+         * @return The constructed `SimpleStatement` instance.
+         */
+        fun create(sql: String): Statement = SimpleStatement(sql)
     }
 }
