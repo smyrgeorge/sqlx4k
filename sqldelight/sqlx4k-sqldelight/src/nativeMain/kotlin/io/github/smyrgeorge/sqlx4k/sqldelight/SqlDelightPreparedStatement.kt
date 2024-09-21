@@ -18,6 +18,10 @@ class SqlDelightPreparedStatement(sql: String) : SqlPreparedStatement {
         statement = statement.bind(index, double)
     }
 
+    fun bindInt(index: Int, int: Int?) {
+        statement = statement.bind(index, int)
+    }
+
     override fun bindLong(index: Int, long: Long?) {
         statement = statement.bind(index, long)
     }

@@ -18,6 +18,7 @@ class SqlDelightCursor(
     override fun getBoolean(index: Int): Boolean? = current.get(index).value?.toBoolean()
     override fun getBytes(index: Int): ByteArray? = current.get(index).valueAsByteArray()
     override fun getDouble(index: Int): Double? = current.get(index).value?.toDouble()
+    fun getInt(index: Int): Int? = current.get(index).value?.toInt()
     override fun getLong(index: Int): Long? = current.get(index).value?.toLong()
     override fun getString(index: Int): String? = current.get(index).value
 }
