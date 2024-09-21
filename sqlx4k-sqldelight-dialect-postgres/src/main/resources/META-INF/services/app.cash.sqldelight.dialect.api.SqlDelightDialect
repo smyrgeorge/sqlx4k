@@ -1,1 +1,1 @@
-io.github.smyrgeorge.sqlx4k.sqldelight.dialect.postgres.PostgresNativeDialect
+io.github.smyrgeorge.sqlx4k.sqldelight.dialect.postgres.PostgresSqlSqlx4kDialect
