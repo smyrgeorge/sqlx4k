@@ -1,10 +1,10 @@
 package io.github.smyrgeorge.sqlx4k.sqldelight
 
 import app.cash.sqldelight.db.SqlPreparedStatement
-import io.github.smyrgeorge.sqlx4k.impl.PgStatement
+import io.github.smyrgeorge.sqlx4k.impl.ExtendedStatement
 
 class SqlDelightPreparedStatement(sql: String) : SqlPreparedStatement {
-    var statement = PgStatement(sql)
+    var statement = ExtendedStatement(sql)
 
     override fun bindBoolean(index: Int, boolean: Boolean?) {
         statement = statement.bind(index, boolean)

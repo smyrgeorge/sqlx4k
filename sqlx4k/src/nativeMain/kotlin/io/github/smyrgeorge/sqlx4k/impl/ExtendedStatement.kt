@@ -3,13 +3,13 @@ package io.github.smyrgeorge.sqlx4k.impl
 import io.github.smyrgeorge.sqlx4k.DbError
 
 /**
- * Represents a PostgreSQL-specific SQL statement that extends `SimpleStatement`
- * to include PostgreSQL-like positional parameters (e.g., `$1`, `$2`).
+ * A subclass of `SimpleStatement` that extends its capabilities to handle PostgreSQL specific
+ * positional parameters using the dollar-sign notation (e.g., `$1`, `$2`).
  *
- * @property sql The SQL statement as a string.
+ * @property sql The SQL query that may contain PostgreSQL specific positional parameters.
  */
 @Suppress("unused")
-class PgStatement(
+class ExtendedStatement(
     private val sql: String
 ) : SimpleStatement(sql) {
 
@@ -27,7 +27,7 @@ class PgStatement(
      * @return The current `PgStatement` instance with the bound parameter, allowing method chaining.
      * @throws DbError if the provided index is out of bounds of the statement's parameters.
      */
-    override fun bind(index: Int, value: Any?): PgStatement {
+    override fun bind(index: Int, value: Any?): ExtendedStatement {
         if (index < 0 || index >= pgParameters.size) {
             DbError(
                 code = DbError.Code.PositionalParameterOutOfBounds,
