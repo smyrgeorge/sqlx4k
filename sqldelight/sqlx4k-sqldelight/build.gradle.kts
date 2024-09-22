@@ -20,6 +20,7 @@ kotlin {
             dependencies {
                 implementation(project(":sqlx4k"))
                 api(libs.sqldeligh)
+                api(libs.kotlinx.datetime)
                 api(libs.stately.concurrency)
             }
         }
