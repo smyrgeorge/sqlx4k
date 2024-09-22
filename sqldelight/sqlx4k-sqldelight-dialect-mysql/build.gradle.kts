@@ -11,6 +11,7 @@ repositories {
 }
 
 kotlin {
+    explicitApi()
     sourceSets {
         configureEach {
             languageSettings.progressiveMode = true
