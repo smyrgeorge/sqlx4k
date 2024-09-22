@@ -13,7 +13,7 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import java.io.File
 import java.lang.System.getenv
 
-class MultiplatformConventions : Plugin<Project> {
+class MultiplatformRustConventions : Plugin<Project> {
     private val os = DefaultNativePlatform.getCurrentOperatingSystem()
     private val arch = DefaultNativePlatform.getCurrentArchitecture()
 
@@ -81,9 +81,9 @@ class MultiplatformConventions : Plugin<Project> {
      * If the file does not exist, a GradleException is thrown indicating that the Rust cargo binary is required,
      * but it was not found.
      *
-     * @see MultiplatformConventions
-     * @see MultiplatformConventions.os
-     * @see MultiplatformConventions.exeExt
+     * @see MultiplatformRustConventions
+     * @see MultiplatformRustConventions.os
+     * @see MultiplatformRustConventions.exeExt
      *
      * @throws GradleException if the Rust cargo binary is not found.
      */
@@ -100,7 +100,6 @@ class MultiplatformConventions : Plugin<Project> {
     }?.let(::File)
         ?.resolve(".cargo/bin/cross$exeExt")?.absolutePath
         ?: throw GradleException("Rust cross binary is required to build project but it wasn't found.")
-
 
     override fun apply(project: Project) {
         val targets = project.targets()

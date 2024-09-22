@@ -1,7 +1,7 @@
 import com.vanniktech.maven.publish.SonatypeHost
 
 plugins {
-    id("io.github.smyrgeorge.sqlx4k.multiplatform")
+    id("io.github.smyrgeorge.sqlx4k.multiplatform.rust")
     // https://github.com/vanniktech/gradle-maven-publish-plugin
     id("com.vanniktech.maven.publish") version "0.29.0"
 }

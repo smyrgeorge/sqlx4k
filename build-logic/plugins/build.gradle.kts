@@ -5,8 +5,12 @@ plugins {
 gradlePlugin {
     plugins {
         create("multiplatform") {
-            id = "io.github.smyrgeorge.sqlx4k.multiplatform"
-            implementationClass = "io.github.smyrgeorge.sqlx4k.multiplatform.MultiplatformConventions"
+            id = "io.github.smyrgeorge.sqlx4k.multiplatform.rust"
+            implementationClass = "io.github.smyrgeorge.sqlx4k.multiplatform.MultiplatformRustConventions"
+        }
+        create("multiplatform.simple") {
+            id = "io.github.smyrgeorge.sqlx4k.multiplatform.simple"
+            implementationClass = "io.github.smyrgeorge.sqlx4k.multiplatform.MultiplatformSimpleConventions"
         }
     }
 }

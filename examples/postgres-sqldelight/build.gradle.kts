@@ -1,5 +1,5 @@
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
+    id("io.github.smyrgeorge.sqlx4k.multiplatform.simple")
     alias(libs.plugins.sqldeligh)
 }
 
@@ -11,8 +11,6 @@ group = rootProject.group
 version = rootProject.version
 
 kotlin {
-    macosArm64 { binaries { executable() } }
-
     applyDefaultHierarchyTemplate()
     sourceSets {
         val nativeMain by getting {
