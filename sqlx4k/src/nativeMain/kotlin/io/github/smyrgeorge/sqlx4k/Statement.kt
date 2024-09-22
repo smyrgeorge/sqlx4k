@@ -70,7 +70,7 @@ interface Statement {
                     message = "Could not map named parameter of type ${this::class.simpleName}"
                 )
 
-                val renderer = Statement.ValueRenderers.get(this::class) ?: error.ex()
+                val renderer = ValueRenderers.get(this::class) ?: error.ex()
                 renderer.render(this).renderValue()
             }
         }
