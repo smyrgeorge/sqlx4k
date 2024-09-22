@@ -21,9 +21,9 @@ import com.squareup.kotlinpoet.SHORT
 import com.squareup.kotlinpoet.TypeName
 
 /**
- * A custom dialect for PostgreSQL using the Sqlx4k library with SqlDelight.
- * This class extends `SqlDelightDialect` and is implemented through the `PostgreSqlDialect()`.
- * It provides specific configurations and type resolvers for PostgreSQL.
+ * A custom dialect for MySQL using the Sqlx4k library with SqlDelight.
+ * This class extends `SqlDelightDialect` and is implemented through the `MySqlDialect()`.
+ * It provides specific configurations and type resolvers for MySQL.
  *
  * Original implementation found here:
  * https://github.com/joepeding/mysql-native-sqldelight/blob/main/mysql-native-dialect/src/main/kotlin/nl/joepeding/sqldelight/mysql/native/dialect/MysqlNativeDialect.kt
