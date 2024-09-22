@@ -12,6 +12,14 @@ gradlePlugin {
             id = "io.github.smyrgeorge.sqlx4k.multiplatform.simple"
             implementationClass = "io.github.smyrgeorge.sqlx4k.multiplatform.MultiplatformSimpleConventions"
         }
+        create("multiplatform.examples") {
+            id = "io.github.smyrgeorge.sqlx4k.multiplatform.examples"
+            implementationClass = "io.github.smyrgeorge.sqlx4k.multiplatform.MultiplatformExamplesConventions"
+        }
+        create("multiplatform.jvm") {
+            id = "io.github.smyrgeorge.sqlx4k.multiplatform.jvm"
+            implementationClass = "io.github.smyrgeorge.sqlx4k.multiplatform.MultiplatformJvmConventions"
+        }
     }
 }
 

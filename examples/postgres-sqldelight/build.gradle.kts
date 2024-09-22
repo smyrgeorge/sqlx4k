@@ -1,5 +1,5 @@
 plugins {
-    id("io.github.smyrgeorge.sqlx4k.multiplatform.simple")
+    id("io.github.smyrgeorge.sqlx4k.multiplatform.examples")
     alias(libs.plugins.sqldeligh)
 }
 
@@ -11,9 +11,8 @@ group = rootProject.group
 version = rootProject.version
 
 kotlin {
-    applyDefaultHierarchyTemplate()
     sourceSets {
-        val nativeMain by getting {
+        val commonMain by getting {
             dependencies {
                 implementation(project(":sqlx4k-postgres"))
                 implementation(project(":sqldelight:sqlx4k-sqldelight"))

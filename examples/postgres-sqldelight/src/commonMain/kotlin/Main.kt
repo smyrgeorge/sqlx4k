@@ -27,6 +27,7 @@ fun main() {
         """.trimIndent()
         postgres.execute(sql).getOrThrow()
 
+        postgres.execute("delete from customer;").getOrThrow()
         db.customerQueries.insert(1, "John 1")
         db.customerQueries.insert(2, "John 2")
         val customers: List<Customer> = db.customerQueries.getAllCustomers().awaitAsList()

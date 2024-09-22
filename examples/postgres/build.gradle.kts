@@ -1,5 +1,5 @@
 plugins {
-    id("io.github.smyrgeorge.sqlx4k.multiplatform.simple")
+    id("io.github.smyrgeorge.sqlx4k.multiplatform.examples")
 }
 
 repositories {
@@ -10,7 +10,6 @@ group = rootProject.group
 version = rootProject.version
 
 kotlin {
-    applyDefaultHierarchyTemplate()
     sourceSets {
         val nativeMain by getting {
             dependencies {
