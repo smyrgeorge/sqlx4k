@@ -41,7 +41,7 @@
 <a class="library-name--link" href="../../../index.html">
                             sqlx4k
                     </a>            </div>
-            <div class="library-version">0.17.0
+            <div class="library-version">0.18.0
             </div>
         </div>
         <div class="filter-section" id="filter-section">
@@ -62,30 +62,11 @@
   <div class="breadcrumbs"><a href="../../index.html">sqlx4k</a><span class="delimiter">/</span><a href="../index.html">io.github.smyrgeorge.sqlx4k</a><span class="delimiter">/</span><span class="current">Statement</span></div>
   <div class="cover ">
     <h1 class="cover"><span><span>Statement</span></span></h1>
-    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="index.html">Statement</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">sql<span class="token operator">: </span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span></div></div></div>
+    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">interface </span><a href="index.html">Statement</a></div><p class="paragraph">Represents a statement that allows binding of positional and named parameters. Provides methods to bind values to parameters and render the statement as a complete SQL query.</p><h4 class="">Inheritors</h4><div class="table"><div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/nativeMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><a href="../../io.github.smyrgeorge.sqlx4k.impl/-simple-statement/index.html">SimpleStatement</a></div></span></div><div></div></div></div></div></div></div>
   </div>
   <div class="tabbedcontent">
     <div class="tabs-section" tabs-section="tabs-section"><button class="section-tab" data-active="" data-togglable="CONSTRUCTOR,TYPE,PROPERTY,FUNCTION">Members</button></div>
     <div class="tabs-section-body">
-      <div data-togglable="CONSTRUCTOR">
-        <h2 class="">Constructors</h2>
-        <div class="table"><a data-name="485091297%2FConstructors%2F420194022" anchor-label="Statement" id="485091297%2FConstructors%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
-          <div class="table-row" data-togglable="CONSTRUCTOR" data-filterable-current=":sqlx4k:dokkaHtmlPartial/nativeMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain">
-            <div class="main-subrow keyValue ">
-              <div class=""><span class="inline-flex">
-                  <div><a href="-statement.html"><span><span>Statement</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="485091297%2FConstructors%2F420194022"></span>
-                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
-                  </span></span></div>
-              <div>
-                <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">constructor</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">sql<span class="token operator">: </span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span></div></div></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
       <div data-togglable="TYPE">
         <h2 class="">Types</h2>
         <div class="table"><a data-name="-1966171719%2FClasslikes%2F420194022" anchor-label="Companion" id="-1966171719%2FClasslikes%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
@@ -113,7 +94,7 @@
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">interface </span><a href="-value-renderer/index.html">ValueRenderer</a><span class="token operator">&lt;</span><a href="-value-renderer/index.html">T</a><span class="token operator">&gt;</span></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">interface </span><a href="-value-renderer/index.html">ValueRenderer</a><span class="token operator">&lt;</span><a href="-value-renderer/index.html">T</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">An interface for rendering values of type <code class="lang-kotlin">T</code> into a format suitable for usage in database statements. Implementations of this interface will define how to convert a value of type <code class="lang-kotlin">T</code> into a type that can be safely and correctly used within a SQL statement.</p></div></div></div>
                 </div>
               </div>
             </div>
@@ -128,7 +109,7 @@
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="-value-renderers/index.html">ValueRenderers</a></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="-value-renderers/index.html">ValueRenderers</a></div><div class="brief "><p class="paragraph">A singleton class responsible for managing a collection of <code class="lang-kotlin">ValueRenderer</code> instances. Each renderer is associated with a specific data type and is used to convert that type into a format suitable for use in database statements.</p></div></div></div>
                 </div>
               </div>
             </div>
@@ -147,7 +128,7 @@
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="bind.html"><span class="token function">bind</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">index<span class="token operator">: </span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-int/index.html">Int</a><span class="token punctuation">, </span></span><span class="parameter ">value<span class="token operator">: </span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-any/index.html">Any</a><span class="token operator">?</span></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="index.html">Statement</a></div><div class="brief "><p class="paragraph">Binds a value to a positional parameter in the statement based on the given index.</p></div><div class="symbol monospace"><span class="token keyword">fun </span><a href="bind.html"><span class="token function">bind</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">parameter<span class="token operator">: </span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">value<span class="token operator">: </span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-any/index.html">Any</a><span class="token operator">?</span></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="index.html">Statement</a></div><div class="brief "><p class="paragraph">Binds a value to a named parameter in the statement.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">fun </span><a href="bind.html"><span class="token function">bind</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">index<span class="token operator">: </span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-int/index.html">Int</a><span class="token punctuation">, </span></span><span class="parameter ">value<span class="token operator">: </span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-any/index.html">Any</a><span class="token operator">?</span></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="index.html">Statement</a></div><div class="brief "><p class="paragraph">Binds a value to a positional parameter in the statement based on the given index.</p></div><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">fun </span><a href="bind.html"><span class="token function">bind</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">parameter<span class="token operator">: </span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">value<span class="token operator">: </span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-any/index.html">Any</a><span class="token operator">?</span></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="index.html">Statement</a></div><div class="brief "><p class="paragraph">Binds a value to a named parameter in the statement.</p></div></div></div>
                 </div>
               </div>
             </div>
@@ -162,7 +143,22 @@
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="render.html"><span class="token function">render</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-string/index.html">String</a></div><div class="brief "><p class="paragraph">Renders the SQL statement by replacing placeholders for positional and named parameters with their respective bound values.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">fun </span><a href="render.html"><span class="token function">render</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-string/index.html">String</a></div><div class="brief "><p class="paragraph">Renders the SQL statement by replacing placeholders for positional and named parameters with their respective bound values.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="1408196645%2FFunctions%2F420194022" anchor-label="renderValue" id="1408196645%2FFunctions%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
+          <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/nativeMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="render-value.html"><span>render</span><wbr><span><span>Value</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1408196645%2FFunctions%2F420194022"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">fun </span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-any/index.html">Any</a><span class="token operator">?</span><span class="token punctuation">.</span><a href="render-value.html"><span class="token function">renderValue</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-string/index.html">String</a></div><div class="brief "><p class="paragraph">Converts the value of the receiver to a string representation suitable for database operations.</p></div></div></div>
                 </div>
               </div>
             </div>

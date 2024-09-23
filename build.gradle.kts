@@ -1,5 +1,5 @@
 group = "io.github.smyrgeorge"
-version = "0.17.0"
+version = "0.18.0"
 
 plugins {
     alias(libs.plugins.dokka)
@@ -11,6 +11,10 @@ repositories {
 }
 
 subprojects {
+    // Exclude examples.
+    if (projectDir.path.contains("/examples")) return@subprojects
+    // Exclude :sqldelight (since it's an empty project).
+    if (name == "sqldelight") return@subprojects
     // Run with ./gradlew :dokkaHtmlMultiModule
     apply(plugin = "org.jetbrains.dokka")
 }
