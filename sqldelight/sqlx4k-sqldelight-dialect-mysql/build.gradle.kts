@@ -10,6 +10,9 @@ repositories {
     mavenCentral()
 }
 
+group = rootProject.group
+version = rootProject.version
+
 kotlin {
     explicitApi()
     sourceSets {
