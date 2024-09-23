@@ -133,6 +133,10 @@ db.listen("chan0") { notification: Postgres.Notification ->
 }
 ```
 
+### SQLDelight
+
+Check the examples for more information.
+
 ## Todo
 
 - [x] PostgreSQL
@@ -140,8 +144,6 @@ db.listen("chan0") { notification: Postgres.Notification ->
 - [x] SQLite
 - [x] Transactions
 - [x] Listen/Notify Postgres.
-- [ ] Re-write NamedParameters, introduce `PreparedStatement` API (in progress)
-- [ ] SQLDelight (in progress)
 - [ ] Transaction isolation level
 - [ ] Testing
 
@@ -226,17 +228,16 @@ val db = PostgreSQL(
     maxConnections = 10
 )
 
-db.execute("drop table if exists sqlx4k;")
+db.execute("drop table if exists sqlx4k;").getOrThrow()
 
 // Make a simple query.
 data class Test(val id: Int)
 
-val res: ResultSet = db.fetchAll("select * from sqlx4k;")
+val res: ResultSet = db.fetchAll("select * from sqlx4k;").getOrThrow()
 res.forEach {
     val id: ResultSet.Row.Column = get("id")
     val test = Test(id = id.value.toInt())
     println(test)
-    test
 }
 ```
 
