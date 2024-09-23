@@ -135,6 +135,32 @@ db.listen("chan0") { notification: Postgres.Notification ->
 
 ### SQLDelight
 
+Only `PostgreSQL` and `MySQL` is supported for now.
+
+```kotlin
+// build.gradle.kts
+
+kotlin {
+    sourceSets {
+        val commonMain by getting {
+            dependencies {
+                implementation("io.github.smyrgeorge:sqlx4k-postgres:x.y.z")
+                implementation("io.github.smyrgeorge:sqlx4k-sqldelight:x.y.z")
+            }
+        }
+    }
+}
+
+sqldelight {
+    databases.register("Database") {
+        generateAsync = true
+        packageName = "db.entities"
+        dialect("io.github.smyrgeorge:sqlx4k-sqldelight-dialect-postgres:x.y.z")
+        // Or 'io.github.smyrgeorge:sqlx4k-sqldelight-dialect-mysql:x.y.z' for MySQl. 
+    }
+}
+```
+
 Check the examples for more information.
 
 ## Todo
@@ -143,8 +169,10 @@ Check the examples for more information.
 - [x] MySQL
 - [x] SQLite
 - [x] Transactions
-- [x] Listen/Notify Postgres.
+- [x] Listen/Notify Postgres
+- [x] SQLDelight
 - [ ] Transaction isolation level
+- [ ] Performance testing
 - [ ] Testing
 
 ## Compilation
