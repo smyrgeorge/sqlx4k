@@ -63,7 +63,7 @@ interface Statement {
                 "'${replace("'", "''")}'"
             }
 
-            is Byte, is Boolean, is Int, is Long, is Short, is Double, is Float -> toString()
+            is Boolean, is Number -> toString()
             else -> {
                 val error = DbError(
                     code = DbError.Code.NamedParameterTypeNotSupported,
