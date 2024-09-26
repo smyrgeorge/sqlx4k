@@ -171,6 +171,8 @@ Check the examples for more information.
 - [x] Transactions
 - [x] Listen/Notify Postgres
 - [x] SQLDelight
+- [ ] Move SQLDelight to another repository (in progress).
+- [ ] Add support for insert/update APIs (with code generation).
 - [ ] Transaction isolation level
 - [ ] Performance testing
 - [ ] Testing
