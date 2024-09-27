@@ -120,6 +120,63 @@ val res: ResultSet = tx1.fetchAll("select * from sqlx4k;").getOrThrow().forEach 
 tx1.commit().getOrThrow()
 ```
 
+### Auto generate basic `insert/update/delete` queries
+
+For this operation you will need to include the `KSP` plugin to your project.
+
+```kotlin
+plugins {
+    alias(libs.plugins.ksp)
+}
+
+// Then you need to configure the processor (will generate the necessary code files).
+ksp {
+    arg("output-package", "io.github.smyrgeorge.sqlx4k.examples.postgres")
+    arg("output-filename", "GeneratedQueries")
+}
+
+dependencies {
+    ksp(implementation("io.github.smyrgeorge:sqlx4k-codegen:x.y.z")) // Will generate code for all available targets.
+}
+```
+
+Then create your data class that will be mapped to a table:
+
+```kotlin
+@Table("sqlx4k")
+data class Sqlx4k(
+    @Id(insert = true) // Will be included in the insert query.
+    val id: Int,
+    val test: String
+)
+```
+
+We also need to create the function definitions for the generated code:
+
+```kotlin
+// Filename: GeneratedQueries (same as `output-filename`).
+// Also the package should be the same as `output-package`.
+package io.github.smyrgeorge.sqlx4k.examples.postgres
+
+import io.github.smyrgeorge.sqlx4k.Statement
+
+// We only need to declare the functions,
+// the actual code will be auto-generated. 
+expect fun Sqlx4k.insert(): Statement
+expect fun Sqlx4k.update(): Statement
+expect fun Sqlx4k.delete(): Statement
+```
+
+Then in your code you can use it like:
+
+```kotlin
+val insert: Statement = Sqlx4k(id = 66, test = "test").insert()
+val affected = db.execute(insert).getOrThrow()
+println("AFFECTED: $affected")
+```
+
+For more details take a look at the `postgres` example.
+
 ### Listen/Notify (only for PostgreSQL)
 
 ```kotlin
@@ -171,8 +228,8 @@ Check the examples for more information.
 - [x] Transactions
 - [x] Listen/Notify Postgres
 - [x] SQLDelight
+- [x] Add support for insert/update APIs (with code generation).
 - [ ] Move SQLDelight to another repository (in progress).
-- [ ] Add support for insert/update APIs (with code generation).
 - [ ] Transaction isolation level
 - [ ] Performance testing
 - [ ] Testing
