@@ -121,6 +121,7 @@ class TableProcessor(
 
             file += "\n"
             file += "actual fun ${clazz.name()}.insert(): Statement {\n"
+            file += "    // language=SQL\n"
             file += "    val sql = \"insert into $table(${props.map { it.toSnakeCase() }.joinToString()})"
             file += " values (${props.joinToString { "?" }})"
             file += " returning $table.*;\"\n"
@@ -172,6 +173,7 @@ class TableProcessor(
 
             file += "\n"
             file += "actual fun ${clazz.name()}.update(): Statement {\n"
+            file += "    // language=SQL\n"
             file += "    val sql = \"update $table"
             file += " set ${props.joinToString { p -> "${p.toSnakeCase()} = ?" }}"
             file += " where ${id.name().toSnakeCase()} = ?"
@@ -207,6 +209,7 @@ class TableProcessor(
 
             file += "\n"
             file += "actual fun ${clazz.name()}.delete(): Statement {\n"
+            file += "    // language=SQL\n"
             file += "    val sql = \"delete from $table where ${id.name().toSnakeCase()} = ?;\"\n"
             file += "    val statement = Statement.create(sql)\n"
             file += "    statement.bind(0, ${id.name()})\n"
