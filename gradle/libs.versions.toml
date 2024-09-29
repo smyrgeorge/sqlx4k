@@ -35,7 +35,7 @@ stately-concurrency = { module = "co.touchlab:stately-concurrency", version.ref 
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
-ksp = { id ="com.google.devtools.ksp", version.ref = "ksp" }
 pubhish = { id = "com.vanniktech.maven.publish", version.ref = "publish" }
+ksp = { id ="com.google.devtools.ksp", version.ref = "ksp" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
 sqldeligh = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
