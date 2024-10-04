@@ -3,10 +3,6 @@ plugins {
     alias(libs.plugins.ksp) // We need the KSP plugin for code-generation.
 }
 
-repositories {
-    mavenCentral()
-}
-
 group = rootProject.group
 version = rootProject.version
 

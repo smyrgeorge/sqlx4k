@@ -5,10 +5,6 @@ plugins {
     alias(libs.plugins.pubhish)
 }
 
-repositories {
-    mavenCentral()
-}
-
 group = rootProject.group
 version = rootProject.version
 

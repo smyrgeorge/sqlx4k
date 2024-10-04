@@ -2,10 +2,6 @@ plugins {
     id("io.github.smyrgeorge.sqlx4k.multiplatform.examples")
 }
 
-repositories {
-    mavenCentral()
-}
-
 group = rootProject.group
 version = rootProject.version
 

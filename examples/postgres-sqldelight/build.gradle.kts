@@ -3,10 +3,6 @@ plugins {
     alias(libs.plugins.sqldeligh)
 }
 
-repositories {
-    mavenCentral()
-}
-
 group = rootProject.group
 version = rootProject.version
 

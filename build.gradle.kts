@@ -11,10 +11,17 @@ repositories {
 }
 
 subprojects {
-    // Exclude examples.
-    if (projectDir.path.contains("/examples")) return@subprojects
-    // Exclude :sqldelight (since it's an empty project).
-    if (name == "sqldelight") return@subprojects
-    // Run with ./gradlew :dokkaHtmlMultiModule
-    apply(plugin = "org.jetbrains.dokka")
+    repositories {
+        mavenCentral()
+    }
+
+    // Dokka config
+    run {
+        // Exclude examples.
+        if (projectDir.path.contains("/examples")) return@run
+        // Exclude :sqldelight (since it's an empty project).
+        if (name == "sqldelight") return@run
+        // Run with ./gradlew :dokkaHtmlMultiModule
+        apply(plugin = "org.jetbrains.dokka")
+    }
 }
