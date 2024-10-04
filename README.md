@@ -228,8 +228,9 @@ Check the examples for more information.
 - [x] Transactions
 - [x] Listen/Notify Postgres
 - [x] SQLDelight
-- [x] Add support for insert/update APIs (with code generation).
-- [ ] Move SQLDelight to another repository (in progress).
+- [x] INSERT/UPDATE/DELETE APIs (with code generation)
+- [ ] Value decoders for basic types (in progress)
+- [ ] Move SQLDelight to another repository (in progress)
 - [ ] Transaction isolation level
 - [ ] Performance testing
 - [ ] Testing
