@@ -3,6 +3,7 @@ version = "0.20.0"
 
 plugins {
     alias(libs.plugins.dokka)
+    alias(libs.plugins.pubhish) apply false
     alias(libs.plugins.kotlin.multiplatform) apply false
 }
 
