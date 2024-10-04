@@ -3,9 +3,6 @@ plugins {
     alias(libs.plugins.ksp) // We need the KSP plugin for code-generation.
 }
 
-group = rootProject.group
-version = rootProject.version
-
 kotlin {
     sourceSets {
         val nativeMain by getting {

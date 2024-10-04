@@ -5,9 +5,6 @@ plugins {
     alias(libs.plugins.pubhish)
 }
 
-group = rootProject.group
-version = rootProject.version
-
 kotlin {
     explicitApi()
     sourceSets {

@@ -3,9 +3,6 @@ plugins {
     alias(libs.plugins.sqldeligh)
 }
 
-group = rootProject.group
-version = rootProject.version
-
 kotlin {
     sourceSets {
         val commonMain by getting {

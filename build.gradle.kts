@@ -11,6 +11,9 @@ repositories {
 }
 
 subprojects {
+    group = rootProject.group
+    version = rootProject.version
+
     repositories {
         mavenCentral()
     }
