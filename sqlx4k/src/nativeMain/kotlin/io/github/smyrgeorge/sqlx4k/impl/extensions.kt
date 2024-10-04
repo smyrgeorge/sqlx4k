@@ -1,7 +1,8 @@
 @file:OptIn(ExperimentalForeignApi::class)
 
-package io.github.smyrgeorge.sqlx4k
+package io.github.smyrgeorge.sqlx4k.impl
 
+import io.github.smyrgeorge.sqlx4k.DbError
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi

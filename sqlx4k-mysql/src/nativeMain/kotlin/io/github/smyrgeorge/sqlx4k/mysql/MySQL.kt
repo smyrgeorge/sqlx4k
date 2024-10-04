@@ -3,10 +3,10 @@ package io.github.smyrgeorge.sqlx4k.mysql
 import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.Transaction
-import io.github.smyrgeorge.sqlx4k.rowsAffectedOrError
-import io.github.smyrgeorge.sqlx4k.sqlx
-import io.github.smyrgeorge.sqlx4k.throwIfError
-import io.github.smyrgeorge.sqlx4k.tx
+import io.github.smyrgeorge.sqlx4k.impl.rowsAffectedOrError
+import io.github.smyrgeorge.sqlx4k.impl.sqlx
+import io.github.smyrgeorge.sqlx4k.impl.throwIfError
+import io.github.smyrgeorge.sqlx4k.impl.tx
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi

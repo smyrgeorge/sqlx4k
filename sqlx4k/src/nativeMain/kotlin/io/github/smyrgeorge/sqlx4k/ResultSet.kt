@@ -1,6 +1,11 @@
 package io.github.smyrgeorge.sqlx4k
 
 import io.github.smyrgeorge.sqlx4k.ResultSet.Row.Column
+import io.github.smyrgeorge.sqlx4k.impl.debug
+import io.github.smyrgeorge.sqlx4k.impl.getFirstRow
+import io.github.smyrgeorge.sqlx4k.impl.isError
+import io.github.smyrgeorge.sqlx4k.impl.throwIfError
+import io.github.smyrgeorge.sqlx4k.impl.toError
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.get
