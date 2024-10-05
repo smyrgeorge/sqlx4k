@@ -13,9 +13,3 @@ module:sqlx4k-postgres
 io.github.smyrgeorge.sqlx4k.postgres
 module:sqlx4k-sqlite
 io.github.smyrgeorge.sqlx4k.sqlite
-module:sqlx4k-sqldelight
-io.github.smyrgeorge.sqlx4k.sqldelight
-module:sqlx4k-sqldelight-dialect-mysql
-io.github.smyrgeorge.sqlx4k.sqldelight.dialect.mysql
-module:sqlx4k-sqldelight-dialect-postgres
-io.github.smyrgeorge.sqlx4k.sqldelight.dialect.postgres
