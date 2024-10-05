@@ -14,9 +14,6 @@ class PublishConventions : Plugin<Project> {
         "sqlx4k-mysql" to "A high-performance Kotlin Native database driver for MySQL.",
         "sqlx4k-postgres" to "A high-performance Kotlin Native database driver for PostgreSQL.",
         "sqlx4k-sqlite" to "A high-performance Kotlin Native database driver for SQLite.",
-        "sqlx4k-sqldelight" to "Sqldelight support for sqlx4k.",
-        "sqlx4k-sqldelight-dialect-mysql" to "Sqldelight support for sqlx4k (MySQL dialect).",
-        "sqlx4k-sqldelight-dialect-postgres" to "Sqldelight support for sqlx4k (PostgreSQL dialect).",
     )
 
     override fun apply(project: Project) {
