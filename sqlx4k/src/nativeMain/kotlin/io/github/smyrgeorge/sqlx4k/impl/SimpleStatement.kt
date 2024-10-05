@@ -1,6 +1,6 @@
 package io.github.smyrgeorge.sqlx4k.impl
 
-import io.github.smyrgeorge.sqlx4k.DbError
+import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 
 /**
@@ -29,13 +29,13 @@ open class SimpleStatement(
      *
      * @param index The zero-based index of the positional parameter to bind the value to.
      * @param value The value to bind to the specified positional parameter.
-     * @return The current `Statement` instance to allow for method chaining.
-     * @throws DbError if the given index is out of bounds for the available positional parameters.
+     * @return The current [Statement] instance to allow for method chaining.
+     * @throws SQLError if the given index is out of bounds for the available positional parameters.
      */
     override fun bind(index: Int, value: Any?): SimpleStatement {
         if (index < 0 || index >= positionalParameters.size) {
-            DbError(
-                code = DbError.Code.PositionalParameterOutOfBounds,
+            SQLError(
+                code = SQLError.Code.PositionalParameterOutOfBounds,
                 message = "Index '$index' out of bounds."
             ).ex()
         }
@@ -48,13 +48,13 @@ open class SimpleStatement(
      *
      * @param parameter The name of the parameter to bind the value to.
      * @param value The value to bind to the specified named parameter. May be null.
-     * @return The current `Statement` instance to allow for method chaining.
-     * @throws DbError if the specified named parameter is not found.
+     * @return The current [Statement] instance to allow for method chaining.
+     * @throws SQLError if the specified named parameter is not found.
      */
     override fun bind(parameter: String, value: Any?): SimpleStatement {
         if (!namedParameters.contains(parameter)) {
-            DbError(
-                code = DbError.Code.NamedParameterNotFound,
+            SQLError(
+                code = SQLError.Code.NamedParameterNotFound,
                 message = "Parameter '$parameter' not found."
             ).ex()
         }
@@ -85,20 +85,20 @@ open class SimpleStatement(
      * an error is thrown.
      *
      * @return A string with all positional parameters substituted by their bound values.
-     * @throws DbError if a value for a positional parameter is not supplied.
+     * @throws SQLError if a value for a positional parameter is not supplied.
      */
     private fun String.renderPositionalParameters(): String {
         var res: String = this
         positionalParameters.forEach { index ->
             if (!positionalParametersValues.containsKey(index)) {
-                DbError(
-                    code = DbError.Code.PositionalParameterValueNotSupplied,
+                SQLError(
+                    code = SQLError.Code.PositionalParameterValueNotSupplied,
                     message = "Value for positional parameter index '$index' was not supplied."
                 ).ex()
             }
             val value = positionalParametersValues[index].renderValue()
-            val range = positionalParametersRegex.find(res)?.range ?: DbError(
-                code = DbError.Code.PositionalParameterValueNotSupplied,
+            val range = positionalParametersRegex.find(res)?.range ?: SQLError(
+                code = SQLError.Code.PositionalParameterValueNotSupplied,
                 message = "Value for positional parameter index '$index' was not supplied."
             ).ex()
             res = res.replaceRange(range, value)
@@ -114,14 +114,14 @@ open class SimpleStatement(
      * named parameter is not supplied, an error is thrown.
      *
      * @return A string with all named parameters substituted by their bound values.
-     * @throws DbError if a value for a named parameter is not supplied.
+     * @throws SQLError if a value for a named parameter is not supplied.
      */
     private fun String.renderNamedParameters(): String {
         var res: String = this
         namedParameters.forEach { name ->
             if (!namedParametersValues.containsKey(name)) {
-                DbError(
-                    code = DbError.Code.NamedParameterValueNotSupplied,
+                SQLError(
+                    code = SQLError.Code.NamedParameterValueNotSupplied,
                     message = "Value for named parameter '$name' was not supplied."
                 ).ex()
             }

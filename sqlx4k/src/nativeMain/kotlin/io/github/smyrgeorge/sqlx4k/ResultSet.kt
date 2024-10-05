@@ -49,7 +49,7 @@ class ResultSet(
      * Returns the size of the current result.
      *
      * This value is equivalent to the number of rows or elements
-     * in the underlying raw `Sqlx4kResult` associated with this `ResultSet`.
+     * in the underlying raw [Sqlx4kResult] associated with this `ResultSet`.
      */
     val size: Int get() = getRaw().size
 
@@ -61,19 +61,19 @@ class ResultSet(
     fun isError(): Boolean = result!!.isError()
 
     /**
-     * Converts the current result of the `ResultSet` to a `DbError`.
+     * Converts the current result of the [ResultSet] to a [SQLError].
      *
-     * @return The `DbError` representation of the current result.
+     * @return The [SQLError] representation of the current result.
      */
-    fun toError(): DbError = result!!.toError()
+    fun toError(): SQLError = result!!.toError()
 
     /**
-     * Converts the current `ResultSet` into a Kotlin `Result` object.
-     * If the result is an error, it returns a failed `Result` with the error.
-     * If the result is successful, it returns a successful `Result` containing the `ResultSet` itself.
+     * Converts the current [ResultSet] into a Kotlin [Result] object.
+     * If the result is an error, it returns a failed [Result] with the error.
+     * If the result is successful, it returns a successful [Result] containing the `ResultSet` itself.
      *
-     * @return A successful `Result` containing the current `ResultSet` if no error,
-     *         or a failed `Result` with the appropriate `DbError`.
+     * @return A successful [Result] containing the current [ResultSet] if no error,
+     *         or a failed [Result] with the appropriate [SQLError].
      */
     fun toKotlinResult(): Result<ResultSet> =
         if (isError()) {

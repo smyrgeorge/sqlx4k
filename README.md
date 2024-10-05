@@ -293,12 +293,16 @@ db.execute("drop table if exists sqlx4k;").getOrThrow()
 // Make a simple query.
 data class Test(val id: Int)
 
-val res: ResultSet = db.fetchAll("select * from sqlx4k;").getOrThrow()
-res.forEach {
-    val id: ResultSet.Row.Column = get("id")
-    val test = Test(id = id.value.toInt())
-    println(test)
+// You can also use RowMappers(s) to map your objects.
+object TestRowMapper : RowMapper<Test> {
+    override fun map(rs: ResultSet, row: ResultSet.Row): Test {
+        val id: ResultSet.Row.Column = row.get("id")
+        return Test(id = id.value!!.toInt())
+    }
 }
+
+val res: List<Test> = db.fetchAll("select * from sqlx4k;", TestRowMapper).getOrThrow()
+println(test)
 ```
 
 ## Checking for memory leaks

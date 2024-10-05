@@ -2,7 +2,7 @@
 
 package io.github.smyrgeorge.sqlx4k.impl
 
-import io.github.smyrgeorge.sqlx4k.DbError
+import io.github.smyrgeorge.sqlx4k.SQLError
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -34,10 +34,10 @@ fun Sqlx4kColumn.debug(prefix: String = ""): String = buildString {
 }
 
 fun Sqlx4kResult.isError(): Boolean = error >= 0
-fun Sqlx4kResult.toError(): DbError {
-    val code = DbError.Code.entries[error]
+fun Sqlx4kResult.toError(): SQLError {
+    val code = SQLError.Code.entries[error]
     val message = error_message?.toKString()
-    return DbError(code, message)
+    return SQLError(code, message)
 }
 
 fun Sqlx4kResult.getFirstRow(): Sqlx4kRow? =
@@ -77,6 +77,6 @@ suspend inline fun sqlx(crossinline f: (c: CPointer<out CPointed>) -> Unit): CPo
         f(ptr)
     }
 
-fun Result<*>.errorOrNull(): DbError? =
-    exceptionOrNull() as? DbError
+fun Result<*>.errorOrNull(): SQLError? =
+    exceptionOrNull() as? SQLError
 

@@ -1,6 +1,6 @@
 package io.github.smyrgeorge.sqlx4k.impl
 
-import io.github.smyrgeorge.sqlx4k.DbError
+import io.github.smyrgeorge.sqlx4k.SQLError
 
 /**
  * A subclass of `SimpleStatement` that extends its capabilities to handle PostgreSQL specific
@@ -25,12 +25,12 @@ class ExtendedStatement(
      * @param index The zero-based positional index of the parameter to bind.
      * @param value The value to bind to the specified parameter.
      * @return The current `PgStatement` instance with the bound parameter, allowing method chaining.
-     * @throws DbError if the provided index is out of bounds of the statement's parameters.
+     * @throws SQLError if the provided index is out of bounds of the statement's parameters.
      */
     override fun bind(index: Int, value: Any?): ExtendedStatement {
         if (index < 0 || index >= pgParameters.size) {
-            DbError(
-                code = DbError.Code.PositionalParameterOutOfBounds,
+            SQLError(
+                code = SQLError.Code.PositionalParameterOutOfBounds,
                 message = "Index '$index' out of bounds."
             ).ex()
         }
@@ -63,14 +63,14 @@ class ExtendedStatement(
      * an error is thrown.
      *
      * @return A string where all positional parameters are replaced by their bound values.
-     * @throws DbError if a positional parameter value is not supplied.
+     * @throws SQLError if a positional parameter value is not supplied.
      */
     private fun String.renderPositionalParameters(): String {
         var res: String = this
         pgParameters.forEach { index ->
             if (!pgParametersValues.containsKey(index)) {
-                DbError(
-                    code = DbError.Code.PositionalParameterValueNotSupplied,
+                SQLError(
+                    code = SQLError.Code.PositionalParameterValueNotSupplied,
                     message = "Value for positional parameter index '$index' was not supplied."
                 ).ex()
             }

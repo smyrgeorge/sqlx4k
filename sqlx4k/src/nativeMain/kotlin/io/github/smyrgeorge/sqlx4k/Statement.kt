@@ -48,10 +48,10 @@ interface Statement {
      * - `null` is represented as the string "null".
      * - `String` values are wrapped in single quotes and any single quotes within the string are escaped.
      * - Numeric and boolean values are converted to their string representation using `toString()`.
-     * - For other types, it attempts to use a custom renderer. If no renderer is found, it throws a `DbError`.
+     * - For other types, it attempts to use a custom renderer. If no renderer is found, it throws a [SQLError].
      *
      * @return A string representation of the receiver suitable for database operations.
-     * @throws DbError if the type of the receiver is unsupported and no appropriate renderer is found.
+     * @throws SQLError if the type of the receiver is unsupported and no appropriate renderer is found.
      */
     fun Any?.renderValue(): String {
         return when (this) {
@@ -65,8 +65,8 @@ interface Statement {
 
             is Boolean, is Number -> toString()
             else -> {
-                val error = DbError(
-                    code = DbError.Code.NamedParameterTypeNotSupported,
+                val error = SQLError(
+                    code = SQLError.Code.NamedParameterTypeNotSupported,
                     message = "Could not map named parameter of type ${this::class.simpleName}"
                 )
 
