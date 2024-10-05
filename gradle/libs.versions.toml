@@ -7,14 +7,10 @@ kotlinx-datetime = "0.6.1"
 kotlinx-coroutines = "1.9.0"
 # https://github.com/vanniktech/gradle-maven-publish-plugin
 publish = "0.29.0"
-# https://github.com/cashapp/sqldelight
-sqldelight = "2.0.2"
 # https://github.com/Kotlin/dokka
 dokka = "1.9.20"
 # https://github.com/willowtreeapps/assertk
 assertk = "0.28.1"
-# https://github.com/touchlab/Stately
-stately = "2.1.0"
 # https://github.com/google/ksp/releases
 ksp = "2.0.20-1.0.25"
 
@@ -25,17 +21,10 @@ ksp = { module = "com.google.devtools.ksp:symbol-processing-api", version.ref = 
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
-sqldeligh = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
-sqldelight-dialect-api = { module = "app.cash.sqldelight:dialect-api", version.ref = "sqldelight" }
-sqldelight-compiler-env = { module = "app.cash.sqldelight:compiler-env", version.ref = "sqldelight" }
-sqldelight-mysql-dialect = { module = "app.cash.sqldelight:mysql-dialect", version.ref = "sqldelight" }
-sqldelight-postgresql-dialect = { module = "app.cash.sqldelight:postgresql-dialect", version.ref = "sqldelight" }
 assertk = { module = "com.willowtreeapps.assertk:assertk", version.ref = "assertk" }
-stately-concurrency = { module = "co.touchlab:stately-concurrency", version.ref = "stately" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 pubhish = { id = "com.vanniktech.maven.publish", version.ref = "publish" }
 ksp = { id ="com.google.devtools.ksp", version.ref = "ksp" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
-sqldeligh = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
