@@ -202,7 +202,7 @@ Check here: https://github.com/smyrgeorge/sqlx4k-sqldelight
 - [x] Transactions
 - [x] Listen/Notify Postgres
 - [x] INSERT/UPDATE/DELETE APIs (with code generation)
-- [ ] Value decoders for basic types (in progress)
+- [x] Value encoders/decoders for basic data-types (in progress)
 - [ ] Transaction isolation level
 - [ ] Performance testing
 - [ ] Testing
