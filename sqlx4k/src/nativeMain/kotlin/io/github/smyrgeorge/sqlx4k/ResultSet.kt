@@ -1,11 +1,11 @@
 package io.github.smyrgeorge.sqlx4k
 
 import io.github.smyrgeorge.sqlx4k.ResultSet.Row.Column
-import io.github.smyrgeorge.sqlx4k.impl.debug
-import io.github.smyrgeorge.sqlx4k.impl.getFirstRow
-import io.github.smyrgeorge.sqlx4k.impl.isError
-import io.github.smyrgeorge.sqlx4k.impl.throwIfError
-import io.github.smyrgeorge.sqlx4k.impl.toError
+import io.github.smyrgeorge.sqlx4k.impl.extensions.debug
+import io.github.smyrgeorge.sqlx4k.impl.extensions.getFirstRow
+import io.github.smyrgeorge.sqlx4k.impl.extensions.isError
+import io.github.smyrgeorge.sqlx4k.impl.extensions.throwIfError
+import io.github.smyrgeorge.sqlx4k.impl.extensions.toError
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.get
@@ -190,17 +190,22 @@ class ResultSet(
             val value: String? get() = column.value?.toKString()
 
             /**
-             * Converts the column value to a ByteArray by interpreting it as a hexadecimal string.
+             * Converts the column value to a String.
              *
-             * This function assumes that the column value (if present) is prefixed with "\\x", which is removed before conversion.
-             * The remaining string is then processed as a hexadecimal representation and converted into a ByteArray.
+             * If the value is null, an SQLError with code `CannotDecode` is thrown.
              *
-             * @return The byte array representation of the column value, or null if the value is absent.
+             * @return The string representation of the column value.
+             * @throws SQLError if the value is null.
              */
-            @OptIn(ExperimentalStdlibApi::class)
-            fun valueAsByteArray(): ByteArray? = column.value?.toKString()
-                ?.removePrefix("\\x")
-                ?.hexToByteArray()
+            fun asString(): String = value
+                ?: SQLError(SQLError.Code.CannotDecode, "Failed to decode value (null)").ex()
+
+            /**
+             * Converts the value of the column to a nullable String.
+             *
+             * @return The string representation of the column value, or null if the value is not present.
+             */
+            fun asStringOrNull(): String? = value
         }
     }
 

@@ -95,7 +95,7 @@ val st1 = Statement
 
 db.fetchAll(st1).getOrThrow().map {
     val id: ResultSet.Row.Column = it.get("id")
-    Test(id = id.value.toInt())
+    Test(id = id.asInt())
 }
 
 // With positional parameters:
@@ -105,7 +105,7 @@ val st2 = Statement
 
 db.fetchAll(st2).getOrThrow().map {
     val id: ResultSet.Row.Column = it.get("id")
-    Test(id = id.value.toInt())
+    Test(id = id.asInt())
 }
 ```
 
@@ -297,7 +297,7 @@ data class Test(val id: Int)
 object TestRowMapper : RowMapper<Test> {
     override fun map(rs: ResultSet, row: ResultSet.Row): Test {
         val id: ResultSet.Row.Column = row.get("id")
-        return Test(id = id.value!!.toInt())
+        return Test(id = id.asInt())
     }
 }
 

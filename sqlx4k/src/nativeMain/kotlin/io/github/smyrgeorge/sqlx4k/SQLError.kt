@@ -32,6 +32,10 @@ class SQLError(
         PoolClosed,
         WorkerCrashed,
 
+        // Decode
+        CannotDecode,
+        CannotDecodeEnumValue,
+
         // Prepared Statement:
         PositionalParameterOutOfBounds,
         NamedParameterNotFound,

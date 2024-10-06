@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalForeignApi::class)
 
-package io.github.smyrgeorge.sqlx4k.impl
+package io.github.smyrgeorge.sqlx4k.impl.extensions
 
 import io.github.smyrgeorge.sqlx4k.SQLError
 import kotlinx.cinterop.CPointed
@@ -76,7 +76,3 @@ suspend inline fun sqlx(crossinline f: (c: CPointer<out CPointed>) -> Unit): CPo
         val ptr: CPointer<out CPointed> = ref.asCPointer()
         f(ptr)
     }
-
-fun Result<*>.errorOrNull(): SQLError? =
-    exceptionOrNull() as? SQLError
-

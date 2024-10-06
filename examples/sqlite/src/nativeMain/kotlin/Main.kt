@@ -1,6 +1,7 @@
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.Transaction
-import io.github.smyrgeorge.sqlx4k.impl.errorOrNull
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
+import io.github.smyrgeorge.sqlx4k.impl.extensions.errorOrNull
 import io.github.smyrgeorge.sqlx4k.sqlite.SQLite
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -36,24 +37,24 @@ fun main() {
 
         val res = db.fetchAll("select * from sqlx4k;").getOrThrow().map {
             val id: ResultSet.Row.Column = it.get("id")
-            Test(id = id.value!!.toInt())
+            Test(id = id.asInt())
         }
         println(res)
 
         val r1 = db.fetchAll("select * from sqlx4k;").getOrThrow().map {
             val id: ResultSet.Row.Column = it.get("id")
-            Test(id = id.value!!.toInt())
+            Test(id = id.asInt())
         }
         println(r1)
 
         val r2 = db.fetchAll("select * from sqlx4k;").getOrThrow().map {
             val id: ResultSet.Row.Column = it.get(0)
-            Test(id = id.value!!.toInt())
+            Test(id = id.asInt())
         }
         println(r2)
 //        val r3 = db.fetchAll("select * from sqlx4k;").map {
 //            val id: ResultSet.Row.Column = it.get(1)
-//            Test(id = id.value!!.toInt())
+//            Test(id = id.asInt())
 //        }
 //        println(r3)
 
@@ -91,7 +92,7 @@ fun main() {
 
         val test = db.fetchAll("select * from sqlx4k;").getOrThrow().map {
             val id: ResultSet.Row.Column = it.get("id")
-            Test(id = id.value!!.toInt())
+            Test(id = id.asInt())
         }
         println(test)
 
@@ -101,11 +102,11 @@ fun main() {
                     repeat(1_000) {
                         db.fetchAll("select * from sqlx4k limit 1000;").getOrThrow().map {
                             val id: ResultSet.Row.Column = it.get("id")
-                            Test(id = id.value!!.toInt())
+                            Test(id = id.asInt())
                         }
                         db.fetchAll("select * from sqlx4k;").getOrThrow().map {
                             val id: ResultSet.Row.Column = it.get("id")
-                            Test(id = id.value!!.toInt())
+                            Test(id = id.asInt())
                         }
                     }
                 }
@@ -124,12 +125,12 @@ fun main() {
                         tx2.execute("insert into sqlx4k (id) values (66);").getOrThrow()
                         tx2.fetchAll("select * from sqlx4k;").getOrThrow().map {
                             val id: ResultSet.Row.Column = it.get("id")
-                            Test(id = id.value!!.toInt())
+                            Test(id = id.asInt())
                         }
                         tx2.rollback().getOrThrow()
                         db.fetchAll("select * from sqlx4k;").getOrThrow().map {
                             val id: ResultSet.Row.Column = it.get("id")
-                            Test(id = id.value!!.toInt())
+                            Test(id = id.asInt())
                         }
                     }
                 }

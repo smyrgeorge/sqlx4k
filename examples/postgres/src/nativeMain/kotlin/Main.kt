@@ -1,11 +1,9 @@
-@file:Suppress("DuplicatedCode")
-
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4k
 import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4kRowMapper
 import io.github.smyrgeorge.sqlx4k.examples.postgres.insert
-import io.github.smyrgeorge.sqlx4k.impl.errorOrNull
+import io.github.smyrgeorge.sqlx4k.impl.extensions.errorOrNull
 import io.github.smyrgeorge.sqlx4k.postgres.PostgreSQL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
