@@ -4,6 +4,11 @@ package io.github.smyrgeorge.sqlx4k.impl.extensions
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
+import kotlinx.datetime.DateTimePeriod
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -37,3 +42,15 @@ inline fun <reified T : Enum<T>> String.toEnum(): T =
     } catch (e: Exception) {
         SQLError(SQLError.Code.CannotDecodeEnumValue, "Cannot decode enum value '$this'.").ex()
     }
+
+fun ResultSet.Row.Column.asLocalDate(): LocalDate = LocalDate.parse(asString())
+fun ResultSet.Row.Column.asLocalDateOrNull(): LocalDate? = asStringOrNull()?.let { LocalDate.parse(it) }
+fun ResultSet.Row.Column.asLocalTime(): LocalTime = LocalTime.parse(asString())
+fun ResultSet.Row.Column.asLocalTimeOrNull(): LocalTime? = asStringOrNull()?.let { LocalTime.parse(it) }
+private fun String.fixTime(): String = replace(" ", "T")
+fun ResultSet.Row.Column.asLocalDateTime(): LocalDateTime = LocalDateTime.parse(asString().fixTime())
+fun ResultSet.Row.Column.asLocalDateTimeOrNull(): LocalDateTime? = asStringOrNull()?.let { LocalDateTime.parse(it.fixTime()) }
+fun ResultSet.Row.Column.asInstant(): Instant = Instant.parse(asString())
+fun ResultSet.Row.Column.asInstantOrNull(): Instant? = asStringOrNull()?.let { Instant.parse(it) }
+fun ResultSet.Row.Column.asDateTimePeriod(): DateTimePeriod = DateTimePeriod.parse(asString())
+fun ResultSet.Row.Column.asDateTimePeriodOrNull(): DateTimePeriod? = asStringOrNull()?.let { DateTimePeriod.parse(it) }
