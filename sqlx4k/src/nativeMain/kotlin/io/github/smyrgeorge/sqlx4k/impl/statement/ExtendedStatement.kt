@@ -1,17 +1,21 @@
-package io.github.smyrgeorge.sqlx4k.impl
+package io.github.smyrgeorge.sqlx4k.impl.statement
 
 import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
 
 /**
- * A subclass of `SimpleStatement` that extends its capabilities to handle PostgreSQL specific
- * positional parameters using the dollar-sign notation (e.g., `$1`, `$2`).
+ * An extension of the `SimpleStatement` class that adds support for positional parameter binding
+ * and custom SQL statement rendering.
  *
- * @property sql The SQL query that may contain PostgreSQL specific positional parameters.
+ * @property sql The SQL statement to be executed.
+ * @property encoders A `ValueEncoderRegistry` used for encoding values.
+ * @constructor Creates an `ExtendedStatement` with the given SQL string and value encoder registry.
  */
 @Suppress("unused")
 class ExtendedStatement(
-    private val sql: String
-) : SimpleStatement(sql) {
+    private val sql: String,
+    private val encoders: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY
+) : SimpleStatement(sql, encoders) {
 
     private val pgParameters: List<Int> by lazy {
         extractPgParameters(sql)
@@ -74,7 +78,7 @@ class ExtendedStatement(
                     message = "Value for positional parameter index '$index' was not supplied."
                 ).ex()
             }
-            val value = pgParametersValues[index].renderValue()
+            val value = pgParametersValues[index].encodeValue(encoders)
             res = res.replace("\$${index + 1}", value)
         }
         return res

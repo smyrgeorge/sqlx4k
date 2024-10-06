@@ -1,6 +1,10 @@
 package io.github.smyrgeorge.sqlx4k
 
-import io.github.smyrgeorge.sqlx4k.impl.SimpleStatement
+import io.github.smyrgeorge.sqlx4k.impl.statement.SimpleStatement
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 import kotlin.reflect.KClass
 
 /**
@@ -50,10 +54,11 @@ interface Statement {
      * - Numeric and boolean values are converted to their string representation using `toString()`.
      * - For other types, it attempts to use a custom renderer. If no renderer is found, it throws a [SQLError].
      *
+     * @param encoders A map of encoders for specific types, used to encode values into a SQL-compatible format.
      * @return A string representation of the receiver suitable for database operations.
      * @throws SQLError if the type of the receiver is unsupported and no appropriate renderer is found.
      */
-    fun Any?.renderValue(): String {
+    fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
         return when (this) {
             null -> "null"
             is String -> {
@@ -64,77 +69,88 @@ interface Statement {
             }
 
             is Boolean, is Number -> toString()
+            is LocalDate, is LocalTime, is LocalDateTime, is Instant -> toString()
             else -> {
                 val error = SQLError(
                     code = SQLError.Code.NamedParameterTypeNotSupported,
                     message = "Could not map named parameter of type ${this::class.simpleName}"
                 )
 
-                val renderer = ValueRenderers.get(this::class) ?: error.ex()
-                renderer.render(this).renderValue()
+                val encoder = encoders.get(this::class) ?: error.ex()
+                encoder.encode(this).encodeValue(encoders)
             }
         }
     }
 
     /**
-     * An interface for rendering values of type `T` into a format suitable for
+     * An interface for encoding values of type `T` into a format suitable for
      * usage in database statements. Implementations of this interface will define
      * how to convert a value of type `T` into a type that can be safely and
      * correctly used within a SQL statement.
      *
      * @param T The type of the value to be rendered.
      */
-    interface ValueRenderer<T> {
-        fun render(value: T): Any
+    interface ValueEncoder<T> {
+        fun encode(value: T): Any
     }
 
     /**
-     * A singleton class responsible for managing a collection of `ValueRenderer` instances.
+     * A singleton class responsible for managing a collection of `ValueEncoder` instances.
      * Each renderer is associated with a specific data type and is used to convert that type
      * into a format suitable for use in database statements.
      */
     @Suppress("unused", "UNCHECKED_CAST")
-    class ValueRenderers {
+    class ValueEncoderRegistry {
+        private val encoders: MutableMap<KClass<*>, ValueEncoder<*>> = mutableMapOf()
+
+        /**
+         * Retrieves a `ValueRenderer` associated with the specified type.
+         *
+         * @param type The `KClass` of the type for which to get the renderer.
+         * @return The `ValueRenderer` instance associated with the specified type, or null if none is found.
+         */
+        fun get(type: KClass<*>): ValueEncoder<Any>? =
+            encoders[type] as ValueEncoder<Any>?
+
+        /**
+         * Registers a `ValueEncoder` for a specific type within the `ValueEncoderRegistry`.
+         *
+         * @param type The `KClass` of the type for which the encoder is being registered.
+         * @param renderer The `ValueEncoder` instance to associate with the specified type.
+         * @return The `ValueEncoderRegistry` instance after the encoder has been registered.
+         */
+        fun register(type: KClass<*>, renderer: ValueEncoder<*>): ValueEncoderRegistry {
+            encoders[type] = renderer
+            return this
+        }
+
+        /**
+         * Unregisters a `ValueEncoder` for the specified type.
+         *
+         * @param type The `KClass` of the type for which the encoder should be unregistered.
+         * @return The `ValueEncoderRegistry` instance after the encoder has been removed.
+         */
+        fun unregister(type: KClass<*>): ValueEncoderRegistry {
+            encoders.remove(type)
+            return this
+        }
+
         companion object {
-            private val renderers: MutableMap<KClass<*>, ValueRenderer<*>> = mutableMapOf()
-
-            /**
-             * Retrieves a `ValueRenderer` associated with the specified type.
-             *
-             * @param type The `KClass` of the type for which to get the renderer.
-             * @return The `ValueRenderer` instance associated with the specified type, or null if none is found.
-             */
-            fun get(type: KClass<*>): ValueRenderer<Any>? =
-                renderers[type] as ValueRenderer<Any>?
-
-            /**
-             * Registers a `ValueRenderer` for a specified type.
-             *
-             * @param type The `KClass` of the type for which to register the renderer.
-             * @param renderer The `ValueRenderer` instance to be associated with the specified type.
-             */
-            fun register(type: KClass<*>, renderer: ValueRenderer<*>) {
-                renderers[type] = renderer
-            }
-
-            /**
-             * Unregisters the `ValueRenderer` associated with a specified type.
-             *
-             * @param type The `KClass` of the type for which to unregister the renderer.
-             */
-            fun unregister(type: KClass<*>) {
-                renderers.remove(type)
-            }
+            val EMPTY = ValueEncoderRegistry()
         }
     }
 
     companion object {
         /**
-         * Creates and returns a new `SimpleStatement` based on the provided SQL string.
+         * Creates a new `Statement` instance with the given SQL string and an optional `ValueEncoderRegistry`.
          *
-         * @param sql The SQL statement as a string.
-         * @return The constructed `SimpleStatement` instance.
+         * @param sql The SQL string to be used in the statement.
+         * @param encoders The `ValueEncoderRegistry` to be used for encoding values, default is `ValueEncoderRegistry.EMPTY`.
+         * @return The newly created `Statement` instance with the specified SQL and encoders.
          */
-        fun create(sql: String): Statement = SimpleStatement(sql)
+        fun create(
+            sql: String,
+            encoders: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY
+        ): Statement = SimpleStatement(sql, encoders)
     }
 }

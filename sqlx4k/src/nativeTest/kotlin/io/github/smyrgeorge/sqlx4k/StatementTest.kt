@@ -101,16 +101,18 @@ class StatementTest {
         @Suppress("unused")
         class Test(val id: Int)
 
-        class TestRenderer : Statement.ValueRenderer<Test> {
-            override fun render(value: Test): Any {
+        class TestEncoder : Statement.ValueEncoder<Test> {
+            override fun encode(value: Test): Any {
                 return value.id
             }
         }
 
-        Statement.ValueRenderers.register(Test::class, TestRenderer())
+        val encoders = Statement
+            .ValueEncoderRegistry()
+            .register(Test::class, TestEncoder())
 
         val sql = "select * from sqlx4k where id = :id"
-        val res = Statement.create(sql)
+        val res = Statement.create(sql, encoders)
             .bind("id", Test(65))
             .render()
         assertThat(res).contains("id = 65")

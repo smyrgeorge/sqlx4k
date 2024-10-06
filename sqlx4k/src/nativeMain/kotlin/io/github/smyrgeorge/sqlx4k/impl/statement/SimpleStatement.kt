@@ -1,16 +1,23 @@
-package io.github.smyrgeorge.sqlx4k.impl
+package io.github.smyrgeorge.sqlx4k.impl.statement
 
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
 
 /**
- * Represents a single SQL statement that supports both positional and named parameters.
+ * Represents a simplified SQL statement allowing the binding of values to named and positional parameters.
  *
- * @property sql The SQL statement as a string.
+ * This class provides mechanisms to bind values to both named and positional parameters
+ * within an SQL statement. The SQL statement can then be rendered with the bound values substituted in place.
+ *
+ * @constructor Creates a [SimpleStatement] instance with the given SQL string.
+ * @property sql The SQL string containing the statement.
+ * @property encoders A registry for encoding values to be inserted into the SQL statement.
  */
 @Suppress("unused")
 open class SimpleStatement(
-    private val sql: String
+    private val sql: String,
+    private val encoders: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY
 ) : Statement {
 
     private val namedParameters: Set<String> by lazy {
@@ -96,7 +103,7 @@ open class SimpleStatement(
                     message = "Value for positional parameter index '$index' was not supplied."
                 ).ex()
             }
-            val value = positionalParametersValues[index].renderValue()
+            val value = positionalParametersValues[index].encodeValue(encoders)
             val range = positionalParametersRegex.find(res)?.range ?: SQLError(
                 code = SQLError.Code.PositionalParameterValueNotSupplied,
                 message = "Value for positional parameter index '$index' was not supplied."
@@ -125,7 +132,7 @@ open class SimpleStatement(
                     message = "Value for named parameter '$name' was not supplied."
                 ).ex()
             }
-            val value = namedParametersValues[name].renderValue()
+            val value = namedParametersValues[name].encodeValue(encoders)
             res = res.replace(":$name", value)
         }
         return res

@@ -4,8 +4,6 @@ package io.github.smyrgeorge.sqlx4k.impl.extensions
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
-import kotlinx.datetime.DatePeriod
-import kotlinx.datetime.DateTimePeriod
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -53,7 +51,3 @@ fun ResultSet.Row.Column.asLocalDateTime(): LocalDateTime = LocalDateTime.parse(
 fun ResultSet.Row.Column.asLocalDateTimeOrNull(): LocalDateTime? = asStringOrNull()?.let { LocalDateTime.parse(it.fixTime()) }
 fun ResultSet.Row.Column.asInstant(): Instant = Instant.parse(asString())
 fun ResultSet.Row.Column.asInstantOrNull(): Instant? = asStringOrNull()?.let { Instant.parse(it) }
-fun ResultSet.Row.Column.asDatePeriod(): DatePeriod = DatePeriod.parse(asString())
-fun ResultSet.Row.Column.asDatePeriodOrNull(): DatePeriod? = asStringOrNull()?.let { DatePeriod.parse(it) }
-fun ResultSet.Row.Column.asDateTimePeriod(): DateTimePeriod = DateTimePeriod.parse(asString())
-fun ResultSet.Row.Column.asDateTimePeriodOrNull(): DateTimePeriod? = asStringOrNull()?.let { DateTimePeriod.parse(it) }
