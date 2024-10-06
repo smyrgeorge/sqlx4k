@@ -2,6 +2,8 @@ package io.github.smyrgeorge.sqlx4k.sqlite
 
 import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.RowMapper
+import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.impl.extensions.rowsAffectedOrError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.sqlx
@@ -49,10 +51,19 @@ class SQLite(
         sqlx { c -> sqlx4k_query(sql, c, Driver.fn) }.rowsAffectedOrError()
     }
 
+    override suspend fun execute(statement: Statement): Result<Long> =
+        execute(statement.render(encoders))
+
     override suspend fun fetchAll(sql: String): Result<ResultSet> {
         val res = sqlx { c -> sqlx4k_fetch_all(sql, c, Driver.fn) }
         return ResultSet(res).toKotlinResult()
     }
+
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+        fetchAll(statement.render(encoders))
+
+    override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
+        fetchAll(statement.render(encoders), rowMapper)
 
     override suspend fun begin(): Result<Transaction> = runCatching {
         val tx = sqlx { c -> sqlx4k_tx_begin(c, Driver.fn) }.tx()
@@ -82,6 +93,9 @@ class SQLite(
             }
         }
 
+        override suspend fun execute(statement: Statement): Result<Long> =
+            execute(statement.render(encoders))
+
         override suspend fun fetchAll(sql: String): Result<ResultSet> {
             val res = mutex.withLock {
                 val r = sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, Driver.fn) }
@@ -91,5 +105,23 @@ class SQLite(
             tx = res.getRaw().tx!!
             return res.toKotlinResult()
         }
+
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+            fetchAll(statement.render(encoders))
+
+        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
+            fetchAll(statement.render(encoders), rowMapper)
+    }
+
+    companion object {
+        /**
+         * The `ValueEncoderRegistry` instance used for encoding values supplied to SQL statements in the `SQLite` class.
+         * This registry maps data types to their corresponding encoders, which convert values into a format suitable for
+         * inclusion in SQL queries.
+         *
+         * This registry is utilized in methods like `execute`, `fetchAll`, and other database operation methods to ensure
+         * that parameters bound to SQL statements are correctly encoded before being executed.
+         */
+        val encoders = Statement.ValueEncoderRegistry()
     }
 }

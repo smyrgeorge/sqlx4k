@@ -5,20 +5,15 @@ import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
 
 /**
- * Represents a simplified SQL statement allowing the binding of values to named and positional parameters.
+ * Represents a simple SQL statement that supports binding values to both positional
+ * and named parameters. This class provides functionality to render the final SQL
+ * string with all parameters replaced by their bound values.
  *
- * This class provides mechanisms to bind values to both named and positional parameters
- * within an SQL statement. The SQL statement can then be rendered with the bound values substituted in place.
- *
- * @constructor Creates a [SimpleStatement] instance with the given SQL string.
- * @property sql The SQL string containing the statement.
- * @property encoders A registry for encoding values to be inserted into the SQL statement.
+ * @param sql The SQL statement string that may contain positional ("?") and named
+ *            (e.g., ":name") parameters to be bound.
  */
 @Suppress("unused")
-open class SimpleStatement(
-    private val sql: String,
-    private val encoders: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY
-) : Statement {
+open class SimpleStatement(private val sql: String) : Statement {
 
     private val namedParameters: Set<String> by lazy {
         extractNamedParameters(sql)
@@ -70,31 +65,28 @@ open class SimpleStatement(
     }
 
     /**
-     * Renders the SQL statement by replacing placeholders for positional and named parameters
-     * with their respective bound values.
+     * Renders the SQL statement by replacing positional and named parameter placeholders
+     * with their corresponding bound values using the provided encoder registry.
      *
-     * This function first processes positional parameters, replacing each positional marker
-     * with its corresponding value. It subsequently processes named parameters, replacing each
-     * named marker (e.g., `:name`) with its corresponding value.
-     *
-     * @return A string representing the rendered SQL statement with all positional and named
-     * parameters substituted by their bound values.
+     * @param encoders The `ValueEncoderRegistry` used to encode parameter values.
+     * @return A string representing the rendered SQL statement with all parameters substituted by their bound values.
      */
-    override fun render(): String = sql
-        .renderPositionalParameters()
-        .renderNamedParameters()
+    override fun render(encoders: ValueEncoderRegistry): String = sql
+        .renderPositionalParameters(encoders)
+        .renderNamedParameters(encoders)
 
     /**
-     * Replaces placeholders for positional parameters in the input string with their corresponding bound values.
+     * Replaces positional parameter placeholders in the string with the corresponding values.
      *
-     * This function iterates through all the positional parameters and replaces their placeholders in the
-     * string with the provided values. If a required value for a positional parameter is not supplied,
-     * an error is thrown.
+     * This function iterates through all the positional parameters and substitutes
+     * their placeholders in the string with the bound values. If a required value
+     * for a positional parameter is not supplied, an error is thrown.
      *
+     * @param encoders The `ValueEncoderRegistry` used to encode parameter values.
      * @return A string with all positional parameters substituted by their bound values.
      * @throws SQLError if a value for a positional parameter is not supplied.
      */
-    private fun String.renderPositionalParameters(): String {
+    private fun String.renderPositionalParameters(encoders: ValueEncoderRegistry): String {
         var res: String = this
         positionalParameters.forEach { index ->
             if (!positionalParametersValues.containsKey(index)) {
@@ -114,16 +106,13 @@ open class SimpleStatement(
     }
 
     /**
-     * Replaces named parameter placeholders in the string with the corresponding values.
+     * Renders the SQL string by replacing named parameter placeholders with their corresponding bound values.
      *
-     * This function iterates through all the named parameters and substitutes their
-     * placeholders in the string with the bound values. If a required value for a
-     * named parameter is not supplied, an error is thrown.
-     *
-     * @return A string with all named parameters substituted by their bound values.
+     * @param encoders The `ValueEncoderRegistry` used to encode parameter values.
+     * @return A string representing the rendered SQL statement with all named parameters substituted by their bound values.
      * @throws SQLError if a value for a named parameter is not supplied.
      */
-    private fun String.renderNamedParameters(): String {
+    private fun String.renderNamedParameters(encoders: ValueEncoderRegistry): String {
         var res: String = this
         namedParameters.forEach { name ->
             if (!namedParametersValues.containsKey(name)) {

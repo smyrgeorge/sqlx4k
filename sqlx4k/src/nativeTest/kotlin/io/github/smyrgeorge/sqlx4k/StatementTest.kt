@@ -112,9 +112,9 @@ class StatementTest {
             .register(Test::class, TestEncoder())
 
         val sql = "select * from sqlx4k where id = :id"
-        val res = Statement.create(sql, encoders)
+        val res = Statement.create(sql)
             .bind("id", Test(65))
-            .render()
+            .render(encoders)
         assertThat(res).contains("id = 65")
     }
 }

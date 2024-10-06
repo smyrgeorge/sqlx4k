@@ -43,7 +43,7 @@ interface Statement {
      * @return A string representing the rendered SQL statement with all positional and named
      * parameters substituted by their bound values.
      */
-    fun render(): String
+    fun render(encoders: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY): String
 
     /**
      * Converts the value of the receiver to a string representation suitable for database operations.
@@ -142,15 +142,11 @@ interface Statement {
 
     companion object {
         /**
-         * Creates a new `Statement` instance with the given SQL string and an optional `ValueEncoderRegistry`.
+         * Creates a new `Statement` instance with the provided SQL string.
          *
-         * @param sql The SQL string to be used in the statement.
-         * @param encoders The `ValueEncoderRegistry` to be used for encoding values, default is `ValueEncoderRegistry.EMPTY`.
-         * @return The newly created `Statement` instance with the specified SQL and encoders.
+         * @param sql The SQL string used to create the statement.
+         * @return A new `Statement` instance initialized with the provided SQL string.
          */
-        fun create(
-            sql: String,
-            encoders: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY
-        ): Statement = SimpleStatement(sql, encoders)
+        fun create(sql: String, ): Statement = SimpleStatement(sql)
     }
 }

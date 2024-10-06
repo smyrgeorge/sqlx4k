@@ -4,18 +4,17 @@ import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
 
 /**
- * An extension of the `SimpleStatement` class that adds support for positional parameter binding
- * and custom SQL statement rendering.
+ * Represents an extended SQL statement that allows binding values to positional parameters
+ * specific to PostgreSQL.
  *
- * @property sql The SQL statement to be executed.
- * @property encoders A `ValueEncoderRegistry` used for encoding values.
- * @constructor Creates an `ExtendedStatement` with the given SQL string and value encoder registry.
+ * This class extends [SimpleStatement] by leveraging PostgreSQL's custom parameter syntax
+ * (e.g., $1, $2) and providing mechanisms to bind values to those parameters and render
+ * the final SQL with all parameters substituted.
+ *
+ * @property sql The SQL string containing the statement.
  */
 @Suppress("unused")
-class ExtendedStatement(
-    private val sql: String,
-    private val encoders: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY
-) : SimpleStatement(sql, encoders) {
+class ExtendedStatement(private val sql: String) : SimpleStatement(sql) {
 
     private val pgParameters: List<Int> by lazy {
         extractPgParameters(sql)
@@ -43,33 +42,24 @@ class ExtendedStatement(
     }
 
     /**
-     * Renders the SQL statement by processing positional parameters.
+     * Renders the SQL statement, including encoding all positional parameters using the specified encoder registry.
      *
-     * This method overrides the base class implementation to process
-     * positional parameters specific to the PgStatement class. It first
-     * delegates the rendering to the base class implementation, then
-     * further processes positional parameters.
-     *
-     * @return A string representing the rendered SQL statement with all
-     *         positional parameters substituted by their bound values.
+     * @param encoders The `ValueEncoderRegistry` that provides the appropriate encoders for the parameter values.
+     * @return A string representing the fully rendered SQL statement with all parameters encoded.
      */
-    override fun render(): String =
+    override fun render(encoders: ValueEncoderRegistry): String =
         super
-            .render()
-            .renderPositionalParameters()
+            .render(encoders)
+            .renderPositionalParameters(encoders)
 
     /**
-     * Replaces positional parameters in the SQL string with their corresponding values.
+     * Replaces positional parameters in the SQL statement with their corresponding encoded values.
      *
-     * This function scans the SQL string for positional parameters indicated by
-     * placeholders such as `$1`, `$2`, etc., and replaces them with their corresponding
-     * bound values from the `pgParametersValues` map. If a required value is not supplied,
-     * an error is thrown.
-     *
-     * @return A string where all positional parameters are replaced by their bound values.
-     * @throws SQLError if a positional parameter value is not supplied.
+     * @param encoders The `ValueEncoderRegistry` that provides the appropriate encoders for the parameter values.
+     * @return The SQL statement with all positional parameters replaced by their encoded values.
+     * @throws SQLError if a value for a positional parameter index is not supplied.
      */
-    private fun String.renderPositionalParameters(): String {
+    private fun String.renderPositionalParameters(encoders: ValueEncoderRegistry): String {
         var res: String = this
         pgParameters.forEach { index ->
             if (!pgParametersValues.containsKey(index)) {

@@ -30,8 +30,7 @@ interface Driver {
      * @param statement the SQL statement to be executed.
      * @return a result containing the number of affected rows.
      */
-    suspend fun execute(statement: Statement): Result<Long> =
-        execute(statement.render())
+    suspend fun execute(statement: Statement): Result<Long>
 
     /**
      * Fetches all results of the given SQL query asynchronously.
@@ -40,6 +39,14 @@ interface Driver {
      * @return a result containing the retrieved result set.
      */
     suspend fun fetchAll(sql: String): Result<ResultSet>
+
+    /**
+     * Fetches all results of the given SQL statement asynchronously.
+     *
+     * @param statement The SQL statement to be executed.
+     * @return A result containing the retrieved result set.
+     */
+    suspend fun fetchAll(statement: Statement): Result<ResultSet>
 
     /**
      * Fetches all results of the given SQL query and maps each row using the provided RowMapper.
@@ -55,15 +62,6 @@ interface Driver {
     }
 
     /**
-     * Fetches all results of the given SQL statement asynchronously.
-     *
-     * @param statement The SQL statement to be executed.
-     * @return A result containing the retrieved result set.
-     */
-    suspend fun fetchAll(statement: Statement): Result<ResultSet> =
-        fetchAll(statement.render())
-
-    /**
      * Fetches all results of the given SQL statement and maps each row using the provided RowMapper.
      *
      * @param T The type of the objects to be returned.
@@ -71,8 +69,7 @@ interface Driver {
      * @param rowMapper The RowMapper to use for converting rows in the result set to instances of type T.
      * @return A Result containing a list of instances of type T mapped from the query result set.
      */
-    suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-        fetchAll(statement.render(), rowMapper)
+    suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>>
 
     /**
      * Represents a general interface for managing connection pools.
