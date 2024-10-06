@@ -9,12 +9,17 @@ import kotlin.uuid.Uuid
 
 fun ResultSet.Row.Column.asBoolean(): Boolean = asString().toBoolean()
 fun ResultSet.Row.Column.asBooleanOrNull(): Boolean? = asStringOrNull()?.toBoolean()
+fun ResultSet.Row.Column.aChar(): Char = asString()[0]
+fun ResultSet.Row.Column.aCharOrNull(): Char? = asStringOrNull()?.get(0)
 fun ResultSet.Row.Column.asInt(): Int = asString().toInt()
 fun ResultSet.Row.Column.asIntOrNull(): Int? = asStringOrNull()?.toInt()
 fun ResultSet.Row.Column.asLong(): Long = asString().toLong()
 fun ResultSet.Row.Column.asLongOrNull(): Long? = asStringOrNull()?.toLong()
+fun ResultSet.Row.Column.asShort(): Short = asString().toShort()
 fun ResultSet.Row.Column.asShortOrNull(): Short? = asStringOrNull()?.toShort()
+fun ResultSet.Row.Column.asFloat(): Float = asString().toFloat()
 fun ResultSet.Row.Column.asFloatOrNull(): Float? = asStringOrNull()?.toFloat()
+fun ResultSet.Row.Column.asDouble(): Double = asString().toDouble()
 fun ResultSet.Row.Column.asDoubleOrNull(): Double? = asStringOrNull()?.toDouble()
 
 @OptIn(ExperimentalUuidApi::class)
