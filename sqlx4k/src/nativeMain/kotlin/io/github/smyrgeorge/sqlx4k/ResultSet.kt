@@ -328,6 +328,13 @@ class ResultSet(
             result.getRaw().getFirstRow()
                 ?: throw NoSuchElementException("Cannot extract metadata: no rows found.")
 
+        /**
+         * Represents metadata for a single column in a result set.
+         *
+         * @property ordinal The ordinal position of the column (zero-based index).
+         * @property name The name of the column.
+         * @property type The data type of the column.
+         */
         data class ColumnMetadata(
             val ordinal: Int,
             val name: String,
