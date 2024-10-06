@@ -7,12 +7,12 @@ package io.github.smyrgeorge.sqlx4k
  */
 interface RowMapper<T> {
     /**
-     * Maps all rows of the given ResultSet to a list of instances of type T.
+     * Maps the results from the given ResultSet to a list of objects of type T.
      *
-     * @param rs The ResultSet containing the rows to map.
-     * @return A list of instances of type T mapped from the ResultSet rows.
+     * @param rs The ResultSet containing database rows to be mapped.
+     * @return A list of objects of type T mapped from the ResultSet.
      */
-    fun map(rs: ResultSet): List<T> = rs.map { map(rs, it) }
+    fun map(rs: ResultSet): List<T> = rs.use { rs.map { map(rs, it) } }
 
     /**
      * Maps a single database row to an instance of type T.
