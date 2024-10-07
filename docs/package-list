@@ -4,12 +4,14 @@ $dokka.linkExtension:html
 module:sqlx4k
 io.github.smyrgeorge.sqlx4k
 io.github.smyrgeorge.sqlx4k.annotation
-io.github.smyrgeorge.sqlx4k.impl
+io.github.smyrgeorge.sqlx4k.impl.extensions
+io.github.smyrgeorge.sqlx4k.impl.statement
 module:sqlx4k-codegen
 io.github.smyrgeorge.sqlx4k.processor
 module:sqlx4k-mysql
 io.github.smyrgeorge.sqlx4k.mysql
 module:sqlx4k-postgres
 io.github.smyrgeorge.sqlx4k.postgres
+io.github.smyrgeorge.sqlx4k.postgres.extensions
 module:sqlx4k-sqlite
 io.github.smyrgeorge.sqlx4k.sqlite
