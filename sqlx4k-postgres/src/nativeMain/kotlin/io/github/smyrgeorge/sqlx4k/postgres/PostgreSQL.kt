@@ -28,6 +28,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import sqlx4k.Sqlx4kResult
 import sqlx4k.Sqlx4kRow
+import sqlx4k.Sqlx4kSchema
 import sqlx4k.sqlx4k_close
 import sqlx4k.sqlx4k_fetch_all
 import sqlx4k.sqlx4k_free_result
@@ -207,15 +208,17 @@ class PostgreSQL(
                 val result: Sqlx4kResult =
                     this?.pointed ?: error("Could not extract the value from the raw pointer (null).")
 
+                val schema: Sqlx4kSchema =
+                    this.pointed.schema?.pointed ?: error("Could not extract the value from the raw pointer (null).")
+
                 assert(result.size == 1)
                 val row: Sqlx4kRow = result.rows!![0]
                 assert(row.size == 1)
-                val column = row.columns!![0]
-                assert(column.kind!!.toKString() == "TEXT")
+                assert(schema.columns!![0].kind!!.toKString() == "TEXT")
 
                 Notification(
-                    channel = column.name!!.toKString(),
-                    value = column.value!!.toKString()
+                    channel = schema.columns!![0].name!!.toKString(),
+                    value = row.columns!![0].value!!.toKString()
                 )
             } finally {
                 sqlx4k_free_result(this)

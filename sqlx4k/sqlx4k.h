@@ -13,10 +13,19 @@ typedef struct Ptr {
   void *ptr;
 } Ptr;
 
-typedef struct Sqlx4kColumn {
+typedef struct Sqlx4kSchemaColumn {
   int ordinal;
   char *name;
   char *kind;
+} Sqlx4kSchemaColumn;
+
+typedef struct Sqlx4kSchema {
+  int size;
+  struct Sqlx4kSchemaColumn *columns;
+} Sqlx4kSchema;
+
+typedef struct Sqlx4kColumn {
+  int ordinal;
   char *value;
 } Sqlx4kColumn;
 
@@ -30,6 +39,7 @@ typedef struct Sqlx4kResult {
   char *error_message;
   unsigned long long rows_affected;
   void *tx;
+  struct Sqlx4kSchema *schema;
   int size;
   struct Sqlx4kRow *rows;
 } Sqlx4kResult;

@@ -1,8 +1,6 @@
 package io.github.smyrgeorge.sqlx4k
 
-import io.github.smyrgeorge.sqlx4k.ResultSet.Row.Column
 import io.github.smyrgeorge.sqlx4k.impl.extensions.debug
-import io.github.smyrgeorge.sqlx4k.impl.extensions.getFirstRow
 import io.github.smyrgeorge.sqlx4k.impl.extensions.isError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.throwIfError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.toError
@@ -17,6 +15,7 @@ import kotlinx.coroutines.sync.withLock
 import sqlx4k.Sqlx4kColumn
 import sqlx4k.Sqlx4kResult
 import sqlx4k.Sqlx4kRow
+import sqlx4k.Sqlx4kSchema
 import sqlx4k.sqlx4k_free_result
 
 /**
@@ -105,14 +104,15 @@ class ResultSet(
      * @property row The internal representation of the SQL row.
      */
     class Row(
-        private val row: Sqlx4kRow
+        private val row: Sqlx4kRow,
+        private val metadata: Metadata
     ) {
 
         val columns: Map<String, Column> by lazy {
             val map = mutableMapOf<String, Column>()
             repeat(row.size) { index ->
                 val raw = row.columns!![index]
-                val col = Column(raw.name!!.toKString(), raw)
+                val col = Column(raw, metadata)
                 map[col.name] = col
             }
             map
@@ -141,7 +141,7 @@ class ResultSet(
         fun get(ordinal: Int): Column {
             if (ordinal < 0 || ordinal >= columns.size) error("Columns :: Out of bounds (index $ordinal)")
             val raw = row.columns!![ordinal]
-            return Column(raw.name!!.toKString(), raw)
+            return Column(raw, metadata)
         }
 
         /**
@@ -154,13 +154,20 @@ class ResultSet(
         /**
          * Represents a column in an SQL database row.
          *
-         * @property name The name of the column.
          * @property column The internal column representation from the Sqlx4k library.
          */
         class Column(
-            val name: String,
-            private val column: Sqlx4kColumn
+            private val column: Sqlx4kColumn,
+            private val metadata: Metadata
         ) {
+            /**
+             * Retrieves the name of the column at the specified ordinal position.
+             *
+             * This property provides access to the name of the column
+             * as defined in the metadata, based on the column's ordinal index.
+             */
+            val name: String get() = metadata.getColumn(ordinal).name
+
             /**
              * Retrieves the ordinal position of this column within the database table.
              *
@@ -177,7 +184,7 @@ class ResultSet(
              *
              * @return The type of the column in String format.
              */
-            val type: String get() = column.kind!!.toKString()
+            val type: String get() = metadata.getColumn(ordinal).type
 
             /**
              * Retrieves the value of the column as a nullable String.
@@ -230,7 +237,7 @@ class ResultSet(
     override fun next(): Row {
         if (current == 0) getRaw().throwIfError()
         if (current < 0 || current >= getRaw().size) error("Rows :: Out of bounds (index $current)")
-        return Row(getRaw().rows!![current++])
+        return Row(getRaw().rows!![current++], Metadata(getRaw().schema!!.pointed))
     }
 
     /**
@@ -265,32 +272,29 @@ class ResultSet(
     /**
      * The `Metadata` class provides an interface to extract and manage metadata from a `ResultSet`.
      *
-     * @property result The `ResultSet` from which metadata is to be extracted.
+     * @property schema The `ResultSet` from which metadata is to be extracted.
      */
-    @Suppress("DuplicatedCode")
     class Metadata(
-        private val result: ResultSet
+        private val schema: Sqlx4kSchema
     ) {
         private val columnsByName: Map<String, ColumnMetadata> by lazy {
-            val row = getFirstRow()
             // <name, ColumnMetadata>
             val map = mutableMapOf<String, ColumnMetadata>()
-            repeat(row.size) { index ->
-                val raw = row.columns!![index]
-                val col = Column(raw.name!!.toKString(), raw)
-                map[col.name] = ColumnMetadata(col.ordinal, col.name, col.type)
+            repeat(schema.size) { index ->
+                val raw = schema.columns!![index]
+                map[raw.name!!.toKString()] =
+                    ColumnMetadata(raw.ordinal, raw.name!!.toKString(), raw.kind!!.toKString())
             }
             map
         }
 
         private val columnsByOrdinal: Map<Int, ColumnMetadata> by lazy {
-            val row = getFirstRow()
             // <ordinal, ColumnMetadata>>
             val map = mutableMapOf<Int, ColumnMetadata>()
-            repeat(row.size) { index ->
-                val raw = row.columns!![index]
-                val col = Column(raw.name!!.toKString(), raw)
-                map[col.ordinal] = ColumnMetadata(col.ordinal, col.name, col.type)
+            repeat(schema.size) { index ->
+                val raw = schema.columns!![index]
+                map[raw.ordinal] =
+                    ColumnMetadata(raw.ordinal, raw.name!!.toKString(), raw.kind!!.toKString())
             }
             map
         }
@@ -300,7 +304,7 @@ class ResultSet(
          *
          * @return the number of columns in the first row.
          */
-        fun getColumnCount(): Int = getFirstRow().size
+        fun getColumnCount(): Int = schema.size
 
         /**
          * Retrieves the metadata for the column at the specified index.
@@ -323,10 +327,6 @@ class ResultSet(
         fun getColumn(name: String): ColumnMetadata =
             columnsByName[name]
                 ?: throw NoSuchElementException("Cannot extract metadata: no column with name '$name'.")
-
-        private fun getFirstRow(): Sqlx4kRow =
-            result.getRaw().getFirstRow()
-                ?: throw NoSuchElementException("Cannot extract metadata: no rows found.")
 
         /**
          * Represents metadata for a single column in a result set.

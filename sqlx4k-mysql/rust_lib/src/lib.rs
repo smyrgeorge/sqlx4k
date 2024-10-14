@@ -1,6 +1,9 @@
 use sqlx::mysql::{MySqlPool, MySqlPoolOptions, MySqlRow, MySqlTypeInfo, MySqlValueRef};
 use sqlx::{Column, Executor, MySql, Row, Transaction, TypeInfo, ValueRef};
-use sqlx4k::{c_chars_to_str, sqlx4k_error_result_of, Ptr, Sqlx4kColumn, Sqlx4kResult, Sqlx4kRow};
+use sqlx4k::{
+    c_chars_to_str, sqlx4k_error_result_of, Ptr, Sqlx4kColumn, Sqlx4kResult, Sqlx4kRow,
+    Sqlx4kSchema, Sqlx4kSchemaColumn,
+};
 use std::{
     ffi::{c_char, c_int, c_void, CString},
     ptr::null_mut,
@@ -293,6 +296,15 @@ pub extern "C" fn sqlx4k_tx_fetch_all(
 fn sqlx4k_result_of(result: Result<Vec<MySqlRow>, sqlx::Error>) -> Sqlx4kResult {
     match result {
         Ok(rows) => {
+            let schema: Sqlx4kSchema = if rows.len() > 0 {
+                sqlx4k_schema_of(rows.get(0).unwrap())
+            } else {
+                Sqlx4kSchema::default()
+            };
+
+            let schema = Box::new(schema);
+            let schema = Box::leak(schema);
+
             let mut rows: Vec<Sqlx4kRow> = rows.iter().map(|r| sqlx4k_row_of(r)).collect();
 
             // Make sure we're not wasting space.
@@ -305,12 +317,50 @@ fn sqlx4k_result_of(result: Result<Vec<MySqlRow>, sqlx::Error>) -> Sqlx4kResult 
             let rows: *mut Sqlx4kRow = rows.as_mut_ptr();
 
             Sqlx4kResult {
+                schema,
                 size: size as c_int,
                 rows,
                 ..Default::default()
             }
         }
         Err(err) => sqlx4k_error_result_of(err),
+    }
+}
+
+fn sqlx4k_schema_of(row: &MySqlRow) -> Sqlx4kSchema {
+    let columns = row.columns();
+    if columns.is_empty() {
+        Sqlx4kSchema::default()
+    } else {
+        let mut columns: Vec<Sqlx4kSchemaColumn> = row
+            .columns()
+            .iter()
+            .map(|c| {
+                let name: &str = c.name();
+                let value_ref: MySqlValueRef = row.try_get_raw(c.ordinal()).unwrap();
+                let info: std::borrow::Cow<MySqlTypeInfo> = value_ref.type_info();
+                let kind: &str = info.name();
+                Sqlx4kSchemaColumn {
+                    ordinal: c.ordinal() as c_int,
+                    name: CString::new(name).unwrap().into_raw(),
+                    kind: CString::new(kind).unwrap().into_raw(),
+                }
+            })
+            .collect();
+
+        // Make sure we're not wasting space.
+        columns.shrink_to_fit();
+        assert!(columns.len() == columns.capacity());
+
+        let size = columns.len();
+        let columns: Box<[Sqlx4kSchemaColumn]> = columns.into_boxed_slice();
+        let columns: &mut [Sqlx4kSchemaColumn] = Box::leak(columns);
+        let columns: *mut Sqlx4kSchemaColumn = columns.as_mut_ptr();
+
+        Sqlx4kSchema {
+            size: size as c_int,
+            columns,
+        }
     }
 }
 
@@ -323,15 +373,9 @@ fn sqlx4k_row_of(row: &MySqlRow) -> Sqlx4kRow {
             .columns()
             .iter()
             .map(|c| {
-                let name: &str = c.name();
-                let value_ref: MySqlValueRef = row.try_get_raw(c.ordinal()).unwrap();
-                let info: std::borrow::Cow<MySqlTypeInfo> = value_ref.type_info();
-                let kind: &str = info.name();
                 let value: Option<&str> = row.get_unchecked(c.ordinal());
                 Sqlx4kColumn {
                     ordinal: c.ordinal() as c_int,
-                    name: CString::new(name).unwrap().into_raw(),
-                    kind: CString::new(kind).unwrap().into_raw(),
                     value: if value.is_none() {
                         null_mut()
                     } else {

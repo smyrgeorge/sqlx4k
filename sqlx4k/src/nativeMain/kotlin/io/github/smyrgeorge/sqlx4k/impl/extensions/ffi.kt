@@ -28,8 +28,8 @@ fun Sqlx4kRow.debug(prefix: String = ""): String = buildString {
 fun Sqlx4kColumn.debug(prefix: String = ""): String = buildString {
     append("\n$prefix[Sqlx4kPgColumn]")
     append("\n${prefix}ordinal: $ordinal")
-    append("\n${prefix}name: ${name?.toKString() ?: "<EMPTY>"}")
-    append("\n${prefix}kind: ${kind?.toKString() ?: "<EMPTY>"}")
+//    append("\n${prefix}name: ${name?.toKString() ?: "<EMPTY>"}")
+//    append("\n${prefix}kind: ${kind?.toKString() ?: "<EMPTY>"}")
     append("\n${prefix}value: ${value?.toKString() ?: "<EMPTY>"}")
 }
 
