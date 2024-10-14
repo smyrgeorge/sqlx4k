@@ -5,7 +5,7 @@
 ![GitHub License](https://img.shields.io/github/license/smyrgeorge/sqlx4k)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/w/smyrgeorge/sqlx4k)
 ![GitHub issues](https://img.shields.io/github/issues/smyrgeorge/sqlx4k)
-[![Kotlin](https://img.shields.io/badge/kotlin-2.0.20-blue.svg?logo=kotlin)](http://kotlinlang.org)
+[![Kotlin](https://img.shields.io/badge/kotlin-2.0.21-blue.svg?logo=kotlin)](http://kotlinlang.org)
 
 A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLite, written for Kotlin Native.
 Looking to build efficient, cross-platform applications with Kotlin Native.
@@ -320,42 +320,42 @@ codesign -s - -v -f --entitlements =(echo -n '<?xml version="1.0" encoding="UTF-
         <key>com.apple.security.get-task-allow</key>
         <true/>
     </dict>
-</plist>') ./sqlx4k-postgres-examples/build/bin/macosArm64/releaseExecutable/sqlx4k-postgres-examples.kexe
+</plist>') ./examples/postgres/build/bin/macosArm64/releaseExecutable/postgres.kexe
 ```
 
 Then run the tool:
 
 ```shell
-leaks -atExit -- ./sqlx4k-postgres-examples/build/bin/macosArm64/releaseExecutable/sqlx4k-postgres-examples.kexe
+leaks -atExit -- ./examples/postgres/build/bin/macosArm64/releaseExecutable/postgres.kexe
 ```
 
 Sample output:
 
 ```text
-Process:         sqlx4k-postgres-examples.kexe [32353]
-Path:            /Users/USER/*/sqlx4k-postgres-examples.kexe
-Load Address:    0x102904000
-Identifier:      examples.kexe
+Process:         postgres.kexe [54426]
+Path:            /Users/USER/*/postgres.kexe
+Load Address:    0x1027ec000
+Identifier:      postgres.kexe
 Version:         0
 Code Type:       ARM64
 Platform:        macOS
-Parent Process:  leaks [32351]
+Parent Process:  leaks [54424]
 
-Date/Time:       2024-07-05 16:14:03.515 +0200
-Launch Time:     2024-07-05 16:13:45.848 +0200
-OS Version:      macOS 14.5 (23F79)
+Date/Time:       2024-10-14 19:17:58.968 +0200
+Launch Time:     2024-10-14 19:17:21.968 +0200
+OS Version:      macOS 15.0 (24A335)
 Report Version:  7
 Analysis Tool:   /Applications/Xcode.app/Contents/Developer/usr/bin/leaks
-Analysis Tool Version:  Xcode 15.4 (15F31d)
+Analysis Tool Version:  Xcode 16.0 (16A242d)
 
-Physical footprint:         213.8M
-Physical footprint (peak):  213.8M
+Physical footprint:         37.1M
+Physical footprint (peak):  38.5M
 Idle exit:                  untracked
 ----
 
 leaks Report Version: 4.0, multi-line stacks
-Process 32353: 125349 nodes malloced for 8520 KB
-Process 32353: 0 leaks for 0 total leaked bytes.
+Process 54426: 1847 nodes malloced for 656 KB
+Process 54426: 0 leaks for 0 total leaked bytes.
 ```
 
 ## References
