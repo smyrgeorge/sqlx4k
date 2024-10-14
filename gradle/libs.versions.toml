@@ -6,7 +6,7 @@ kotlinx-datetime = "0.6.1"
 # https://github.com/Kotlin/kotlinx.coroutines
 kotlinx-coroutines = "1.9.0"
 # https://github.com/vanniktech/gradle-maven-publish-plugin
-publish = "0.29.0"
+publish = "0.30.0"
 # https://github.com/Kotlin/dokka
 dokka = "1.9.20"
 # https://github.com/willowtreeapps/assertk
