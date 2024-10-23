@@ -1,5 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.publish
 
+import com.vanniktech.maven.publish.JavadocJar
+import com.vanniktech.maven.publish.KotlinMultiplatform
 import com.vanniktech.maven.publish.MavenPublishBaseExtension
 import com.vanniktech.maven.publish.SonatypeHost
 import org.gradle.api.Plugin
@@ -19,6 +21,15 @@ class PublishConventions : Plugin<Project> {
     override fun apply(project: Project) {
         project.plugins.apply("com.vanniktech.maven.publish")
         project.extensions.configure<MavenPublishBaseExtension> {
+            // sources publishing is always enabled by the Kotlin Multiplatform plugin
+            configure(
+                KotlinMultiplatform(
+                    // whether to publish a sources jar
+                    sourcesJar = true,
+                    // configures the -javadoc artifact, possible values:
+                    javadocJar = JavadocJar.Dokka("dokkaHtml"),
+                )
+            )
             coordinates(
                 groupId = project.group as String,
                 artifactId = project.name,

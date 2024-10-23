@@ -1,6 +1,6 @@
 plugins {
-    id("io.github.smyrgeorge.sqlx4k.publish")
     id("io.github.smyrgeorge.sqlx4k.multiplatform.rust")
+    id("io.github.smyrgeorge.sqlx4k.publish")
 }
 
 kotlin {
