@@ -74,7 +74,7 @@ class ResultSet(
      * @return A successful [Result] containing the current [ResultSet] if no error,
      *         or a failed [Result] with the appropriate [SQLError].
      */
-    fun toKotlinResult(): Result<ResultSet> =
+    fun toResult(): Result<ResultSet> =
         if (isError()) {
             val error = toError()
             close()
@@ -166,7 +166,7 @@ class ResultSet(
              * This property provides access to the name of the column
              * as defined in the metadata, based on the column's ordinal index.
              */
-            val name: String get() = metadata.getColumn(ordinal).name
+            val name: String by lazy { metadata.getColumn(ordinal).name }
 
             /**
              * Retrieves the ordinal position of this column within the database table.
@@ -184,7 +184,7 @@ class ResultSet(
              *
              * @return The type of the column in String format.
              */
-            val type: String get() = metadata.getColumn(ordinal).type
+            val type: String by lazy { metadata.getColumn(ordinal).type }
 
             /**
              * Retrieves the value of the column as a nullable String.

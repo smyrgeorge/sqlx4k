@@ -86,7 +86,7 @@ class PostgreSQL(
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> {
         val res = sqlx { c -> sqlx4k_fetch_all(sql, c, Driver.fn) }
-        return ResultSet(res).toKotlinResult()
+        return ResultSet(res).toResult()
     }
 
     override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
@@ -172,7 +172,7 @@ class PostgreSQL(
             }
 
             tx = res.getRaw().tx!!
-            return res.toKotlinResult()
+            return res.toResult()
         }
 
         override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
