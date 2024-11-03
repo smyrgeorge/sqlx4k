@@ -5,6 +5,7 @@ import sqlx4k.Ptr
 import sqlx4k.Sqlx4kResult
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
+import kotlin.time.Duration
 
 /**
  * Represents an interface for executing SQL statements and managing their results.
@@ -95,6 +96,48 @@ interface Driver {
          * @return A Result object indicating the success or failure of the operation.
          */
         suspend fun close(): Result<Unit>
+
+        /**
+         * Class representing configuration options for a connection pool.
+         *
+         * @property minConnections The minimum number of connections to maintain at all times.
+         * @property maxConnections The maximum number of connections that this pool should maintain.
+         * @property acquireTimeout The maximum amount of time to spend waiting for a connection.
+         * @property idleTimeout The maximum idle duration for individual connections.
+         * @property maxLifetime The maximum lifetime of individual connections.
+         */
+        @Suppress("unused")
+        data class Options(
+            // Set the minimum number of connections to maintain at all times.
+            val minConnections: Int? = null,
+            // Set the maximum number of connections that this pool should maintain.
+            val maxConnections: Int = 10,
+            // Set the maximum amount of time to spend waiting for a connection .
+            val acquireTimeout: Duration? = null,
+            // Set a maximum idle duration for individual connections.
+            val idleTimeout: Duration? = null,
+            // Set the maximum lifetime of individual connections.
+            val maxLifetime: Duration? = null,
+        ) {
+            class Builder {
+                private var minConnections: Int? = null
+                private var maxConnections: Int = 10
+                private var acquireTimeout: Duration? = null
+                private var idleTimeout: Duration? = null
+                private var maxLifetime: Duration? = null
+
+                fun minConnections(minConnections: Int) = apply { this.minConnections = minConnections }
+                fun maxConnections(maxConnections: Int) = apply { this.maxConnections = maxConnections }
+                fun acquireTimeout(acquireTimeout: Duration?) = apply { this.acquireTimeout = acquireTimeout }
+                fun idleTimeout(idleTimeout: Duration?) = apply { this.idleTimeout = idleTimeout }
+                fun maxLifetime(maxLifetime: Duration?) = apply { this.maxLifetime = maxLifetime }
+                fun build() = Options(minConnections, maxConnections, acquireTimeout, idleTimeout, maxLifetime)
+            }
+
+            companion object {
+                fun builder(): Builder = Builder()
+            }
+        }
     }
 
     /**

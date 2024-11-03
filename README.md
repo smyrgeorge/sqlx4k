@@ -15,7 +15,6 @@
 ![](https://img.shields.io/static/v1?label=&message=Android&color=blue)
 
 A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLite, written for Kotlin Native.
-Looking to build efficient, cross-platform applications with Kotlin Native.
 
 > [!IMPORTANT]  
 > The project is in a very early stage; thus, breaking changes should be expected.
@@ -68,13 +67,17 @@ The driver fully supports non-blocking io.
 You can set the `maxConnections` from the driver constructor:
 
 ```kotlin
+val options = Driver.Pool.Options.builder()
+    .maxConnections(10)
+    .build()
+
 val db = PostgreSQL(
     host = "localhost",
     port = 15432,
     username = "postgres",
     password = "postgres",
     database = "test",
-    maxConnections = 10 // set the max-pool-size here
+    options = options
 )
 
 val db = MySQL(
@@ -83,12 +86,12 @@ val db = MySQL(
     username = "mysql",
     password = "mysql",
     database = "test",
-    maxConnections = 10
+    options = options
 )
 
 val db = SQLite(
     database = "test.db",
-    maxConnections = 10
+    options = options
 )
 ```
 

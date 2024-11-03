@@ -51,7 +51,11 @@ Sqlx4kResult *sqlx4k_of(const char *host,
                         const char *username,
                         const char *password,
                         const char *database,
-                        int max_connections);
+                        int min_connections,
+                        int max_connections,
+                        int acquire_timeout_milis,
+                        int idle_timeout_milis,
+                        int max_lifetime_milis);
 
 int sqlx4k_pool_size(void);
 

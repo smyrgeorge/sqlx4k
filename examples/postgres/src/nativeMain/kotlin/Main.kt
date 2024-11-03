@@ -1,3 +1,4 @@
+import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4k
@@ -22,13 +23,17 @@ fun main() {
             f: suspend (A) -> Unit
         ): Unit = withContext(context) { map { async { f(it) } }.awaitAll() }
 
+        val options = Driver.Pool.Options.builder()
+            .maxConnections(20)
+            .build()
+
         val db = PostgreSQL(
             host = "localhost",
             port = 15432,
             username = "postgres",
             password = "postgres",
             database = "test",
-            maxConnections = 11
+            options = options
         )
 
         db.execute("drop table if exists sqlx4k;").getOrThrow()
@@ -158,8 +163,6 @@ fun main() {
                 }
             }
         }
-//      4.740002541s
-//      4.732109584s
         println(t1)
 
         val t2 = measureTime {
@@ -176,8 +179,6 @@ fun main() {
                 }
             }
         }
-//      9.385897375s
-//      9.351138833s
         println(t2)
 
         println("Connections: ${db.poolSize()}, Idle: ${db.poolIdleSize()}")

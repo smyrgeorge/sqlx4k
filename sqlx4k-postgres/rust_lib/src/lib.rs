@@ -10,6 +10,7 @@ use std::{
     ffi::{c_char, c_int, c_void, CString},
     ptr::null_mut,
     sync::OnceLock,
+    time::Duration,
 };
 use tokio::runtime::Runtime;
 
@@ -127,7 +128,11 @@ pub extern "C" fn sqlx4k_of(
     username: *const c_char,
     password: *const c_char,
     database: *const c_char,
+    min_connections: c_int,
     max_connections: c_int,
+    acquire_timeout_milis: c_int,
+    idle_timeout_milis: c_int,
+    max_lifetime_milis: c_int,
 ) -> *mut Sqlx4kResult {
     let host = c_chars_to_str(host);
     let username = c_chars_to_str(username);
@@ -143,9 +148,33 @@ pub extern "C" fn sqlx4k_of(
     let runtime = Runtime::new().unwrap();
 
     // Create the db pool options.
-    let pool = PgPoolOptions::new()
-        .max_connections(max_connections as u32)
-        .connect(&url);
+    let pool = PgPoolOptions::new().max_connections(max_connections as u32);
+
+    let pool = if min_connections > 0 {
+        pool.min_connections(min_connections as u32)
+    } else {
+        pool
+    };
+
+    let pool = if acquire_timeout_milis > 0 {
+        pool.acquire_timeout(Duration::from_millis(acquire_timeout_milis as u64))
+    } else {
+        pool
+    };
+
+    let pool = if idle_timeout_milis > 0 {
+        pool.idle_timeout(Duration::from_millis(idle_timeout_milis as u64))
+    } else {
+        pool
+    };
+
+    let pool = if max_lifetime_milis > 0 {
+        pool.max_lifetime(Duration::from_millis(max_lifetime_milis as u64))
+    } else {
+        pool
+    };
+
+    let pool = pool.connect(&url);
 
     // Create the pool here.
     let pool: PgPool = runtime.block_on(pool).unwrap();

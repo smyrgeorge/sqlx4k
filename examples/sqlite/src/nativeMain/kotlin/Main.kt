@@ -20,8 +20,7 @@ fun main() {
         ): Unit = withContext(context) { map { async { f(it) } }.awaitAll() }
 
         val db = SQLite(
-            database = "test.db",
-            maxConnections = 10
+            database = "test.db"
         )
 
         db.execute("drop table if exists sqlx4k;").getOrThrow()

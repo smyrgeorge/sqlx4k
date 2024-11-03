@@ -52,7 +52,7 @@ class PostgreSQL(
     username: String,
     password: String,
     database: String,
-    maxConnections: Int
+    options: Driver.Pool.Options = Driver.Pool.Options(),
 ) : Driver, Driver.Pool, Driver.Transactional {
     init {
         sqlx4k_of(
@@ -61,7 +61,11 @@ class PostgreSQL(
             username = username,
             password = password,
             database = database,
-            max_connections = maxConnections
+            min_connections = options.minConnections ?: -1,
+            max_connections = options.maxConnections,
+            acquire_timeout_milis = options.acquireTimeout?.inWholeMilliseconds?.toInt() ?: -1,
+            idle_timeout_milis = options.idleTimeout?.inWholeMilliseconds?.toInt() ?: -1,
+            max_lifetime_milis = options.maxLifetime?.inWholeMilliseconds?.toInt() ?: -1,
         ).throwIfError()
     }
 

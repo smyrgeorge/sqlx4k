@@ -24,8 +24,7 @@ fun main() {
             port = 13306,
             username = "mysql",
             password = "mysql",
-            database = "test",
-            maxConnections = 10
+            database = "test"
         )
 
         db.execute("drop table if exists sqlx4k;").getOrThrow()
