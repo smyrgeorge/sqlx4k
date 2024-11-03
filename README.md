@@ -67,6 +67,7 @@ The driver fully supports non-blocking io.
 You can set the `maxConnections` from the driver constructor:
 
 ```kotlin
+// Additionally, you can set minConnections, acquireTimeout, idleTimeout, etc. 
 val options = Driver.Pool.Options.builder()
     .maxConnections(10)
     .build()
@@ -367,16 +368,3 @@ leaks Report Version: 4.0, multi-line stacks
 Process 54426: 1847 nodes malloced for 656 KB
 Process 54426: 0 leaks for 0 total leaked bytes.
 ```
-
-## References
-
-- https://kotlinlang.org/docs/multiplatform.html
-- https://kotlinlang.org/docs/native-c-interop.html
-- https://github.com/launchbadge/sqlx
-- https://github.com/avan1235/kotlin-native-rust-interop
-- https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=d0e44ce1f765ce89523ef89ccd864e54
-- https://stackoverflow.com/questions/57616229/returning-array-from-rust-to-ffi
-- https://stackoverflow.com/questions/76706784/why-stdmemforget-cannot-be-used-for-creating-static-references
-- https://stackoverflow.com/questions/66412090/proper-way-of-dealing-with-blocking-code-using-kotling-coroutines
-- https://github.com/square/retrofit/blob/fbf1225e28e2094bec35f587b8933748b705d167/retrofit/src/main/java/retrofit2/KotlinExtensions.kt#L31
-- https://www.droidcon.com/2024/04/18/publishing-kotlin-multiplatform-libraries-with-sonatype-central/
