@@ -12,7 +12,7 @@ dokka = "1.9.20"
 # https://github.com/willowtreeapps/assertk
 assertk = "0.28.1"
 # https://github.com/google/ksp/releases
-ksp = "2.0.21-1.0.27"
+ksp = "2.0.21-1.0.28"
 
 [libraries]
 gradle-kotlin-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
