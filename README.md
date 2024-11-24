@@ -125,7 +125,7 @@ db.fetchAll(st2).getOrThrow().map {
 ```kotlin
 val tx1: Transaction = db.begin().getOrThrow()
 tx1.execute("delete from sqlx4k;").getOrThrow()
-val res: ResultSet = tx1.fetchAll("select * from sqlx4k;").getOrThrow().forEach {
+tx1.fetchAll("select * from sqlx4k;").getOrThrow().forEach {
     println(debug())
 }
 tx1.commit().getOrThrow()
@@ -215,8 +215,6 @@ Check here: https://github.com/smyrgeorge/sqlx4k-sqldelight
 - [x] INSERT/UPDATE/DELETE APIs (with code generation)
 - [x] Value encoders/decoders for basic data-types (in progress)
 - [ ] Transaction isolation level
-- [ ] Performance testing
-- [ ] Testing
 
 ## Compilation
 
@@ -287,34 +285,6 @@ Then run the `main` method.
 ## Examples
 
 See `Main.kt` file for more examples (examples modules).
-
-```kotlin
-// Initialize the connection pool.
-val db = PostgreSQL(
-    host = "localhost",
-    port = 15432,
-    username = "postgres",
-    password = "postgres",
-    database = "test",
-    maxConnections = 10
-)
-
-db.execute("drop table if exists sqlx4k;").getOrThrow()
-
-// Make a simple query.
-data class Test(val id: Int)
-
-// You can also use RowMappers(s) to map your objects.
-object TestRowMapper : RowMapper<Test> {
-    override fun map(rs: ResultSet, row: ResultSet.Row): Test {
-        val id: ResultSet.Row.Column = row.get("id")
-        return Test(id = id.asInt())
-    }
-}
-
-val res: List<Test> = db.fetchAll("select * from sqlx4k;", TestRowMapper).getOrThrow()
-println(test)
-```
 
 ## Checking for memory leaks
 
