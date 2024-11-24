@@ -139,23 +139,31 @@ class PostgreSQL(
         execute("select pg_notify('$channel', '$value');").getOrThrow()
     }
 
-    class Tx(override var tx: CPointer<out CPointed>) : Transaction {
+    class Tx(
+        override var tx: CPointer<out CPointed>
+    ) : Transaction {
         private val mutex = Mutex()
+        override var status: Transaction.Status = Transaction.Status.Open
 
         override suspend fun commit(): Result<Unit> = runCatching {
             mutex.withLock {
+                isOpenOrError()
+                status = Transaction.Status.Closed
                 sqlx { c -> sqlx4k_tx_commit(tx, c, Driver.fn) }.throwIfError()
             }
         }
 
         override suspend fun rollback(): Result<Unit> = runCatching {
             mutex.withLock {
+                isOpenOrError()
+                status = Transaction.Status.Closed
                 sqlx { c -> sqlx4k_tx_rollback(tx, c, Driver.fn) }.throwIfError()
             }
         }
 
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
+                isOpenOrError()
                 val res = sqlx { c -> sqlx4k_tx_query(tx, sql, c, Driver.fn) }.tx()
                 tx = res.first
                 res.second.toLong()
@@ -167,6 +175,7 @@ class PostgreSQL(
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> {
             val res = mutex.withLock {
+                isOpenOrError()
                 val r = sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, Driver.fn) }
                 ResultSet(r)
             }

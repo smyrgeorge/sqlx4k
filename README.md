@@ -60,11 +60,42 @@ We support the following targets:
 
 ### Async-io
 
-The driver fully supports non-blocking io.
+The driver is designed with full support for non-blocking I/O, enabling seamless integration with modern,
+high-performance applications. By leveraging asynchronous, non-blocking operations, it ensures efficient resource
+management, reduces latency, and improves scalability.
 
 ### Connection pool
 
-You can set the `maxConnections` from the driver constructor:
+### Connection Pool Settings
+
+The driver allows you to configure connection pool settings directly from its constructor, giving you fine-grained
+control over how database connections are managed. These settings are designed to optimize performance and resource
+utilization for your specific application requirements.
+
+#### Key Configuration Options:
+
+- **`minConnections`**  
+  Specifies the minimum number of connections to maintain in the pool at all times. This ensures that a baseline number
+  of connections are always ready to serve requests, reducing the latency for acquiring connections during peak usage.
+
+- **`maxConnections`**  
+  Defines the maximum number of connections that can be maintained in the pool. This setting helps limit resource usage
+  and ensures the pool does not exceed the available database or system capacity.
+
+- **`acquireTimeout`**  
+  Sets the maximum duration to wait when attempting to acquire a connection from the pool. If a connection cannot be
+  acquired within this time, an exception is thrown, allowing you to handle connection timeouts gracefully.
+
+- **`idleTimeout`**  
+  Specifies the maximum duration a connection can remain idle before being closed and removed from the pool. This helps
+  clean up unused connections, freeing up resources.
+
+- **`maxLifetime`**  
+  Defines the maximum lifetime for individual connections. Once a connection reaches this duration, it is closed and
+  replaced, even if it is active, helping prevent issues related to stale or long-lived connections.
+
+By adjusting these parameters, you can fine-tune the driver's behavior to match the specific needs of your application,
+whether you're optimizing for low-latency responses, high-throughput workloads, or efficient resource utilization.
 
 ```kotlin
 // Additionally, you can set minConnections, acquireTimeout, idleTimeout, etc. 
@@ -129,6 +160,19 @@ tx1.fetchAll("select * from sqlx4k;").getOrThrow().forEach {
     println(debug())
 }
 tx1.commit().getOrThrow()
+```
+
+You can also execute entire blocks in a transaction scope.
+
+```kotlin
+db.transaction {
+    execute("delete from sqlx4k;").getOrThrow()
+    fetchAll("select * from sqlx4k;").getOrThrow().forEach {
+        println(it.debug())
+    }
+    // At the end of the block will auto commit the transaction.
+    // If any error occurs will automatically trigger the rollback method.
+}
 ```
 
 ### Auto generate basic `insert/update/delete` queries

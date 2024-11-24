@@ -32,6 +32,9 @@ class SQLError(
         PoolClosed,
         WorkerCrashed,
 
+        // Transaction
+        TransactionIsClosed,
+
         // Decode
         CannotDecode,
         CannotDecodeEnumValue,

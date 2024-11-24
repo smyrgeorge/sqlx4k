@@ -150,6 +150,20 @@ fun main() {
         db.execute("insert into sqlx4k (id, test) values (65, 'test');").getOrThrow()
         db.execute("insert into sqlx4k (id, test) values (66, 'test');").getOrThrow()
 
+        db.transaction {
+            execute("delete from sqlx4k;").getOrThrow()
+            fetchAll("select * from sqlx4k;").getOrThrow().forEach {
+                println(it.debug())
+            }
+            // Execute outside the tx.
+            db.fetchAll("select * from sqlx4k;").getOrThrow().forEach {
+                println(it.debug())
+            }
+        }
+
+        db.execute("insert into sqlx4k (id, test) values (65, 'test');").getOrThrow()
+        db.execute("insert into sqlx4k (id, test) values (66, 'test');").getOrThrow()
+
         val test = db.fetchAll("select * from sqlx4k;", Sqlx4kRowMapper).getOrThrow()
         println(test)
 

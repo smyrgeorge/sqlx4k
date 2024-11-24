@@ -16,7 +16,23 @@ import kotlinx.cinterop.ExperimentalForeignApi
 @Suppress("unused")
 @OptIn(ExperimentalForeignApi::class)
 interface Transaction : Driver {
+    val status: Status
     var tx: CPointer<out CPointed>
+
+    /**
+     * Checks if the transaction is open and throws an error if it is closed.
+     *
+     * This method verifies the current status of the transaction. If the status
+     * is [Status.Closed], it throws an [SQLError] indicating that the transaction
+     * has already been closed.
+     *
+     * @throws SQLError if the transaction is closed.
+     */
+    fun isOpenOrError() {
+        if (status == Status.Closed) {
+            SQLError(SQLError.Code.TransactionIsClosed, "Transaction has already closed.").ex()
+        }
+    }
 
     /**
      * Commits the current transaction, finalizing all operations performed within the transaction context.
@@ -39,4 +55,16 @@ interface Transaction : Driver {
      * @return A [Result] containing [Unit] if the rollback was successful, or an error if the rollback failed.
      */
     suspend fun rollback(): Result<Unit>
+
+    /**
+     * Represents the status of a transaction.
+     *
+     * The status can be either of the following:
+     * - Open: Indicates that the transaction is currently active and operations can be performed.
+     * - Closed: Indicates that the transaction has been finalized, either through commit or rollback.
+     */
+    enum class Status {
+        Open,
+        Closed
+    }
 }
