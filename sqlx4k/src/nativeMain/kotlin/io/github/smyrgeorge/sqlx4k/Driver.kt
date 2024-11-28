@@ -160,19 +160,23 @@ interface Driver {
         suspend fun begin(): Result<Transaction>
 
         /**
-         * Executes a block of code within a database transaction context.
+         * Executes a transaction with the specified transactional operations block.
          *
-         * This method begins a transaction, executes the provided suspending function,
-         * and commits the transaction if the function completes successfully.
-         * If an exception occurs during the execution, the transaction is rolled back.
+         * This method begins a new transaction, executes the provided block within the context
+         * of the transaction, commits the transaction if the block completes successfully, and
+         * rolls back the transaction in case of an error.
          *
-         * @param f A suspending function to be executed within the transaction context.
+         * @param T the return type of the transactional operations block
+         * @param f the suspendable block of code containing transactional operations to be executed
+         * @return the result of the transactional operations block
+         * @throws Throwable if an error occurs during the transactional operations, bubble up the error after rolling back the transaction
          */
-        suspend fun transaction(f: suspend Transaction.() -> Unit) {
+        suspend fun <T> transaction(f: suspend Transaction.() -> T): T {
             val tx: Transaction = begin().getOrThrow()
-            try {
-                f(tx)
+            return try {
+                val res = f(tx)
                 tx.commit()
+                res
             } catch (e: Throwable) {
                 tx.rollback()
                 throw e
