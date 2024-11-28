@@ -1,5 +1,5 @@
 group = "io.github.smyrgeorge"
-version = "0.33.0"
+version = "0.34.0"
 
 plugins {
     alias(libs.plugins.dokka)
