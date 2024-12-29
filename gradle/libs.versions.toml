@@ -8,7 +8,7 @@ kotlinx-coroutines = "1.10.1"
 # https://github.com/vanniktech/gradle-maven-publish-plugin
 publish = "0.30.0"
 # https://github.com/Kotlin/dokka
-dokka = "1.9.20"
+dokka = "2.0.0"
 # https://github.com/willowtreeapps/assertk
 assertk = "0.28.1"
 # https://github.com/google/ksp/releases
