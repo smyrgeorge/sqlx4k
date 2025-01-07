@@ -13,7 +13,7 @@ use std::{
 use tokio::runtime::Runtime;
 
 static RUNTIME: OnceLock<Runtime> = OnceLock::new();
-static mut SQLX4K: OnceLock<Sqlx4k> = OnceLock::new();
+static SQLX4K: OnceLock<Sqlx4k> = OnceLock::new();
 
 #[derive(Debug)]
 struct Sqlx4k {
@@ -169,32 +169,29 @@ pub extern "C" fn sqlx4k_of(
     let sqlx4k = Sqlx4k { pool };
 
     RUNTIME.set(runtime).unwrap();
-    unsafe { SQLX4K.set(sqlx4k).unwrap() };
+    SQLX4K.set(sqlx4k).unwrap();
 
     Sqlx4kResult::default().leak()
 }
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_pool_size() -> c_int {
-    unsafe { SQLX4K.get().unwrap() }.pool.size() as c_int
+    SQLX4K.get().unwrap().pool.size() as c_int
 }
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_pool_idle_size() -> c_int {
-    unsafe { SQLX4K.get().unwrap() }.pool.num_idle() as c_int
+    SQLX4K.get().unwrap().pool.num_idle() as c_int
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_close(
-    callback: *mut c_void,
-    fun: unsafe extern "C" fn(Ptr, *mut Sqlx4kResult),
-) {
+pub extern "C" fn sqlx4k_close(callback: *mut c_void, fun: extern "C" fn(Ptr, *mut Sqlx4kResult)) {
     let callback = Ptr { ptr: callback };
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { SQLX4K.get().unwrap() };
+    let sqlx4k = SQLX4K.get().unwrap();
     runtime.spawn(async move {
         let result = sqlx4k.close().await;
-        unsafe { fun(callback, result) }
+        fun(callback, result)
     });
 }
 
@@ -202,15 +199,15 @@ pub extern "C" fn sqlx4k_close(
 pub extern "C" fn sqlx4k_query(
     sql: *const c_char,
     callback: *mut c_void,
-    fun: unsafe extern "C" fn(Ptr, *mut Sqlx4kResult),
+    fun: extern "C" fn(Ptr, *mut Sqlx4kResult),
 ) {
     let callback = Ptr { ptr: callback };
     let sql = c_chars_to_str(sql).to_owned();
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { SQLX4K.get().unwrap() };
+    let sqlx4k = SQLX4K.get().unwrap();
     runtime.spawn(async move {
         let result = sqlx4k.query(&sql).await;
-        unsafe { fun(callback, result) }
+        fun(callback, result)
     });
 }
 
@@ -218,29 +215,29 @@ pub extern "C" fn sqlx4k_query(
 pub extern "C" fn sqlx4k_fetch_all(
     sql: *const c_char,
     callback: *mut c_void,
-    fun: unsafe extern "C" fn(Ptr, *mut Sqlx4kResult),
+    fun: extern "C" fn(Ptr, *mut Sqlx4kResult),
 ) {
     let callback = Ptr { ptr: callback };
     let sql = c_chars_to_str(sql).to_owned();
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { SQLX4K.get().unwrap() };
+    let sqlx4k = SQLX4K.get().unwrap();
     runtime.spawn(async move {
         let result = sqlx4k.fetch_all(&sql).await;
-        unsafe { fun(callback, result) }
+        fun(callback, result)
     });
 }
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_tx_begin(
     callback: *mut c_void,
-    fun: unsafe extern "C" fn(Ptr, *mut Sqlx4kResult),
+    fun: extern "C" fn(Ptr, *mut Sqlx4kResult),
 ) {
     let callback = Ptr { ptr: callback };
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
+    let sqlx4k = SQLX4K.get().unwrap();
     runtime.spawn(async move {
         let result = sqlx4k.tx_begin().await;
-        unsafe { fun(callback, result) }
+        fun(callback, result)
     });
 }
 
@@ -248,15 +245,15 @@ pub extern "C" fn sqlx4k_tx_begin(
 pub extern "C" fn sqlx4k_tx_commit(
     tx: *mut c_void,
     callback: *mut c_void,
-    fun: unsafe extern "C" fn(Ptr, *mut Sqlx4kResult),
+    fun: extern "C" fn(Ptr, *mut Sqlx4kResult),
 ) {
     let tx = Ptr { ptr: tx };
     let callback = Ptr { ptr: callback };
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
+    let sqlx4k = SQLX4K.get().unwrap();
     runtime.spawn(async move {
         let result = sqlx4k.tx_commit(tx).await;
-        unsafe { fun(callback, result) }
+        fun(callback, result)
     });
 }
 
@@ -264,15 +261,15 @@ pub extern "C" fn sqlx4k_tx_commit(
 pub extern "C" fn sqlx4k_tx_rollback(
     tx: *mut c_void,
     callback: *mut c_void,
-    fun: unsafe extern "C" fn(Ptr, *mut Sqlx4kResult),
+    fun: extern "C" fn(Ptr, *mut Sqlx4kResult),
 ) {
     let tx = Ptr { ptr: tx };
     let callback = Ptr { ptr: callback };
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
+    let sqlx4k = SQLX4K.get().unwrap();
     runtime.spawn(async move {
         let result = sqlx4k.tx_rollback(tx).await;
-        unsafe { fun(callback, result) }
+        fun(callback, result)
     });
 }
 
@@ -281,16 +278,16 @@ pub extern "C" fn sqlx4k_tx_query(
     tx: *mut c_void,
     sql: *const c_char,
     callback: *mut c_void,
-    fun: unsafe extern "C" fn(Ptr, *mut Sqlx4kResult),
+    fun: extern "C" fn(Ptr, *mut Sqlx4kResult),
 ) {
     let tx = Ptr { ptr: tx };
     let callback = Ptr { ptr: callback };
     let sql = c_chars_to_str(sql).to_owned();
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
+    let sqlx4k = SQLX4K.get().unwrap();
     runtime.spawn(async move {
         let result = sqlx4k.tx_query(tx, &sql).await;
-        unsafe { fun(callback, result) }
+        fun(callback, result)
     });
 }
 
@@ -299,16 +296,16 @@ pub extern "C" fn sqlx4k_tx_fetch_all(
     tx: *mut c_void,
     sql: *const c_char,
     callback: *mut c_void,
-    fun: unsafe extern "C" fn(Ptr, *mut Sqlx4kResult),
+    fun: extern "C" fn(Ptr, *mut Sqlx4kResult),
 ) {
     let tx = Ptr { ptr: tx };
     let callback = Ptr { ptr: callback };
     let sql = c_chars_to_str(sql).to_owned();
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { SQLX4K.get_mut().unwrap() };
+    let sqlx4k = SQLX4K.get().unwrap();
     runtime.spawn(async move {
         let result = sqlx4k.tx_fetch_all(tx, &sql).await;
-        unsafe { fun(callback, result) }
+        fun(callback, result)
     });
 }
 
