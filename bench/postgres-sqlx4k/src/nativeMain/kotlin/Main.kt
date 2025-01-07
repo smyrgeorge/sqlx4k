@@ -2,6 +2,7 @@ import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.bench.postgres.sqlx4k.Sqlx4k
 import io.github.smyrgeorge.sqlx4k.bench.postgres.sqlx4k.Sqlx4kRowMapper
 import io.github.smyrgeorge.sqlx4k.bench.postgres.sqlx4k.insert
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 import io.github.smyrgeorge.sqlx4k.postgres.PostgreSQL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -65,7 +66,8 @@ suspend fun bench() {
         println("[txCommit] $time")
         time
     }.map { it.inWholeMilliseconds }.average()
-    println("[txCommit] ${txCommit.milliseconds}")
+    val txCommitRows = db.fetchAll("select count(*) from sqlx4k;").getOrThrow().first().get(0).asLong()
+    println("[txCommit] ${txCommit.milliseconds} $txCommitRows")
 
     println("[txRollback]")
     val txRollback = tests.map {
@@ -88,5 +90,6 @@ suspend fun bench() {
         println("[txRollback] $time")
         time
     }.map { it.inWholeMilliseconds }.average()
-    println("[txRollback] ${txRollback.milliseconds}")
+    val txRollbackRows = db.fetchAll("select count(*) from sqlx4k;").getOrThrow().first().get(0).asLong()
+    println("[txRollback] ${txRollback.milliseconds} $txRollbackRows")
 }

@@ -13,6 +13,10 @@ dokka = "2.0.0"
 assertk = "0.28.1"
 # https://github.com/google/ksp/releases
 ksp = "2.1.0-1.0.29"
+# https://plugins.gradle.org/plugin/org.springframework.boot
+spring-boot = "3.4.1"
+# https://plugins.gradle.org/plugin/io.spring.dependency-management
+spring-depedency-management = "1.1.7"
 
 [libraries]
 gradle-kotlin-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
@@ -28,3 +32,6 @@ kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref 
 pubhish = { id = "com.vanniktech.maven.publish", version.ref = "publish" }
 ksp = { id ="com.google.devtools.ksp", version.ref = "ksp" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
+kotlin-spring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+spring-depedency-management = { id = "io.spring.dependency-management", version.ref = "spring-depedency-management" }

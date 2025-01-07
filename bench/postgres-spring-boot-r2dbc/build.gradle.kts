@@ -1,8 +1,8 @@
 plugins {
     kotlin("jvm")
-    kotlin("plugin.spring") version "2.1.0"
-    id("org.springframework.boot") version "3.3.5"
-    id("io.spring.dependency-management") version "1.1.6"
+    alias(libs.plugins.kotlin.spring)
+    alias(libs.plugins.spring.boot)
+    alias(libs.plugins.spring.depedency.management)
 }
 
 java.sourceCompatibility = JavaVersion.VERSION_21

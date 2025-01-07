@@ -43,27 +43,19 @@ class Sqlx4kService(
         databaseClient.sql("drop table if exists sqlx4k;").await()
         databaseClient.sql("create table sqlx4k(id integer, test text);").await()
 
-        val tests = 1..numberOfTests
+        val tests = 1..2
 
-        println("[txCommit]")
-        val txCommit = tests.map {
-            println("[txCommit] $it")
-            val time = measureTime {
-                (1..workers).forEachParallel {
-                    repeat(repeatPerWorker) {
-                        transactionalOperator.executeAndAwait {
-                            entityTemplate.insert(Sqlx4k(65, "test")).awaitFirst()
-                            entityTemplate.insert(Sqlx4k(66, "test")).awaitFirst()
-                            entityTemplate.select(selectAll, Sqlx4k::class.java).asFlow().toList()
-                        }
+        tests.map {
+            (1..workers).forEachParallel {
+                repeat(repeatPerWorker) {
+                    transactionalOperator.executeAndAwait {
+                        entityTemplate.insert(Sqlx4k(65, "test")).awaitFirst()
                         entityTemplate.select(selectAll, Sqlx4k::class.java).asFlow().toList()
                     }
+                    entityTemplate.select(selectAll, Sqlx4k::class.java).asFlow().toList()
                 }
             }
-            println("[txCommit] $time")
-            time
-        }.map { it.inWholeMilliseconds }.average()
-        println("[txCommit] ${txCommit.milliseconds}")
+        }
     }
 
     suspend fun bench() {
@@ -90,7 +82,8 @@ class Sqlx4kService(
             println("[txCommit] $time")
             time
         }.map { it.inWholeMilliseconds }.average()
-        println("[txCommit] ${txCommit.milliseconds}")
+        val txCommitRows = entityTemplate.count(selectAll, Sqlx4k::class.java).awaitFirst()
+        println("[txCommit] ${txCommit.milliseconds} $txCommitRows")
 
         println("[txRollback]")
         val txRollback = tests.map {
@@ -113,9 +106,8 @@ class Sqlx4kService(
             println("[txRollback] $time")
             time
         }.map { it.inWholeMilliseconds }.average()
-        println("[txRollback] ${txRollback.milliseconds}")
-
-        exitProcess(0)
+        val txRollbackRows = entityTemplate.count(selectAll, Sqlx4k::class.java).awaitFirst()
+        println("[txRollback] ${txRollback.milliseconds} $txRollbackRows")
     }
 
     companion object {
