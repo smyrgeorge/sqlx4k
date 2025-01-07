@@ -21,8 +21,9 @@ subprojects {
 
     // Dokka config
     run {
-        // Exclude examples.
+        // Exclude examples/bench modules.
         if (projectDir.path.contains("/examples")) return@run
+        if (projectDir.path.contains("/bench")) return@run
         // Run with ./gradlew :dokkaHtmlMultiModule
         apply(plugin = "org.jetbrains.dokka")
     }

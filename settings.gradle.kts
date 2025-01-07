@@ -20,3 +20,4 @@ include("examples:postgres")
 include("examples:sqlite")
 
 include("bench:postgres-sqlx4k")
+include("bench:postgres-spring-boot-r2dbc")

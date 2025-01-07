@@ -1,0 +1,23 @@
+server:
+  port: 8082
+
+spring:
+  main:
+    banner-mode: "off"
+  r2dbc:
+    url: r2dbc:postgresql://localhost:15432/test?currentSchema=public
+    username: postgres
+    password: postgres
+    pool:
+      # Similar values you can find here: https://github.com/brettwooldridge/HikariCP
+      max-idle-time: 10m
+      max-create-connection-time: 30s
+      # max-acquire-time:
+      initial-size: 10
+      max-size: 40
+
+logging:
+  pattern:
+    console: "%4relative %green(%d) %X{identity} [%thread] %highlight(${LOG_LEVEL_PATTERN:- %p}) %cyan(%logger{35}) - %msg%n"
+  level:
+    root: INFO

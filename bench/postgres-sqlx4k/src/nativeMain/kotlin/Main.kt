@@ -43,7 +43,7 @@ fun main() = runBlocking {
 
 suspend fun bench() {
     db.execute("drop table if exists sqlx4k;").getOrThrow()
-    db.execute("create table if not exists sqlx4k(id integer, test text);").getOrThrow()
+    db.execute("create table sqlx4k(id integer, test text);").getOrThrow()
 
     val tests = 1..numberOfTests
 
