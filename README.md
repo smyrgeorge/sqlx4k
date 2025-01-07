@@ -175,7 +175,7 @@ db.transaction {
 }
 ```
 
-### Auto generate basic `insert/update/delete` queries
+### Auto generate basic `CRUD` (insert/update/delete) queries
 
 For this operation you will need to include the `KSP` plugin to your project.
 
