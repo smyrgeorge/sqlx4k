@@ -18,3 +18,5 @@ include("sqlx4k-sqlite")
 include("examples:mysql")
 include("examples:postgres")
 include("examples:sqlite")
+
+include("bench:postgres-sqlx4k")

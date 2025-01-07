@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres
-    platform: linux/amd64
+    platform: linux/arm64
     restart: unless-stopped
     ports:
       - "15432:5432"
@@ -11,7 +11,7 @@ services:
       - POSTGRES_DB=test
   mysql:
     image: mysql
-    platform: linux/amd64
+    platform: linux/arm64
     restart: unless-stopped
     ports:
       - "13306:3306"
