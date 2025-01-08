@@ -232,6 +232,21 @@ println("AFFECTED: $affected")
 
 For more details take a look at the `postgres` example.
 
+### RowMapper(s)
+
+```kotlin
+object Sqlx4kRowMapper : RowMapper<Sqlx4k> {
+    override fun map(rs: ResultSet, row: ResultSet.Row): Sqlx4k {
+        val id: ResultSet.Row.Column = row.get(0)
+        val test: ResultSet.Row.Column = row.get(1)
+        // Use built-in mapping methods to map the values to the corresponding type.
+        return Sqlx4k(id = id.asInt(), test = test.asString())
+    }
+}
+
+val res = List<Sqlx4k> = db.fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow()
+```
+
 ### Listen/Notify (only for PostgreSQL)
 
 ```kotlin
