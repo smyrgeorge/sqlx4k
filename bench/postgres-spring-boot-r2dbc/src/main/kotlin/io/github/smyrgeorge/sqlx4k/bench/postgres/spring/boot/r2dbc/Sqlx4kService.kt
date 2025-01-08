@@ -15,7 +15,6 @@ import org.springframework.stereotype.Repository
 import org.springframework.transaction.reactive.TransactionalOperator
 import org.springframework.transaction.reactive.executeAndAwait
 import kotlin.coroutines.CoroutineContext
-import kotlin.system.exitProcess
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.measureTime
 
@@ -63,6 +62,24 @@ class Sqlx4kService(
         databaseClient.sql("create table sqlx4k(id integer, test text);").await()
 
         val tests = 1..numberOfTests
+
+        println("[noTx]")
+        val noTx = tests.map {
+            println("[noTx] $it")
+            val time = measureTime {
+                (1..workers).forEachParallel {
+                    repeat(repeatPerWorker) {
+                        entityTemplate.insert(Sqlx4k(65, "test")).awaitFirst()
+                        entityTemplate.insert(Sqlx4k(66, "test")).awaitFirst()
+                        entityTemplate.select(selectAll, Sqlx4k::class.java).asFlow().toList().map { it.toString() }
+                    }
+                }
+            }
+            println("[noTx] $time")
+            time
+        }.map { it.inWholeMilliseconds }.average()
+        val noTxRows = entityTemplate.count(selectAll, Sqlx4k::class.java).awaitFirst()
+        println("[noTx] ${noTx.milliseconds} $noTxRows")
 
         println("[txCommit]")
         val txCommit = tests.map {

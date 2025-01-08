@@ -48,6 +48,24 @@ suspend fun bench() {
 
     val tests = 1..numberOfTests
 
+    println("[noTx]")
+    val noTx = tests.map {
+        println("[noTx] $it")
+        val time = measureTime {
+            (1..workers).forEachParallel {
+                repeat(repeatPerWorker) {
+                    db.execute(Sqlx4k(65, "test").insert()).getOrThrow()
+                    db.execute(Sqlx4k(66, "test").insert()).getOrThrow()
+                    db.fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow().map { it.toString() }
+                }
+            }
+        }
+        println("[noTx] $time")
+        time
+    }.map { it.inWholeMilliseconds }.average()
+    val noTxRows = db.fetchAll("select count(*) from sqlx4k;").getOrThrow().first().get(0).asLong()
+    println("[noTx] ${noTx.milliseconds} $noTxRows")
+
     println("[txCommit]")
     val txCommit = tests.map {
         println("[txCommit] $it")

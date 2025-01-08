@@ -331,12 +331,7 @@ fn sqlx4k_result_of(result: Result<Vec<MySqlRow>, sqlx::Error>) -> Sqlx4kResult 
             let schema = Box::new(schema);
             let schema = Box::leak(schema);
 
-            let mut rows: Vec<Sqlx4kRow> = rows.iter().map(|r| sqlx4k_row_of(r)).collect();
-
-            // Make sure we're not wasting space.
-            rows.shrink_to_fit();
-            assert!(rows.len() == rows.capacity());
-
+            let rows: Vec<Sqlx4kRow> = rows.iter().map(|r| sqlx4k_row_of(r)).collect();
             let size = rows.len();
             let rows: Box<[Sqlx4kRow]> = rows.into_boxed_slice();
             let rows: &mut [Sqlx4kRow] = Box::leak(rows);
@@ -358,7 +353,7 @@ fn sqlx4k_schema_of(row: &MySqlRow) -> Sqlx4kSchema {
     if columns.is_empty() {
         Sqlx4kSchema::default()
     } else {
-        let mut columns: Vec<Sqlx4kSchemaColumn> = row
+        let columns: Vec<Sqlx4kSchemaColumn> = row
             .columns()
             .iter()
             .map(|c| {
@@ -373,10 +368,6 @@ fn sqlx4k_schema_of(row: &MySqlRow) -> Sqlx4kSchema {
                 }
             })
             .collect();
-
-        // Make sure we're not wasting space.
-        columns.shrink_to_fit();
-        assert!(columns.len() == columns.capacity());
 
         let size = columns.len();
         let columns: Box<[Sqlx4kSchemaColumn]> = columns.into_boxed_slice();
@@ -395,7 +386,7 @@ fn sqlx4k_row_of(row: &MySqlRow) -> Sqlx4kRow {
     if columns.is_empty() {
         Sqlx4kRow::default()
     } else {
-        let mut columns: Vec<Sqlx4kColumn> = row
+        let columns: Vec<Sqlx4kColumn> = row
             .columns()
             .iter()
             .map(|c| {
@@ -410,10 +401,6 @@ fn sqlx4k_row_of(row: &MySqlRow) -> Sqlx4kRow {
                 }
             })
             .collect();
-
-        // Make sure we're not wasting space.
-        columns.shrink_to_fit();
-        assert!(columns.len() == columns.capacity());
 
         let size = columns.len();
         let columns: Box<[Sqlx4kColumn]> = columns.into_boxed_slice();

@@ -358,10 +358,7 @@ fn sqlx4k_result_of_pg_notification(item: PgNotification) -> Sqlx4kResult {
         name: CString::new(item.channel()).unwrap().into_raw(),
         kind: CString::new("TEXT").unwrap().into_raw(),
     };
-    let mut columns = vec![column];
-    // Make sure we're not wasting space.
-    columns.shrink_to_fit();
-    assert!(columns.len() == columns.capacity());
+    let columns = vec![column];
     let columns: Box<[Sqlx4kSchemaColumn]> = columns.into_boxed_slice();
     let columns: &mut [Sqlx4kSchemaColumn] = Box::leak(columns);
     let columns: *mut Sqlx4kSchemaColumn = columns.as_mut_ptr();
@@ -374,19 +371,13 @@ fn sqlx4k_result_of_pg_notification(item: PgNotification) -> Sqlx4kResult {
         value: CString::new(item.payload()).unwrap().into_raw(),
     };
 
-    let mut columns = vec![column];
-    // Make sure we're not wasting space.
-    columns.shrink_to_fit();
-    assert!(columns.len() == columns.capacity());
+    let columns = vec![column];
     let columns: Box<[Sqlx4kColumn]> = columns.into_boxed_slice();
     let columns: &mut [Sqlx4kColumn] = Box::leak(columns);
     let columns: *mut Sqlx4kColumn = columns.as_mut_ptr();
 
     let row = Sqlx4kRow { size: 1, columns };
-    let mut rows = vec![row];
-    // Make sure we're not wasting space.
-    rows.shrink_to_fit();
-    assert!(rows.len() == rows.capacity());
+    let rows = vec![row];
     let rows: Box<[Sqlx4kRow]> = rows.into_boxed_slice();
     let rows: &mut [Sqlx4kRow] = Box::leak(rows);
     let rows: *mut Sqlx4kRow = rows.as_mut_ptr();
@@ -411,12 +402,7 @@ fn sqlx4k_result_of(result: Result<Vec<PgRow>, sqlx::Error>) -> Sqlx4kResult {
             let schema = Box::new(schema);
             let schema = Box::leak(schema);
 
-            let mut rows: Vec<Sqlx4kRow> = rows.iter().map(|r| sqlx4k_row_of(r)).collect();
-
-            // Make sure we're not wasting space.
-            rows.shrink_to_fit();
-            assert!(rows.len() == rows.capacity());
-
+            let rows: Vec<Sqlx4kRow> = rows.iter().map(|r| sqlx4k_row_of(r)).collect();
             let size = rows.len();
             let rows: Box<[Sqlx4kRow]> = rows.into_boxed_slice();
             let rows: &mut [Sqlx4kRow] = Box::leak(rows);
@@ -438,7 +424,7 @@ fn sqlx4k_schema_of(row: &PgRow) -> Sqlx4kSchema {
     if columns.is_empty() {
         Sqlx4kSchema::default()
     } else {
-        let mut columns: Vec<Sqlx4kSchemaColumn> = row
+        let columns: Vec<Sqlx4kSchemaColumn> = row
             .columns()
             .iter()
             .map(|c| {
@@ -453,10 +439,6 @@ fn sqlx4k_schema_of(row: &PgRow) -> Sqlx4kSchema {
                 }
             })
             .collect();
-
-        // Make sure we're not wasting space.
-        columns.shrink_to_fit();
-        assert!(columns.len() == columns.capacity());
 
         let size = columns.len();
         let columns: Box<[Sqlx4kSchemaColumn]> = columns.into_boxed_slice();
@@ -475,7 +457,7 @@ fn sqlx4k_row_of(row: &PgRow) -> Sqlx4kRow {
     if columns.is_empty() {
         Sqlx4kRow::default()
     } else {
-        let mut columns: Vec<Sqlx4kColumn> = row
+        let columns: Vec<Sqlx4kColumn> = row
             .columns()
             .iter()
             .map(|c| {
@@ -490,10 +472,6 @@ fn sqlx4k_row_of(row: &PgRow) -> Sqlx4kRow {
                 }
             })
             .collect();
-
-        // Make sure we're not wasting space.
-        columns.shrink_to_fit();
-        assert!(columns.len() == columns.capacity());
 
         let size = columns.len();
         let columns: Box<[Sqlx4kColumn]> = columns.into_boxed_slice();
