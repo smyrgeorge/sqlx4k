@@ -198,6 +198,11 @@ dependencies {
 Then create your data class that will be mapped to a table:
 
 ```kotlin
+package io.github.smyrgeorge.sqlx4k.examples.postgres
+
+import io.github.smyrgeorge.sqlx4k.annotation.Id
+import io.github.smyrgeorge.sqlx4k.annotation.Table
+
 @Table("sqlx4k")
 data class Sqlx4k(
     @Id(insert = true) // Will be included in the insert query.
