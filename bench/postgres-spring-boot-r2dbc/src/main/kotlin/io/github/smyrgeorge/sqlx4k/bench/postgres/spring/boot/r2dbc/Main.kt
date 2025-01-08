@@ -14,8 +14,6 @@ fun main(args: Array<String>) {
         println("Starting (waiting 5s)...")
         Thread.sleep(5000)
         runBlocking {
-            println("Warming up...")
-            Sqlx4kService.INSTANCE.warmup()
             println("Running...")
             Sqlx4kService.INSTANCE.bench()
             exitProcess(0)

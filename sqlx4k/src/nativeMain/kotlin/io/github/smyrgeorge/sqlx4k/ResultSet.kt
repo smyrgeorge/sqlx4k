@@ -53,6 +53,15 @@ class ResultSet(
     val size: Int get() = getRaw().size
 
     /**
+     * Provides access to the metadata of the result set associated with the `ResultSet`.
+     *
+     * This lazily initialized property allows users to interact with the metadata,
+     * which contains information about the schema of the result set, such as column count and
+     * details about each column (e.g., name, ordinal position, and data type).
+     */
+    val metadata: Metadata by lazy { Metadata(getRaw().schema!!.pointed) }
+
+    /**
      * Checks if the current result is an error.
      *
      * @return True if the result represents an error, false otherwise.

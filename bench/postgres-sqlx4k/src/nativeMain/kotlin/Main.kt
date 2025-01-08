@@ -12,11 +12,12 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.measureTime
 
 private const val connections = 40
-private const val numberOfTests = 5
-private const val workers = 10
+private const val numberOfTests = 10
+private const val workers = 4
 private const val repeatPerWorker = 1_000
 
 suspend fun <A> Iterable<A>.forEachParallel(
@@ -25,7 +26,9 @@ suspend fun <A> Iterable<A>.forEachParallel(
 ): Unit = withContext(context) { map { async { f(it) } }.awaitAll() }
 
 val options = Driver.Pool.Options.builder()
+    .minConnections(10)
     .maxConnections(connections)
+    .maxLifetime(10.minutes)
     .build()
 
 val db = PostgreSQL(
@@ -50,12 +53,11 @@ suspend fun bench() {
 
     println("[noTx]")
     val noTx = tests.map {
-        println("[noTx] $it")
         val time = measureTime {
             (1..workers).forEachParallel {
                 repeat(repeatPerWorker) {
-                    db.execute(Sqlx4k(65, "test").insert()).getOrThrow()
-                    db.execute(Sqlx4k(66, "test").insert()).getOrThrow()
+                    db.execute(Sqlx4k.random().insert()).getOrThrow()
+                    db.execute(Sqlx4k.random().insert()).getOrThrow()
                     db.fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow()
                 }
             }
@@ -68,13 +70,12 @@ suspend fun bench() {
 
     println("[txCommit]")
     val txCommit = tests.map {
-        println("[txCommit] $it")
         val time = measureTime {
             (1..workers).forEachParallel {
                 repeat(repeatPerWorker) {
                     db.transaction {
-                        execute(Sqlx4k(65, "test").insert()).getOrThrow()
-                        execute(Sqlx4k(66, "test").insert()).getOrThrow()
+                        execute(Sqlx4k.random().insert()).getOrThrow()
+                        execute(Sqlx4k.random().insert()).getOrThrow()
                         fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow()
                     }
                     db.fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow()
@@ -89,14 +90,13 @@ suspend fun bench() {
 
     println("[txRollback]")
     val txRollback = tests.map {
-        println("[txRollback] $it")
         val time = measureTime {
             (1..workers).forEachParallel {
                 repeat(repeatPerWorker) {
                     runCatching {
                         db.transaction {
-                            execute(Sqlx4k(65, "test").insert()).getOrThrow()
-                            execute(Sqlx4k(66, "test").insert()).getOrThrow()
+                            execute(Sqlx4k.random().insert()).getOrThrow()
+                            execute(Sqlx4k.random().insert()).getOrThrow()
                             fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow()
                             error("Trigger rollback")
                         }

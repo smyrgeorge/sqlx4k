@@ -1,6 +1,11 @@
 package io.github.smyrgeorge.sqlx4k
 
-import kotlinx.cinterop.*
+import kotlinx.cinterop.CPointer
+import kotlinx.cinterop.CValue
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.asStableRef
+import kotlinx.cinterop.staticCFunction
+import kotlinx.cinterop.useContents
 import sqlx4k.Ptr
 import sqlx4k.Sqlx4kResult
 import kotlin.coroutines.Continuation
@@ -128,9 +133,9 @@ interface Driver {
 
                 fun minConnections(minConnections: Int) = apply { this.minConnections = minConnections }
                 fun maxConnections(maxConnections: Int) = apply { this.maxConnections = maxConnections }
-                fun acquireTimeout(acquireTimeout: Duration?) = apply { this.acquireTimeout = acquireTimeout }
-                fun idleTimeout(idleTimeout: Duration?) = apply { this.idleTimeout = idleTimeout }
-                fun maxLifetime(maxLifetime: Duration?) = apply { this.maxLifetime = maxLifetime }
+                fun acquireTimeout(acquireTimeout: Duration) = apply { this.acquireTimeout = acquireTimeout }
+                fun idleTimeout(idleTimeout: Duration) = apply { this.idleTimeout = idleTimeout }
+                fun maxLifetime(maxLifetime: Duration) = apply { this.maxLifetime = maxLifetime }
                 fun build() = Options(minConnections, maxConnections, acquireTimeout, idleTimeout, maxLifetime)
             }
 

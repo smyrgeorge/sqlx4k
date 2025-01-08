@@ -28,8 +28,8 @@ class Sqlx4kService(
         INSTANCE = this
     }
 
-    private val numberOfTests = 5
-    private val workers = 10
+    private val numberOfTests = 10
+    private val workers = 4
     private val repeatPerWorker = 1_000
     private val selectAll = Query.empty().limit(100)
 
@@ -37,25 +37,6 @@ class Sqlx4kService(
         context: CoroutineContext = Dispatchers.IO,
         f: suspend (A) -> Unit
     ): Unit = withContext(context) { map { async { f(it) } }.awaitAll() }
-
-    suspend fun warmup() {
-        databaseClient.sql("drop table if exists sqlx4k;").await()
-        databaseClient.sql("create table sqlx4k(id integer, test text);").await()
-
-        val tests = 1..2
-
-        tests.map {
-            (1..workers).forEachParallel {
-                repeat(repeatPerWorker) {
-                    transactionalOperator.executeAndAwait {
-                        entityTemplate.insert(Sqlx4k(65, "test")).awaitFirst()
-                        entityTemplate.select(selectAll, Sqlx4k::class.java).asFlow().toList()
-                    }
-                    entityTemplate.select(selectAll, Sqlx4k::class.java).asFlow().toList()
-                }
-            }
-        }
-    }
 
     suspend fun bench() {
         databaseClient.sql("drop table if exists sqlx4k;").await()
@@ -65,12 +46,11 @@ class Sqlx4kService(
 
         println("[noTx]")
         val noTx = tests.map {
-            println("[noTx] $it")
             val time = measureTime {
                 (1..workers).forEachParallel {
                     repeat(repeatPerWorker) {
-                        entityTemplate.insert(Sqlx4k(65, "test")).awaitFirst()
-                        entityTemplate.insert(Sqlx4k(66, "test")).awaitFirst()
+                        entityTemplate.insert(Sqlx4k.random()).awaitFirst()
+                        entityTemplate.insert(Sqlx4k.random()).awaitFirst()
                         entityTemplate.select(selectAll, Sqlx4k::class.java).asFlow().toList()
                     }
                 }
@@ -83,13 +63,12 @@ class Sqlx4kService(
 
         println("[txCommit]")
         val txCommit = tests.map {
-            println("[txCommit] $it")
             val time = measureTime {
                 (1..workers).forEachParallel {
                     repeat(repeatPerWorker) {
                         transactionalOperator.executeAndAwait {
-                            entityTemplate.insert(Sqlx4k(65, "test")).awaitFirst()
-                            entityTemplate.insert(Sqlx4k(66, "test")).awaitFirst()
+                            entityTemplate.insert(Sqlx4k.random()).awaitFirst()
+                            entityTemplate.insert(Sqlx4k.random()).awaitFirst()
                             entityTemplate.select(selectAll, Sqlx4k::class.java).asFlow().toList()
                         }
                         entityTemplate.select(selectAll, Sqlx4k::class.java).asFlow().toList()
@@ -104,14 +83,13 @@ class Sqlx4kService(
 
         println("[txRollback]")
         val txRollback = tests.map {
-            println("[txRollback] $it")
             val time = measureTime {
                 (1..workers).forEachParallel {
                     repeat(repeatPerWorker) {
                         runCatching {
                             transactionalOperator.executeAndAwait {
-                                entityTemplate.insert(Sqlx4k(65, "test")).awaitFirst()
-                                entityTemplate.insert(Sqlx4k(66, "test")).awaitFirst()
+                                entityTemplate.insert(Sqlx4k.random()).awaitFirst()
+                                entityTemplate.insert(Sqlx4k.random()).awaitFirst()
                                 entityTemplate.select(selectAll, Sqlx4k::class.java).asFlow().toList()
                                 error("Trigger rollback")
                             }

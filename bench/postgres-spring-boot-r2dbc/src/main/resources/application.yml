@@ -9,11 +9,6 @@ spring:
     username: postgres
     password: postgres
     pool:
-      # Similar values you can find here: https://github.com/brettwooldridge/HikariCP
-      max-idle-time: 10m
-      max-create-connection-time: 30s
-      # max-acquire-time:
-      initial-size: 10
       max-size: 40
 
 logging:
