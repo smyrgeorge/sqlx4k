@@ -56,7 +56,7 @@ suspend fun bench() {
                 repeat(repeatPerWorker) {
                     db.execute(Sqlx4k(65, "test").insert()).getOrThrow()
                     db.execute(Sqlx4k(66, "test").insert()).getOrThrow()
-                    db.fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow().map { it.toString() }
+                    db.fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow()
                 }
             }
         }

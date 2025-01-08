@@ -71,7 +71,7 @@ class Sqlx4kService(
                     repeat(repeatPerWorker) {
                         entityTemplate.insert(Sqlx4k(65, "test")).awaitFirst()
                         entityTemplate.insert(Sqlx4k(66, "test")).awaitFirst()
-                        entityTemplate.select(selectAll, Sqlx4k::class.java).asFlow().toList().map { it.toString() }
+                        entityTemplate.select(selectAll, Sqlx4k::class.java).asFlow().toList()
                     }
                 }
             }
