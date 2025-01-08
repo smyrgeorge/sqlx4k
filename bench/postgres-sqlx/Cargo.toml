@@ -1,0 +1,13 @@
+[package]
+name = "postgres-sqlx"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# https://crates.io/crates/tokio
+tokio = { version = "1.40.0", features = ["full"] }
+# https://crates.io/crates/sqlx
+sqlx = { version = "0.8.2", features = [
+    "runtime-tokio", # Use the tokio runtime without enabling a TLS backend.
+    "postgres",      # Add support for the Postgres database server.
+] }
