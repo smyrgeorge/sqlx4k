@@ -147,6 +147,6 @@ interface Statement {
          * @param sql The SQL string used to create the statement.
          * @return A new `Statement` instance initialized with the provided SQL string.
          */
-        fun create(sql: String, ): Statement = SimpleStatement(sql)
+        fun create(sql: String): Statement = SimpleStatement(sql)
     }
 }

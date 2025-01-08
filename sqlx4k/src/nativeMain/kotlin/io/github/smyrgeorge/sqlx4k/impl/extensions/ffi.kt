@@ -40,9 +40,6 @@ fun Sqlx4kResult.toError(): SQLError {
     return SQLError(code, message)
 }
 
-fun Sqlx4kResult.getFirstRow(): Sqlx4kRow? =
-    if (size >= 0) rows?.get(0) else null
-
 fun Sqlx4kResult.throwIfError() {
     if (isError()) toError().ex()
 }

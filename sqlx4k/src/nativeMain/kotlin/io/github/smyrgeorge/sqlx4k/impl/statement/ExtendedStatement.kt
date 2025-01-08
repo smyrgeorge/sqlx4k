@@ -13,7 +13,6 @@ import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
  *
  * @property sql The SQL string containing the statement.
  */
-@Suppress("unused")
 class ExtendedStatement(private val sql: String) : SimpleStatement(sql) {
 
     private val pgParameters: List<Int> by lazy {

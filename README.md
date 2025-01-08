@@ -241,7 +241,7 @@ For more details take a look at the `postgres` example.
 
 ```kotlin
 object Sqlx4kRowMapper : RowMapper<Sqlx4k> {
-    override fun map(rs: ResultSet, row: ResultSet.Row): Sqlx4k {
+    override fun map(row: ResultSet.Row): Sqlx4k {
         val id: ResultSet.Row.Column = row.get(0)
         val test: ResultSet.Row.Column = row.get(1)
         // Use built-in mapping methods to map the values to the corresponding type.

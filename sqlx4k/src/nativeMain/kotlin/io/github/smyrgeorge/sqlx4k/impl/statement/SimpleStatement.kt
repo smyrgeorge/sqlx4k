@@ -12,7 +12,6 @@ import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
  * @param sql The SQL statement string that may contain positional ("?") and named
  *            (e.g., ":name") parameters to be bound.
  */
-@Suppress("unused")
 open class SimpleStatement(private val sql: String) : Statement {
 
     private val namedParameters: Set<String> by lazy {
