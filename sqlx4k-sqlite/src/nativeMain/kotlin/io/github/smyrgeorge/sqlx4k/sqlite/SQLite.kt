@@ -50,8 +50,8 @@ class SQLite(
     init {
         sqlx4k_of(
             url = url,
-            _username = null,
-            _password = null,
+            username = null,
+            password = null,
             min_connections = options.minConnections ?: -1,
             max_connections = options.maxConnections,
             acquire_timeout_milis = options.acquireTimeout?.inWholeMilliseconds?.toInt() ?: -1,

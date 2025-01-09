@@ -124,8 +124,8 @@ impl Sqlx4k {
 #[no_mangle]
 pub extern "C" fn sqlx4k_of(
     url: *const c_char,
-    _username: *const c_char,
-    _password: *const c_char,
+    username: *const c_char,
+    password: *const c_char,
     min_connections: c_int,
     max_connections: c_int,
     acquire_timeout_milis: c_int,
@@ -133,6 +133,8 @@ pub extern "C" fn sqlx4k_of(
     max_lifetime_milis: c_int,
 ) -> *mut Sqlx4kResult {
     let url = c_chars_to_str(url);
+    let _username = username;
+    let _password = password;
     let options: SqliteConnectOptions = url.parse().unwrap();
 
     // Create the tokio runtime.
