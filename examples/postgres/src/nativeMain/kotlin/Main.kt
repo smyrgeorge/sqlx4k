@@ -28,11 +28,9 @@ fun main() {
             .build()
 
         val db = PostgreSQL(
-            host = "localhost",
-            port = 15432,
+            url = "postgresql://localhost:15432/test",
             username = "postgres",
             password = "postgres",
-            database = "test",
             options = options
         )
 

@@ -1,4 +1,6 @@
-use sqlx::mysql::{MySqlPool, MySqlPoolOptions, MySqlRow, MySqlTypeInfo, MySqlValueRef};
+use sqlx::mysql::{
+    MySqlConnectOptions, MySqlPool, MySqlPoolOptions, MySqlRow, MySqlTypeInfo, MySqlValueRef,
+};
 use sqlx::{Column, Executor, MySql, Row, Transaction, TypeInfo, ValueRef};
 use sqlx4k::{
     c_chars_to_str, sqlx4k_error_result_of, Ptr, Sqlx4kColumn, Sqlx4kResult, Sqlx4kRow,
@@ -121,26 +123,20 @@ impl Sqlx4k {
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_of(
-    host: *const c_char,
-    port: c_int,
+    url: *const c_char,
     username: *const c_char,
     password: *const c_char,
-    database: *const c_char,
     min_connections: c_int,
     max_connections: c_int,
     acquire_timeout_milis: c_int,
     idle_timeout_milis: c_int,
     max_lifetime_milis: c_int,
 ) -> *mut Sqlx4kResult {
-    let host = c_chars_to_str(host);
+    let url = c_chars_to_str(url);
     let username = c_chars_to_str(username);
     let password = c_chars_to_str(password);
-    let database = c_chars_to_str(database);
-
-    let url = format!(
-        "mysql://{}:{}@{}:{}/{}",
-        username, password, host, port, database
-    );
+    let options: MySqlConnectOptions = url.parse().unwrap();
+    let options = options.username(username).password(password);
 
     // Create the tokio runtime.
     let runtime = Runtime::new().unwrap();
@@ -172,7 +168,7 @@ pub extern "C" fn sqlx4k_of(
         pool
     };
 
-    let pool = pool.connect(&url);
+    let pool = pool.connect_with(options);
 
     // Create the pool here.
     let pool: MySqlPool = runtime.block_on(pool).unwrap();

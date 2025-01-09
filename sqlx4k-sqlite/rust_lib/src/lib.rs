@@ -1,4 +1,6 @@
-use sqlx::sqlite::{SqlitePool, SqlitePoolOptions, SqliteRow, SqliteTypeInfo, SqliteValueRef};
+use sqlx::sqlite::{
+    SqliteConnectOptions, SqlitePool, SqlitePoolOptions, SqliteRow, SqliteTypeInfo, SqliteValueRef,
+};
 use sqlx::{Column, Executor, Row, Sqlite, Transaction, TypeInfo, ValueRef};
 use sqlx4k::{
     c_chars_to_str, sqlx4k_error_result_of, Ptr, Sqlx4kColumn, Sqlx4kResult, Sqlx4kRow,
@@ -121,16 +123,17 @@ impl Sqlx4k {
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_of(
-    database: *const c_char,
+    url: *const c_char,
+    _username: *const c_char,
+    _password: *const c_char,
     min_connections: c_int,
     max_connections: c_int,
     acquire_timeout_milis: c_int,
     idle_timeout_milis: c_int,
     max_lifetime_milis: c_int,
 ) -> *mut Sqlx4kResult {
-    let database = c_chars_to_str(database);
-
-    let url = format!("sqlite:{}", database);
+    let url = c_chars_to_str(url);
+    let options: SqliteConnectOptions = url.parse().unwrap();
 
     // Create the tokio runtime.
     let runtime = Runtime::new().unwrap();
@@ -162,7 +165,7 @@ pub extern "C" fn sqlx4k_of(
         pool
     };
 
-    let pool = pool.connect(&url);
+    let pool = pool.connect_with(options);
 
     // Create the pool here.
     let pool: SqlitePool = runtime.block_on(pool).unwrap();

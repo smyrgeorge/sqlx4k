@@ -26,23 +26,34 @@ import sqlx4k.sqlx4k_tx_fetch_all
 import sqlx4k.sqlx4k_tx_query
 import sqlx4k.sqlx4k_tx_rollback
 
+/**
+ * The `MySQL` class provides a driver implementation for interacting with a MySQL database.
+ * It supports connection pooling, transactional operations, and executing SQL queries.
+ * 
+ *  The connection URL should follow the nex pattern,
+ *  as described by [MySQL](https://dev.mysql.com/doc/connector-j/8.0/en/connector-j-reference-jdbc-url-format.html).
+ * 
+ *  The generic format of the connection URL:
+ *  mysql://[host][/database][?properties]
+ *
+ * @param url The connection URL for the MySQL database.
+ * @param username The username for authenticating with the database.
+ * @param password The password for authenticating with the database.
+ * @param options The optional configuration for the connection pool, such as min/max connections and timeout settings.
+ */
 @Suppress("unused")
 @OptIn(ExperimentalForeignApi::class)
 class MySQL(
-    host: String,
-    port: Int,
+    url: String,
     username: String,
     password: String,
-    database: String,
     options: Driver.Pool.Options = Driver.Pool.Options(),
 ) : Driver, Driver.Pool, Driver.Transactional {
     init {
         sqlx4k_of(
-            host = host,
-            port = port,
+            url = url,
             username = username,
             password = password,
-            database = database,
             min_connections = options.minConnections ?: -1,
             max_connections = options.maxConnections,
             acquire_timeout_milis = options.acquireTimeout?.inWholeMilliseconds?.toInt() ?: -1,

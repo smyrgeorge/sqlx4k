@@ -20,11 +20,9 @@ fun main() {
         ): Unit = withContext(context) { map { async { f(it) } }.awaitAll() }
 
         val db = MySQL(
-            host = "localhost",
-            port = 13306,
+            url = "mysql://localhost:13306/test",
             username = "mysql",
-            password = "mysql",
-            database = "test"
+            password = "mysql"
         )
 
         db.execute("drop table if exists sqlx4k;").getOrThrow()

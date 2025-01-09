@@ -19,9 +19,7 @@ fun main() {
             f: suspend (A) -> Unit
         ): Unit = withContext(context) { map { async { f(it) } }.awaitAll() }
 
-        val db = SQLite(
-            database = "test.db"
-        )
+        val db = SQLite(url = "sqlite://test.db")
 
         db.execute("drop table if exists sqlx4k;").getOrThrow()
         val error = db.execute("select * from sqlx4kk").errorOrNull()
@@ -51,17 +49,12 @@ fun main() {
             Test(id = id.asInt())
         }
         println(r2)
-//        val r3 = db.fetchAll("select * from sqlx4k;").map {
-//            val id: ResultSet.Row.Column = it.get(1)
-//            Test(id = id.asInt())
-//        }
-//        println(r3)
 
         db.fetchAll("select 1;").getOrThrow().forEach {
             println(it.debug())
         }
 
-        db.fetchAll("select now();").getOrThrow().forEach {
+        db.fetchAll("select date('now');").getOrThrow().forEach {
             println(it.debug())
         }
 

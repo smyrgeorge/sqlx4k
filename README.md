@@ -104,25 +104,20 @@ val options = Driver.Pool.Options.builder()
     .build()
 
 val db = PostgreSQL(
-    host = "localhost",
-    port = 15432,
-    username = "postgres",
-    password = "postgres",
-    database = "test",
-    options = options
+  url = "postgresql://localhost:15432/test",
+  username = "postgres",
+  password = "postgres",
+  options = options
 )
 
 val db = MySQL(
-    host = "localhost",
-    port = 13306,
-    username = "mysql",
-    password = "mysql",
-    database = "test",
-    options = options
+  url = "mysql://localhost:13306/test",
+  username = "mysql",
+  password = "mysql"
 )
 
 val db = SQLite(
-    database = "test.db",
+    url = "sqlite://test.db",
     options = options
 )
 ```

@@ -46,11 +46,9 @@ typedef struct Sqlx4kResult {
 
 void sqlx4k_free_result(struct Sqlx4kResult *ptr);
 
-Sqlx4kResult *sqlx4k_of(const char *host,
-                        int port,
+Sqlx4kResult *sqlx4k_of(const char *url,
                         const char *username,
                         const char *password,
-                        const char *database,
                         int min_connections,
                         int max_connections,
                         int acquire_timeout_milis,

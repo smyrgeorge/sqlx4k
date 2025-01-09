@@ -44,23 +44,41 @@ import sqlx4k.sqlx4k_tx_query
 import sqlx4k.sqlx4k_tx_rollback
 import kotlin.experimental.ExperimentalNativeApi
 
+/**
+ * PostgreSQL class provides mechanisms to interact with a PostgreSQL database.
+ * It implements `Driver`, `Driver.Pool`, and `Driver.Transactional` interfaces,
+ * offering functionalities such as connection pooling, executing queries,
+ * fetching data, and handling transactions.
+ *
+ *  The URL scheme designator can be either `postgresql://` or `postgres://`.
+ *  Each of the URL parts is optional.
+ *
+ *  postgresql://
+ *  postgresql://localhost
+ *  postgresql://localhost:5433
+ *  postgresql://localhost/mydb
+ *  postgresql://user@localhost
+ *  postgresql://user:secret@localhost
+ *  postgresql://localhost?dbname=mydb&user=postgres&password=postgres
+ *
+ * @param url The URL of the PostgreSQL database to connect to.
+ * @param username The username used for authentication.
+ * @param password The password used for authentication.
+ * @param options Optional pool configuration, defaulting to `Driver.Pool.Options`.
+ */
 @Suppress("MemberVisibilityCanBePrivate", "unused")
 @OptIn(ExperimentalForeignApi::class, ExperimentalNativeApi::class)
 class PostgreSQL(
-    host: String,
-    port: Int,
+    url: String,
     username: String,
     password: String,
-    database: String,
     options: Driver.Pool.Options = Driver.Pool.Options(),
 ) : Driver, Driver.Pool, Driver.Transactional {
     init {
         sqlx4k_of(
-            host = host,
-            port = port,
+            url = url,
             username = username,
             password = password,
-            database = database,
             min_connections = options.minConnections ?: -1,
             max_connections = options.maxConnections,
             acquire_timeout_milis = options.acquireTimeout?.inWholeMilliseconds?.toInt() ?: -1,

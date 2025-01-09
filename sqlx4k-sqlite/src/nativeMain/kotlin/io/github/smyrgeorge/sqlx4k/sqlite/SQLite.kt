@@ -26,15 +26,32 @@ import sqlx4k.sqlx4k_tx_fetch_all
 import sqlx4k.sqlx4k_tx_query
 import sqlx4k.sqlx4k_tx_rollback
 
+/**
+ * A database driver for SQLite, implemented with connection pooling and transactional support.
+ * This class provides mechanisms to execute SQL queries, manage database connections, and
+ * handle transactions in a coroutine-based environment.
+ * 
+ * `sqlite::memory:` | Open an in-memory database.
+ * `sqlite:data.db` | Open the file `data.db` in the current directory.
+ * `sqlite://data.db` | Open the file `data.db` in the current directory.
+ * `sqlite:///data.db` | Open the file `data.db` from the root (`/`) directory.
+ * `sqlite://data.db?mode=ro` | Open the file `data.db` for read-only access.
+ *
+ * @param url The URL string for connecting to the SQLite database.
+ * @param options Configuration options for the connection pool, such as minimum and
+ * maximum connections, timeout durations, etc.
+ */
 @Suppress("unused")
 @OptIn(ExperimentalForeignApi::class)
 class SQLite(
-    database: String,
+    url: String,
     options: Driver.Pool.Options = Driver.Pool.Options(),
 ) : Driver, Driver.Pool, Driver.Transactional {
     init {
         sqlx4k_of(
-            database = database,
+            url = url,
+            _username = null,
+            _password = null,
             min_connections = options.minConnections ?: -1,
             max_connections = options.maxConnections,
             acquire_timeout_milis = options.acquireTimeout?.inWholeMilliseconds?.toInt() ?: -1,
