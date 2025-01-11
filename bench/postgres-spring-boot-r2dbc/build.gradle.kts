@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     kotlin("jvm")
     alias(libs.plugins.kotlin.spring)
@@ -6,6 +8,7 @@ plugins {
 }
 
 java.sourceCompatibility = JavaVersion.VERSION_21
+java.targetCompatibility = JavaVersion.VERSION_21
 
 dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
@@ -22,6 +25,7 @@ dependencies {
 
 kotlin {
     compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_21)
         freeCompilerArgs.add("-Xwhen-guards")
         freeCompilerArgs.add("-Xjsr305=strict")
     }
