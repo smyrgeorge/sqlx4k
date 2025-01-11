@@ -198,6 +198,18 @@ interface Driver {
      */
     interface Migrate {
         /**
+         * Initiates the migration process using a default set of migration scripts.
+         *
+         * This method applies database schema or data migrations by executing SQL scripts
+         * or statements located in the default path (`./db/migrations`). These migrations
+         * modify the structure or content of the database to align with the expected state.
+         *
+         * @return A [Result] containing [Unit] if the migration succeeds, or an error indicating
+         * potential issues such as a failed migration process or database-specific errors.
+         */
+        suspend fun migrate(): Result<Unit> = migrate("./db/migrations")
+
+        /**
          * Executes the migration process using the provided file path.
          *
          * This method applies database schema or data migrations by executing SQL scripts or

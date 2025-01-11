@@ -119,12 +119,8 @@ impl Sqlx4k {
     }
 
     async fn migrate(&self, path: &str) -> *mut Sqlx4kResult {
-        let runtime = RUNTIME.get().unwrap();
-        let sqlx4k = SQLX4K.get().unwrap();
-        let result = runtime.block_on(async {
-            let migrator = Migrator::new(Path::new(&path)).await.unwrap();
-            migrator.run(&sqlx4k.pool).await
-        });
+        let migrator = Migrator::new(Path::new(&path)).await.unwrap();
+        let result = migrator.run(&self.pool).await;
         let result = match result {
             Ok(_) => Sqlx4kResult::default(),
             Err(err) => sqlx4k_migrate_error_result_of(err),

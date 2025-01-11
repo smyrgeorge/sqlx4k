@@ -104,16 +104,16 @@ val options = Driver.Pool.Options.builder()
     .build()
 
 val db = PostgreSQL(
-  url = "postgresql://localhost:15432/test",
-  username = "postgres",
-  password = "postgres",
-  options = options
+    url = "postgresql://localhost:15432/test",
+    username = "postgres",
+    password = "postgres",
+    options = options
 )
 
 val db = MySQL(
-  url = "mysql://localhost:13306/test",
-  username = "mysql",
-  password = "mysql"
+    url = "mysql://localhost:13306/test",
+    username = "mysql",
+    password = "mysql"
 )
 
 val db = SQLite(
@@ -247,6 +247,20 @@ object Sqlx4kRowMapper : RowMapper<Sqlx4k> {
 val res = List<Sqlx4k> = db.fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow()
 ```
 
+### Database Migrations
+
+Run any pending migrations against the database; and, validate previously applied migrations against the current
+migration source to detect accidental changes in previously-applied migrations.
+
+```kotlin
+db.migrate("./db/migrations").getOrThrow()
+println("Migrations completed.")
+```
+
+This process will create a table with name `_sqlx_migrations`.
+
+For more information, take a look at the example.
+
 ### Listen/Notify (only for PostgreSQL)
 
 ```kotlin
@@ -263,17 +277,6 @@ db.listen("chan0") { notification: Postgres.Notification ->
 ### SQLDelight
 
 Check here: https://github.com/smyrgeorge/sqlx4k-sqldelight
-
-## Todo
-
-- [x] PostgreSQL
-- [x] MySQL
-- [x] SQLite
-- [x] Transactions
-- [x] Listen/Notify Postgres
-- [x] INSERT/UPDATE/DELETE APIs (with code generation)
-- [x] Value encoders/decoders for basic data-types (in progress)
-- [ ] Transaction isolation level
 
 ## Compilation
 

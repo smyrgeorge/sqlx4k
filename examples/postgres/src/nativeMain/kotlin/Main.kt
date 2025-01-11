@@ -6,6 +6,10 @@ import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4kRowMapper
 import io.github.smyrgeorge.sqlx4k.examples.postgres.insert
 import io.github.smyrgeorge.sqlx4k.impl.extensions.errorOrNull
 import io.github.smyrgeorge.sqlx4k.postgres.PostgreSQL
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.toKString
+import kotlinx.cinterop.usePinned
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.async
@@ -13,9 +17,11 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import platform.posix.getcwd
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.measureTime
 
+@OptIn(ExperimentalForeignApi::class)
 fun main() {
     runBlocking {
         suspend fun <A> Iterable<A>.forEachParallel(
@@ -33,6 +39,14 @@ fun main() {
             password = "postgres",
             options = options
         )
+
+        runCatching {
+            val cwd = ByteArray(1024).usePinned { getcwd(it.addressOf(0), 1024.toULong()) }!!.toKString()
+            println("Working Directory = $cwd")
+            val path = "./db/migrations"
+            db.migrate(path).getOrThrow()
+            println("Migrations completed.")
+        }
 
         db.execute("drop table if exists sqlx4k;").getOrThrow()
         val error = db.execute("select * from sqlx4kk").errorOrNull()
