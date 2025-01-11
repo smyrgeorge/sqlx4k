@@ -31,6 +31,7 @@ class SQLError(
         PoolTimedOut,
         PoolClosed,
         WorkerCrashed,
+        Migrate,
 
         // Transaction
         TransactionIsClosed,

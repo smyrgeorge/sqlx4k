@@ -16,6 +16,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import sqlx4k.sqlx4k_close
 import sqlx4k.sqlx4k_fetch_all
+import sqlx4k.sqlx4k_migrate
 import sqlx4k.sqlx4k_of
 import sqlx4k.sqlx4k_pool_idle_size
 import sqlx4k.sqlx4k_pool_size
@@ -30,7 +31,7 @@ import sqlx4k.sqlx4k_tx_rollback
  * A database driver for SQLite, implemented with connection pooling and transactional support.
  * This class provides mechanisms to execute SQL queries, manage database connections, and
  * handle transactions in a coroutine-based environment.
- * 
+ *
  * `sqlite::memory:` | Open an in-memory database.
  * `sqlite:data.db` | Open the file `data.db` in the current directory.
  * `sqlite://data.db` | Open the file `data.db` in the current directory.
@@ -46,7 +47,7 @@ import sqlx4k.sqlx4k_tx_rollback
 class SQLite(
     url: String,
     options: Driver.Pool.Options = Driver.Pool.Options(),
-) : Driver, Driver.Pool, Driver.Transactional {
+) : Driver, Driver.Pool, Driver.Transactional, Driver.Migrate {
     init {
         sqlx4k_of(
             url = url,
@@ -58,6 +59,10 @@ class SQLite(
             idle_timeout_milis = options.idleTimeout?.inWholeMilliseconds?.toInt() ?: -1,
             max_lifetime_milis = options.maxLifetime?.inWholeMilliseconds?.toInt() ?: -1,
         ).throwIfError()
+    }
+
+    override suspend fun migrate(path: String): Result<Unit> = runCatching {
+        sqlx { c -> sqlx4k_migrate(path, c, Driver.fn) }.throwIfError()
     }
 
     override suspend fun close(): Result<Unit> = runCatching {

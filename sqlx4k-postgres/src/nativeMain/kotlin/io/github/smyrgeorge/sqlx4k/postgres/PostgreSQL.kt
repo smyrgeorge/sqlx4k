@@ -33,6 +33,7 @@ import sqlx4k.sqlx4k_close
 import sqlx4k.sqlx4k_fetch_all
 import sqlx4k.sqlx4k_free_result
 import sqlx4k.sqlx4k_listen
+import sqlx4k.sqlx4k_migrate
 import sqlx4k.sqlx4k_of
 import sqlx4k.sqlx4k_pool_idle_size
 import sqlx4k.sqlx4k_pool_size
@@ -73,7 +74,7 @@ class PostgreSQL(
     username: String,
     password: String,
     options: Driver.Pool.Options = Driver.Pool.Options(),
-) : Driver, Driver.Pool, Driver.Transactional {
+) : Driver, Driver.Pool, Driver.Transactional, Driver.Migrate {
     init {
         sqlx4k_of(
             url = url,
@@ -85,6 +86,10 @@ class PostgreSQL(
             idle_timeout_milis = options.idleTimeout?.inWholeMilliseconds?.toInt() ?: -1,
             max_lifetime_milis = options.maxLifetime?.inWholeMilliseconds?.toInt() ?: -1,
         ).throwIfError()
+    }
+
+    override suspend fun migrate(path: String): Result<Unit> = runCatching {
+        sqlx { c -> sqlx4k_migrate(path, c, Driver.fn) }.throwIfError()
     }
 
     override suspend fun close(): Result<Unit> = runCatching {

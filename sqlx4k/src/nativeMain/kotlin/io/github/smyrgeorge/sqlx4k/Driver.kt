@@ -189,6 +189,27 @@ interface Driver {
         }
     }
 
+    /**
+     * Interface representing a migration mechanism.
+     *
+     * This interface provides a method for applying schema or data migrations
+     * to a database. Migrations typically involve executing SQL scripts or
+     * statements to modify the structure of the database or its data.
+     */
+    interface Migrate {
+        /**
+         * Executes the migration process using the provided file path.
+         *
+         * This method applies database schema or data migrations by executing SQL scripts or
+         * statements located in the specified path. Migrations may involve modifying the database
+         * structure or its contents to match the desired schema or state.
+         *
+         * @param path The file path to the migration scripts or resources.
+         * @return A [Result] containing [Unit] if the migration is successful, or an error if the migration fails.
+         */
+        suspend fun migrate(path: String): Result<Unit>
+    }
+
     companion object {
         /**
          * A static C function pointer used with SQLx4k for handling SQL operation results.

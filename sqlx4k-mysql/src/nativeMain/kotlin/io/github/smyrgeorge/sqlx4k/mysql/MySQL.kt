@@ -16,6 +16,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import sqlx4k.sqlx4k_close
 import sqlx4k.sqlx4k_fetch_all
+import sqlx4k.sqlx4k_migrate
 import sqlx4k.sqlx4k_of
 import sqlx4k.sqlx4k_pool_idle_size
 import sqlx4k.sqlx4k_pool_size
@@ -29,10 +30,10 @@ import sqlx4k.sqlx4k_tx_rollback
 /**
  * The `MySQL` class provides a driver implementation for interacting with a MySQL database.
  * It supports connection pooling, transactional operations, and executing SQL queries.
- * 
+ *
  *  The connection URL should follow the nex pattern,
  *  as described by [MySQL](https://dev.mysql.com/doc/connector-j/8.0/en/connector-j-reference-jdbc-url-format.html).
- * 
+ *
  *  The generic format of the connection URL:
  *  mysql://[host][/database][?properties]
  *
@@ -48,7 +49,7 @@ class MySQL(
     username: String,
     password: String,
     options: Driver.Pool.Options = Driver.Pool.Options(),
-) : Driver, Driver.Pool, Driver.Transactional {
+) : Driver, Driver.Pool, Driver.Transactional, Driver.Migrate {
     init {
         sqlx4k_of(
             url = url,
@@ -60,6 +61,10 @@ class MySQL(
             idle_timeout_milis = options.idleTimeout?.inWholeMilliseconds?.toInt() ?: -1,
             max_lifetime_milis = options.maxLifetime?.inWholeMilliseconds?.toInt() ?: -1,
         ).throwIfError()
+    }
+
+    override suspend fun migrate(path: String): Result<Unit> = runCatching {
+        sqlx { c -> sqlx4k_migrate(path, c, Driver.fn) }.throwIfError()
     }
 
     override suspend fun close(): Result<Unit> = runCatching {
