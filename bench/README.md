@@ -26,6 +26,6 @@ We performed **10 runs** per scenario and calculated the average execution time.
 
 | kind              |   no-tx   | tx-commit | tx-rollback |
 |-------------------|:---------:|:---------:|:-----------:|
-| rust-sqlx         |           |           |             |
+| rust-sqlx         | 3.414700s |           |             |
 | spring-boot-r2dbc | 2.982300s | 4.623800s |  3.522100s  |
 | sqlx4k            | 3.484700s | 4.884900s |  3.552010s  |
