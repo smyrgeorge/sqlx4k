@@ -15,15 +15,15 @@ panic = "abort"
 [dependencies]
 sqlx4k = { path = "../../sqlx4k/rust_lib" }
 # https://crates.io/crates/once_cell
-once_cell = { version = "1.19.0" }
+once_cell = { version = "1.20.2" }
 # https://crates.io/crates/tokio
-tokio = { version = "1.40.0", features = ["rt-multi-thread"] }
+tokio = { version = "1.43.0", features = ["rt-multi-thread"] }
 # https://crates.io/crates/sqlx
-sqlx = { version = "0.8.2", features = [
+sqlx = { version = "0.8.3", features = [
     "runtime-tokio", # Use the tokio runtime without enabling a TLS backend.
     "sqlite",        # Add support for the Postgres database server.
 ] }
 
 [build-dependencies]
 # https://crates.io/crates/cbindgen
-cbindgen = "0.27.0"
+cbindgen = "0.28.0"
