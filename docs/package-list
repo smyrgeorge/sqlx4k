@@ -10,8 +10,10 @@ module:sqlx4k-codegen
 io.github.smyrgeorge.sqlx4k.processor
 module:sqlx4k-mysql
 io.github.smyrgeorge.sqlx4k.mysql
+io.github.smyrgeorge.sqlx4k.mysql.extensions
 module:sqlx4k-postgres
 io.github.smyrgeorge.sqlx4k.postgres
 io.github.smyrgeorge.sqlx4k.postgres.extensions
 module:sqlx4k-sqlite
 io.github.smyrgeorge.sqlx4k.sqlite
+io.github.smyrgeorge.sqlx4k.sqlite.extensions
