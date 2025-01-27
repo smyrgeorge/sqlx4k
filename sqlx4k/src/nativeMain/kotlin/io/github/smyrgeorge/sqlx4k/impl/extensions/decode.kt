@@ -11,8 +11,6 @@ import kotlinx.datetime.LocalTime
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-fun ResultSet.Row.Column.asBoolean(): Boolean = asString().toBoolean()
-fun ResultSet.Row.Column.asBooleanOrNull(): Boolean? = asStringOrNull()?.toBoolean()
 fun ResultSet.Row.Column.aChar(): Char = asString()[0]
 fun ResultSet.Row.Column.aCharOrNull(): Char? = asStringOrNull()?.get(0)
 fun ResultSet.Row.Column.asInt(): Int = asString().toInt()
