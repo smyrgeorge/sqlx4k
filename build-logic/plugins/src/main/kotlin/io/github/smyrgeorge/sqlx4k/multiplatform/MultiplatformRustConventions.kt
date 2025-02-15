@@ -13,6 +13,7 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import java.io.File
 import java.lang.System.getenv
 
+@Suppress("unused")
 class MultiplatformRustConventions : Plugin<Project> {
     private val os = DefaultNativePlatform.getCurrentOperatingSystem()
     private val arch = DefaultNativePlatform.getCurrentArchitecture()

@@ -5,6 +5,7 @@ import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
+@Suppress("unused")
 class MultiplatformExamplesConventions : Plugin<Project> {
     override fun apply(project: Project) {
         val targets = Utils.targetsOf(project)
@@ -18,7 +19,7 @@ class MultiplatformExamplesConventions : Plugin<Project> {
                 Pair("macosX64") { macosX64 { binaries { executable() } } },
 //                Pair("linuxArm64") { linuxArm64 { binaries { executable() } } },
 //                Pair("linuxX64") { linuxX64 { binaries { executable() } } },
-//                Pair("mingwX64") { mingwX64 { binaries { executable() } } },
+                Pair("mingwX64") { mingwX64 { binaries { executable() } } },
             )
 
             targets.forEach {

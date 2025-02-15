@@ -41,7 +41,8 @@ fun main() {
         )
 
         runCatching {
-            val cwd = ByteArray(1024).usePinned { getcwd(it.addressOf(0), 1024.toULong()) }!!.toKString()
+            val cwd = ""
+//            val cwd = ByteArray(1024).usePinned { getcwd(it.addressOf(0), 1024.toULong()) }!!.toKString()
             println("Working Directory = $cwd")
             val path = "./db/migrations"
             db.migrate(path).getOrThrow()
