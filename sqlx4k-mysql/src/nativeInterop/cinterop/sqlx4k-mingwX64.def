@@ -5,5 +5,6 @@ staticLibraries = libsqlx4k_mysql.a
 libraryPaths = ./rust_lib/target/x86_64-pc-windows-gnu/release
 # The following was found with: export RUSTFLAGS="--print=native-static-libs"
 # https://github.com/HowardHinnant/date/issues/272
-linkerOpts = -lbcrypt -ladvapi32 -lole32 -lkernel32 -ladvapi32 -lntdll -luserenv -lws2_32 -ldbghelp
+linkerOpts = -lntdll
+# linkerOpts = -lbcrypt -ladvapi32 -lole32 -lkernel32 -ladvapi32 -lntdll -luserenv -lws2_32 -ldbghelp
 # linkerOpts = -lbcrypt -ladvapi32 -lwindows.0.52.0 -lkernel32 -ladvapi32 -lntdll -luserenv -lws2_32 -ldbghelp
