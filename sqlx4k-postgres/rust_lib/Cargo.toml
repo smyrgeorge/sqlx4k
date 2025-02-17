@@ -15,7 +15,7 @@ panic = "abort"
 [dependencies]
 sqlx4k = { path = "../../sqlx4k/rust_lib" }
 # https://crates.io/crates/once_cell
-once_cell = { version = "1.20.2" }
+once_cell = { version = "1.20.3" }
 # https://crates.io/crates/tokio
 tokio = { version = "1.43.0", features = ["rt-multi-thread"] }
 # https://crates.io/crates/sqlx
