@@ -1,5 +1,5 @@
 plugins {
-    id("io.github.smyrgeorge.sqlx4k.multiplatform.examples")
+    id("io.github.smyrgeorge.sqlx4k.multiplatform.binaries")
 }
 
 kotlin {

@@ -9,8 +9,8 @@ gradlePlugin {
             implementationClass = "io.github.smyrgeorge.sqlx4k.multiplatform.MultiplatformRustConventions"
         }
         create("multiplatform.examples") {
-            id = "io.github.smyrgeorge.sqlx4k.multiplatform.examples"
-            implementationClass = "io.github.smyrgeorge.sqlx4k.multiplatform.MultiplatformExamplesConventions"
+            id = "io.github.smyrgeorge.sqlx4k.multiplatform.binaries"
+            implementationClass = "io.github.smyrgeorge.sqlx4k.multiplatform.MultiplatformBinariesConventions"
         }
         create("multiplatform.jvm") {
             id = "io.github.smyrgeorge.sqlx4k.multiplatform.jvm"

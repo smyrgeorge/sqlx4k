@@ -1,5 +1,5 @@
 plugins {
-    id("io.github.smyrgeorge.sqlx4k.multiplatform.examples")
+    id("io.github.smyrgeorge.sqlx4k.multiplatform.binaries")
     alias(libs.plugins.ksp) // We need the KSP plugin for code-generation.
 }
 
