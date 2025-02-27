@@ -41,6 +41,16 @@ implementation("io.github.smyrgeorge:sqlx4k-mysql:x.y.z")
 implementation("io.github.smyrgeorge:sqlx4k-sqlite:x.y.z")
 ```
 
+### Windows
+
+If you are building your project on Windows, for target mingwX64, and you encounter the following error:
+
+```text
+lld-link: error: -exclude-symbols:___chkstk_ms is not allowed in .drectve
+```
+
+Please look at this issue: [#18](https://github.com/smyrgeorge/sqlx4k/issues/18)
+
 ## Supported targets
 
 We support the following targets:
