@@ -15,10 +15,7 @@ import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
  */
 class ExtendedStatement(private val sql: String) : SimpleStatement(sql) {
 
-    private val pgParameters: List<Int> by lazy {
-        extractPgParameters(sql)
-    }
-
+    private val pgParameters: List<Int> by lazy { extractPgParameters(sql) }
     private val pgParametersValues: MutableMap<Int, Any?> = mutableMapOf()
 
     /**
@@ -47,9 +44,7 @@ class ExtendedStatement(private val sql: String) : SimpleStatement(sql) {
      * @return A string representing the fully rendered SQL statement with all parameters encoded.
      */
     override fun render(encoders: ValueEncoderRegistry): String =
-        super
-            .render(encoders)
-            .renderPositionalParameters(encoders)
+        super.render(encoders).renderPositionalParameters(encoders)
 
     /**
      * Replaces positional parameters in the SQL statement with their corresponding encoded values.
@@ -59,21 +54,34 @@ class ExtendedStatement(private val sql: String) : SimpleStatement(sql) {
      * @throws SQLError if a value for a positional parameter index is not supplied.
      */
     private fun String.renderPositionalParameters(encoders: ValueEncoderRegistry): String {
-        var res: String = this
-        pgParameters.forEach { index ->
-            if (!pgParametersValues.containsKey(index)) {
+        return pgParametersRegex.replace(this) { matchResult ->
+            // Extract the number from the match, the regex matches patterns like "$1", "$2", etc.
+            val indexStr = matchResult.value.substring(1)
+            val index = indexStr.toIntOrNull() ?: SQLError(
+                code = SQLError.Code.PositionalParameterValueNotSupplied,
+                message = "Invalid positional parameter index '$indexStr'."
+            ).ex()
+            val adjustedIndex = index - 1
+            if (!pgParametersValues.containsKey(adjustedIndex)) {
                 SQLError(
                     code = SQLError.Code.PositionalParameterValueNotSupplied,
-                    message = "Value for positional parameter index '$index' was not supplied."
+                    message = "Value for positional parameter index '$adjustedIndex' was not supplied."
                 ).ex()
             }
-            val value = pgParametersValues[index].encodeValue(encoders)
-            res = res.replace("\$${index + 1}", value)
+            pgParametersValues[adjustedIndex]!!.encodeValue(encoders)
         }
-        return res
     }
 
-    private val pgParametersRegex = "\\\$\\d+".toRegex()
+    /**
+     * A regular expression used to match positional PostgreSQL-style parameters in a SQL query string.
+     *
+     * The regex pattern matches placeholders in the format `$1`, `$2`, and so on, where the `$` symbol
+     * is followed by one or more digits representing the positional parameter index.
+     *
+     * This regex is utilized to locate all PostgreSQL-style positional parameters within a given SQL
+     * query string for processing or parameter replacement in the SQL statement.
+     */
+    private val pgParametersRegex = "\\$\\d+".toRegex()
     private fun extractPgParameters(sql: String): List<Int> =
         pgParametersRegex.findAll(sql).mapIndexed { idx, _ -> idx }.toList()
 }

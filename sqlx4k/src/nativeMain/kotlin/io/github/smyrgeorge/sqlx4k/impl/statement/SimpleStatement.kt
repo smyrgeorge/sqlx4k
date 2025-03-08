@@ -14,14 +14,8 @@ import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
  */
 open class SimpleStatement(private val sql: String) : Statement {
 
-    private val namedParameters: Set<String> by lazy {
-        extractNamedParameters(sql)
-    }
-
-    private val positionalParameters: List<Int> by lazy {
-        extractPositionalParameters(sql)
-    }
-
+    private val namedParameters: Set<String> by lazy { extractNamedParameters(sql) }
+    private val positionalParameters: List<Int> by lazy { extractPositionalParameters(sql) }
     private val namedParametersValues: MutableMap<String, Any?> = mutableMapOf()
     private val positionalParametersValues: MutableMap<Int, Any?> = mutableMapOf()
 
@@ -70,38 +64,38 @@ open class SimpleStatement(private val sql: String) : Statement {
      * @param encoders The `ValueEncoderRegistry` used to encode parameter values.
      * @return A string representing the rendered SQL statement with all parameters substituted by their bound values.
      */
-    override fun render(encoders: ValueEncoderRegistry): String = sql
-        .renderPositionalParameters(encoders)
-        .renderNamedParameters(encoders)
+    override fun render(encoders: ValueEncoderRegistry): String =
+        sql.renderPositionalParameters(encoders).renderNamedParameters(encoders)
 
     /**
-     * Replaces positional parameter placeholders in the string with the corresponding values.
+     * Replaces positional parameter placeholders within a string with their corresponding bound values.
      *
-     * This function iterates through all the positional parameters and substitutes
-     * their placeholders in the string with the bound values. If a required value
-     * for a positional parameter is not supplied, an error is thrown.
-     *
-     * @param encoders The `ValueEncoderRegistry` used to encode parameter values.
-     * @return A string with all positional parameters substituted by their bound values.
+     * @param encoders The `ValueEncoderRegistry` used to encode the bound parameter values.
+     * @return The string with all positional parameter placeholders replaced by their encoded values.
      * @throws SQLError if a value for a positional parameter is not supplied.
      */
     private fun String.renderPositionalParameters(encoders: ValueEncoderRegistry): String {
-        var res: String = this
-        positionalParameters.forEach { index ->
+        // Create an iterator over the list of positional parameters.
+        val paramsIterator = positionalParameters.iterator()
+        // Use the regex's replace function to process all placeholders in one pass.
+        return positionalParametersRegex.replace(this) {
+            // Check for missing parameter values.
+            if (!paramsIterator.hasNext()) {
+                SQLError(
+                    code = SQLError.Code.PositionalParameterValueNotSupplied,
+                    message = "Not enough positional parameter values provided."
+                ).ex()
+            }
+            val index = paramsIterator.next()
             if (!positionalParametersValues.containsKey(index)) {
                 SQLError(
                     code = SQLError.Code.PositionalParameterValueNotSupplied,
                     message = "Value for positional parameter index '$index' was not supplied."
                 ).ex()
             }
-            val value = positionalParametersValues[index].encodeValue(encoders)
-            val range = positionalParametersRegex.find(res)?.range ?: SQLError(
-                code = SQLError.Code.PositionalParameterValueNotSupplied,
-                message = "Value for positional parameter index '$index' was not supplied."
-            ).ex()
-            res = res.replaceRange(range, value)
+            // Encode the value and return its string representation.
+            positionalParametersValues[index]!!.encodeValue(encoders)
         }
-        return res
     }
 
     /**
