@@ -1,5 +1,5 @@
 group = "io.github.smyrgeorge"
-version = "0.45.0"
+version = "0.46.0"
 
 plugins {
     alias(libs.plugins.dokka)
@@ -21,9 +21,7 @@ subprojects {
 
     // Dokka config
     run {
-        // Exclude examples/bench modules.
-        if (projectDir.path.contains("/examples")) return@run
-        if (projectDir.path.contains("/bench")) return@run
+        if (!project.name.startsWith("sqlx4k")) return@run
         // Run with ./gradlew :dokkaHtmlMultiModule
         apply(plugin = "org.jetbrains.dokka")
     }
