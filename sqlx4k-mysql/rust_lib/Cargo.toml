@@ -15,9 +15,9 @@ panic = "abort"
 [dependencies]
 sqlx4k = { path = "../../sqlx4k/rust_lib" }
 # https://crates.io/crates/once_cell
-once_cell = { version = "1.20.3" }
+once_cell = { version = "1.21.1" }
 # https://crates.io/crates/tokio
-tokio = { version = "1.43.0", features = ["rt-multi-thread"] }
+tokio = { version = "1.44.1", features = ["rt-multi-thread"] }
 # https://crates.io/crates/sqlx
 sqlx = { version = "0.8.3", features = [
     "runtime-tokio", # Use the tokio runtime without enabling a TLS backend.

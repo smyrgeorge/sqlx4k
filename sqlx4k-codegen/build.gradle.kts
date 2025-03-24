@@ -8,6 +8,7 @@ kotlin {
         configureEach {
             languageSettings.progressiveMode = true
         }
+        @Suppress("unused")
         val jvmMain by getting {
             dependencies {
                 implementation(libs.ksp)
