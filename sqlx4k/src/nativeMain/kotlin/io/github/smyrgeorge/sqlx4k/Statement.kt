@@ -70,6 +70,13 @@ interface Statement {
 
             is Boolean, is Number -> toString()
             is LocalDate, is LocalTime, is LocalDateTime, is Instant -> toString()
+            is Array<*> -> joinToString(", ", "(", ")") { it.encodeValue(encoders) }
+            is IntArray -> joinToString(", ", "(", ")") { it.encodeValue(encoders) }
+            is DoubleArray -> joinToString(", ", "(", ")") { it.encodeValue(encoders) }
+            is FloatArray -> joinToString(", ", "(", ")") { it.encodeValue(encoders) }
+            is BooleanArray -> joinToString(", ", "(", ")") { it.encodeValue(encoders) }
+            is List<*>, is Set<*> -> joinToString(", ", "(", ")") { it.encodeValue(encoders) }
+
             else -> {
                 val error = SQLError(
                     code = SQLError.Code.NamedParameterTypeNotSupported,

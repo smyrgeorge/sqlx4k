@@ -68,7 +68,7 @@ class ExtendedStatement(private val sql: String) : SimpleStatement(sql) {
                     message = "Value for positional parameter index '$adjustedIndex' was not supplied."
                 ).ex()
             }
-            pgParametersValues[adjustedIndex]!!.encodeValue(encoders)
+            pgParametersValues[adjustedIndex].encodeValue(encoders)
         }
     }
 

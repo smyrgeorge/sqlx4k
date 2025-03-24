@@ -94,7 +94,7 @@ open class SimpleStatement(private val sql: String) : Statement {
                 ).ex()
             }
             // Encode the value and return its string representation.
-            positionalParametersValues[index]!!.encodeValue(encoders)
+            positionalParametersValues[index].encodeValue(encoders)
         }
     }
 
@@ -106,18 +106,31 @@ open class SimpleStatement(private val sql: String) : Statement {
      * @throws SQLError if a value for a named parameter is not supplied.
      */
     private fun String.renderNamedParameters(encoders: ValueEncoderRegistry): String {
-        var res: String = this
-        namedParameters.forEach { name ->
+        // If there are no named parameters to replace, return the original string
+        if (namedParameters.isEmpty()) return this
+
+        // Pre-validate all parameters are bound to fail early
+        for (name in namedParameters) {
             if (!namedParametersValues.containsKey(name)) {
                 SQLError(
                     code = SQLError.Code.NamedParameterValueNotSupplied,
                     message = "Value for named parameter '$name' was not supplied."
                 ).ex()
             }
-            val value = namedParametersValues[name].encodeValue(encoders)
-            res = res.replace(":$name", value)
         }
-        return res
+
+        // Use the regex's replace function to process all named parameters in one pass
+        return nameParameterRegex.replace(this) { match ->
+            val paramName = match.groupValues[1]
+            // Only replace parameters that were identified during extraction
+            if (paramName in namedParameters) {
+                namedParametersValues[paramName].encodeValue(encoders)
+            } else {
+                // This should not happen if the extraction was correct
+                // But keep the original text just in case
+                match.value
+            }
+        }
     }
 
     /**
@@ -126,7 +139,7 @@ open class SimpleStatement(private val sql: String) : Statement {
      * The pattern is used to match named parameters in the format ":parameterName",
      * where "parameterName" starts with a letter and is followed by alphanumeric characters.
      */
-    private val nameParameterRegex = """(?<!:):(?!:)[a-zA-Z]\w+""".toRegex()
+    private val nameParameterRegex = """(?<![:']):(?!:)([a-zA-Z][a-zA-Z0-9_]*)(?![a-zA-Z0-9_:'"])""".toRegex()
     private fun extractNamedParameters(sql: String): Set<String> =
         nameParameterRegex.findAll(sql).map { it.value.substring(1) }.toHashSet()
 
@@ -137,7 +150,7 @@ open class SimpleStatement(private val sql: String) : Statement {
      * This regex is utilized to locate all instances of positional parameters
      * within a given SQL query string.
      */
-    private val positionalParametersRegex = "\\?".toRegex()
+    private val positionalParametersRegex = "(\\?)(?=(?:[^']*(?:'[^']*')?)*[^']*$)(?=(?:[^\"]*(?:\"[^\"]*\")?)*[^\"]*$)(?=(?:[^`]*(?:`[^`]*`)?)*[^`]*$)".toRegex()
     private fun extractPositionalParameters(sql: String): List<Int> =
         positionalParametersRegex.findAll(sql).mapIndexed { idx, _ -> idx }.toList()
 }
