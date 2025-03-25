@@ -47,23 +47,23 @@ class PostgreSQLTests {
     fun `Test basic type mappings`() = runBlocking {
         val types = """
             select
-                   null,
-                   true::bool,
-                   1::int2,
-                   1::int4,
-                   1::int8,
-                   1::float4,
-                   1::float8,
-                   1::numeric(10,2),
-                   'a'::char,
-                   'aa'::varchar,
-                   'aa'::text,
+                   null as nil,
+                   true::bool as bool,
+                   1::int2 as int2,
+                   1::int4 as int4,
+                   1::int8 as int8,
+                   1::float4 as float4,
+                   1::float8 as float8,
+                   1::numeric(10,2) as numeric,
+                   'a'::char as char,
+                   'aa'::varchar as varchar,
+                   'aa'::text as text,
                    '2025-03-25 07:31:43.330068'::timestamp as timestamp,
                    '2025-03-25 07:31:43.330068+00'::timestamptz as timestampz,
                    '2025-03-25'::date as date,
                    '07:31:43.330068'::time as time,
-                   '22d64ef8-f6b3-43da-8869-2ee9d31be9d5'::uuid,
-                   'aa'::bytea
+                   '22d64ef8-f6b3-43da-8869-2ee9d31be9d5'::uuid as uuid,
+                   'aa'::bytea as bytea
             ;
         """.trimIndent()
 
