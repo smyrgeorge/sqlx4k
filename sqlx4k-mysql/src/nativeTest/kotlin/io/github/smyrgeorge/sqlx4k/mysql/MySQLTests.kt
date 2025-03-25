@@ -32,23 +32,23 @@ class MySQLTests {
     fun `Test basic type mappings`() = runBlocking {
         val types = """
             select
-                   null,
-                   true,
-                   1, -- cast(1 as smallint),
-                   1, -- cast(1 as int),
-                   1, -- cast(1 as bigint),
-                   1, -- cast(1 as float),
-                   1, -- cast(1 as double),
-                   1, -- cast(1 as numeric(10,2)),
-                   1, -- cast('a' as char),
-                   '',
-                   'aa',
+                   null as nil,
+                   true as bool,
+                   1, -- cast(1 as smallint) as smallint,
+                   1, -- cast(1 as int) as int,
+                   1, -- cast(1 as bigint) as bigint,
+                   1, -- cast(1 as float) as float,
+                   1, -- cast(1 as double) as double,
+                   1, -- cast(1 as numeric(10,2)) as numeric,
+                   1, -- cast('a' as char) as char,
+                   '' as string_1,
+                   'aa' as string_2,
                    1, -- cast('2025-03-25 07:31:43.330068' as timestamp) as timestamp,
                    1, -- cast('2025-03-25 07:31:43.330068+00' as timestamp) as timestampz,
                    cast('2025-03-25' as date) as date,
                    cast('07:31:43' as time) as time,
-                   1, -- cast('22d64ef8-f6b3-43da-8869-2ee9d31be9d5' as uuid),
-                   1 -- cast('aa' as blob)
+                   1, -- cast('22d64ef8-f6b3-43da-8869-2ee9d31be9d5' as uuid) as uuid,
+                   1 -- cast('aa' as blob) as blob
             ;
         """.trimIndent()
 
