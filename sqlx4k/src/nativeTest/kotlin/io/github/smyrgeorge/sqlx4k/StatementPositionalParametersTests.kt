@@ -8,7 +8,7 @@ import assertk.assertions.isEqualTo
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
-class StatementPositionalParametersTest {
+class StatementPositionalParametersTests {
 
     @Test
     fun `Positional parameters - multiple SQL injection attempts are properly escaped`() {

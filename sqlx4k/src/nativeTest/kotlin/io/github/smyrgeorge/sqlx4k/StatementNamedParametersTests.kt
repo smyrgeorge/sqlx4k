@@ -6,7 +6,7 @@ import assertk.assertions.contains
 import assertk.assertions.doesNotContain
 import kotlin.test.Test
 
-class StatementNamedParametersTest {
+class StatementNamedParametersTests {
 
     @Test
     fun `Named parameter - SQL injection attempt with quotes in string is properly escaped`() {

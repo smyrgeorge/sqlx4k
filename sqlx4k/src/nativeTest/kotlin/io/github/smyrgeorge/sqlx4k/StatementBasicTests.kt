@@ -6,7 +6,7 @@ import assertk.assertions.contains
 import kotlin.test.Test
 import kotlin.test.assertFails
 
-class StatementTest {
+class StatementBasicTests {
 
     @Test
     fun `Mix named and positional parameters`() {

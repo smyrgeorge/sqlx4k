@@ -5,7 +5,7 @@ import assertk.assertThat
 import assertk.assertions.contains
 import kotlin.test.Test
 
-class StatementCollectionsTest {
+class StatementCollectionsTests {
 
     @Test
     fun `Bind list to positional parameter`() {

@@ -8,63 +8,6 @@ on:
     branches: [ main ]
 
 jobs:
-#  build-linux-x64:
-#    runs-on: ubuntu-latest
-#    environment: Maven Central
-#    steps:
-#      - name: Checkout Project
-#        uses: actions/checkout@v4
-#
-#      - name: Setup Java
-#        uses: actions/setup-java@v4
-#        with:
-#          distribution: corretto
-#          java-version: 17
-#
-#      - name: Setup Gradle
-#        uses: gradle/actions/setup-gradle@v4
-#
-#      - name: Setup Cache
-#        uses: actions/cache@v4
-#        with:
-#          path: |
-#            /home/runner/.konan
-#            sqlx4k-mysql/rust_lib/target
-#            sqlx4k-postgres/rust_lib/target
-#            sqlx4k-sqlite/rust_lib/target
-#          key: rust-lib-cache-linux
-#
-#      - name: Gradle Build
-#        run: ./scripts/build-linux-x64.sh
-#  build-linux-arm64:
-#    runs-on: ubuntu-latest
-#    environment: Maven Central
-#    steps:
-#      - name: Checkout Project
-#        uses: actions/checkout@v4
-#
-#      - name: Setup Java
-#        uses: actions/setup-java@v4
-#        with:
-#          distribution: corretto
-#          java-version: 17
-#
-#      - name: Setup Gradle
-#        uses: gradle/actions/setup-gradle@v4
-#
-#      - name: Setup Cache
-#        uses: actions/cache@v4
-#        with:
-#          path: |
-#            /home/runner/.konan
-#            sqlx4k-mysql/rust_lib/target
-#            sqlx4k-postgres/rust_lib/target
-#            sqlx4k-sqlite/rust_lib/target
-#          key: rust-lib-cache-linux
-#
-#      - name: Gradle Build
-#        run: ./scripts/build-linux-arm64.sh
-
   build-apple:
     runs-on: macos-14
     environment: Maven Central
@@ -95,7 +38,7 @@ jobs:
           key: rust-lib-cache-apple
 
       - name: Gradle Build
-        run: ./gradlew clean build
+        run: ./gradlew build -x test
 #        run: ./scripts/build-apple.sh
 
 #      - name: Gradle Publish

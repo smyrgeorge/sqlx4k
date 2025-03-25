@@ -4,15 +4,16 @@ package io.github.smyrgeorge.sqlx4k.impl.extensions
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
-import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.format.FormatStringsInDatetimeFormats
+import kotlinx.datetime.format.byUnicodePattern
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-fun ResultSet.Row.Column.aChar(): Char = asString()[0]
-fun ResultSet.Row.Column.aCharOrNull(): Char? = asStringOrNull()?.get(0)
+fun ResultSet.Row.Column.asChar(): Char = asString()[0]
+fun ResultSet.Row.Column.asCharOrNull(): Char? = asStringOrNull()?.get(0)
 fun ResultSet.Row.Column.asInt(): Int = asString().toInt()
 fun ResultSet.Row.Column.asIntOrNull(): Int? = asStringOrNull()?.toInt()
 fun ResultSet.Row.Column.asLong(): Long = asString().toLong()
@@ -44,8 +45,14 @@ fun ResultSet.Row.Column.asLocalDate(): LocalDate = LocalDate.parse(asString())
 fun ResultSet.Row.Column.asLocalDateOrNull(): LocalDate? = asStringOrNull()?.let { LocalDate.parse(it) }
 fun ResultSet.Row.Column.asLocalTime(): LocalTime = LocalTime.parse(asString())
 fun ResultSet.Row.Column.asLocalTimeOrNull(): LocalTime? = asStringOrNull()?.let { LocalTime.parse(it) }
-private fun String.fixTime(): String = replace(" ", "T")
-fun ResultSet.Row.Column.asLocalDateTime(): LocalDateTime = LocalDateTime.parse(asString().fixTime())
-fun ResultSet.Row.Column.asLocalDateTimeOrNull(): LocalDateTime? = asStringOrNull()?.let { LocalDateTime.parse(it.fixTime()) }
-fun ResultSet.Row.Column.asInstant(): Instant = Instant.parse(asString())
-fun ResultSet.Row.Column.asInstantOrNull(): Instant? = asStringOrNull()?.let { Instant.parse(it) }
+fun ResultSet.Row.Column.asLocalDateTime(): LocalDateTime = LocalDateTime.parse(asString(), localDateTimeFormatter)
+fun ResultSet.Row.Column.asLocalDateTimeOrNull(): LocalDateTime? =
+    asStringOrNull()?.let { LocalDateTime.parse(it, localDateTimeFormatter) }
+
+//fun ResultSet.Row.Column.asInstant(): Instant = LocalDateTime.parse(asString())
+//fun ResultSet.Row.Column.asInstantOrNull(): Instant? = asStringOrNull()?.let { LocalDateTime.parse(it) }
+
+private val localDateTimeFormatter = LocalDateTime.Format {
+    @OptIn(FormatStringsInDatetimeFormats::class)
+    byUnicodePattern("yyyy-MM-dd HH:mm:ss.SSSSSS")
+}
