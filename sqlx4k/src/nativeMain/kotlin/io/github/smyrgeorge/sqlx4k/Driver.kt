@@ -19,7 +19,7 @@ import kotlin.time.Duration
  * transactions. It abstracts the underlying database operations and offers a coroutine-based
  * API for asynchronous execution.
  */
-@Suppress("KDocUnresolvedReference")
+@Suppress("unused")
 @OptIn(ExperimentalForeignApi::class)
 interface Driver {
     /**
@@ -154,7 +154,7 @@ interface Driver {
      */
     interface Transactional {
         /**
-         * Begins a new transaction asynchronously.
+         * Begins (with default isolation level) a new transaction asynchronously.
          *
          * This method initializes and starts a new transaction with the underlying database.
          * It suspends until the transaction has started and returns a result containing
@@ -165,18 +165,19 @@ interface Driver {
         suspend fun begin(): Result<Transaction>
 
         /**
-         * Executes a transaction with the specified transactional operations block.
+         * Begins (with default isolation level) a transactional operation and executes the provided block of code within the transaction context.
          *
-         * This method begins a new transaction, executes the provided block within the context
-         * of the transaction, commits the transaction if the block completes successfully, and
-         * rolls back the transaction in case of an error.
+         * This method starts a new transaction, allowing the caller to perform a series of operations within
+         * a transactional context. If the block of code completes successfully, the transaction is committed.
+         * In case of an exception, the transaction is rolled back.
          *
-         * @param T the return type of the transactional operations block
-         * @param f the suspendable block of code containing transactional operations to be executed
-         * @return the result of the transactional operations block
-         * @throws Throwable if an error occurs during the transactional operations, bubble up the error after rolling back the transaction
+         * @param T The return type of the operation executed within the transaction.
+         * @param f A suspend function representing the transactional operations to be performed.
+         *          It is invoked with the started transaction as the receiver.
+         * @return The result of the operation performed within the transaction context.
+         * @throws Throwable Rethrows any exception encountered during the execution of the transactional block.
          */
-        suspend fun <T> transaction(f: suspend Transaction.() -> T): T {
+        suspend fun <T> begin(f: suspend Transaction.() -> T): T {
             val tx: Transaction = begin().getOrThrow()
             return try {
                 val res = f(tx)
@@ -224,15 +225,15 @@ interface Driver {
 
     companion object {
         /**
-         * A static C function pointer used with SQLx4k for handling SQL operation results.
+         * Represents a static C function used in the `Driver` class for interfacing with native code.
          *
-         * This function is used as a callback to process results of SQL operations executed
-         * by SQLx4k. It handles the continuation of a suspended function by resuming it with
-         * the result provided and properly disposing of the continuation reference.
+         * This function handles the processing of the result from a native SQL operation. It takes
+         * a native pointer to a continuation object and the resulting pointer from the SQL operation,
+         * resumes the suspended continuation with the result, and disposes of the stable reference
+         * associated with the continuation.
          *
-         * The function takes two parameters:
-         * @param c - A pointer to the continuation that needs to be resumed.
-         * @param r - A pointer to the Sqlx4kResult.
+         * The function encapsulates the interaction between native code and Kotlin coroutines,
+         * enabling asynchronous processing and ensuring proper resource management.
          */
         val fn = staticCFunction<CValue<Ptr>, CPointer<Sqlx4kResult>?, Unit> { c, r ->
             val ref = c.useContents { ptr }!!.asStableRef<Continuation<CPointer<Sqlx4kResult>?>>()

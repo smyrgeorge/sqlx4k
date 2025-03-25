@@ -71,7 +71,7 @@ suspend fun bench() {
         val time = measureTime {
             (1..workers).forEachParallel {
                 repeat(repeatPerWorker) {
-                    db.transaction {
+                    db.begin {
                         execute(Sqlx4k.random().insert()).getOrThrow()
                         execute(Sqlx4k.random().insert()).getOrThrow()
                         fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow()
@@ -92,7 +92,7 @@ suspend fun bench() {
             (1..workers).forEachParallel {
                 repeat(repeatPerWorker) {
                     runCatching {
-                        db.transaction {
+                        db.begin {
                             execute(Sqlx4k.random().insert()).getOrThrow()
                             execute(Sqlx4k.random().insert()).getOrThrow()
                             fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow()

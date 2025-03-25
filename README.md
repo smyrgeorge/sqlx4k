@@ -63,8 +63,8 @@ We support the following targets:
 - linuxArm64
 - linuxX64
 - mingwX64
-- wasmJs (potential future candidate)
 - jvm (potential future candidate)
+- wasmWasi (potential future candidate)
 
 ## Features
 
@@ -170,7 +170,7 @@ tx1.commit().getOrThrow()
 You can also execute entire blocks in a transaction scope.
 
 ```kotlin
-db.transaction {
+db.begin {
     execute("delete from sqlx4k;").getOrThrow()
     fetchAll("select * from sqlx4k;").getOrThrow().forEach {
         println(it.debug())
@@ -203,10 +203,7 @@ dependencies {
 Then create your data class that will be mapped to a table:
 
 ```kotlin
-package io.github.smyrgeorge.sqlx4k.examples.postgres
-
-import io.github.smyrgeorge.sqlx4k.annotation.Id
-import io.github.smyrgeorge.sqlx4k.annotation.Table
+// package io.github.smyrgeorge.sqlx4k.examples.postgres
 
 @Table("sqlx4k")
 data class Sqlx4k(
@@ -221,9 +218,7 @@ We also need to create the function definitions for the generated code:
 ```kotlin
 // Filename: GeneratedQueries (same as `output-filename`).
 // Also the package should be the same as `output-package`.
-package io.github.smyrgeorge.sqlx4k.examples.postgres
-
-import io.github.smyrgeorge.sqlx4k.Statement
+// package io.github.smyrgeorge.sqlx4k.examples.postgres
 
 // We only need to declare the functions,
 // the actual code will be auto-generated. 

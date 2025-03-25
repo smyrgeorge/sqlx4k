@@ -159,7 +159,7 @@ fun main() {
         db.execute("insert into sqlx4k (id, test) values (65, 'test');").getOrThrow()
         db.execute("insert into sqlx4k (id, test) values (66, 'test');").getOrThrow()
 
-        db.transaction {
+        db.begin {
             execute("delete from sqlx4k;").getOrThrow()
             fetchAll("select * from sqlx4k;").getOrThrow().forEach {
                 println(it.debug())
