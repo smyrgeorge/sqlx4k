@@ -10,6 +10,7 @@ import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asChar
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asDouble
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asFloat
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asInstant
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalDate
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalDateTime
@@ -20,6 +21,7 @@ import io.github.smyrgeorge.sqlx4k.impl.extensions.asUuid
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asBoolean
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asByteArray
 import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
@@ -64,6 +66,7 @@ class PostgreSQLTests {
                    'aa'::bytea
             ;
         """.trimIndent()
+
         db.fetchAll(types).getOrThrow().use {
             val row: ResultSet.Row = it.first()
 
@@ -80,7 +83,7 @@ class PostgreSQLTests {
                 assertThat(row.get(9).asString()).isEqualTo("aa")
                 assertThat(row.get(10).asString()).isEqualTo("aa")
                 assertThat(row.get(11).asLocalDateTime()).isEqualTo(LocalDateTime.parse("2025-03-25T07:31:43.330068"))
-//            assertThat(row.get(12).asInstant()).isEqualTo(Instant.parse("2025-03-25T07:31:43.330068+00"))
+                assertThat(row.get(12).asInstant()).isEqualTo(Instant.parse("2025-03-25T07:31:43.330068Z"))
                 assertThat(row.get(13).asLocalDate()).isEqualTo(LocalDate.parse("2025-03-25"))
                 assertThat(row.get(14).asLocalTime()).isEqualTo(LocalTime.parse("07:31:43.330068"))
                 assertThat(row.get(15).asUuid()).isEqualTo(Uuid.parse("22d64ef8-f6b3-43da-8869-2ee9d31be9d5"))

@@ -4,11 +4,15 @@ package io.github.smyrgeorge.sqlx4k.impl.extensions
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.UtcOffset
+import kotlinx.datetime.format.DateTimeFormat
 import kotlinx.datetime.format.FormatStringsInDatetimeFormats
 import kotlinx.datetime.format.byUnicodePattern
+import kotlinx.datetime.toInstant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -33,14 +37,6 @@ fun ResultSet.Row.Column.asUuidOrNull(): Uuid? = asStringOrNull()?.let { Uuid.pa
 
 inline fun <reified T : Enum<T>> ResultSet.Row.Column.asEnum(): T = asString().toEnum<T>()
 inline fun <reified T : Enum<T>> ResultSet.Row.Column.asEnumOrNull(): T? = asStringOrNull()?.toEnum<T>()
-
-inline fun <reified T : Enum<T>> String.toEnum(): T =
-    try {
-        enumValueOf<T>(this)
-    } catch (e: Exception) {
-        SQLError(SQLError.Code.CannotDecodeEnumValue, "Cannot decode enum value '$this'.").ex()
-    }
-
 fun ResultSet.Row.Column.asLocalDate(): LocalDate = LocalDate.parse(asString())
 fun ResultSet.Row.Column.asLocalDateOrNull(): LocalDate? = asStringOrNull()?.let { LocalDate.parse(it) }
 fun ResultSet.Row.Column.asLocalTime(): LocalTime = LocalTime.parse(asString())
@@ -49,10 +45,22 @@ fun ResultSet.Row.Column.asLocalDateTime(): LocalDateTime = LocalDateTime.parse(
 fun ResultSet.Row.Column.asLocalDateTimeOrNull(): LocalDateTime? =
     asStringOrNull()?.let { LocalDateTime.parse(it, localDateTimeFormatter) }
 
-//fun ResultSet.Row.Column.asInstant(): Instant = LocalDateTime.parse(asString())
-//fun ResultSet.Row.Column.asInstantOrNull(): Instant? = asStringOrNull()?.let { LocalDateTime.parse(it) }
+fun ResultSet.Row.Column.asInstant(): Instant = asString().toInstantSqlx4k()
+fun ResultSet.Row.Column.asInstantOrNull(): Instant? = asStringOrNull()?.toInstantSqlx4k()
 
-private val localDateTimeFormatter = LocalDateTime.Format {
+inline fun <reified T : Enum<T>> String.toEnum(): T =
+    try {
+        enumValueOf<T>(this)
+    } catch (e: Exception) {
+        SQLError(SQLError.Code.CannotDecodeEnumValue, "Cannot decode enum value '$this'.").ex()
+    }
+
+private fun String.toInstantSqlx4k(): Instant {
+    val split = split("+")
+    return LocalDateTime.parse(split[0], localDateTimeFormatter).toInstant(UtcOffset(hours = split[1].toInt()))
+}
+
+private val localDateTimeFormatter: DateTimeFormat<LocalDateTime> = LocalDateTime.Format {
     @OptIn(FormatStringsInDatetimeFormats::class)
     byUnicodePattern("yyyy-MM-dd HH:mm:ss.SSSSSS")
 }
