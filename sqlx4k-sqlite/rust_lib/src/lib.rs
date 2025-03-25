@@ -1,4 +1,4 @@
-use sqlx::migrate::Migrator;
+use sqlx::migrate::{MigrateDatabase, Migrator};
 use sqlx::sqlite::{
     SqliteConnectOptions, SqlitePool, SqlitePoolOptions, SqliteRow, SqliteTypeInfo, SqliteValueRef,
 };
@@ -178,6 +178,13 @@ pub extern "C" fn sqlx4k_of(
     } else {
         pool
     };
+
+    // Creat the database file if not exists.
+    runtime.block_on(async {
+        if !sqlx::Sqlite::database_exists(&url).await.unwrap() {
+            sqlx::Sqlite::create_database(&url).await.unwrap();
+        }
+    });
 
     let pool = pool.connect_with(options);
 
