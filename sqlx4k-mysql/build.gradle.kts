@@ -14,5 +14,12 @@ kotlin {
                 api(project(":sqlx4k"))
             }
         }
+        @Suppress("unused")
+        val nativeTest by getting {
+            dependencies {
+                implementation(libs.kotlin.test)
+                implementation(libs.assertk)
+            }
+        }
     }
 }

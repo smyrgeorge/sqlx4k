@@ -148,7 +148,7 @@ class ResultSet(
          * @throws IllegalArgumentException if the ordinal is out of bounds.
          */
         fun get(ordinal: Int): Column {
-            if (ordinal < 0 || ordinal >= columns.size) error("Columns :: Out of bounds (index $ordinal)")
+            if (ordinal < 0 || ordinal >= size) error("Columns :: Out of bounds (index $ordinal)")
             val raw = row.columns!![ordinal]
             return Column(raw, metadata)
         }
