@@ -14,9 +14,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlin.test.Test
-import kotlin.uuid.ExperimentalUuidApi
 
-@OptIn(ExperimentalUuidApi::class)
 class MySQLTests {
 
     val options = Driver.Pool.Options.builder()

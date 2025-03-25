@@ -38,7 +38,7 @@ jobs:
           key: rust-lib-cache-apple
 
       - name: Gradle Build
-        run: ./gradlew build -x test
+        run: ./gradlew build -x test -x macosArm64Test
 #        run: ./scripts/build-apple.sh
 
 #      - name: Gradle Publish

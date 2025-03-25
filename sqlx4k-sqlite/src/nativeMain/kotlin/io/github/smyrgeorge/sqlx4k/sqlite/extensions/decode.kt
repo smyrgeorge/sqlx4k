@@ -11,3 +11,9 @@ private fun String.asBoolean(): Boolean {
 
 fun ResultSet.Row.Column.asBoolean(): Boolean = asString().asBoolean()
 fun ResultSet.Row.Column.asBooleanOrNull(): Boolean? = asStringOrNull()?.asBoolean()
+
+@OptIn(ExperimentalStdlibApi::class)
+fun ResultSet.Row.Column.asByteArray(): ByteArray = asString().hexToByteArray()
+
+@OptIn(ExperimentalStdlibApi::class)
+fun ResultSet.Row.Column.asByteArrayOrNull(): ByteArray? = asStringOrNull()?.hexToByteArray()

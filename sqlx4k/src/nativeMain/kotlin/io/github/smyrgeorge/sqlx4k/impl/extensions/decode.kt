@@ -62,5 +62,5 @@ private fun String.toInstantSqlx4k(): Instant {
 
 private val localDateTimeFormatter: DateTimeFormat<LocalDateTime> = LocalDateTime.Format {
     @OptIn(FormatStringsInDatetimeFormats::class)
-    byUnicodePattern("yyyy-MM-dd HH:mm:ss.SSSSSS")
+    byUnicodePattern("yyyy-MM-dd HH:mm:ss[.SSSSSS]")
 }
