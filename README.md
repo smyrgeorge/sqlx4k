@@ -13,6 +13,7 @@
 ![](https://img.shields.io/static/v1?label=&message=Windows&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=iOS&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=Android&color=blue)
+[![libs.tech recommends](https://libs.tech/project/814605898/badge.svg)](https://libs.tech/project/814605898/sqlx4k)
 
 A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLite, written for Kotlin Native.
 
