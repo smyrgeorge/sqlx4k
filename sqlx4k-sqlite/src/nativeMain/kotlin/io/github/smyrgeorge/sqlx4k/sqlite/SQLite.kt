@@ -96,16 +96,32 @@ class SQLite(
         Tx(tx.first)
     }
 
+    /**
+     * Represents a specific implementation of the `Transaction` interface.
+     * This class facilitates the management of database transactions, including
+     * methods to commit, roll back, execute queries, and fetch results.
+     *
+     * Transactions in this class are thread-safe, ensuring consistent access
+     * to transaction operations through the usage of a [Mutex].
+     *
+     * This implementation ensures that transactional queries and operations
+     * are properly committed or rolled back, and verifies the transactional
+     * state before allowing execution.
+     *
+     * @constructor Creates an instance of the `Tx` class with the given transaction pointer.
+     * @param tx A pointer to the transaction object in memory used for transactional operations.
+     */
     class Tx(
-        override var tx: CPointer<out CPointed>
+        private var tx: CPointer<out CPointed>
     ) : Transaction {
         private val mutex = Mutex()
-        override var status: Transaction.Status = Transaction.Status.Open
+        private var _status: Transaction.Status = Transaction.Status.Open
+        override val status: Transaction.Status = _status
 
         override suspend fun commit(): Result<Unit> = runCatching {
             mutex.withLock {
                 isOpenOrError()
-                status = Transaction.Status.Closed
+                _status = Transaction.Status.Closed
                 sqlx { c -> sqlx4k_tx_commit(tx, c, Driver.fn) }.throwIfError()
             }
         }
@@ -113,7 +129,7 @@ class SQLite(
         override suspend fun rollback(): Result<Unit> = runCatching {
             mutex.withLock {
                 isOpenOrError()
-                status = Transaction.Status.Closed
+                _status = Transaction.Status.Closed
                 sqlx { c -> sqlx4k_tx_rollback(tx, c, Driver.fn) }.throwIfError()
             }
         }

@@ -98,16 +98,25 @@ class MySQL(
         Tx(tx.first)
     }
 
+    /**
+     * Implementation of the `Transaction` interface that provides methods to manage
+     * and execute transactional operations using SQL commands. Transactions are
+     * synchronized using a `Mutex` to maintain thread safety.
+     *
+     * @constructor Initializes the transaction implementation with the provided transaction pointer.
+     * @property tx The transaction pointer representing the current state and context of the transaction.
+     */
     class Tx(
-        override var tx: CPointer<out CPointed>
+        private var tx: CPointer<out CPointed>
     ) : Transaction {
         private val mutex = Mutex()
-        override var status: Transaction.Status = Transaction.Status.Open
+        private var _status: Transaction.Status = Transaction.Status.Open
+        override val status: Transaction.Status = _status
 
         override suspend fun commit(): Result<Unit> = runCatching {
             mutex.withLock {
                 isOpenOrError()
-                status = Transaction.Status.Closed
+                _status = Transaction.Status.Closed
                 sqlx { c -> sqlx4k_tx_commit(tx, c, Driver.fn) }.throwIfError()
             }
         }
@@ -115,7 +124,7 @@ class MySQL(
         override suspend fun rollback(): Result<Unit> = runCatching {
             mutex.withLock {
                 isOpenOrError()
-                status = Transaction.Status.Closed
+                _status = Transaction.Status.Closed
                 sqlx { c -> sqlx4k_tx_rollback(tx, c, Driver.fn) }.throwIfError()
             }
         }

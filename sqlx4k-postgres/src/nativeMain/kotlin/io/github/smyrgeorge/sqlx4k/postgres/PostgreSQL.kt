@@ -162,16 +162,27 @@ class PostgreSQL(
         execute("select pg_notify('$channel', '$value');").getOrThrow()
     }
 
+    /**
+     * Represents a database transaction, providing methods to perform commit, rollback,
+     * and query execution operations within the transaction's context.
+     *
+     * This class models the behavior of a transactional session, ensuring thread-safe execution
+     * of operations using a locking mechanism and maintaining the transaction's state.
+     *
+     * @constructor Creates a new instance of [Tx] bound to the specified transaction pointer.
+     * @property tx A pointer to the transaction in the underlying C library.
+     */
     class Tx(
-        override var tx: CPointer<out CPointed>
+        private var tx: CPointer<out CPointed>
     ) : Transaction {
         private val mutex = Mutex()
-        override var status: Transaction.Status = Transaction.Status.Open
+        private var _status: Transaction.Status = Transaction.Status.Open
+        override val status: Transaction.Status = _status
 
         override suspend fun commit(): Result<Unit> = runCatching {
             mutex.withLock {
                 isOpenOrError()
-                status = Transaction.Status.Closed
+                _status = Transaction.Status.Closed
                 sqlx { c -> sqlx4k_tx_commit(tx, c, Driver.fn) }.throwIfError()
             }
         }
@@ -179,7 +190,7 @@ class PostgreSQL(
         override suspend fun rollback(): Result<Unit> = runCatching {
             mutex.withLock {
                 isOpenOrError()
-                status = Transaction.Status.Closed
+                _status = Transaction.Status.Closed
                 sqlx { c -> sqlx4k_tx_rollback(tx, c, Driver.fn) }.throwIfError()
             }
         }

@@ -1,7 +1,5 @@
 package io.github.smyrgeorge.sqlx4k
 
-import kotlinx.cinterop.CPointed
-import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 
 /**
@@ -10,14 +8,10 @@ import kotlinx.cinterop.ExperimentalForeignApi
  *
  * This interface integrates with the `Driver` interface to facilitate execution
  * of SQL queries and retrieval of results within a transactional context.
- *
- * @property tx Pointer to the underlying transaction.
  */
-@Suppress("unused")
 @OptIn(ExperimentalForeignApi::class)
 interface Transaction : Driver {
     val status: Status
-    var tx: CPointer<out CPointed>
 
     /**
      * Checks if the transaction is open and throws an error if it is closed.
