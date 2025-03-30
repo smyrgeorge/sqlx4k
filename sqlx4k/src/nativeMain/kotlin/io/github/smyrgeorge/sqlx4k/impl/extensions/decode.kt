@@ -16,7 +16,10 @@ import kotlinx.datetime.toInstant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-fun ResultSet.Row.Column.asChar(): Char = asString()[0]
+fun ResultSet.Row.Column.asChar(): Char {
+    require(asString().length == 1) { "The column ($name) value is not a char (length != 1)." }
+    return asString()[0]
+}
 fun ResultSet.Row.Column.asCharOrNull(): Char? = asStringOrNull()?.get(0)
 fun ResultSet.Row.Column.asInt(): Int = asString().toInt()
 fun ResultSet.Row.Column.asIntOrNull(): Int? = asStringOrNull()?.toInt()
