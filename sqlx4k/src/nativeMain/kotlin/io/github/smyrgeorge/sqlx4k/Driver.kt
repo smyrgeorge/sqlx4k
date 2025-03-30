@@ -177,7 +177,7 @@ interface Driver {
          * @return The result of the operation performed within the transaction context.
          * @throws Throwable Rethrows any exception encountered during the execution of the transactional block.
          */
-        suspend fun <T> begin(f: suspend Transaction.() -> T): T {
+        suspend fun <T> transaction(f: suspend Transaction.() -> T): T {
             val tx: Transaction = begin().getOrThrow()
             return try {
                 val res = f(tx)

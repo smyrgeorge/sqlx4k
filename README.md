@@ -113,6 +113,16 @@ val options = Driver.Pool.Options.builder()
     .maxConnections(10)
     .build()
 
+/**
+ * The following urls are supported:
+ *  postgresql://
+ *  postgresql://localhost
+ *  postgresql://localhost:5433
+ *  postgresql://localhost/mydb
+ *  postgresql://user@localhost
+ *  postgresql://user:secret@localhost
+ *  postgresql://localhost?dbname=mydb&user=postgres&password=postgres
+ */
 val db = PostgreSQL(
     url = "postgresql://localhost:15432/test",
     username = "postgres",
@@ -120,14 +130,29 @@ val db = PostgreSQL(
     options = options
 )
 
+
+/**
+ *  The connection URL should follow the nex pattern,
+ *  as described by [MySQL](https://dev.mysql.com/doc/connector-j/8.0/en/connector-j-reference-jdbc-url-format.html).
+ *  The generic format of the connection URL:
+ *  mysql://[host][/database][?properties]
+ */
 val db = MySQL(
     url = "mysql://localhost:13306/test",
     username = "mysql",
     password = "mysql"
 )
 
+/**
+ * The following urls are supported:
+ * `sqlite::memory:`            | Open an in-memory database.
+ * `sqlite:data.db`             | Open the file `data.db` in the current directory.
+ * `sqlite://data.db`           | Open the file `data.db` in the current directory.
+ * `sqlite:///data.db`          | Open the file `data.db` from the root (`/`) directory.
+ * `sqlite://data.db?mode=ro`   | Open the file `data.db` for read-only access.
+*/
 val db = SQLite(
-    url = "sqlite://test.db",
+    url = "sqlite://test.db", // If the `test.db` file is not found, a new db will be created.
     options = options
 )
 ```
@@ -170,7 +195,7 @@ tx1.commit().getOrThrow()
 You can also execute entire blocks in a transaction scope.
 
 ```kotlin
-db.begin {
+db.transaction {
     execute("delete from sqlx4k;").getOrThrow()
     fetchAll("select * from sqlx4k;").getOrThrow().forEach {
         println(it.debug())
