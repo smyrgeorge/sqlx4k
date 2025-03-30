@@ -63,7 +63,7 @@ suspend fun bench() {
         println("[noTx] $time")
         time
     }.map { it.inWholeMilliseconds }.average()
-    val noTxRows = db.fetchAll("select count(*) from sqlx4k;").getOrThrow().first().get(0).asLong()
+    val noTxRows = db.fetchAll("select count(*) from sqlx4k;").getOrThrow().use { first().get(0).asLong() }
     println("[noTx] ${noTx.milliseconds} $noTxRows")
 
     println("[txCommit]")
@@ -83,7 +83,7 @@ suspend fun bench() {
         println("[txCommit] $time")
         time
     }.map { it.inWholeMilliseconds }.average()
-    val txCommitRows = db.fetchAll("select count(*) from sqlx4k;").getOrThrow().first().get(0).asLong()
+    val txCommitRows = db.fetchAll("select count(*) from sqlx4k;").getOrThrow().use { first().get(0).asLong() }
     println("[txCommit] ${txCommit.milliseconds} $txCommitRows")
 
     println("[txRollback]")
@@ -106,6 +106,6 @@ suspend fun bench() {
         println("[txRollback] $time")
         time
     }.map { it.inWholeMilliseconds }.average()
-    val txRollbackRows = db.fetchAll("select count(*) from sqlx4k;").getOrThrow().first().get(0).asLong()
+    val txRollbackRows = db.fetchAll("select count(*) from sqlx4k;").getOrThrow().use { first().get(0).asLong() }
     println("[txRollback] ${txRollback.milliseconds} $txRollbackRows")
 }

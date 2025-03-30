@@ -104,9 +104,11 @@ fun main() {
                    'aa'::bytea
             ;
         """.trimIndent()
-        val r0 = db.fetchAll(types).getOrThrow().map {
-            it.columns.forEach { c ->
-                println("${c.key} :: ${c.value.name} ${c.value.type} ${c.value.value}")
+        val r0 = db.fetchAll(types).getOrThrow().use {
+            map {
+                it.columns.forEach { c ->
+                    println("${c.key} :: ${c.value.name} ${c.value.type} ${c.value.value}")
+                }
             }
         }
         println(r0)
@@ -117,17 +119,9 @@ fun main() {
         val r2 = db.fetchAll("select * from sqlx4k;", Sqlx4kRowMapper).getOrThrow()
         println(r2)
 
-        db.fetchAll("select 1;").getOrThrow().forEach {
-            println(it.debug())
-        }
-
-        db.fetchAll("select now();").getOrThrow().forEach {
-            println(it.debug())
-        }
-
-        db.fetchAll("select 'testtest', 'test1';").getOrThrow().forEach {
-            println(it.debug())
-        }
+        db.fetchAll("select 1;").getOrThrow().use { forEach { println(it.debug()) } }
+        db.fetchAll("select now();").getOrThrow().use { forEach { println(it.debug()) } }
+        db.fetchAll("select 'testtest', 'test1';").getOrThrow().use { forEach { println(it.debug()) } }
 
         println("Connections: ${db.poolSize()}, Idle: ${db.poolIdleSize()}")
         println("\n\n\n::: LISTEN/NOTIFY :::")
@@ -145,30 +139,19 @@ fun main() {
         val tx1: Transaction = db.begin().getOrThrow()
         println(tx1)
         tx1.execute("delete from sqlx4k;").getOrThrow()
-        tx1.fetchAll("select * from sqlx4k;").getOrThrow().forEach {
-            println(it.debug())
-        }
-        db.fetchAll("select * from sqlx4k;").getOrThrow().forEach {
-            println(it.debug())
-        }
+        tx1.fetchAll("select * from sqlx4k;").getOrThrow().use { forEach { println(it.debug()) } }
+        db.fetchAll("select * from sqlx4k;").getOrThrow().use { forEach { println(it.debug()) } }
         tx1.commit().getOrThrow()
-        db.fetchAll("select * from sqlx4k;").getOrThrow().forEach {
-            println(it.debug())
-        }
+        db.fetchAll("select * from sqlx4k;").getOrThrow().use { forEach { println(it.debug()) } }
 
         db.execute("insert into sqlx4k (id, test) values (65, 'test');").getOrThrow()
         db.execute("insert into sqlx4k (id, test) values (66, 'test');").getOrThrow()
 
         db.transaction {
             execute("delete from sqlx4k;").getOrThrow()
-            fetchAll("select * from sqlx4k;").getOrThrow().forEach {
-                println(it.debug())
-            }
+            fetchAll("select * from sqlx4k;").getOrThrow().use { forEach { println(it.debug()) } }
             // Execute outside the tx.
-            db.fetchAll("select * from sqlx4k;").getOrThrow().forEach {
-                println(it.debug())
-            }
-        }
+            db.fetchAll("select * from sqlx4k;").getOrThrow().use{ forEach { println(it.debug()) } } }
 
         db.execute("insert into sqlx4k (id, test) values (65, 'test');").getOrThrow()
         db.execute("insert into sqlx4k (id, test) values (66, 'test');").getOrThrow()

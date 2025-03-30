@@ -68,7 +68,7 @@ class PostgreSQLTests {
         """.trimIndent()
 
         db.fetchAll(types).getOrThrow().use {
-            val row: ResultSet.Row = it.first()
+            val row: ResultSet.Row = first()
 
             assertAll {
                 assertThat(row.get(0).asStringOrNull()).isNull()

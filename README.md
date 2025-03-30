@@ -165,9 +165,11 @@ val st1 = Statement
     .create("select * from sqlx4k where id = :id")
     .bind("id", 65)
 
-db.fetchAll(st1).getOrThrow().map {
-    val id: ResultSet.Row.Column = it.get("id")
-    Test(id = id.asInt())
+db.fetchAll(st1).getOrThrow().use {
+    map {
+        val id: ResultSet.Row.Column = it.get("id")
+        Test(id = id.asInt())
+    }
 }
 
 // With positional parameters:
@@ -175,9 +177,11 @@ val st2 = Statement
     .create("select * from sqlx4k where id = ?")
     .bind(0, 65)
 
-db.fetchAll(st2).getOrThrow().map {
-    val id: ResultSet.Row.Column = it.get("id")
-    Test(id = id.asInt())
+db.fetchAll(st2).getOrThrow().use {
+    map {
+        val id: ResultSet.Row.Column = it.get("id")
+        Test(id = id.asInt())
+    }
 }
 ```
 
@@ -186,9 +190,7 @@ db.fetchAll(st2).getOrThrow().map {
 ```kotlin
 val tx1: Transaction = db.begin().getOrThrow()
 tx1.execute("delete from sqlx4k;").getOrThrow()
-tx1.fetchAll("select * from sqlx4k;").getOrThrow().forEach {
-    println(debug())
-}
+tx1.fetchAll("select * from sqlx4k;").getOrThrow().use { forEach { println(debug()) } }
 tx1.commit().getOrThrow()
 ```
 
@@ -197,9 +199,7 @@ You can also execute entire blocks in a transaction scope.
 ```kotlin
 db.transaction {
     execute("delete from sqlx4k;").getOrThrow()
-    fetchAll("select * from sqlx4k;").getOrThrow().forEach {
-        println(it.debug())
-    }
+    fetchAll("select * from sqlx4k;").getOrThrow().use { forEach { println(it.debug()) } }
     // At the end of the block will auto commit the transaction.
     // If any error occurs will automatically trigger the rollback method.
 }

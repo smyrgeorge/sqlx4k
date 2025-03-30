@@ -2,6 +2,7 @@ package io.github.smyrgeorge.sqlx4k.postgres
 
 import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.ResultSetHolder
 import io.github.smyrgeorge.sqlx4k.RowMapper
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
@@ -107,12 +108,12 @@ class PostgreSQL(
     override suspend fun execute(statement: Statement): Result<Long> =
         execute(statement.render(encoders))
 
-    override suspend fun fetchAll(sql: String): Result<ResultSet> {
+    override suspend fun fetchAll(sql: String): Result<ResultSetHolder> {
         val res = sqlx { c -> sqlx4k_fetch_all(sql, c, Driver.fn) }
         return ResultSet(res).toResult()
     }
 
-    override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+    override suspend fun fetchAll(statement: Statement): Result<ResultSetHolder> =
         fetchAll(statement.render(encoders))
 
     override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
@@ -207,7 +208,7 @@ class PostgreSQL(
         override suspend fun execute(statement: Statement): Result<Long> =
             execute(statement.render(encoders))
 
-        override suspend fun fetchAll(sql: String): Result<ResultSet> {
+        override suspend fun fetchAll(sql: String): Result<ResultSetHolder> {
             val res = mutex.withLock {
                 isOpenOrError()
                 val r = sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, Driver.fn) }
@@ -218,7 +219,7 @@ class PostgreSQL(
             return res.toResult()
         }
 
-        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+        override suspend fun fetchAll(statement: Statement): Result<ResultSetHolder> =
             fetchAll(statement.render(encoders))
 
         override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =

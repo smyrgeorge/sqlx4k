@@ -12,7 +12,7 @@ interface RowMapper<T> {
      * @param rs The ResultSet containing database rows to be mapped.
      * @return A list of objects of type T mapped from the ResultSet.
      */
-    fun map(rs: ResultSet): List<T> = rs.use { rs.map { map(it) } }
+    fun map(rs: ResultSet): List<T> = rs.map { map(it) }
 
     /**
      * Maps the given database row to an object of type T.

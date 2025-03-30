@@ -36,21 +36,27 @@ fun main() {
 
         data class Test(val id: Int)
 
-        val res = db.fetchAll("select * from sqlx4k;").getOrThrow().map {
-            val id: ResultSet.Row.Column = it.get("id")
-            Test(id = id.asInt())
+        val res = db.fetchAll("select * from sqlx4k;").getOrThrow().use {
+            map {
+                val id: ResultSet.Row.Column = it.get("id")
+                Test(id = id.asInt())
+            }
         }
         println(res)
 
-        val r1 = db.fetchAll("select * from sqlx4k;").getOrThrow().map {
-            val id: ResultSet.Row.Column = it.get("id")
-            Test(id = id.asInt())
+        val r1 = db.fetchAll("select * from sqlx4k;").getOrThrow().use {
+            map {
+                val id: ResultSet.Row.Column = it.get("id")
+                Test(id = id.asInt())
+            }
         }
         println(r1)
 
-        val r2 = db.fetchAll("select * from sqlx4k;").getOrThrow().map {
-            val id: ResultSet.Row.Column = it.get(0)
-            Test(id = id.asInt())
+        val r2 = db.fetchAll("select * from sqlx4k;").getOrThrow().use {
+            map {
+                val id: ResultSet.Row.Column = it.get(0)
+                Test(id = id.asInt())
+            }
         }
         println(r2)
 //        val r3 = db.fetchAll("select * from sqlx4k;").map {
@@ -59,17 +65,11 @@ fun main() {
 //        }
 //        println(r3)
 
-        db.fetchAll("select 1;").getOrThrow().forEach {
-            println(it.debug())
-        }
+        db.fetchAll("select 1;").getOrThrow().use { forEach { println(it.debug()) } }
 
-        db.fetchAll("select now();").getOrThrow().forEach {
-            println(it.debug())
-        }
+        db.fetchAll("select now();").getOrThrow().use { forEach { println(it.debug()) } }
 
-        db.fetchAll("select 'testtest', 'test1';").getOrThrow().forEach {
-            println(it.debug())
-        }
+        db.fetchAll("select 'testtest', 'test1';").getOrThrow().use { forEach { println(it.debug()) } }
 
         println("Connections: ${db.poolSize()}, Idle: ${db.poolIdleSize()}")
 
@@ -77,23 +77,19 @@ fun main() {
         val tx1: Transaction = db.begin().getOrThrow()
         println(tx1)
         tx1.execute("delete from sqlx4k;").getOrThrow()
-        tx1.fetchAll("select * from sqlx4k;").getOrThrow().forEach {
-            println(it.debug())
-        }
-        db.fetchAll("select * from sqlx4k;").getOrThrow().forEach {
-            println(it.debug())
-        }
+        tx1.fetchAll("select * from sqlx4k;").getOrThrow().use { forEach { println(it.debug()) } }
+        db.fetchAll("select * from sqlx4k;").getOrThrow().use { forEach { println(it.debug()) } }
         tx1.commit().getOrThrow()
-        db.fetchAll("select * from sqlx4k;").getOrThrow().forEach {
-            println(it.debug())
-        }
+        db.fetchAll("select * from sqlx4k;").getOrThrow().use { forEach { println(it.debug()) } }
 
         db.execute("insert into sqlx4k (id) values (65);").getOrThrow()
         db.execute("insert into sqlx4k (id) values (66);").getOrThrow()
 
-        val test = db.fetchAll("select * from sqlx4k;").getOrThrow().map {
-            val id: ResultSet.Row.Column = it.get("id")
-            Test(id = id.asInt())
+        val test = db.fetchAll("select * from sqlx4k;").getOrThrow().use {
+            map {
+                val id: ResultSet.Row.Column = it.get("id")
+                Test(id = id.asInt())
+            }
         }
         println(test)
 
@@ -101,13 +97,17 @@ fun main() {
             runBlocking {
                 (1..20).forEachParallel {
                     repeat(1_000) {
-                        db.fetchAll("select * from sqlx4k limit 1000;").getOrThrow().map {
-                            val id: ResultSet.Row.Column = it.get("id")
-                            Test(id = id.asInt())
+                        db.fetchAll("select * from sqlx4k limit 1000;").getOrThrow().use {
+                            map {
+                                val id: ResultSet.Row.Column = it.get("id")
+                                Test(id = id.asInt())
+                            }
                         }
-                        db.fetchAll("select * from sqlx4k;").getOrThrow().map {
-                            val id: ResultSet.Row.Column = it.get("id")
-                            Test(id = id.asInt())
+                        db.fetchAll("select * from sqlx4k;").getOrThrow().use {
+                            map {
+                                val id: ResultSet.Row.Column = it.get("id")
+                                Test(id = id.asInt())
+                            }
                         }
                     }
                 }
@@ -124,14 +124,18 @@ fun main() {
                         val tx2 = db.begin().getOrThrow()
                         tx2.execute("insert into sqlx4k (id) values (65);").getOrThrow()
                         tx2.execute("insert into sqlx4k (id) values (66);").getOrThrow()
-                        tx2.fetchAll("select * from sqlx4k;").getOrThrow().map {
-                            val id: ResultSet.Row.Column = it.get("id")
-                            Test(id = id.asInt())
+                        tx2.fetchAll("select * from sqlx4k;").getOrThrow().use {
+                            map {
+                                val id: ResultSet.Row.Column = it.get("id")
+                                Test(id = id.asInt())
+                            }
                         }
                         tx2.rollback().getOrThrow()
-                        db.fetchAll("select * from sqlx4k;").getOrThrow().forEach {
-                            val id: ResultSet.Row.Column = it.get("id")
-                            Test(id = id.asInt())
+                        db.fetchAll("select * from sqlx4k;").getOrThrow().use {
+                            forEach {
+                                val id: ResultSet.Row.Column = it.get("id")
+                                Test(id = id.asInt())
+                            }
                         }
                     }
                 }

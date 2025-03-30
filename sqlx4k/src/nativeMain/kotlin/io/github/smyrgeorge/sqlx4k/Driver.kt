@@ -19,7 +19,6 @@ import kotlin.time.Duration
  * transactions. It abstracts the underlying database operations and offers a coroutine-based
  * API for asynchronous execution.
  */
-@Suppress("unused")
 @OptIn(ExperimentalForeignApi::class)
 interface Driver {
     /**
@@ -44,7 +43,7 @@ interface Driver {
      * @param sql the SQL statement to be executed.
      * @return a result containing the retrieved result set.
      */
-    suspend fun fetchAll(sql: String): Result<ResultSet>
+    suspend fun fetchAll(sql: String): Result<ResultSetHolder>
 
     /**
      * Fetches all results of the given SQL statement asynchronously.
@@ -52,7 +51,7 @@ interface Driver {
      * @param statement The SQL statement to be executed.
      * @return A result containing the retrieved result set.
      */
-    suspend fun fetchAll(statement: Statement): Result<ResultSet>
+    suspend fun fetchAll(statement: Statement): Result<ResultSetHolder>
 
     /**
      * Fetches all results of the given SQL query and maps each row using the provided RowMapper.
@@ -63,8 +62,7 @@ interface Driver {
      * @return A Result containing a list of instances of type T mapped from the query result set.
      */
     suspend fun <T> fetchAll(sql: String, rowMapper: RowMapper<T>): Result<List<T>> = runCatching {
-        val res: ResultSet = fetchAll(sql).getOrThrow()
-        rowMapper.map(res)
+        fetchAll(sql).getOrThrow().use { rowMapper.map(this) }
     }
 
     /**
@@ -199,28 +197,20 @@ interface Driver {
      */
     interface Migrate {
         /**
-         * Initiates the migration process using a default set of migration scripts.
+         * Executes database migrations from the specified path.
          *
-         * This method applies database schema or data migrations by executing SQL scripts
-         * or statements located in the default path (`./db/migrations`). These migrations
-         * modify the structure or content of the database to align with the expected state.
+         * This method applies schema or data migrations to a database. It expects
+         * migration files to be located in the specified directory. The default
+         * path points to `./db/migrations`. The method returns a `Result` indicating
+         * the success or failure of the migration process.
          *
-         * @return A [Result] containing [Unit] if the migration succeeds, or an error indicating
-         * potential issues such as a failed migration process or database-specific errors.
+         * @param path The file path to the directory containing migration scripts.
+         *             Defaults to `./db/migrations`.
+         * @return A [Result] object wrapping [Unit]. The success state indicates that
+         *         the migrations were applied successfully, while a failure state
+         *         contains information about the encountered error.
          */
-        suspend fun migrate(): Result<Unit> = migrate("./db/migrations")
-
-        /**
-         * Executes the migration process using the provided file path.
-         *
-         * This method applies database schema or data migrations by executing SQL scripts or
-         * statements located in the specified path. Migrations may involve modifying the database
-         * structure or its contents to match the desired schema or state.
-         *
-         * @param path The file path to the migration scripts or resources.
-         * @return A [Result] containing [Unit] if the migration is successful, or an error if the migration fails.
-         */
-        suspend fun migrate(path: String): Result<Unit>
+        suspend fun migrate(path: String = "./db/migrations"): Result<Unit>
     }
 
     companion object {

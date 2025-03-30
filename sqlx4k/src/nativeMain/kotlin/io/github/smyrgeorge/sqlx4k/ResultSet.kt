@@ -24,11 +24,11 @@ import sqlx4k.sqlx4k_free_result
  *
  * @property ptr The raw pointer to the native result set.
  */
+@Suppress("unused")
 @OptIn(ExperimentalForeignApi::class)
-@Suppress("unused", "MemberVisibilityCanBePrivate")
 class ResultSet(
     private var ptr: CPointer<Sqlx4kResult>?
-) : Iterator<ResultSet.Row>, Iterable<ResultSet.Row>, AutoCloseable {
+) : Iterable<ResultSet.Row> {
 
     /**
      * A mutex used to ensure thread-safe operations when closing the ResultSet.
@@ -39,9 +39,17 @@ class ResultSet(
      */
     private val closeMutex = Mutex()
 
-    private var current: Int = 0
+    /**
+     * Indicates whether the `ResultSet` has been closed.
+     *
+     * This variable keeps track of the resource management state for the `ResultSet`.
+     * If `true`, it means the `ResultSet` has been closed and its resources have been released.
+     * If `false`, the `ResultSet` is still active and its resources are available for use.
+     *
+     * Used internally to ensure thread-safe access and proper resource handling.
+     */
     private var closed: Boolean = false
-    private var result: Sqlx4kResult? = ptr?.pointed
+    private var result: Sqlx4kResult = ptr?.pointed
         ?: error("Could not extract the value from the raw pointer (null).")
 
     /**
@@ -66,14 +74,14 @@ class ResultSet(
      *
      * @return True if the result represents an error, false otherwise.
      */
-    fun isError(): Boolean = result!!.isError()
+    fun isError(): Boolean = result.isError()
 
     /**
      * Converts the current result of the [ResultSet] to a [SQLError].
      *
      * @return The [SQLError] representation of the current result.
      */
-    fun toError(): SQLError = result!!.toError()
+    internal fun toError(): SQLError = result.toError()
 
     /**
      * Converts the current [ResultSet] into a Kotlin [Result] object.
@@ -83,29 +91,48 @@ class ResultSet(
      * @return A successful [Result] containing the current [ResultSet] if no error,
      *         or a failed [Result] with the appropriate [SQLError].
      */
-    fun toResult(): Result<ResultSet> =
+    fun toResult(): Result<ResultSetHolder> =
         if (isError()) {
             val error = toError()
             close()
             Result.failure(error)
-        } else Result.success(this)
+        } else Result.success(ResultSetHolder(this))
 
     /**
      * Retrieves the raw `Sqlx4kResult` associated with the `ResultSet`.
      *
      * @return The raw `Sqlx4kResult` if it has not been freed, or throws an error if it has.
      */
-    fun getRaw(): Sqlx4kResult =
-        if (closed) error("Resulted already closed (null).")
-        else result ?: error("Resulted already freed (null).")
+    fun getRaw(): Sqlx4kResult = if (closed) error("ResultSed already closed.") else result
 
     /**
-     * Retrieves the raw pointer to the `Sqlx4kResult` associated with the `ResultSet`.
+     * Closes the `ResultSet` and releases any associated resources.
      *
-     * @return The raw `CPointer<Sqlx4kResult>` if it has not been freed, or throws an error if it has.
+     * This method ensures the `ResultSet` is properly closed and any native resources are freed.
+     * It is thread-safe and can be accessed concurrently.
+     * If the `ResultSet` is already closed, subsequent calls to this method will have no effect.
      */
-    fun getRawPtr(): CPointer<Sqlx4kResult> = ptr
-        ?: error("Resulted already freed (null).")
+    internal fun close() {
+        val alreadyClosed: Boolean = runBlocking {
+            closeMutex.withLock {
+                val c = closed
+                closed = true
+                c
+            }
+        }
+
+        if (alreadyClosed) return
+
+        sqlx4k_free_result(ptr)
+        ptr = null
+    }
+
+    /**
+     * Returns an iterator over elements of type `Row`.
+     *
+     * @return Iterator<Row> for the result set.
+     */
+    override fun iterator(): Iterator<Row> = IteratorImpl(getRaw())
 
     /**
      * Represents a row in a SQL result set.
@@ -226,59 +253,6 @@ class ResultSet(
     }
 
     /**
-     * Checks if there are more rows available in the result set.
-     *
-     * @return True if there are more rows, false otherwise.
-     */
-    override fun hasNext(): Boolean {
-        if (current == 0) getRaw().throwIfError()
-        val hasNext = current < getRaw().size
-        if (!hasNext) close()
-        return hasNext
-    }
-
-    /**
-     * Retrieves the next row in the result set.
-     *
-     * @return The next row in the result set.
-     * @throws IllegalStateException if the index is out of bounds or if an error occurs while fetching the raw data.
-     */
-    override fun next(): Row {
-        if (current == 0) getRaw().throwIfError()
-        if (current < 0 || current >= getRaw().size) error("Rows :: Out of bounds (index $current)")
-        return Row(getRaw().rows!![current++], Metadata(getRaw().schema!!.pointed))
-    }
-
-    /**
-     * Closes the `ResultSet` and releases any associated resources.
-     *
-     * This method ensures the `ResultSet` is properly closed and any native resources are freed.
-     * It is thread-safe and can be accessed concurrently.
-     * If the `ResultSet` is already closed, subsequent calls to this method will have no effect.
-     */
-    override fun close() {
-        val alreadyClosed: Boolean = runBlocking {
-            closeMutex.withLock {
-                val c = closed
-                closed = true
-                c
-            }
-        }
-        if (alreadyClosed) return
-
-        result = null
-        sqlx4k_free_result(ptr)
-        ptr = null
-    }
-
-    /**
-     * Returns an iterator over elements of type `Row`.
-     *
-     * @return Iterator<Row> for the result set.
-     */
-    override fun iterator(): Iterator<Row> = this
-
-    /**
      * The `Metadata` class provides an interface to extract and manage metadata from a `ResultSet`.
      *
      * @property schema The `ResultSet` from which metadata is to be extracted.
@@ -349,5 +323,42 @@ class ResultSet(
             val name: String,
             val type: String
         )
+    }
+
+    /**
+     * An implementation of the [Iterator] interface for iterating over rows in a SQL result set.
+     *
+     * This class is responsible for providing sequential access to each row in a [Sqlx4kResult].
+     * It ensures error-checking before accessing rows and enforces bounds checks to prevent invalid access.
+     *
+     * @property res The underlying SQL result set being iterated.
+     */
+    class IteratorImpl(
+        private val res: Sqlx4kResult
+    ) : Iterator<Row> {
+        private var current: Int = 0
+
+        /**
+         * Checks if there are more rows available in the result set.
+         *
+         * @return True if there are more rows, false otherwise.
+         */
+        override fun hasNext(): Boolean {
+            if (current == 0) res.throwIfError()
+            val hasNext = current < res.size
+            return hasNext
+        }
+
+        /**
+         * Retrieves the next row in the result set.
+         *
+         * @return The next row in the result set.
+         * @throws IllegalStateException if the index is out of bounds or if an error occurs while fetching the raw data.
+         */
+        override fun next(): Row {
+            if (current == 0) res.throwIfError()
+            if (current < 0 || current >= res.size) error("Rows :: Out of bounds (index $current)")
+            return Row(res.rows!![current++], Metadata(res.schema!!.pointed))
+        }
     }
 }
