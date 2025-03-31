@@ -165,11 +165,9 @@ val st1 = Statement
     .create("select * from sqlx4k where id = :id")
     .bind("id", 65)
 
-db.fetchAll(st1).getOrThrow().use {
-    map {
-        val id: ResultSet.Row.Column = it.get("id")
-        Test(id = id.asInt())
-    }
+db.fetchAll(st1).getOrThrow().map {
+    val id: ResultSet.Row.Column = it.get("id")
+    Test(id = id.asInt())
 }
 
 // With positional parameters:
@@ -177,11 +175,9 @@ val st2 = Statement
     .create("select * from sqlx4k where id = ?")
     .bind(0, 65)
 
-db.fetchAll(st2).getOrThrow().use {
-    map {
-        val id: ResultSet.Row.Column = it.get("id")
-        Test(id = id.asInt())
-    }
+db.fetchAll(st2).getOrThrow().map {
+    val id: ResultSet.Row.Column = it.get("id")
+    Test(id = id.asInt())
 }
 ```
 
@@ -190,7 +186,7 @@ db.fetchAll(st2).getOrThrow().use {
 ```kotlin
 val tx1: Transaction = db.begin().getOrThrow()
 tx1.execute("delete from sqlx4k;").getOrThrow()
-tx1.fetchAll("select * from sqlx4k;").getOrThrow().use { forEach { println(debug()) } }
+tx1.fetchAll("select * from sqlx4k;").getOrThrow().forEach { println(it) }
 tx1.commit().getOrThrow()
 ```
 
@@ -199,7 +195,7 @@ You can also execute entire blocks in a transaction scope.
 ```kotlin
 db.transaction {
     execute("delete from sqlx4k;").getOrThrow()
-    fetchAll("select * from sqlx4k;").getOrThrow().use { forEach { println(it.debug()) } }
+    fetchAll("select * from sqlx4k;").getOrThrow().forEach { println(it) }
     // At the end of the block will auto commit the transaction.
     // If any error occurs will automatically trigger the rollback method.
 }
@@ -393,40 +389,40 @@ codesign -s - -v -f --entitlements =(echo -n '<?xml version="1.0" encoding="UTF-
         <key>com.apple.security.get-task-allow</key>
         <true/>
     </dict>
-</plist>') ./examples/postgres/build/bin/macosArm64/releaseExecutable/postgres.kexe
+</plist>') ./bench/postgres-sqlx4k/build/bin/macosArm64/releaseExecutable/postgres-sqlx4k.kexe
 ```
 
 Then run the tool:
 
 ```shell
-leaks -atExit -- ./examples/postgres/build/bin/macosArm64/releaseExecutable/postgres.kexe
+leaks -atExit -- ./bench/postgres-sqlx4k/build/bin/macosArm64/releaseExecutable/postgres-sqlx4k.kexe
 ```
 
 Sample output:
 
 ```text
-Process:         postgres.kexe [54426]
-Path:            /Users/USER/*/postgres.kexe
-Load Address:    0x1027ec000
-Identifier:      postgres.kexe
+Process:         postgres-sqlx4k.kexe [31096]
+Path:            /Users/USER/*/postgres-sqlx4k.kexe
+Load Address:    0x100938000
+Identifier:      postgres-sqlx4k.kexe
 Version:         0
 Code Type:       ARM64
 Platform:        macOS
-Parent Process:  leaks [54424]
+Parent Process:  leaks [31095]
 
-Date/Time:       2024-10-14 19:17:58.968 +0200
-Launch Time:     2024-10-14 19:17:21.968 +0200
-OS Version:      macOS 15.0 (24A335)
+Date/Time:       2025-04-01 00:29:35.315 +0200
+Launch Time:     2025-04-01 00:28:07.164 +0200
+OS Version:      macOS 15.3.1 (24D70)
 Report Version:  7
 Analysis Tool:   /Applications/Xcode.app/Contents/Developer/usr/bin/leaks
-Analysis Tool Version:  Xcode 16.0 (16A242d)
+Analysis Tool Version:  Xcode 16.2 (16C5032a)
 
-Physical footprint:         37.1M
-Physical footprint (peak):  38.5M
+Physical footprint:         21.2M
+Physical footprint (peak):  24.2M
 Idle exit:                  untracked
 ----
 
 leaks Report Version: 4.0, multi-line stacks
-Process 54426: 1847 nodes malloced for 656 KB
-Process 54426: 0 leaks for 0 total leaked bytes.
+Process 31096: 1741 nodes malloced for 547 KB
+Process 31096: 0 leaks for 0 total leaked bytes.
 ```

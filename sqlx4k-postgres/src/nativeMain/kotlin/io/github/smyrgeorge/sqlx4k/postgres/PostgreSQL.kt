@@ -2,14 +2,15 @@ package io.github.smyrgeorge.sqlx4k.postgres
 
 import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.ResultSet
-import io.github.smyrgeorge.sqlx4k.ResultSetHolder
 import io.github.smyrgeorge.sqlx4k.RowMapper
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.impl.extensions.rowsAffectedOrError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.sqlx
 import io.github.smyrgeorge.sqlx4k.impl.extensions.throwIfError
+import io.github.smyrgeorge.sqlx4k.impl.extensions.toResultSet
 import io.github.smyrgeorge.sqlx4k.impl.extensions.tx
+import io.github.smyrgeorge.sqlx4k.impl.extensions.use
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -68,7 +69,6 @@ import kotlin.experimental.ExperimentalNativeApi
  * @param password The password used for authentication.
  * @param options Optional pool configuration, defaulting to `Driver.Pool.Options`.
  */
-@Suppress("MemberVisibilityCanBePrivate", "unused")
 @OptIn(ExperimentalForeignApi::class, ExperimentalNativeApi::class)
 class PostgreSQL(
     url: String,
@@ -108,12 +108,12 @@ class PostgreSQL(
     override suspend fun execute(statement: Statement): Result<Long> =
         execute(statement.render(encoders))
 
-    override suspend fun fetchAll(sql: String): Result<ResultSetHolder> {
+    override suspend fun fetchAll(sql: String): Result<ResultSet> {
         val res = sqlx { c -> sqlx4k_fetch_all(sql, c, Driver.fn) }
-        return ResultSet(res).toResult()
+        return res.use { it.toResultSet() }.toResult()
     }
 
-    override suspend fun fetchAll(statement: Statement): Result<ResultSetHolder> =
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
         fetchAll(statement.render(encoders))
 
     override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
@@ -208,18 +208,19 @@ class PostgreSQL(
         override suspend fun execute(statement: Statement): Result<Long> =
             execute(statement.render(encoders))
 
-        override suspend fun fetchAll(sql: String): Result<ResultSetHolder> {
+        override suspend fun fetchAll(sql: String): Result<ResultSet> {
             val res = mutex.withLock {
                 isOpenOrError()
-                val r = sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, Driver.fn) }
-                ResultSet(r)
+                sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, Driver.fn) }
             }
 
-            tx = res.getRaw().tx!!
-            return res.toResult()
+            return res.use {
+                tx = it.tx!!
+                it.toResultSet()
+            }.toResult()
         }
 
-        override suspend fun fetchAll(statement: Statement): Result<ResultSetHolder> =
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
             fetchAll(statement.render(encoders))
 
         override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =

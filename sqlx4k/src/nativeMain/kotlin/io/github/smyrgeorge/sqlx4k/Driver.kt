@@ -43,7 +43,7 @@ interface Driver {
      * @param sql the SQL statement to be executed.
      * @return a result containing the retrieved result set.
      */
-    suspend fun fetchAll(sql: String): Result<ResultSetHolder>
+    suspend fun fetchAll(sql: String): Result<ResultSet>
 
     /**
      * Fetches all results of the given SQL statement asynchronously.
@@ -51,7 +51,7 @@ interface Driver {
      * @param statement The SQL statement to be executed.
      * @return A result containing the retrieved result set.
      */
-    suspend fun fetchAll(statement: Statement): Result<ResultSetHolder>
+    suspend fun fetchAll(statement: Statement): Result<ResultSet>
 
     /**
      * Fetches all results of the given SQL query and maps each row using the provided RowMapper.
@@ -62,7 +62,7 @@ interface Driver {
      * @return A Result containing a list of instances of type T mapped from the query result set.
      */
     suspend fun <T> fetchAll(sql: String, rowMapper: RowMapper<T>): Result<List<T>> = runCatching {
-        fetchAll(sql).getOrThrow().use { rowMapper.map(this) }
+        fetchAll(sql).getOrThrow().let { rowMapper.map(it) }
     }
 
     /**
