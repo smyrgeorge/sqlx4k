@@ -118,7 +118,11 @@ impl Sqlx4k {
     }
 
     async fn migrate(&self, path: &str) -> *mut Sqlx4kResult {
-        let migrator = Migrator::new(Path::new(&path)).await.unwrap();
+        let migrator = Migrator::new(Path::new(&path)).await;
+        let migrator = match migrator {
+            Ok(mgr) => mgr,
+            Err(err) => return sqlx4k_migrate_error_result_of(err).leak(),
+        };
         let result = migrator.run(&self.pool).await;
         let result = match result {
             Ok(_) => Sqlx4kResult::default(),
@@ -189,7 +193,11 @@ pub extern "C" fn sqlx4k_of(
     let pool = pool.connect_with(options);
 
     // Create the pool here.
-    let pool: SqlitePool = runtime.block_on(pool).unwrap();
+    let pool = runtime.block_on(pool);
+    let pool: SqlitePool = match pool {
+        Ok(pool) => pool,
+        Err(err) => return sqlx4k_error_result_of(err).leak(),
+    };
     let sqlx4k = Sqlx4k { pool };
 
     RUNTIME.set(runtime).unwrap();
