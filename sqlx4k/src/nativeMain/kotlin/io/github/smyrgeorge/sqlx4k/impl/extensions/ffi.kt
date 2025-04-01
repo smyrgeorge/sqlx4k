@@ -113,11 +113,6 @@ fun CPointer<Sqlx4kResult>?.rowsAffectedOrError(): Long = use {
     it.rows_affected.toLong()
 }
 
-fun CPointer<Sqlx4kResult>?.tx(): Pair<CPointer<out CPointed>, ULong> = use {
-    it.throwIfError()
-    it.tx!! to it.rows_affected
-}
-
 /**
  * Executes a SQLx operation asynchronously using Kotlin coroutines.
  *

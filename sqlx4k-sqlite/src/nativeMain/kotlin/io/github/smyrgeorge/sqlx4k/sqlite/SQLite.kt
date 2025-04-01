@@ -9,7 +9,6 @@ import io.github.smyrgeorge.sqlx4k.impl.extensions.rowsAffectedOrError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.sqlx
 import io.github.smyrgeorge.sqlx4k.impl.extensions.throwIfError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.toResultSet
-import io.github.smyrgeorge.sqlx4k.impl.extensions.tx
 import io.github.smyrgeorge.sqlx4k.impl.extensions.use
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
@@ -68,7 +67,6 @@ class SQLite(
 
     override suspend fun close(): Result<Unit> = runCatching {
         sqlx { c -> sqlx4k_close(c, Driver.fn) }.throwIfError()
-        Result.success(Unit)
     }
 
     override fun poolSize(): Int = sqlx4k_pool_size()
@@ -93,8 +91,10 @@ class SQLite(
         fetchAll(statement.render(encoders), rowMapper)
 
     override suspend fun begin(): Result<Transaction> = runCatching {
-        val tx = sqlx { c -> sqlx4k_tx_begin(c, Driver.fn) }.tx()
-        Tx(tx.first)
+        sqlx { c -> sqlx4k_tx_begin(c, Driver.fn) }.use {
+            it.throwIfError()
+            Tx(it.tx!!)
+        }
     }
 
     /**
@@ -138,9 +138,11 @@ class SQLite(
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
                 isOpenOrError()
-                val res = sqlx { c -> sqlx4k_tx_query(tx, sql, c, Driver.fn) }.tx()
-                tx = res.first
-                res.second.toLong()
+                sqlx { c -> sqlx4k_tx_query(tx, sql, c, Driver.fn) }.use {
+                    tx = it.tx!!
+                    it.throwIfError()
+                    it.rows_affected.toLong()
+                }
             }
         }
 
