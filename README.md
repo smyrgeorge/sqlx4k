@@ -270,7 +270,7 @@ object Sqlx4kRowMapper : RowMapper<Sqlx4k> {
     }
 }
 
-val res = List<Sqlx4k> = db.fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow()
+val res: List<Sqlx4k> = db.fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow()
 ```
 
 ### Database Migrations
