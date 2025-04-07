@@ -41,7 +41,7 @@
             </a>        <button class="navigation-controls--btn navigation-controls--btn_toc ui-kit_mobile-only" id="toc-toggle" type="button">Toggle table of contents
         </button>
         <div class="navigation-controls--break ui-kit_mobile-only"></div>
-        <div class="library-version" id="library-version">0.47.0
+        <div class="library-version" id="library-version">0.50.0
         </div>
         <div class="navigation-controls">
         <div class="filter-section filter-section_loading" id="filter-section">
@@ -94,24 +94,24 @@
   <div class="breadcrumbs"><a href="../../index.html">sqlx4k</a><span class="delimiter">/</span><a href="../index.html">io.github.smyrgeorge.sqlx4k</a><span class="delimiter">/</span><span class="current">ResultSet</span></div>
   <div class="cover ">
     <h1 class="cover"><span>Result</span><wbr><span><span>Set</span></span></h1>
-    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="index.html">ResultSet</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">ptr<span class="token operator">: </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&lt;</span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&gt;</span><span class="token operator">?</span></span></span><span class="token punctuation">)</span> : <a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-iterator/index.html">Iterator</a><span class="token operator">&lt;</span><a href="-row/index.html">ResultSet.Row</a><span class="token operator">&gt; </span>, <a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-iterable/index.html">Iterable</a><span class="token operator">&lt;</span><a href="-row/index.html">ResultSet.Row</a><span class="token operator">&gt; </span></div><p class="paragraph">The ResultSet class represents a set of results returned from a database query. It supports iteration and provides methods for error checking and conversion.</p></div></div>
+    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="index.html">ResultSet</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword">val </span>rows<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="-row/index.html">ResultSet.Row</a><span class="token operator">&gt;</span><span class="token punctuation">, </span></span><span class="parameter "><span class="token keyword">val </span>error<span class="token operator">: </span><a href="../-s-q-l-error/index.html">SQLError</a><span class="token operator">?</span><span class="token punctuation">, </span></span><span class="parameter "><span class="token keyword">val </span>metadata<span class="token operator">: </span><a href="-metadata/index.html">ResultSet.Metadata</a></span></span><span class="token punctuation">)</span> : <a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-iterable/index.html">Iterable</a><span class="token operator">&lt;</span><a href="-row/index.html">ResultSet.Row</a><span class="token operator">&gt; </span></div><p class="paragraph">Represents the result of a SQL query, containing rows and metadata.</p><p class="paragraph">The <code class="lang-kotlin">ResultSet</code> class provides an interface to traverse and interact with query results.</p></div></div>
   </div>
   <div class="tabbedcontent">
     <div class="tabs-section" tabs-section="tabs-section"><button class="section-tab" data-active="" data-togglable="CONSTRUCTOR,TYPE,PROPERTY,FUNCTION">Members</button></div>
     <div class="tabs-section-body">
       <div data-togglable="CONSTRUCTOR">
         <h2 class="">Constructors</h2>
-        <div class="table"><a data-name="66142670%2FConstructors%2F420194022" anchor-label="ResultSet" id="66142670%2FConstructors%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
+        <div class="table"><a data-name="-1150614911%2FConstructors%2F420194022" anchor-label="ResultSet" id="-1150614911%2FConstructors%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
           <div class="table-row" data-togglable="CONSTRUCTOR" data-filterable-current=":sqlx4k:dokkaHtmlPartial/nativeMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="-result-set.html"><span>Result</span><wbr><span><span>Set</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="66142670%2FConstructors%2F420194022"></span>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1150614911%2FConstructors%2F420194022"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">constructor</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">ptr<span class="token operator">: </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&lt;</span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&gt;</span><span class="token operator">?</span></span></span><span class="token punctuation">)</span></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">constructor</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">rows<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="-row/index.html">ResultSet.Row</a><span class="token operator">&gt;</span><span class="token punctuation">, </span></span><span class="parameter ">error<span class="token operator">: </span><a href="../-s-q-l-error/index.html">SQLError</a><span class="token operator">?</span><span class="token punctuation">, </span></span><span class="parameter ">metadata<span class="token operator">: </span><a href="-metadata/index.html">ResultSet.Metadata</a></span></span><span class="token punctuation">)</span></div></div></div>
                 </div>
               </div>
             </div>
@@ -120,7 +120,22 @@
       </div>
       <div data-togglable="TYPE">
         <h2 class="">Types</h2>
-        <div class="table"><a data-name="1234486884%2FClasslikes%2F420194022" anchor-label="Metadata" id="1234486884%2FClasslikes%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
+        <div class="table"><a data-name="-1945045563%2FClasslikes%2F420194022" anchor-label="IteratorImpl" id="-1945045563%2FClasslikes%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
+          <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/nativeMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="-iterator-impl/index.html"><span>Iterator</span><wbr><span><span>Impl</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1945045563%2FClasslikes%2F420194022"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="-iterator-impl/index.html">IteratorImpl</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">rs<span class="token operator">: </span><a href="index.html">ResultSet</a></span></span><span class="token punctuation">)</span> : <a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-iterator/index.html">Iterator</a><span class="token operator">&lt;</span><a href="-row/index.html">ResultSet.Row</a><span class="token operator">&gt; </span></div><div class="brief "><p class="paragraph">An implementation of the <a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-iterator/index.html">Iterator</a> interface for iterating over rows in a SQL result set.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="1234486884%2FClasslikes%2F420194022" anchor-label="Metadata" id="1234486884%2FClasslikes%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
           <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/nativeMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
@@ -130,7 +145,7 @@
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="-metadata/index.html">Metadata</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">schema<span class="token operator">: </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span></span></span><span class="token punctuation">)</span></div><div class="brief "><p class="paragraph">The <code class="lang-kotlin">Metadata</code> class provides an interface to extract and manage metadata from a <code class="lang-kotlin">ResultSet</code>.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="-metadata/index.html">Metadata</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">columns<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="-metadata/-column/index.html">ResultSet.Metadata.Column</a><span class="token operator">&gt;</span></span></span><span class="token punctuation">)</span></div></div></div>
                 </div>
               </div>
             </div>
@@ -145,7 +160,7 @@
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="-row/index.html">Row</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">row<span class="token operator">: </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token punctuation">, </span></span><span class="parameter ">metadata<span class="token operator">: </span><a href="-metadata/index.html">ResultSet.Metadata</a></span></span><span class="token punctuation">)</span></div><div class="brief "><p class="paragraph">Represents a row in a SQL result set.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">data </span><span class="token keyword">class </span><a href="-row/index.html">Row</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">columns<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="-row/-column/index.html">ResultSet.Row.Column</a><span class="token operator">&gt;</span></span></span><span class="token punctuation">)</span></div><div class="brief "><p class="paragraph">Represents a single row in a result set, composed of multiple columns.</p></div></div></div>
                 </div>
               </div>
             </div>
@@ -154,7 +169,22 @@
       </div>
       <div data-togglable="PROPERTY">
         <h2 class="">Properties</h2>
-        <div class="table"><a data-name="1905874991%2FProperties%2F420194022" anchor-label="metadata" id="1905874991%2FProperties%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
+        <div class="table"><a data-name="-436650604%2FProperties%2F420194022" anchor-label="error" id="-436650604%2FProperties%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
+          <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/nativeMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="error.html"><span><span>error</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-436650604%2FProperties%2F420194022"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">val </span><a href="error.html">error</a><span class="token operator">: </span><a href="../-s-q-l-error/index.html">SQLError</a><span class="token operator">?</span></div><div class="brief "><p class="paragraph">An optional error associated with the result set.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="1905874991%2FProperties%2F420194022" anchor-label="metadata" id="1905874991%2FProperties%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
           <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/nativeMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
@@ -164,7 +194,22 @@
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">val </span><a href="metadata.html">metadata</a><span class="token operator">: </span><a href="-metadata/index.html">ResultSet.Metadata</a></div><div class="brief "><p class="paragraph">Provides access to the metadata of the result set associated with the <code class="lang-kotlin">ResultSet</code>.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">val </span><a href="metadata.html">metadata</a><span class="token operator">: </span><a href="-metadata/index.html">ResultSet.Metadata</a></div><div class="brief "><p class="paragraph">Metadata about the result set, including schema and column information.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-1982608059%2FProperties%2F420194022" anchor-label="rows" id="-1982608059%2FProperties%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
+          <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/nativeMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="rows.html"><span><span>rows</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1982608059%2FProperties%2F420194022"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">val </span><a href="rows.html">rows</a><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="-row/index.html">ResultSet.Row</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">The list of rows in the result set.</p></div></div></div>
                 </div>
               </div>
             </div>
@@ -179,7 +224,7 @@
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">val </span><a href="size.html">size</a><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-int/index.html">Int</a></div><div class="brief "><p class="paragraph">Returns the size of the current result.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">val </span><a href="size.html">size</a><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-int/index.html">Int</a></div><div class="brief "><p class="paragraph">Represents the total number of rows in the result set.</p></div></div></div>
                 </div>
               </div>
             </div>
@@ -188,67 +233,7 @@
       </div>
       <div data-togglable="FUNCTION">
         <h2 class="">Functions</h2>
-        <div class="table"><a data-name="-410484828%2FFunctions%2F420194022" anchor-label="close" id="-410484828%2FFunctions%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/nativeMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain">
-            <div class="main-subrow keyValue ">
-              <div class=""><span class="inline-flex">
-                  <div><a href="close.html"><span><span>close</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-410484828%2FFunctions%2F420194022"></span>
-                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
-                  </span></span></div>
-              <div>
-                <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">fun </span><a href="close.html"><span class="token function">close</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span></div><div class="brief "><p class="paragraph">Closes the <code class="lang-kotlin">ResultSet</code> and releases any associated resources.</p></div></div></div>
-                </div>
-              </div>
-            </div>
-          </div>
-<a data-name="-1685350388%2FFunctions%2F420194022" anchor-label="getRaw" id="-1685350388%2FFunctions%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/nativeMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain">
-            <div class="main-subrow keyValue ">
-              <div class=""><span class="inline-flex">
-                  <div><a href="get-raw.html"><span>get</span><wbr><span><span>Raw</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1685350388%2FFunctions%2F420194022"></span>
-                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
-                  </span></span></div>
-              <div>
-                <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="get-raw.html"><span class="token function">getRaw</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span></div><div class="brief "><p class="paragraph">Retrieves the raw <code class="lang-kotlin">Sqlx4kResult</code> associated with the <code class="lang-kotlin">ResultSet</code>.</p></div></div></div>
-                </div>
-              </div>
-            </div>
-          </div>
-<a data-name="1663566336%2FFunctions%2F420194022" anchor-label="getRawPtr" id="1663566336%2FFunctions%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/nativeMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain">
-            <div class="main-subrow keyValue ">
-              <div class=""><span class="inline-flex">
-                  <div><a href="get-raw-ptr.html"><span>get</span><wbr><span>Raw</span><wbr><span><span>Ptr</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1663566336%2FFunctions%2F420194022"></span>
-                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
-                  </span></span></div>
-              <div>
-                <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="get-raw-ptr.html"><span class="token function">getRawPtr</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&lt;</span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Retrieves the raw pointer to the <code class="lang-kotlin">Sqlx4kResult</code> associated with the <code class="lang-kotlin">ResultSet</code>.</p></div></div></div>
-                </div>
-              </div>
-            </div>
-          </div>
-<a data-name="-1068371249%2FFunctions%2F420194022" anchor-label="hasNext" id="-1068371249%2FFunctions%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/nativeMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain">
-            <div class="main-subrow keyValue ">
-              <div class=""><span class="inline-flex">
-                  <div><a href="has-next.html"><span>has</span><wbr><span><span>Next</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1068371249%2FFunctions%2F420194022"></span>
-                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
-                  </span></span></div>
-              <div>
-                <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">operator override </span><span class="token keyword">fun </span><a href="has-next.html"><span class="token function">hasNext</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a></div><div class="brief "><p class="paragraph">Checks if there are more rows available in the result set.</p></div></div></div>
-                </div>
-              </div>
-            </div>
-          </div>
-<a data-name="-1540967010%2FFunctions%2F420194022" anchor-label="isError" id="-1540967010%2FFunctions%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
+        <div class="table"><a data-name="-1540967010%2FFunctions%2F420194022" anchor-label="isError" id="-1540967010%2FFunctions%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
           <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/nativeMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
@@ -278,32 +263,17 @@
               </div>
             </div>
           </div>
-<a data-name="-1215015573%2FFunctions%2F420194022" anchor-label="next" id="-1215015573%2FFunctions%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
+<a data-name="-1296364935%2FFunctions%2F420194022" anchor-label="throwIfError" id="-1296364935%2FFunctions%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
           <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/nativeMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
-                  <div><a href="next.html"><span><span>next</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1215015573%2FFunctions%2F420194022"></span>
+                  <div><a href="throw-if-error.html"><span>throw</span><wbr><span>If</span><wbr><span><span>Error</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1296364935%2FFunctions%2F420194022"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">operator override </span><span class="token keyword">fun </span><a href="next.html"><span class="token function">next</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="-row/index.html">ResultSet.Row</a></div><div class="brief "><p class="paragraph">Retrieves the next row in the result set.</p></div></div></div>
-                </div>
-              </div>
-            </div>
-          </div>
-<a data-name="714494767%2FFunctions%2F420194022" anchor-label="toError" id="714494767%2FFunctions%2F420194022" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/nativeMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/nativeMain">
-            <div class="main-subrow keyValue ">
-              <div class=""><span class="inline-flex">
-                  <div><a href="to-error.html"><span>to</span><wbr><span><span>Error</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="714494767%2FFunctions%2F420194022"></span>
-                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
-                  </span></span></div>
-              <div>
-                <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="to-error.html"><span class="token function">toError</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="../-s-q-l-error/index.html">SQLError</a></div><div class="brief "><p class="paragraph">Converts the current result of the <a href="index.html">ResultSet</a> to a <a href="../-s-q-l-error/index.html">SQLError</a>.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="throw-if-error.html"><span class="token function">throwIfError</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span></div><div class="brief "><p class="paragraph">Throws the current error if one exists.</p></div></div></div>
                 </div>
               </div>
             </div>
@@ -318,7 +288,7 @@
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="to-result.html"><span class="token function">toResult</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&lt;</span><a href="index.html">ResultSet</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Converts the current <a href="index.html">ResultSet</a> into a Kotlin Result object. If the result is an error, it returns a failed Result with the error. If the result is successful, it returns a successful Result containing the <code class="lang-kotlin">ResultSet</code> itself.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="to-result.html"><span class="token function">toResult</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&lt;</span><a href="index.html">ResultSet</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Converts the current <code class="lang-kotlin">ResultSet</code> into a <code class="lang-kotlin">Result</code> object.</p></div></div></div>
                 </div>
               </div>
             </div>

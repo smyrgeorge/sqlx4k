@@ -41,7 +41,7 @@
             </a>        <button class="navigation-controls--btn navigation-controls--btn_toc ui-kit_mobile-only" id="toc-toggle" type="button">Toggle table of contents
         </button>
         <div class="navigation-controls--break ui-kit_mobile-only"></div>
-        <div class="library-version" id="library-version">0.47.0
+        <div class="library-version" id="library-version">0.50.0
         </div>
         <div class="navigation-controls">
         <div class="filter-section filter-section_loading" id="filter-section">
@@ -95,7 +95,7 @@
   <div class="cover ">
     <h1 class="cover"><span>to</span><wbr><span><span>Result</span></span></h1>
   </div>
-  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="to-result.html"><span class="token function">toResult</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&lt;</span><a href="index.html">ResultSet</a><span class="token operator">&gt;</span></div><p class="paragraph">Converts the current <a href="index.html">ResultSet</a> into a Kotlin Result object. If the result is an error, it returns a failed Result with the error. If the result is successful, it returns a successful Result containing the <code class="lang-kotlin">ResultSet</code> itself.</p><span class="kdoc-tag"><h4 class="">Return</h4><p class="paragraph">A successful Result containing the current <a href="index.html">ResultSet</a> if no error,     or a failed Result with the appropriate <a href="../-s-q-l-error/index.html">SQLError</a>.</p></span></div></div>
+  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/nativeMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="to-result.html"><span class="token function">toResult</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&lt;</span><a href="index.html">ResultSet</a><span class="token operator">&gt;</span></div><p class="paragraph">Converts the current <code class="lang-kotlin">ResultSet</code> into a <code class="lang-kotlin">Result</code> object.</p><p class="paragraph">If the current result is an error, it returns a <code class="lang-kotlin">Result.failure</code> with the associated error. Otherwise, it returns a <code class="lang-kotlin">Result.success</code> with the current <code class="lang-kotlin">ResultSet</code>.</p><span class="kdoc-tag"><h4 class="">Return</h4><p class="paragraph">A <code class="lang-kotlin">Result&lt;ResultSet&gt;</code> that is either a success wrapping the current <code class="lang-kotlin">ResultSet</code>     or a failure wrapping the associated error.</p></span></div></div>
 </div>
     <div class="footer">
         <a href="#content" id="go-to-top-link" class="footer--button footer--button_go-to-top"></a>
