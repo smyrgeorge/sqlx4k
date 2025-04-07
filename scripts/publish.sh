@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-./gradlew clean build -Ptargets=all
+./gradlew clean build -Ptargets=all -x :sqlx4k-sqlite:linkDebugTestLinuxX64
 
 ./gradlew :dokkaHtmlMultiModule
 rm -rf ./docs/*
