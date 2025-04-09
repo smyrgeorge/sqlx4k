@@ -4,13 +4,7 @@ package io.github.smyrgeorge.sqlx4k.impl.extensions
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
-import kotlinx.cinterop.CPointed
-import kotlinx.cinterop.CPointer
-import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.StableRef
-import kotlinx.cinterop.get
-import kotlinx.cinterop.pointed
-import kotlinx.cinterop.toKString
+import kotlinx.cinterop.*
 import sqlx4k.Sqlx4kResult
 import sqlx4k.Sqlx4kSchema
 import sqlx4k.sqlx4k_free_result
@@ -48,7 +42,6 @@ private fun Sqlx4kSchema.toMetadata(): ResultSet.Metadata {
 
     return ResultSet.Metadata(columns)
 }
-
 
 /**
  * Converts a Sqlx4kResult to ResultSet.

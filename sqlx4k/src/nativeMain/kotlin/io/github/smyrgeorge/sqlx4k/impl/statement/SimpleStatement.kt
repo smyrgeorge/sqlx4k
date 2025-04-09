@@ -14,8 +14,8 @@ import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
  */
 open class SimpleStatement(private val sql: String) : Statement {
 
-    private val namedParameters: Set<String> by lazy { extractNamedParameters(sql) }
-    private val positionalParameters: List<Int> by lazy { extractPositionalParameters(sql) }
+    private val namedParameters: Set<String> = extractNamedParameters(sql)
+    private val positionalParameters: List<Int> = extractPositionalParameters(sql)
     private val namedParametersValues: MutableMap<String, Any?> = mutableMapOf()
     private val positionalParametersValues: MutableMap<Int, Any?> = mutableMapOf()
 
@@ -134,23 +134,33 @@ open class SimpleStatement(private val sql: String) : Statement {
     }
 
     /**
-     * Regular expression pattern used for validating and extracting named parameters from a string.
+     * A regular expression used to identify named parameter placeholders within a SQL query string.
      *
-     * The pattern is used to match named parameters in the format ":parameterName",
-     * where "parameterName" starts with a letter and is followed by alphanumeric characters.
+     * The regex pattern matches named parameters that follow a colon (:) and consist of an alphabetic
+     * character (a-z or A-Z) followed by zero or more alphanumeric characters or underscores. It ensures
+     * that the matched parameter is not preceded by a colon (e.g., "::") or followed by invalid characters.
+     *
+     * This regex is utilized in methods that process or extract named parameters from a SQL query to either
+     * replace them with bound values or perform validation.
      */
     private val nameParameterRegex = """(?<![:']):(?!:)([a-zA-Z][a-zA-Z0-9_]*)(?![a-zA-Z0-9_:'"])""".toRegex()
     private fun extractNamedParameters(sql: String): Set<String> =
         nameParameterRegex.findAll(sql).map { it.value.substring(1) }.toHashSet()
 
     /**
-     * A regular expression used to match positional parameters in SQL queries.
+     * A regular expression used to match positional parameter placeholders in an SQL string.
      *
-     * The positional parameter is represented by a question mark ("?").
-     * This regex is utilized to locate all instances of positional parameters
-     * within a given SQL query string.
+     * The pattern identifies placeholders denoted by `?` that are not enclosed by single quotes,
+     * double quotes, or backticks. This ensures that the regex only matches placeholders used
+     * for positional parameter binding, excluding those that appear as part of string literals
+     * or other enclosed constructs within the SQL statement.
+     *
+     * This regex is utilized for tasks such as extracting positional parameters or replacing
+     * their placeholders with bound values during SQL rendering.
      */
-    private val positionalParametersRegex = "(\\?)(?=(?:[^']*(?:'[^']*')?)*[^']*$)(?=(?:[^\"]*(?:\"[^\"]*\")?)*[^\"]*$)(?=(?:[^`]*(?:`[^`]*`)?)*[^`]*$)".toRegex()
+    private val positionalParametersRegex =
+        "(\\?)(?=(?:[^']*(?:'[^']*')?)*[^']*$)(?=(?:[^\"]*(?:\"[^\"]*\")?)*[^\"]*$)(?=(?:[^`]*(?:`[^`]*`)?)*[^`]*$)".toRegex()
+
     private fun extractPositionalParameters(sql: String): List<Int> =
         positionalParametersRegex.findAll(sql).mapIndexed { idx, _ -> idx }.toList()
 }
