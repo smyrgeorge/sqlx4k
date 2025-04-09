@@ -143,6 +143,11 @@ interface Statement {
         }
 
         companion object {
+            /**
+             * A pre-initialized empty instance of `ValueEncoderRegistry`.
+             * This instance contains no registered `ValueEncoder` instances and
+             * can be used as a default or placeholder.
+             */
             val EMPTY = ValueEncoderRegistry()
         }
     }

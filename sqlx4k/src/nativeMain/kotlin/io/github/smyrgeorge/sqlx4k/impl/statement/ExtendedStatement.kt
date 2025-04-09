@@ -4,18 +4,50 @@ import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
 
 /**
- * Represents an extended SQL statement that allows binding values to positional parameters
- * specific to PostgreSQL.
+ * The `ExtendedStatement` class provides an implementation that extends the functionality
+ * of an SQL statement, allowing the handling of PostgreSQL-style positional parameters.
  *
- * This class extends [SimpleStatement] by leveraging PostgreSQL's custom parameter syntax
- * (e.g., $1, $2) and providing mechanisms to bind values to those parameters and render
- * the final SQL with all parameters substituted.
+ * Positional parameters in the form `$1`, `$2`, etc., are supported and can be bound to
+ * specific values, encoded, and rendered into a final SQL statement.
  *
- * @property sql The SQL string containing the statement.
+ * @param sql The SQL query string containing positional PostgreSQL-style parameters.
  */
-class ExtendedStatement(private val sql: String) : SimpleStatement(sql) {
+class ExtendedStatement(private val sql: String) : AbstractStatement(sql) {
 
-    private val pgParameters: List<Int> by lazy(mode = LazyThreadSafetyMode.NONE) { extractPgParameters(sql) }
+    /**
+     * A regular expression used to match positional PostgreSQL-style parameters in a SQL query string.
+     *
+     * The regex pattern matches placeholders in the format `$1`, `$2`, and so on, where the `$` symbol
+     * is followed by one or more digits representing the positional parameter index.
+     *
+     * This regex is utilized to locate all PostgreSQL-style positional parameters within a given SQL
+     * query string for processing or parameter replacement in the SQL statement.
+     */
+    private val pgParametersRegex = "\\$\\d+".toRegex()
+
+    /**
+     * A list of positional parameter indices extracted from the SQL statement.
+     *
+     * The `pgParameters` list contains the zero-based indices of the positional parameters
+     * found within the `sql` statement. The indices are determined using the `pgParametersRegex`
+     * regular expression within the `extractPgParameters` method.
+     *
+     * This property is primarily used to track the parameters in the SQL statement
+     * and bind values or encode them during statement rendering.
+     */
+    private val pgParameters: List<Int> = extractPgParameters()
+
+    /**
+     * A mutable map used for storing the values of positional parameters within
+     * the prepared SQL statement of the `ExtendedStatement` class.
+     *
+     * The keys in the map represent the zero-based positional indices of the
+     * parameters in the SQL statement, while the corresponding values represent
+     * the parameter values. These values can be `null` for nullable parameters.
+     *
+     * This map is primarily utilized to manage, bind, and retrieve parameter values
+     * during statement preparation and rendering processes.
+     */
     private val pgParametersValues: MutableMap<Int, Any?> = mutableMapOf()
 
     /**
@@ -72,16 +104,6 @@ class ExtendedStatement(private val sql: String) : SimpleStatement(sql) {
         }
     }
 
-    /**
-     * A regular expression used to match positional PostgreSQL-style parameters in a SQL query string.
-     *
-     * The regex pattern matches placeholders in the format `$1`, `$2`, and so on, where the `$` symbol
-     * is followed by one or more digits representing the positional parameter index.
-     *
-     * This regex is utilized to locate all PostgreSQL-style positional parameters within a given SQL
-     * query string for processing or parameter replacement in the SQL statement.
-     */
-    private val pgParametersRegex = "\\$\\d+".toRegex()
-    private fun extractPgParameters(sql: String): List<Int> =
+    private fun extractPgParameters(): List<Int> =
         pgParametersRegex.findAll(sql).mapIndexed { idx, _ -> idx }.toList()
 }
