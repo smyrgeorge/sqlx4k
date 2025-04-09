@@ -1,49 +1,21 @@
 package io.github.smyrgeorge.sqlx4k.postgres
 
-import io.github.smyrgeorge.sqlx4k.Driver
-import io.github.smyrgeorge.sqlx4k.ResultSet
-import io.github.smyrgeorge.sqlx4k.RowMapper
-import io.github.smyrgeorge.sqlx4k.Statement
-import io.github.smyrgeorge.sqlx4k.Transaction
-import io.github.smyrgeorge.sqlx4k.impl.extensions.rowsAffectedOrError
-import io.github.smyrgeorge.sqlx4k.impl.extensions.sqlx
-import io.github.smyrgeorge.sqlx4k.impl.extensions.throwIfError
-import io.github.smyrgeorge.sqlx4k.impl.extensions.toResultSet
-import io.github.smyrgeorge.sqlx4k.impl.extensions.use
+import io.github.smyrgeorge.sqlx4k.*
+import io.github.smyrgeorge.sqlx4k.impl.extensions.*
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.get
-import kotlinx.cinterop.pointed
 import kotlinx.cinterop.staticCFunction
-import kotlinx.cinterop.toKString
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.IO
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import sqlx4k.Sqlx4kResult
-import sqlx4k.Sqlx4kRow
-import sqlx4k.Sqlx4kSchema
-import sqlx4k.sqlx4k_close
-import sqlx4k.sqlx4k_fetch_all
-import sqlx4k.sqlx4k_free_result
-import sqlx4k.sqlx4k_listen
-import sqlx4k.sqlx4k_migrate
-import sqlx4k.sqlx4k_of
-import sqlx4k.sqlx4k_pool_idle_size
-import sqlx4k.sqlx4k_pool_size
-import sqlx4k.sqlx4k_query
-import sqlx4k.sqlx4k_tx_begin
-import sqlx4k.sqlx4k_tx_commit
-import sqlx4k.sqlx4k_tx_fetch_all
-import sqlx4k.sqlx4k_tx_query
-import sqlx4k.sqlx4k_tx_rollback
+import sqlx4k.*
+import kotlin.concurrent.AtomicInt
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.experimental.ExperimentalNativeApi
 
 /**
@@ -136,8 +108,7 @@ class PostgreSQL(
         Companion.channels[channelId] = channel
 
         // Start the channel consumer.
-        @OptIn(DelicateCoroutinesApi::class)
-        GlobalScope.launch(Dispatchers.IO) {
+        PgChannelScope.launch {
             channel.consumeEach { f(it) }
         }
 
@@ -211,15 +182,13 @@ class PostgreSQL(
             execute(statement.render(encoders))
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> {
-            val res = mutex.withLock {
+            return mutex.withLock {
                 isOpenOrError()
-                sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, Driver.fn) }
+                sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, Driver.fn) }.use {
+                    tx = it.tx!!
+                    it.toResultSet()
+                }.toResult()
             }
-
-            return res.use {
-                tx = it.tx!!
-                it.toResultSet()
-            }.toResult()
         }
 
         override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
@@ -245,42 +214,34 @@ class PostgreSQL(
          */
         val encoders = Statement.ValueEncoderRegistry()
 
-        private val channels: MutableMap<Int, Channel<Notification>> by lazy { mutableMapOf() }
-        private val listenerMutex = Mutex()
-        private var listenerId: Int = 0
-        private suspend fun listenerId(): Int = listenerMutex.withLock {
-            // Will eventually overflow, but it doesn't matter, is the desired behaviour.
-            listenerId += 1
-            listenerId
-        }
+        // Will eventually overflow, but it doesn't matter, is the desired behaviour.
+        private fun listenerId(): Int = listenerId.incrementAndGet()
+        private val listenerId = AtomicInt(0)
 
-        private fun CPointer<Sqlx4kResult>?.notify(): Notification {
-            return try {
-                val result: Sqlx4kResult =
-                    this?.pointed ?: error("Could not extract the value from the raw pointer (null).")
-
-                val schema: Sqlx4kSchema =
-                    this.pointed.schema?.pointed ?: error("Could not extract the value from the raw pointer (null).")
-
-                assert(result.size == 1)
-                val row: Sqlx4kRow = result.rows!![0]
-                assert(row.size == 1)
-                assert(schema.columns!![0].kind!!.toKString() == "TEXT")
-
-                Notification(
-                    channel = schema.columns!![0].name!!.toKString(),
-                    value = row.columns!![0].value!!.toKString()
-                )
-            } finally {
-                sqlx4k_free_result(this)
-            }
-        }
-
+        private val channels: MutableMap<Int, Channel<Notification>> = mutableMapOf()
         private val notify = staticCFunction<Int, CPointer<Sqlx4kResult>?, Unit> { c, r ->
-            channels[c]?.let {
-                val notification: Notification = r.notify()
-                runBlocking { it.send(notification) }
+            fun ResultSet.toNotification(): Notification {
+                require(rows.size == 1) { "Expected exactly one row, got ${rows.size}" }
+                val row: ResultSet.Row = rows[0]
+                require(row.size == 1) { "Expected exactly one column, got ${row.size}" }
+                val column = row.get(0)
+                require(column.type == "TEXT") { "Expected TEXT column, got ${column.type}" }
+
+                return Notification(
+                    channel = column.name,
+                    value = column.asString(),
+                )
             }
+
+            channels[c]?.let {
+                val notification: Notification = r.use { it.toResultSet() }.toNotification()
+                PgChannelScope.launch { it.send(notification) }
+            }
+        }
+
+        private object PgChannelScope : CoroutineScope {
+            override val coroutineContext: CoroutineContext
+                get() = EmptyCoroutineContext
         }
     }
 }

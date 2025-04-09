@@ -1,32 +1,13 @@
 package io.github.smyrgeorge.sqlx4k.mysql
 
-import io.github.smyrgeorge.sqlx4k.Driver
-import io.github.smyrgeorge.sqlx4k.ResultSet
-import io.github.smyrgeorge.sqlx4k.RowMapper
-import io.github.smyrgeorge.sqlx4k.Statement
-import io.github.smyrgeorge.sqlx4k.Transaction
-import io.github.smyrgeorge.sqlx4k.impl.extensions.rowsAffectedOrError
-import io.github.smyrgeorge.sqlx4k.impl.extensions.sqlx
-import io.github.smyrgeorge.sqlx4k.impl.extensions.throwIfError
-import io.github.smyrgeorge.sqlx4k.impl.extensions.toResultSet
-import io.github.smyrgeorge.sqlx4k.impl.extensions.use
+import io.github.smyrgeorge.sqlx4k.*
+import io.github.smyrgeorge.sqlx4k.impl.extensions.*
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import sqlx4k.sqlx4k_close
-import sqlx4k.sqlx4k_fetch_all
-import sqlx4k.sqlx4k_migrate
-import sqlx4k.sqlx4k_of
-import sqlx4k.sqlx4k_pool_idle_size
-import sqlx4k.sqlx4k_pool_size
-import sqlx4k.sqlx4k_query
-import sqlx4k.sqlx4k_tx_begin
-import sqlx4k.sqlx4k_tx_commit
-import sqlx4k.sqlx4k_tx_fetch_all
-import sqlx4k.sqlx4k_tx_query
-import sqlx4k.sqlx4k_tx_rollback
+import sqlx4k.*
 
 /**
  * The `MySQL` class provides a driver implementation for interacting with a MySQL database.
@@ -145,15 +126,13 @@ class MySQL(
             execute(statement.render(encoders))
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> {
-            val res = mutex.withLock {
+            return mutex.withLock {
                 isOpenOrError()
-                sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, Driver.fn) }
+                sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, Driver.fn) }.use {
+                    tx = it.tx!!
+                    it.toResultSet()
+                }.toResult()
             }
-
-            return res.use {
-                tx = it.tx!!
-                it.toResultSet()
-            }.toResult()
         }
 
         override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
