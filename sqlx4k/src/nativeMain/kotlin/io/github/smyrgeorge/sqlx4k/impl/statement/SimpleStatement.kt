@@ -14,8 +14,8 @@ import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
  */
 open class SimpleStatement(private val sql: String) : Statement {
 
-    private val namedParameters: Set<String> = extractNamedParameters(sql)
-    private val positionalParameters: List<Int> = extractPositionalParameters(sql)
+    private val namedParameters: Set<String> by lazy(mode = LazyThreadSafetyMode.NONE) { extractNamedParameters(sql) }
+    private val positionalParameters: List<Int> by lazy(mode = LazyThreadSafetyMode.NONE) { extractPositionalParameters(sql) }
     private val namedParametersValues: MutableMap<String, Any?> = mutableMapOf()
     private val positionalParametersValues: MutableMap<Int, Any?> = mutableMapOf()
 

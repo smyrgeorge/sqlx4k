@@ -15,7 +15,7 @@ import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
  */
 class ExtendedStatement(private val sql: String) : SimpleStatement(sql) {
 
-    private val pgParameters: List<Int> = extractPgParameters(sql)
+    private val pgParameters: List<Int> by lazy(mode = LazyThreadSafetyMode.NONE) { extractPgParameters(sql) }
     private val pgParametersValues: MutableMap<Int, Any?> = mutableMapOf()
 
     /**
