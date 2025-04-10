@@ -120,7 +120,7 @@ fun main() {
         println("Connections: ${db.poolSize()}, Idle: ${db.poolIdleSize()}")
         println("\n\n\n::: LISTEN/NOTIFY :::")
         db.listen("chan0") { notification: PostgreSQL.Notification ->
-            println(notification)
+            println(notification.value.asString())
         }
 
         (1..10).forEach {

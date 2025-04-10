@@ -131,7 +131,11 @@ class PostgreSQL(
      * https://www.postgresql.org/docs/current/sql-notify.html
      */
     suspend fun notify(channel: String, value: String) {
-        execute("select pg_notify('$channel', '$value');").getOrThrow()
+        require(channel.isNotBlank()) { "Channel cannot be blank." }
+        val notify = Statement.create("select pg_notify(:chanel, :value);")
+            .bind("chanel", channel)
+            .bind("value", value)
+        execute(notify).getOrThrow()
     }
 
     /**
@@ -181,7 +185,7 @@ class PostgreSQL(
         override suspend fun execute(statement: Statement): Result<Long> =
             execute(statement.render(encoders))
 
-        override suspend fun fetchAll(sql: String): Result<ResultSet> {
+        override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 isOpenOrError()
                 sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, Driver.fn) }.use {
@@ -198,9 +202,19 @@ class PostgreSQL(
             fetchAll(statement.render(encoders), rowMapper)
     }
 
+    /**
+     * Represents a notification received from a PostgreSQL listen/notify channel.
+     *
+     * A `Notification` object contains details about a notification event that has
+     * been listened to via the PostgreSQL listen/notify mechanism. It holds the
+     * associated channel and the actual value of the notification payload.
+     *
+     * @property channel The name of the PostgreSQL channel from which the notification was received.
+     * @property value The payload of the notification represented as a column of a result set.
+     */
     data class Notification(
         val channel: String,
-        val value: String,
+        val value: ResultSet.Row.Column,
     )
 
     companion object {
@@ -229,7 +243,7 @@ class PostgreSQL(
 
                 return Notification(
                     channel = column.name,
-                    value = column.asString(),
+                    value = column,
                 )
             }
 

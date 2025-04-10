@@ -125,7 +125,7 @@ class MySQL(
         override suspend fun execute(statement: Statement): Result<Long> =
             execute(statement.render(encoders))
 
-        override suspend fun fetchAll(sql: String): Result<ResultSet> {
+        override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 isOpenOrError()
                 sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, Driver.fn) }.use {
