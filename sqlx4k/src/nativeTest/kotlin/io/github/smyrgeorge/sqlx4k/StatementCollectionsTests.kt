@@ -3,6 +3,7 @@ package io.github.smyrgeorge.sqlx4k
 import assertk.all
 import assertk.assertThat
 import assertk.assertions.contains
+import assertk.assertions.doesNotContain
 import kotlin.test.Test
 
 class StatementCollectionsTests {
@@ -154,6 +155,167 @@ class StatementCollectionsTests {
         assertThat(res).all {
             contains("id IN (100, 200, 300)")
             contains("category = 'electronics'")
+        }
+    }
+
+    @Test
+    fun `List with SQL injection attempts is properly escaped`() {
+        val sql = "SELECT * FROM users WHERE username IN ?"
+        val maliciousInputs = listOf(
+            "admin",
+            "user' OR '1'='1",
+            "guest'; DROP TABLE users; --"
+        )
+
+        val res = Statement.create(sql)
+            .bind(0, maliciousInputs)
+            .render()
+
+        // Verify each element is properly escaped
+        assertThat(res).all {
+            contains("username IN ('admin', 'user'' OR ''1''=''1', 'guest''; DROP TABLE users; --')")
+            // Ensure the rendered SQL doesn't contain unescaped quotes
+            doesNotContain("user' OR '1'='1")
+            doesNotContain("guest'; DROP TABLE users; --")
+        }
+    }
+
+    @Test
+    fun `Named parameter with list of SQL injection attempts is properly escaped`() {
+        val sql = "SELECT * FROM products WHERE category IN :categories"
+        val maliciousInputs = listOf(
+            "electronics",
+            "furniture' UNION SELECT username, password FROM users; --",
+            "toys'); DELETE FROM products; --"
+        )
+
+        val res = Statement.create(sql)
+            .bind("categories", maliciousInputs)
+            .render()
+
+        // Verify each element is properly escaped
+        assertThat(res).all {
+            contains("category IN ('electronics', 'furniture'' UNION SELECT username, password FROM users; --', 'toys''); DELETE FROM products; --')")
+            // Ensure the rendered SQL doesn't contain unescaped quotes
+            doesNotContain("furniture' UNION SELECT")
+            doesNotContain("toys'); DELETE FROM")
+        }
+    }
+
+    @Test
+    fun `Array with SQL injection attempts is properly escaped`() {
+        val sql = "SELECT * FROM logs WHERE level IN ?"
+        val maliciousInputs = arrayOf(
+            "INFO",
+            "ERROR' OR '1'='1",
+            "DEBUG'; DROP TABLE logs; --"
+        )
+
+        val res = Statement.create(sql)
+            .bind(0, maliciousInputs)
+            .render()
+
+        // Verify each element is properly escaped
+        assertThat(res).all {
+            contains("level IN ('INFO', 'ERROR'' OR ''1''=''1', 'DEBUG''; DROP TABLE logs; --')")
+            // Ensure the rendered SQL doesn't contain unescaped quotes
+            doesNotContain("ERROR' OR '1'='1")
+            doesNotContain("DEBUG'; DROP TABLE logs; --")
+        }
+    }
+
+    @Test
+    fun `Set with SQL injection attempts is properly escaped`() {
+        val sql = "SELECT * FROM permissions WHERE role IN :roles"
+        val maliciousInputs = setOf(
+            "admin",
+            "user' OR admin='true",
+            "guest'; TRUNCATE TABLE permissions; --"
+        )
+
+        val res = Statement.create(sql)
+            .bind("roles", maliciousInputs)
+            .render()
+
+        // Verify each element is properly escaped
+        // Note: Set order is not guaranteed, so we check for individual escaped strings
+        assertThat(res).all {
+            contains("'admin'")
+            contains("'user'' OR admin=''true'")
+            contains("'guest''; TRUNCATE TABLE permissions; --'")
+            // Ensure the rendered SQL doesn't contain unescaped quotes
+            doesNotContain("user' OR admin='true")
+            doesNotContain("guest'; TRUNCATE TABLE permissions; --")
+        }
+    }
+
+    @Test
+    fun `Empty collection with SQL injection in query is properly handled`() {
+        // This tests that even if the collection is empty, the SQL is still properly formed
+        // and doesn't allow for injection in the surrounding query
+        val sql = "SELECT * FROM users WHERE username IN ? -- ' OR '1'='1"
+        val emptyList = emptyList<String>()
+
+        val res = Statement.create(sql)
+            .bind(0, emptyList)
+            .render()
+
+        // The comment and attempted injection should be preserved as-is
+        assertThat(res).contains("username IN () -- ' OR '1'='1")
+    }
+
+    @Test
+    fun `Nested collections with SQL injection attempts are properly escaped`() {
+        val sql = "SELECT * FROM matrix WHERE row IN ? AND column IN ?"
+        val maliciousRows = listOf(
+            "1",
+            "2' OR '1'='1",
+            "3'; DROP TABLE matrix; --"
+        )
+        val maliciousColumns = listOf(
+            "A",
+            "B' UNION SELECT username, password FROM users; --",
+            "C'); DELETE FROM matrix; --"
+        )
+
+        val res = Statement.create(sql)
+            .bind(0, maliciousRows)
+            .bind(1, maliciousColumns)
+            .render()
+
+        // Verify each element in both collections is properly escaped
+        assertThat(res).all {
+            contains("row IN ('1', '2'' OR ''1''=''1', '3''; DROP TABLE matrix; --')")
+            contains("column IN ('A', 'B'' UNION SELECT username, password FROM users; --', 'C''); DELETE FROM matrix; --')")
+            // Ensure the rendered SQL doesn't contain unescaped quotes
+            doesNotContain("2' OR '1'='1")
+            doesNotContain("3'; DROP TABLE matrix; --")
+            doesNotContain("B' UNION SELECT")
+            doesNotContain("C'); DELETE FROM")
+        }
+    }
+
+    @Test
+    fun `Collection with mixed types including SQL injection attempts`() {
+        val sql = "SELECT * FROM mixed WHERE value IN ?"
+        // This list contains different types, including strings with SQL injection attempts
+        val mixedValues = listOf(
+            1,
+            "text' OR 1=1; --",
+            true,
+            null,
+            "normal text"
+        )
+
+        val res = Statement.create(sql)
+            .bind(0, mixedValues)
+            .render()
+
+        // Verify each element is properly handled according to its type
+        assertThat(res).all {
+            contains("value IN (1, 'text'' OR 1=1; --', true, null, 'normal text')")
+            // Ensure the string with injection attempt is properly escaped
+            doesNotContain("text' OR 1=1; --")
         }
     }
 }
