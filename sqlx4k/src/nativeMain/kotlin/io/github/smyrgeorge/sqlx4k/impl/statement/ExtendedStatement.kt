@@ -23,7 +23,8 @@ class ExtendedStatement(private val sql: String) : AbstractStatement(sql) {
      * This regex is utilized to locate all PostgreSQL-style positional parameters within a given SQL
      * query string for processing or parameter replacement in the SQL statement.
      */
-    private val pgParametersRegex = "\\$\\d+".toRegex()
+    private val pgParametersRegex =
+        "\\$\\d++(?=(?:[^']*(?:'[^']*')?)*[^']*$)(?=(?:[^\"]*(?:\"[^\"]*\")?)*[^\"]*$)(?=(?:[^`]*(?:`[^`]*`)?)*[^`]*$)".toRegex()
 
     /**
      * A list of positional parameter indices extracted from the SQL statement.
