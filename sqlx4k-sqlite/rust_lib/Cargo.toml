@@ -17,9 +17,9 @@ sqlx4k = { path = "../../sqlx4k/rust_lib" }
 # https://crates.io/crates/once_cell
 once_cell = { version = "1.21.3" }
 # https://crates.io/crates/tokio
-tokio = { version = "1.44.1", features = ["rt-multi-thread"] }
+tokio = { version = "1.45.0", features = ["rt-multi-thread"] }
 # https://crates.io/crates/sqlx
-sqlx = { version = "0.8.3", features = [
+sqlx = { version = "0.8.5", features = [
     "runtime-tokio", # Use the tokio runtime without enabling a TLS backend.
     "sqlite",        # Add support for the Postgres database server.
 ] }

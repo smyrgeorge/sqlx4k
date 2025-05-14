@@ -14,7 +14,7 @@ panic = "abort"
 
 [dependencies]
 # https://crates.io/crates/sqlx
-sqlx = { version = "0.8.3", features = [] }
+sqlx = { version = "0.8.5", features = [] }
 
 [build-dependencies]
 # https://crates.io/crates/cbindgen
