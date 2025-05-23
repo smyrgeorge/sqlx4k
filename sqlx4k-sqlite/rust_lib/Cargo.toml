@@ -19,11 +19,11 @@ once_cell = { version = "1.21.3" }
 # https://crates.io/crates/tokio
 tokio = { version = "1.45.0", features = ["rt-multi-thread"] }
 # https://crates.io/crates/sqlx
-sqlx = { version = "0.8.5", features = [
+sqlx = { version = "0.8.6", features = [
     "runtime-tokio", # Use the tokio runtime without enabling a TLS backend.
     "sqlite",        # Add support for the Postgres database server.
 ] }
 
 [build-dependencies]
 # https://crates.io/crates/cbindgen
-cbindgen = "0.28.0"
+cbindgen = "0.29.0"
