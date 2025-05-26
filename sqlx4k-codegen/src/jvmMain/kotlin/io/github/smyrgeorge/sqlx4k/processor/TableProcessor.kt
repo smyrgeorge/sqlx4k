@@ -108,10 +108,10 @@ class TableProcessor(
                     (insert.value as? Boolean) ?: false
                 }
                 .filter {
-                    val id = it.annotations.find { a -> a.name() == COLUMN_ANNOTATION_NAME }
+                    val column = it.annotations.find { a -> a.name() == COLUMN_ANNOTATION_NAME }
                         ?: return@filter true
 
-                    val insert: KSValueArgument = id.arguments.first { a ->
+                    val insert: KSValueArgument = column.arguments.first { a ->
                         a.name?.asString() == INSERT_PROPERTY_NAME
                     }
 
@@ -157,13 +157,12 @@ class TableProcessor(
             @Suppress("NAME_SHADOWING")
             val props = props
                 // Exclude @Id from the update query,
-                .filter { it.name() == id.name() }
+                .filter { it.name() != id.name() }
                 .filter {
-                    val id = it.annotations.find { a ->
-                        a.name() == COLUMN_ANNOTATION_NAME
-                    } ?: return@filter true
+                    val column = it.annotations.find { a -> a.name() == COLUMN_ANNOTATION_NAME }
+                        ?: return@filter true
 
-                    val update: KSValueArgument = id.arguments.first { a ->
+                    val update: KSValueArgument = column.arguments.first { a ->
                         a.name?.asString() == UPDATE_PROPERTY_NAME
                     }
 
