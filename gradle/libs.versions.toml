@@ -2,7 +2,7 @@
 # https://plugins.gradle.org/plugin/org.jetbrains.kotlin.jvm
 kotlin = "2.1.21"
 # https://github.com/Kotlin/kotlinx-datetime
-kotlinx-datetime = "0.6.2"
+kotlinx-datetime = "0.7.0-0.6.x-compat"
 # https://github.com/Kotlin/kotlinx.coroutines
 kotlinx-coroutines = "1.10.2"
 # https://github.com/vanniktech/gradle-maven-publish-plugin
