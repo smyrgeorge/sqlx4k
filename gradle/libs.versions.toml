@@ -1,6 +1,6 @@
 [versions]
 # https://plugins.gradle.org/plugin/org.jetbrains.kotlin.jvm
-kotlin = "2.1.21"
+kotlin = "2.2.0"
 # https://github.com/Kotlin/kotlinx-datetime
 kotlinx-datetime = "0.7.0-0.6.x-compat"
 # https://github.com/Kotlin/kotlinx.coroutines
