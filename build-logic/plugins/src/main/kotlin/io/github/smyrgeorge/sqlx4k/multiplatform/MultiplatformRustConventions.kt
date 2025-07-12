@@ -113,7 +113,7 @@ class MultiplatformRustConventions : Plugin<Project> {
                     definitionFile.set(file("src/nativeInterop/cinterop/sqlx4k.def"))
                 }
 
-                val cargo = tasks.create("cargo-$target") {
+                val cargo = tasks.register("cargo-$target") {
                     val exec = project.serviceOf<ExecOperations>()
                     doLast {
                         exec.exec {

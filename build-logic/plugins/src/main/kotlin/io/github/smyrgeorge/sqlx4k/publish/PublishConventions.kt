@@ -3,7 +3,6 @@ package io.github.smyrgeorge.sqlx4k.publish
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinMultiplatform
 import com.vanniktech.maven.publish.MavenPublishBaseExtension
-import com.vanniktech.maven.publish.SonatypeHost
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
@@ -66,7 +65,7 @@ class PublishConventions : Plugin<Project> {
             }
 
             // Configure publishing to Maven Central
-            publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
+            publishToMavenCentral()
 
             // Enable GPG signing for all publications
             signAllPublications()
