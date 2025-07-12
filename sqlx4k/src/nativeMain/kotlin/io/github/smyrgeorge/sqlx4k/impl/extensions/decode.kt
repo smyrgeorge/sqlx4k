@@ -4,15 +4,11 @@ package io.github.smyrgeorge.sqlx4k.impl.extensions
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
-import kotlinx.datetime.Instant
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalDateTime
-import kotlinx.datetime.LocalTime
-import kotlinx.datetime.UtcOffset
+import kotlinx.datetime.*
 import kotlinx.datetime.format.DateTimeFormat
 import kotlinx.datetime.format.FormatStringsInDatetimeFormats
 import kotlinx.datetime.format.byUnicodePattern
-import kotlinx.datetime.toInstant
+import kotlin.time.ExperimentalTime
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -20,6 +16,7 @@ fun ResultSet.Row.Column.asChar(): Char {
     require(asString().length == 1) { "The column ($name) value is not a char (length != 1)." }
     return asString()[0]
 }
+
 fun ResultSet.Row.Column.asCharOrNull(): Char? = asStringOrNull()?.get(0)
 fun ResultSet.Row.Column.asInt(): Int = asString().toInt()
 fun ResultSet.Row.Column.asIntOrNull(): Int? = asStringOrNull()?.toInt()
@@ -60,7 +57,10 @@ inline fun <reified T : Enum<T>> String.toEnum(): T =
 
 private fun String.toInstantSqlx4k(): Instant {
     val split = split("+")
-    return LocalDateTime.parse(split[0], localDateTimeFormatter).toInstant(UtcOffset(hours = split[1].toInt()))
+    @OptIn(ExperimentalTime::class)
+    return LocalDateTime.parse(split[0], localDateTimeFormatter)
+        .toInstant(UtcOffset(hours = split[1].toInt()))
+        .toDeprecatedInstant()
 }
 
 private val localDateTimeFormatter: DateTimeFormat<LocalDateTime> = LocalDateTime.Format {
