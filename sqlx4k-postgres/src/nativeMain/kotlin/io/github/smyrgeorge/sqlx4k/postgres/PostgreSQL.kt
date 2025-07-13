@@ -248,7 +248,7 @@ class PostgreSQL(
             }
 
             channels[c]?.let {
-                val notification: Notification = r.use { it.toResultSet() }.toNotification()
+                val notification: Notification = r.use { res -> res.toResultSet() }.toNotification()
                 PgChannelScope.launch { it.send(notification) }
             }
         }
