@@ -6,29 +6,20 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isNull
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.Driver
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asChar
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asDouble
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asFloat
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asInstant
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalDate
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalDateTime
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalTime
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asShort
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asUuid
+import io.github.smyrgeorge.sqlx4k.impl.extensions.*
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asBoolean
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asByteArray
 import kotlinx.coroutines.runBlocking
-import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlin.test.Test
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-@OptIn(ExperimentalUuidApi::class)
+@OptIn(ExperimentalUuidApi::class, ExperimentalTime::class)
 class PostgreSQLTests {
 
     val options = Driver.Pool.Options.builder()

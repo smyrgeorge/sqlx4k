@@ -9,6 +9,7 @@ import kotlinx.datetime.format.DateTimeFormat
 import kotlinx.datetime.format.FormatStringsInDatetimeFormats
 import kotlinx.datetime.format.byUnicodePattern
 import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -45,7 +46,10 @@ fun ResultSet.Row.Column.asLocalDateTime(): LocalDateTime = LocalDateTime.parse(
 fun ResultSet.Row.Column.asLocalDateTimeOrNull(): LocalDateTime? =
     asStringOrNull()?.let { LocalDateTime.parse(it, localDateTimeFormatter) }
 
+@OptIn(ExperimentalTime::class)
 fun ResultSet.Row.Column.asInstant(): Instant = asString().toInstantSqlx4k()
+
+@OptIn(ExperimentalTime::class)
 fun ResultSet.Row.Column.asInstantOrNull(): Instant? = asStringOrNull()?.toInstantSqlx4k()
 
 inline fun <reified T : Enum<T>> String.toEnum(): T =
@@ -55,12 +59,11 @@ inline fun <reified T : Enum<T>> String.toEnum(): T =
         SQLError(SQLError.Code.CannotDecodeEnumValue, "Cannot decode enum value '$this'.").ex()
     }
 
+@OptIn(ExperimentalTime::class)
 private fun String.toInstantSqlx4k(): Instant {
     val split = split("+")
     @OptIn(ExperimentalTime::class)
-    return LocalDateTime.parse(split[0], localDateTimeFormatter)
-        .toInstant(UtcOffset(hours = split[1].toInt()))
-        .toDeprecatedInstant()
+    return LocalDateTime.parse(split[0], localDateTimeFormatter).toInstant(UtcOffset(hours = split[1].toInt()))
 }
 
 private val localDateTimeFormatter: DateTimeFormat<LocalDateTime> = LocalDateTime.Format {

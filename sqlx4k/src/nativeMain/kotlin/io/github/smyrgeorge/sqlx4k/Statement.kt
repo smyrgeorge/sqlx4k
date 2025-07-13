@@ -1,11 +1,12 @@
 package io.github.smyrgeorge.sqlx4k
 
 import io.github.smyrgeorge.sqlx4k.impl.statement.SimpleStatement
-import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlin.reflect.KClass
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
 /**
  * Represents a statement that allows binding of positional and named parameters.
@@ -58,6 +59,7 @@ interface Statement {
      * @return A string representation of the receiver suitable for database operations.
      * @throws SQLError if the type of the receiver is unsupported and no appropriate renderer is found.
      */
+    @OptIn(ExperimentalTime::class)
     fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
         return when (this) {
             null -> "null"
