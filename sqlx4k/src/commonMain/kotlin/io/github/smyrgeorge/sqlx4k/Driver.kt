@@ -1,10 +1,5 @@
 package io.github.smyrgeorge.sqlx4k
 
-import kotlinx.cinterop.*
-import sqlx4k.Ptr
-import sqlx4k.Sqlx4kResult
-import kotlin.coroutines.Continuation
-import kotlin.coroutines.resume
 import kotlin.time.Duration
 
 /**
@@ -14,7 +9,6 @@ import kotlin.time.Duration
  * transactions. It abstracts the underlying database operations and offers a coroutine-based
  * API for asynchronous execution.
  */
-@OptIn(ExperimentalForeignApi::class)
 interface Driver {
     /**
      * Executes the given SQL statement asynchronously.
@@ -206,24 +200,5 @@ interface Driver {
          *         contains information about the encountered error.
          */
         suspend fun migrate(path: String = "./db/migrations"): Result<Unit>
-    }
-
-    companion object {
-        /**
-         * Represents a static C function used in the `Driver` class for interfacing with native code.
-         *
-         * This function handles the processing of the result from a native SQL operation. It takes
-         * a native pointer to a continuation object and the resulting pointer from the SQL operation,
-         * resumes the suspended continuation with the result, and disposes of the stable reference
-         * associated with the continuation.
-         *
-         * The function encapsulates the interaction between native code and Kotlin coroutines,
-         * enabling asynchronous processing and ensuring proper resource management.
-         */
-        val fn = staticCFunction<CValue<Ptr>, CPointer<Sqlx4kResult>?, Unit> { c, r ->
-            val ref = c.useContents { ptr }!!.asStableRef<Continuation<CPointer<Sqlx4kResult>?>>()
-            ref.get().resume(r)
-            ref.dispose()
-        }
     }
 }

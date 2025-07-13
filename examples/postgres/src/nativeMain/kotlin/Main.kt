@@ -6,18 +6,10 @@ import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4kRowMapper
 import io.github.smyrgeorge.sqlx4k.examples.postgres.insert
 import io.github.smyrgeorge.sqlx4k.impl.extensions.errorOrNull
 import io.github.smyrgeorge.sqlx4k.postgres.PostgreSQL
-import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.measureTime
 
-@OptIn(ExperimentalForeignApi::class)
 fun main() {
     runBlocking {
         suspend fun <A> Iterable<A>.forEachParallel(

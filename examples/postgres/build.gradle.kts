@@ -22,6 +22,6 @@ ksp {
 dependencies {
     ksp(project(":sqlx4k-codegen")) // Will generate code for all available targets.
 //    You can also enable the code generation for specific target
-//    add("kspMacosArm64", project(":processor"))
-//    add("kspCommonMainMetadata", project(":processor"))
+//    add("kspMacosArm64", project(":sqlx4k-codegen"))
+//    add("kspCommonMainMetadata", project(":sqlx4k-codegen"))
 }
