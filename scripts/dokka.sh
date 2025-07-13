@@ -1,5 +1,7 @@
 #!/usr/bin/env sh
 
+set -e
+
 ./gradlew :dokkaHtmlMultiModule
 rm -rf ./docs/*
 cp -R ./build/dokka/htmlMultiModule/* ./docs/
