@@ -41,7 +41,9 @@ class ResultSet(
      *
      * @return Unit. If an error exists, this method throws an exception and does not return normally.
      */
-    fun throwIfError(): Unit = error?.ex() ?: Unit
+    fun throwIfError() {
+        error?.ex()
+    }
 
     /**
      * Converts the current `ResultSet` into a `Result` object.

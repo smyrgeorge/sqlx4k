@@ -6,6 +6,5 @@ package io.github.smyrgeorge.sqlx4k.annotation
  *
  * @property insert Specifies whether the identifier should be included in insert operations.
  */
-@Suppress("unused")
 @Target(AnnotationTarget.PROPERTY)
 annotation class Id(val insert: Boolean = false)

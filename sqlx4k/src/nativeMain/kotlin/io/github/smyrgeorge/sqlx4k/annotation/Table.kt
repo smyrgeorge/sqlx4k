@@ -5,6 +5,5 @@ package io.github.smyrgeorge.sqlx4k.annotation
  *
  * @property name The name of the table in the database.
  */
-@Suppress("unused")
 @Target(AnnotationTarget.CLASS)
 annotation class Table(val name: String)

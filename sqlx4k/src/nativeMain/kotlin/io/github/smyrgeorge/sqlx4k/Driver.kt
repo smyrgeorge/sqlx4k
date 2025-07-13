@@ -1,11 +1,6 @@
 package io.github.smyrgeorge.sqlx4k
 
-import kotlinx.cinterop.CPointer
-import kotlinx.cinterop.CValue
-import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.asStableRef
-import kotlinx.cinterop.staticCFunction
-import kotlinx.cinterop.useContents
+import kotlinx.cinterop.*
 import sqlx4k.Ptr
 import sqlx4k.Sqlx4kResult
 import kotlin.coroutines.Continuation
@@ -109,7 +104,6 @@ interface Driver {
          * @property idleTimeout The maximum idle duration for individual connections.
          * @property maxLifetime The maximum lifetime of individual connections.
          */
-        @Suppress("unused")
         data class Options(
             // Set the minimum number of connections to maintain at all times.
             val minConnections: Int? = null,
@@ -122,6 +116,7 @@ interface Driver {
             // Set the maximum lifetime of individual connections.
             val maxLifetime: Duration? = null,
         ) {
+            @Suppress("unused")
             class Builder {
                 private var minConnections: Int? = null
                 private var maxConnections: Int = 10
