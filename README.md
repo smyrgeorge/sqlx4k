@@ -7,13 +7,13 @@
 ![GitHub issues](https://img.shields.io/github/issues/smyrgeorge/sqlx4k)
 [![Kotlin](https://img.shields.io/badge/kotlin-2.2.0-blue.svg?logo=kotlin)](http://kotlinlang.org)
 
+![](https://img.shields.io/static/v1?label=&message=Jvm&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=Platforms&color=grey)
 ![](https://img.shields.io/static/v1?label=&message=Linux&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=macOS&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=Windows&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=iOS&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=Android&color=blue)
-![](https://img.shields.io/static/v1?label=&message=Jvm&color=blue)
 
 A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLite, written for Kotlin Multiplatform.
 
@@ -56,6 +56,7 @@ Please look at this issue: [#18](https://github.com/smyrgeorge/sqlx4k/issues/18)
 
 We support the following targets:
 
+- jvm (only PostgreSQL is supported at the moment)
 - iosArm64
 - androidNativeX64
 - androidNativeArm64
@@ -64,7 +65,6 @@ We support the following targets:
 - linuxArm64
 - linuxX64
 - mingwX64
-- jvm (only PostgreSQL is supported at the moment)
 - wasmWasi (potential future candidate)
 
 ## Features
