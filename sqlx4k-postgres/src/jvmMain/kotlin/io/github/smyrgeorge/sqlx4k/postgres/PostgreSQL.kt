@@ -15,7 +15,9 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.net.URI
+import kotlin.String
 import kotlin.jvm.optionals.getOrElse
+import kotlin.text.String
 import kotlin.time.toJavaDuration
 
 /**
@@ -57,7 +59,7 @@ class PostgreSQL(
     }
 
     override suspend fun migrate(path: String): Result<Unit> {
-        TODO("Not yet implemented")
+        error("This feature is not yet implemented.")
     }
 
     override suspend fun close(): Result<Unit> = runCatching {
@@ -87,6 +89,27 @@ class PostgreSQL(
     override suspend fun begin(): Result<Transaction> = runCatching {
         val con: Connection = pool.create().awaitSingle().also { it.beginTransaction().awaitSingle() }
         return Result.success(Tx(con))
+    }
+
+    suspend fun listen(channel: String, f: (Notification) -> Unit) {
+        listen(listOf(channel), f)
+    }
+
+    suspend fun listen(channels: List<String>, f: (Notification) -> Unit) {
+        error("This feature is not yet implemented.")
+    }
+
+    /**
+     * We accept only [String] values,
+     * because only the text type is supported by postgres.
+     * https://www.postgresql.org/docs/current/sql-notify.html
+     */
+    suspend fun notify(channel: String, value: String) {
+        require(channel.isNotBlank()) { "Channel cannot be blank." }
+        val notify = Statement.create("select pg_notify(:chanel, :value);")
+            .bind("chanel", channel)
+            .bind("value", value)
+        execute(notify).getOrThrow()
     }
 
     /**

@@ -199,21 +199,6 @@ class PostgreSQL(
             fetchAll(statement.render(encoders), rowMapper)
     }
 
-    /**
-     * Represents a notification received from a PostgreSQL listen/notify channel.
-     *
-     * A `Notification` object contains details about a notification event that has
-     * been listened to via the PostgreSQL listen/notify mechanism. It holds the
-     * associated channel and the actual value of the notification payload.
-     *
-     * @property channel The name of the PostgreSQL channel from which the notification was received.
-     * @property value The payload of the notification represented as a column of a result set.
-     */
-    data class Notification(
-        val channel: String,
-        val value: ResultSet.Row.Column,
-    )
-
     companion object {
         /**
          * The `ValueEncoderRegistry` instance used for encoding values supplied to SQL statements in the `PostgreSQL` class.
