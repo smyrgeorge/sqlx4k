@@ -3,7 +3,6 @@ import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4k
 import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4kRowMapper
-import io.github.smyrgeorge.sqlx4k.examples.postgres.insert
 import io.github.smyrgeorge.sqlx4k.impl.extensions.errorOrNull
 import io.github.smyrgeorge.sqlx4k.postgres.Notification
 import io.github.smyrgeorge.sqlx4k.postgres.PostgreSQL
@@ -12,7 +11,11 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.time.measureTime
 
 fun main() {
-    runBlocking {
+    Main().run()
+}
+
+class Main {
+    fun run(): Unit = runBlocking {
         suspend fun <A> Iterable<A>.forEachParallel(
             context: CoroutineContext = Dispatchers.IO,
             f: suspend (A) -> Unit
@@ -41,17 +44,14 @@ fun main() {
 
         db.execute("create table if not exists sqlx4k(id integer, test text);").getOrThrow()
         db.execute("insert into sqlx4k (id, test) values (65, 'test');").getOrThrow()
-        val insert = Sqlx4k(id = 66, test = "test").insert()
-        val affected = db.execute(insert).getOrThrow()
-        println("AFFECTED: $affected")
 
         runCatching {
-            val st = Statement.create("select * from sqlx4k where id = ?")
+            val st = Statement.Companion.create("select * from sqlx4k where id = ?")
                 .bind(0, 66)
                 .render()
             println("Statement: $st")
 
-            val st1 = Statement.create("? ? ?")
+            val st1 = Statement.Companion.create("? ? ?")
                 .bind(0, "test")
                 .bind(1, "'test'")
                 .bind(2, "';select *;--")

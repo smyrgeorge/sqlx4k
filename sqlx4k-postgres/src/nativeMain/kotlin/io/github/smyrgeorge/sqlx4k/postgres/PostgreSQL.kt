@@ -13,10 +13,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import sqlx4k.*
-import kotlin.concurrent.AtomicInt
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
-import kotlin.experimental.ExperimentalNativeApi
 
 /**
  * PostgreSQL class provides mechanisms to interact with a PostgreSQL database.
@@ -31,22 +32,19 @@ import kotlin.experimental.ExperimentalNativeApi
  *  postgresql://localhost
  *  postgresql://localhost:5433
  *  postgresql://localhost/mydb
- *  postgresql://user@localhost
- *  postgresql://user:secret@localhost
- *  postgresql://localhost?dbname=mydb&user=postgres&password=postgres
  *
  * @param url The URL of the PostgreSQL database to connect to.
  * @param username The username used for authentication.
  * @param password The password used for authentication.
  * @param options Optional pool configuration, defaulting to `Driver.Pool.Options`.
  */
-@OptIn(ExperimentalForeignApi::class, ExperimentalNativeApi::class)
+@OptIn(ExperimentalForeignApi::class)
 class PostgreSQL(
     url: String,
     username: String,
     password: String,
     options: Driver.Pool.Options = Driver.Pool.Options(),
-) : Driver, Driver.Pool, Driver.Transactional, Driver.Migrate {
+) : IPostgresSQL {
     init {
         sqlx4k_of(
             url = url,
@@ -96,11 +94,34 @@ class PostgreSQL(
         }
     }
 
-    suspend fun listen(channel: String, f: (Notification) -> Unit) {
+    /**
+     * Listens to a specific PostgreSQL channel and processes notifications using the provided callback function.
+     *
+     * This method leverages the PostgreSQL listen/notify mechanism to receive notifications on the specified channel.
+     * It delegates the listening task to the `listen` method that supports multiple channels.
+     *
+     * @param channel The name of the PostgreSQL channel to listen to. This represents a single PostgreSQL listen/notify channel.
+     * @param f A callback function that is invoked for each notification received. The function accepts a `Notification` object
+     *          containing the channel name and the notification payload.
+     */
+    override suspend fun listen(channel: String, f: (Notification) -> Unit) {
         listen(listOf(channel), f)
     }
 
-    suspend fun listen(channels: List<String>, f: (Notification) -> Unit) {
+    /**
+     * Listens to notifications on the specified PostgreSQL channels and processes them
+     * using the provided callback function. The notifications are received via the
+     * PostgreSQL listen/notify mechanism.
+     *
+     * @param channels A list of channel names to listen to. The list must not be empty.
+     *                 Each channel represents a PostgreSQL listen/notify channel.
+     * @param f A callback function that is invoked for each notification received.
+     *          The function accepts a `Notification` object containing the channel name
+     *          and the notification payload.
+     * @throws IllegalArgumentException If the `channels` list is empty.
+     */
+    override suspend fun listen(channels: List<String>, f: (Notification) -> Unit) {
+        require(channels.isNotEmpty()) { "Channels cannot be empty." }
         val channelId: Int = listenerId()
         val channel = Channel<Notification>(capacity = Channel.UNLIMITED)
 
@@ -126,11 +147,17 @@ class PostgreSQL(
     }
 
     /**
-     * We accept only [String] values,
-     * because only the text type is supported by postgres.
-     * https://www.postgresql.org/docs/current/sql-notify.html
+     * Sends a notification to a specific PostgreSQL channel with the given value.
+     *
+     * This method utilizes the PostgreSQL `pg_notify` functionality to send a notification
+     * to a specified channel. The channel and value are passed as parameters. The channel name
+     * must not be blank.
+     *
+     * @param channel The name of the PostgreSQL channel to send the notification to. Must not be blank.
+     * @param value The notification payload to be sent to the specified channel.
+     * @throws IllegalArgumentException If the `channel` parameter is blank.
      */
-    suspend fun notify(channel: String, value: String) {
+    override suspend fun notify(channel: String, value: String) {
         require(channel.isNotBlank()) { "Channel cannot be blank." }
         val notify = Statement.create("select pg_notify(:chanel, :value);")
             .bind("chanel", channel)
@@ -202,21 +229,6 @@ class PostgreSQL(
             fetchAll(statement.render(encoders), rowMapper)
     }
 
-    /**
-     * Represents a notification received from a PostgreSQL listen/notify channel.
-     *
-     * A `Notification` object contains details about a notification event that has
-     * been listened to via the PostgreSQL listen/notify mechanism. It holds the
-     * associated channel and the actual value of the notification payload.
-     *
-     * @property channel The name of the PostgreSQL channel from which the notification was received.
-     * @property value The payload of the notification represented as a column of a result set.
-     */
-    data class Notification(
-        val channel: String,
-        val value: ResultSet.Row.Column,
-    )
-
     companion object {
         /**
          * The `ValueEncoderRegistry` instance used for encoding values supplied to SQL statements in the `PostgreSQL` class.
@@ -229,7 +241,10 @@ class PostgreSQL(
         val encoders = Statement.ValueEncoderRegistry()
 
         // Will eventually overflow, but it doesn't matter, is the desired behaviour.
-        private fun listenerId(): Int = listenerId.incrementAndGet()
+        @OptIn(ExperimentalAtomicApi::class)
+        private fun listenerId(): Int = listenerId.incrementAndFetch()
+
+        @OptIn(ExperimentalAtomicApi::class)
         private val listenerId = AtomicInt(0)
 
         private val channels: MutableMap<Int, Channel<Notification>> = mutableMapOf()
@@ -240,11 +255,7 @@ class PostgreSQL(
                 require(row.size == 1) { "Expected exactly one column, got ${row.size}" }
                 val column = row.get(0)
                 require(column.type == "TEXT") { "Expected TEXT column, got ${column.type}" }
-
-                return Notification(
-                    channel = column.name,
-                    value = column,
-                )
+                return Notification(column.name, column)
             }
 
             channels[c]?.let {

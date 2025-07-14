@@ -3,6 +3,7 @@ package io.github.smyrgeorge.sqlx4k.multiplatform
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
+import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
 @Suppress("unused")
@@ -21,6 +22,14 @@ class MultiplatformBinariesConventions : Plugin<Project> {
 //                Pair("linuxX64") { linuxX64 { binaries { executable() } } },
                 Pair("mingwX64") { mingwX64 { binaries { executable() } } },
             )
+
+            println("Enabling target jvm")
+            jvm {
+                @OptIn(ExperimentalKotlinGradlePluginApi::class)
+                mainRun {
+                    mainClass.set("MainKt")
+                }
+            }
 
             targets.forEach {
                 println("Enabling target $it")

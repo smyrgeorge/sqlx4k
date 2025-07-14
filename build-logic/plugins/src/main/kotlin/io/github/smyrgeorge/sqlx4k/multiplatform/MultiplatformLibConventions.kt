@@ -14,7 +14,7 @@ import java.io.File
 import java.lang.System.getenv
 
 @Suppress("unused")
-class MultiplatformRustConventions : Plugin<Project> {
+class MultiplatformLibConventions : Plugin<Project> {
     private val os = DefaultNativePlatform.getCurrentOperatingSystem()
     private val arch = DefaultNativePlatform.getCurrentArchitecture()
 
@@ -45,9 +45,9 @@ class MultiplatformRustConventions : Plugin<Project> {
      * If the file does not exist, a GradleException is thrown indicating that the Rust cargo binary is required,
      * but it was not found.
      *
-     * @see MultiplatformRustConventions
-     * @see MultiplatformRustConventions.os
-     * @see MultiplatformRustConventions.exeExt
+     * @see MultiplatformLibConventions
+     * @see MultiplatformLibConventions.os
+     * @see MultiplatformLibConventions.exeExt
      *
      * @throws GradleException if the Rust cargo binary is not found.
      */
@@ -79,6 +79,9 @@ class MultiplatformRustConventions : Plugin<Project> {
                 Pair("linuxX64") { linuxX64 { rust("x86_64-unknown-linux-gnu", !os.isLinux) } },
                 Pair("mingwX64") { mingwX64 { rust("x86_64-pc-windows-gnu", true) } },
             )
+
+            println("Enabling target jvm")
+            jvm()
 
             targets.forEach {
                 println("Enabling target $it")

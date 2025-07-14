@@ -5,7 +5,6 @@ import assertk.assertThat
 import assertk.assertions.isEqualTo
 import assertk.assertions.isNull
 import assertk.assertions.isTrue
-import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.impl.extensions.*
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asBoolean
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asByteArray
@@ -13,27 +12,16 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
-import kotlin.test.Test
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-@OptIn(ExperimentalUuidApi::class, ExperimentalTime::class)
-class PostgreSQLTests {
+class CommonPostgreSQLTests(
+    private val db: IPostgresSQL
+) {
 
-    val options = Driver.Pool.Options.builder()
-        .maxConnections(10)
-        .build()
-
-    val db = PostgreSQL(
-        url = "postgresql://localhost:15432/test",
-        username = "postgres",
-        password = "postgres",
-        options = options
-    )
-
-    @Test
+    @OptIn(ExperimentalUuidApi::class, ExperimentalTime::class)
     fun `Test basic type mappings`() = runBlocking {
         val types = """
             select

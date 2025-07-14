@@ -16,6 +16,5 @@ git push
 git tag "$version" -f
 git push --tags -f
 
-cat local.properties >> gradle.properties
 ./gradlew publishAllPublicationsToMavenCentralRepository -Ptargets=all
 git checkout .

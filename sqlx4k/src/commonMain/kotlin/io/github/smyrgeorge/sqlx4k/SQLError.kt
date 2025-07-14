@@ -26,12 +26,15 @@ class SQLError(
      * Represents various error codes that can occur while interacting with a database or performing related operations.
      */
     enum class Code {
+        // IMPORTANT: Do not change the order the errors.
         // Error from the underlying driver:
         Database,
         PoolTimedOut,
         PoolClosed,
         WorkerCrashed,
         Migrate,
+
+        Pool,
 
         // Transaction
         TransactionIsClosed,

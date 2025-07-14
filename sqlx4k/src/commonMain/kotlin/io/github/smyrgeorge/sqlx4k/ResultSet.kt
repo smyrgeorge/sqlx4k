@@ -1,7 +1,5 @@
 package io.github.smyrgeorge.sqlx4k
 
-import sqlx4k.Sqlx4kResult
-
 /**
  * Represents the result of a SQL query, containing rows and metadata.
  *
@@ -108,6 +106,22 @@ class ResultSet(
         }
 
         /**
+         * Converts the current row into a metadata representation.
+         *
+         * This method iterates through all columns in the row, extracts their ordinal, name, and type,
+         * and constructs a `Metadata` object that contains a list of corresponding `Metadata.Column` objects.
+         *
+         * @return A `Metadata` instance containing the metadata of all columns in the row.
+         */
+        fun toMetadata(): Metadata {
+            val columns = List(size) { index ->
+                val column = get(index)
+                Metadata.Column(ordinal = column.ordinal, name = column.name, type = column.type)
+            }
+            return Metadata(columns)
+        }
+
+        /**
          * Represents a column in a database table.
          *
          * This class provides metadata and access to the value of a column in a database row.
@@ -203,12 +217,13 @@ class ResultSet(
     }
 
     /**
-     * An implementation of the [Iterator] interface for iterating over rows in a SQL result set.
+     * Implementation of the `Iterator` interface for iterating over rows in a `ResultSet`.
      *
-     * This class is responsible for providing sequential access to each row in a [Sqlx4kResult].
-     * It ensures error-checking before accessing rows and enforces bounds checks to prevent invalid access.
+     * This class provides mechanisms to traverse the rows in a result set, ensuring that
+     * any errors in the result set are detected and propagated appropriately.
      *
-     * @property rs The underlying SQL result set being iterated.
+     * @constructor Creates an instance of the iterator for a given `ResultSet`.
+     * @param rs The `ResultSet` over which this iterator will operate.
      */
     class IteratorImpl(
         private val rs: ResultSet

@@ -1,21 +1,20 @@
 plugins {
-    id("io.github.smyrgeorge.sqlx4k.multiplatform.rust")
+    id("io.github.smyrgeorge.sqlx4k.multiplatform.lib")
     id("io.github.smyrgeorge.sqlx4k.publish")
 }
 
 kotlin {
+    @Suppress("unused")
     sourceSets {
         configureEach {
             languageSettings.progressiveMode = true
         }
-        @Suppress("unused")
         val commonMain by getting {
             dependencies {
                 api(libs.kotlinx.coroutines.core)
-                implementation(libs.kotlinx.datetime)
+                api(libs.kotlinx.datetime)
             }
         }
-        @Suppress("unused")
         val commonTest by getting {
             dependencies {
                 implementation(libs.kotlin.test)
