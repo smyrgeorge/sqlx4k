@@ -5,15 +5,19 @@ import io.r2dbc.pool.ConnectionPool
 import io.r2dbc.pool.ConnectionPoolConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
+import io.r2dbc.spi.Connection
+import io.r2dbc.spi.Row
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitSingle
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.jvm.optionals.getOrElse
 import kotlin.time.toJavaDuration
 
+@Suppress("SqlSourceToSinkFlow")
 class PostgreSQL(
     url: String,
     host: String,
@@ -32,8 +36,9 @@ class PostgreSQL(
         password = password,
         options = options
     ).apply {
-        @OptIn(DelicateCoroutinesApi::class)
-        GlobalScope.launch { runCatching { warmup().awaitSingle() } }
+        runBlocking {
+            launch { runCatching { warmup().awaitSingle() } }
+        }
     }
 
     override suspend fun migrate(path: String): Result<Unit> {
@@ -48,7 +53,6 @@ class PostgreSQL(
     override fun poolIdleSize(): Int = pool.metrics.getOrElse { error("No metrics available.") }.idleSize()
 
     override suspend fun execute(sql: String): Result<Long> = runCatching {
-        @Suppress("SqlSourceToSinkFlow")
         pool.create().awaitSingle().createStatement(sql).execute().awaitSingle().rowsUpdated.awaitSingle()
     }
 
@@ -56,27 +60,6 @@ class PostgreSQL(
         execute(statement.render(encoders))
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
-        fun  io.r2dbc.spi.Row.toRow(): ResultSet.Row {
-            val columns = metadata.columnMetadatas.mapIndexed { i, c ->
-                ResultSet.Row.Column(
-                    ordinal = i,
-                    name = c.name,
-                    type = c.type.name,
-                    value = get(i, String::class.java)
-                )
-            }
-            return ResultSet.Row(columns)
-        }
-
-        suspend fun io.r2dbc.spi.Result.toResultSet(): ResultSet {
-            val rows = map { r, _ -> r.toRow() }.asFlow().toList()
-            val meta = if (rows.isEmpty()) ResultSet.Metadata(emptyList())
-            else rows.first().toMetadata()
-            // TODO: handle error?
-            return ResultSet(rows, null, meta)
-        }
-
-        @Suppress("SqlSourceToSinkFlow")
         pool.create().awaitSingle().createStatement(sql).execute().awaitSingle().toResultSet()
     }
 
@@ -86,8 +69,65 @@ class PostgreSQL(
     override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
         fetchAll(statement.render(encoders), rowMapper)
 
-    override suspend fun begin(): Result<Transaction> {
-        TODO("Not yet implemented")
+    override suspend fun begin(): Result<Transaction> = runCatching {
+        val con: Connection = pool.create().awaitSingle().also { it.beginTransaction().awaitSingle() }
+        return Result.success(Tx(con))
+    }
+
+    /**
+     * Represents a transactional context for executing SQL operations with commit and rollback capabilities.
+     *
+     * This class implements the [Transaction] interface and ensures thread safety through the use of a [Mutex].
+     * It provides methods to manage the lifecycle of a transaction, execute SQL operations, and retrieve result sets.
+     *
+     * @constructor Initializes the transaction with a given database connection.
+     * @param connection The database connection associated with this transaction.
+     */
+    class Tx(
+        private var connection: Connection
+    ) : Transaction {
+        private val mutex = Mutex()
+        private var _status: Transaction.Status = Transaction.Status.Open
+        override val status: Transaction.Status = _status
+
+        override suspend fun commit(): Result<Unit> = runCatching {
+            mutex.withLock {
+                isOpenOrError()
+                _status = Transaction.Status.Closed
+                connection.commitTransaction().awaitSingle()
+            }
+        }
+
+        override suspend fun rollback(): Result<Unit> = runCatching {
+            mutex.withLock {
+                isOpenOrError()
+                _status = Transaction.Status.Closed
+                connection.rollbackTransaction().awaitSingle()
+            }
+        }
+
+        override suspend fun execute(sql: String): Result<Long> = runCatching {
+            mutex.withLock {
+                isOpenOrError()
+                connection.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitSingle()
+            }
+        }
+
+        override suspend fun execute(statement: Statement): Result<Long> =
+            execute(statement.render(encoders))
+
+        override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
+            return mutex.withLock {
+                isOpenOrError()
+                connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
+            }
+        }
+
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+            fetchAll(statement.render(encoders))
+
+        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
+            fetchAll(statement.render(encoders), rowMapper)
     }
 
     companion object {
@@ -128,6 +168,26 @@ class PostgreSQL(
             }
 
             return ConnectionPool(config.build())
+        }
+
+        private fun Row.toRow(): ResultSet.Row {
+            val columns = metadata.columnMetadatas.mapIndexed { i, c ->
+                ResultSet.Row.Column(
+                    ordinal = i,
+                    name = c.name,
+                    type = c.type.name,
+                    value = get(i, String::class.java)
+                )
+            }
+            return ResultSet.Row(columns)
+        }
+
+        private suspend fun io.r2dbc.spi.Result.toResultSet(): ResultSet {
+            val rows = map { r, _ -> r.toRow() }.asFlow().toList()
+            val meta = if (rows.isEmpty()) ResultSet.Metadata(emptyList())
+            else rows.first().toMetadata()
+            // TODO: handle error?
+            return ResultSet(rows, null, meta)
         }
     }
 }
