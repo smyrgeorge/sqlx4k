@@ -4,11 +4,11 @@ plugins {
 
 gradlePlugin {
     plugins {
-        create("multiplatform.rust") {
-            id = "io.github.smyrgeorge.sqlx4k.multiplatform.rust"
-            implementationClass = "io.github.smyrgeorge.sqlx4k.multiplatform.MultiplatformRustConventions"
+        create("multiplatform.lib") {
+            id = "io.github.smyrgeorge.sqlx4k.multiplatform.lib"
+            implementationClass = "io.github.smyrgeorge.sqlx4k.multiplatform.MultiplatformLibConventions"
         }
-        create("multiplatform.examples") {
+        create("multiplatform.binaries") {
             id = "io.github.smyrgeorge.sqlx4k.multiplatform.binaries"
             implementationClass = "io.github.smyrgeorge.sqlx4k.multiplatform.MultiplatformBinariesConventions"
         }
