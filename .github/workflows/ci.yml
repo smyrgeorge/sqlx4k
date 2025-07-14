@@ -34,13 +34,13 @@ jobs:
         with:
           path: |
             /home/runner/.konan
-            sqlx4k-mysql/rust_lib/target
-            sqlx4k-postgres/rust_lib/target
-            sqlx4k-sqlite/rust_lib/target
+            sqlx4k-mysql/src/rust/target
+            sqlx4k-postgres/src/rust/target
+            sqlx4k-sqlite/src/rust/target
           key: rust-lib-cache-apple
 
       - name: Gradle Build
-        run: ./gradlew build -x test -x macosArm64Test
+        run: ./gradlew build -x test -x jvmTest -x macosArm64Test
 #        run: ./scripts/build-apple.sh
 
 #      - name: Gradle Publish
