@@ -94,11 +94,34 @@ class PostgreSQL(
         }
     }
 
+    /**
+     * Listens to a specific PostgreSQL channel and processes notifications using the provided callback function.
+     *
+     * This method leverages the PostgreSQL listen/notify mechanism to receive notifications on the specified channel.
+     * It delegates the listening task to the `listen` method that supports multiple channels.
+     *
+     * @param channel The name of the PostgreSQL channel to listen to. This represents a single PostgreSQL listen/notify channel.
+     * @param f A callback function that is invoked for each notification received. The function accepts a `Notification` object
+     *          containing the channel name and the notification payload.
+     */
     override suspend fun listen(channel: String, f: (Notification) -> Unit) {
         listen(listOf(channel), f)
     }
 
+    /**
+     * Listens to notifications on the specified PostgreSQL channels and processes them
+     * using the provided callback function. The notifications are received via the
+     * PostgreSQL listen/notify mechanism.
+     *
+     * @param channels A list of channel names to listen to. The list must not be empty.
+     *                 Each channel represents a PostgreSQL listen/notify channel.
+     * @param f A callback function that is invoked for each notification received.
+     *          The function accepts a `Notification` object containing the channel name
+     *          and the notification payload.
+     * @throws IllegalArgumentException If the `channels` list is empty.
+     */
     override suspend fun listen(channels: List<String>, f: (Notification) -> Unit) {
+        require(channels.isNotEmpty()) { "Channels cannot be empty." }
         val channelId: Int = listenerId()
         val channel = Channel<Notification>(capacity = Channel.UNLIMITED)
 
@@ -124,9 +147,15 @@ class PostgreSQL(
     }
 
     /**
-     * We accept only [String] values,
-     * because only the text type is supported by postgres.
-     * https://www.postgresql.org/docs/current/sql-notify.html
+     * Sends a notification to a specific PostgreSQL channel with the given value.
+     *
+     * This method utilizes the PostgreSQL `pg_notify` functionality to send a notification
+     * to a specified channel. The channel and value are passed as parameters. The channel name
+     * must not be blank.
+     *
+     * @param channel The name of the PostgreSQL channel to send the notification to. Must not be blank.
+     * @param value The notification payload to be sent to the specified channel.
+     * @throws IllegalArgumentException If the `channel` parameter is blank.
      */
     override suspend fun notify(channel: String, value: String) {
         require(channel.isNotBlank()) { "Channel cannot be blank." }
@@ -226,11 +255,7 @@ class PostgreSQL(
                 require(row.size == 1) { "Expected exactly one column, got ${row.size}" }
                 val column = row.get(0)
                 require(column.type == "TEXT") { "Expected TEXT column, got ${column.type}" }
-
-                return Notification(
-                    channel = column.name,
-                    value = column,
-                )
+                return Notification(column.name, column)
             }
 
             channels[c]?.let {

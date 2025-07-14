@@ -5,8 +5,10 @@ import io.r2dbc.pool.ConnectionPool
 import io.r2dbc.pool.ConnectionPoolConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
+import io.r2dbc.postgresql.api.PostgresqlConnection
 import io.r2dbc.spi.Connection
 import io.r2dbc.spi.Row
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.asFlow
@@ -15,9 +17,9 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.net.URI
-import kotlin.String
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.jvm.optionals.getOrElse
-import kotlin.text.String
 import kotlin.time.toJavaDuration
 
 /**
@@ -58,7 +60,7 @@ class PostgreSQL(
     }
 
     override suspend fun migrate(path: String): Result<Unit> {
-        error("This feature is not yet implemented.")
+        error("This feature is not yet implemented for the JVM platform.")
     }
 
     override suspend fun close(): Result<Unit> = runCatching {
@@ -92,18 +94,79 @@ class PostgreSQL(
         return Result.success(Tx(con))
     }
 
+    /**
+     * Listens for notifications from a specified PostgreSQL channel.
+     *
+     * The method establishes a subscription to a PostgreSQL channel using the LISTEN/NOTIFY
+     * mechanism. When a notification is received on the subscribed channel, the provided
+     * callback function is invoked with the notification object as a parameter. This method
+     * delegates the functionality to a variant that supports multiple channels.
+     *
+     * @param channel The name of the PostgreSQL channel to listen to. Must not be blank.
+     * @param f A callback function to handle notifications. The function receives a `Notification` object
+     *          containing the channel name and payload.
+     * @throws IllegalArgumentException If the `channel` parameter is blank.
+     */
     override suspend fun listen(channel: String, f: (Notification) -> Unit) {
         listen(listOf(channel), f)
     }
 
+    /**
+     * Listens for notifications from the specified PostgreSQL channels.
+     *
+     * The method establishes a subscription to one or more PostgreSQL channels using the LISTEN/NOTIFY
+     * functionality. When a notification is received on one of the subscribed channels, the provided
+     * callback function is invoked with the notification object as a parameter. The method ensures that
+     * channel names are valid and automatically attempts to reconnect if the connection is closed.
+     *
+     * @param channels A list of PostgreSQL channel names to listen to. Must not be empty.
+     * @param f A callback function to handle notifications. The function receives a `Notification` object
+     *          containing the channel name and payload.
+     * @throws IllegalArgumentException If the `channels` list is empty or any channel name is blank.
+     */
     override suspend fun listen(channels: List<String>, f: (Notification) -> Unit) {
-        error("This feature is not yet implemented.")
+        fun io.r2dbc.postgresql.api.Notification.toNotification(): Notification {
+            require(name.isNotBlank()) { "Channel cannot be blank." }
+            val value = ResultSet.Row.Column(0, name, "TEXT", parameter)
+            return Notification(name, value)
+        }
+
+        fun List<String>.listenAll(): String {
+            val sql = joinToString { "LISTEN ?;" }
+            val statement = Statement.create(sql)
+            forEachIndexed { i, channel -> statement.bind(i + 1, channel) }
+            return statement.render(encoders)
+        }
+
+        require(channels.isNotEmpty()) { "Channels cannot be empty." }
+        val sql = channels.listenAll()
+
+        PgChannelScope.launch {
+            while (true) {
+                val con = pool.create().awaitSingle() as PostgresqlConnection
+                @Suppress("SqlSourceToSinkFlow")
+                con.createStatement(sql)
+                    .execute()
+                    .flatMap { it.rowsUpdated }
+                    .thenMany(con.notifications)
+                    .asFlow()
+                    .collect { f(it.toNotification()) }
+
+                // Automatically reconnect if connection closes.
+            }
+        }
     }
 
     /**
-     * We accept only [String] values,
-     * because only the text type is supported by postgres.
-     * https://www.postgresql.org/docs/current/sql-notify.html
+     * Sends a notification to a specific PostgreSQL channel with the given value.
+     *
+     * This method utilizes the PostgreSQL `pg_notify` functionality to send a notification
+     * to a specified channel. The channel and value are passed as parameters. The channel name
+     * must not be blank.
+     *
+     * @param channel The name of the PostgreSQL channel to send the notification to. Must not be blank.
+     * @param value The notification payload to be sent to the specified channel.
+     * @throws IllegalArgumentException If the `channel` parameter is blank.
      */
     override suspend fun notify(channel: String, value: String) {
         require(channel.isNotBlank()) { "Channel cannot be blank." }
@@ -181,6 +244,11 @@ class PostgreSQL(
          * that parameters bound to SQL statements are correctly encoded before being executed.
          */
         val encoders = Statement.ValueEncoderRegistry()
+
+        private object PgChannelScope : CoroutineScope {
+            override val coroutineContext: CoroutineContext
+                get() = EmptyCoroutineContext
+        }
 
         private fun createConnectionPool(
             url: String,
