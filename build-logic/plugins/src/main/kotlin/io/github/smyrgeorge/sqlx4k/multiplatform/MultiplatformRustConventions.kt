@@ -80,10 +80,14 @@ class MultiplatformRustConventions : Plugin<Project> {
                 Pair("mingwX64") { mingwX64 { rust("x86_64-pc-windows-gnu", true) } },
             )
 
+            println("Enabling target jvm")
+            jvm()
+
             targets.forEach {
                 println("Enabling target $it")
                 availableTargets[it]?.invoke()
             }
+
 
             applyDefaultHierarchyTemplate()
         }

@@ -20,7 +20,7 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalUuidApi::class, ExperimentalTime::class)
-class PostgreSQLTests {
+class NativePostgreSQLTests {
 
     val options = Driver.Pool.Options.builder()
         .maxConnections(10)
