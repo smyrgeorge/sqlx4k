@@ -5,6 +5,7 @@ import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4k
 import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4kRowMapper
 import io.github.smyrgeorge.sqlx4k.examples.postgres.insert
 import io.github.smyrgeorge.sqlx4k.impl.extensions.errorOrNull
+import io.github.smyrgeorge.sqlx4k.postgres.Notification
 import io.github.smyrgeorge.sqlx4k.postgres.PostgreSQL
 import kotlinx.coroutines.*
 import kotlin.coroutines.CoroutineContext
@@ -111,7 +112,7 @@ fun main() {
 
         println("Connections: ${db.poolSize()}, Idle: ${db.poolIdleSize()}")
         println("\n\n\n::: LISTEN/NOTIFY :::")
-        db.listen("chan0") { notification: PostgreSQL.Notification ->
+        db.listen("chan0") { notification: Notification ->
             println(notification.value.asString())
         }
 
