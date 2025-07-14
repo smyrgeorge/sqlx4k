@@ -121,6 +121,7 @@ class PostgreSQL(
      * @throws IllegalArgumentException If the `channels` list is empty.
      */
     override suspend fun listen(channels: List<String>, f: (Notification) -> Unit) {
+        // TODO: validate channels.
         require(channels.isNotEmpty()) { "Channels cannot be empty." }
         val channelId: Int = listenerId()
         val channel = Channel<Notification>(capacity = Channel.UNLIMITED)
@@ -136,7 +137,6 @@ class PostgreSQL(
         // Create the listener.
         sqlx { c ->
             sqlx4k_listen(
-                // TODO: validate channels.
                 channels = channels.joinToString(","),
                 notify_id = channelId,
                 notify = notify,

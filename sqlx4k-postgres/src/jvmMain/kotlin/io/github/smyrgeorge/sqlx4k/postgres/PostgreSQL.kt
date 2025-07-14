@@ -157,6 +157,7 @@ class PostgreSQL(
             return Notification(name, value)
         }
 
+        // TODO: validate channels.
         require(channels.isNotEmpty()) { "Channels cannot be empty." }
         val sql = channels.joinToString { "LISTEN $it;" }
 
