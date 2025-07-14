@@ -16,6 +16,7 @@ import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import reactor.pool.PoolAcquireTimeoutException
 import reactor.pool.PoolShutdownException
 import java.net.URI
 import kotlin.coroutines.CoroutineContext
@@ -63,7 +64,7 @@ class PostgreSQL(
         try {
             pool.disposeLater().awaitFirstOrNull()
         } catch (e: Exception) {
-            SQLError(SQLError.Code.Database, e.message).ex()
+            SQLError(SQLError.Code.WorkerCrashed, e.message).ex()
         }
     }
 
@@ -156,13 +157,8 @@ class PostgreSQL(
             return Notification(name, value)
         }
 
-        fun List<String>.listenAll(): String {
-            val sql = joinToString { "LISTEN $it;" }
-            return sql
-        }
-
         require(channels.isNotEmpty()) { "Channels cannot be empty." }
-        val sql = channels.listenAll()
+        val sql = channels.joinToString { "LISTEN $it;" }
 
         PgChannelScope.launch {
             while (true) {
@@ -205,6 +201,7 @@ class PostgreSQL(
         } catch (e: Exception) {
             when (e) {
                 is PoolShutdownException -> SQLError(SQLError.Code.PoolClosed, e.message).ex()
+                is PoolAcquireTimeoutException -> SQLError(SQLError.Code.PoolTimedOut, e.message).ex()
                 else -> SQLError(SQLError.Code.Pool, e.message).ex()
             }
         }

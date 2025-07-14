@@ -114,8 +114,8 @@ class Main {
         }
 
         (1..10).forEach {
-            db.notify("chan0", "Hello $it")
             delay(1000)
+            db.notify("chan0", "Hello $it")
         }
 
         println("\n\n\n::: TX :::")
@@ -174,7 +174,6 @@ class Main {
 
         println("Connections: ${db.poolSize()}, Idle: ${db.poolIdleSize()}")
         (1..10).forEach {
-            println("Notify: $it")
             db.notify("chan0", "Hello $it")
             delay(1000)
         }
