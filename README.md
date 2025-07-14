@@ -63,7 +63,7 @@ We support the following targets:
 - linuxArm64
 - linuxX64
 - mingwX64
-- jvm (potential future candidate)
+- jvm (in progress, check `feature/jvm-postgres` branch)
 - wasmWasi (potential future candidate)
 
 ## Features
