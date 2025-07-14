@@ -16,7 +16,6 @@ import sqlx4k.*
 import kotlin.concurrent.AtomicInt
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
-import kotlin.experimental.ExperimentalNativeApi
 
 /**
  * PostgreSQL class provides mechanisms to interact with a PostgreSQL database.
@@ -37,7 +36,7 @@ import kotlin.experimental.ExperimentalNativeApi
  * @param password The password used for authentication.
  * @param options Optional pool configuration, defaulting to `Driver.Pool.Options`.
  */
-@OptIn(ExperimentalForeignApi::class, ExperimentalNativeApi::class)
+@OptIn(ExperimentalForeignApi::class)
 class PostgreSQL(
     url: String,
     username: String,
