@@ -22,6 +22,7 @@ static SQLX4K: OnceLock<Sqlx4k> = OnceLock::new();
 
 #[derive(Debug)]
 struct Sqlx4k {
+    connect_options: PgConnectOptions,
     pool: PgPool,
 }
 
@@ -185,7 +186,7 @@ pub extern "C" fn sqlx4k_of(
         pool
     };
 
-    let pool = pool.connect_with(options);
+    let pool = pool.connect_with(options.clone());
 
     // Create the pool here.
     let pool = runtime.block_on(pool);
@@ -193,7 +194,10 @@ pub extern "C" fn sqlx4k_of(
         Ok(pool) => pool,
         Err(err) => return sqlx4k_error_result_of(err).leak(),
     };
-    let sqlx4k = Sqlx4k { pool };
+    let sqlx4k = Sqlx4k {
+        connect_options: options,
+        pool,
+    };
 
     RUNTIME.set(runtime).unwrap();
     SQLX4K.set(sqlx4k).unwrap();
@@ -365,7 +369,20 @@ pub extern "C" fn sqlx4k_listen(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = SQLX4K.get().unwrap();
     runtime.spawn(async move {
-        let mut listener = PgListener::connect_with(&sqlx4k.pool).await.unwrap();
+        // Create a pool of 1 without timeouts (as they don't apply here)
+        // We only use the pool to handle re-connections
+        let pool = sqlx4k
+            .pool
+            .options()
+            .clone()
+            .connect_with(sqlx4k.connect_options.clone())
+            .await
+            .unwrap();
+
+        let mut listener = PgListener::connect_with(&pool).await.unwrap();
+        // We don't need to handle close events
+        listener.ignore_pool_close_event(true);
+
         let channels: Vec<&str> = channels.split(',').collect();
         listener.listen_all(channels).await.unwrap();
 
