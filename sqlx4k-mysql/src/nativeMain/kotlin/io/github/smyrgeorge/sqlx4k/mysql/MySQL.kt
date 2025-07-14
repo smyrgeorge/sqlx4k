@@ -30,7 +30,7 @@ class MySQL(
     username: String,
     password: String,
     options: Driver.Pool.Options = Driver.Pool.Options(),
-) : Driver, Driver.Pool, Driver.Transactional, Driver.Migrate {
+) : IMySQL {
     init {
         sqlx4k_of(
             url = url,
