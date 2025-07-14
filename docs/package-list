@@ -1,6 +1,58 @@
 $dokka.format:html-v1
 $dokka.linkExtension:html
-
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL.Companion///PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/-companion/index.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL.Companion/encoders/#/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/-companion/encoders.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL.Tx///PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/-tx/index.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL.Tx/Tx/#[Error type: Unresolved type for CPointer<out CPointed>][[Error type: Unresolved type for CPointed]]/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/-tx/-tx.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL.Tx/Tx/#io.r2dbc.spi.Connection/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[jvm]-my-s-q-l/-tx/-tx.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL.Tx/commit/#/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/-tx/commit.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL.Tx/execute/#io.github.smyrgeorge.sqlx4k.Statement/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/-tx/execute.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL.Tx/execute/#kotlin.String/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/-tx/execute.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL.Tx/fetchAll/#io.github.smyrgeorge.sqlx4k.Statement#io.github.smyrgeorge.sqlx4k.RowMapper[TypeParam(bounds=[kotlin.Any?])]/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/-tx/fetch-all.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL.Tx/fetchAll/#io.github.smyrgeorge.sqlx4k.Statement/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/-tx/fetch-all.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL.Tx/fetchAll/#kotlin.String/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/-tx/fetch-all.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL.Tx/rollback/#/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/-tx/rollback.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL.Tx/status/#/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/-tx/status.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL///PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/index.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/MySQL/#kotlin.String#kotlin.String#kotlin.String#io.github.smyrgeorge.sqlx4k.Driver.Pool.Options/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/-my-s-q-l.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/begin/#/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/begin.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/close/#/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/close.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/execute/#io.github.smyrgeorge.sqlx4k.Statement/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/execute.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/execute/#kotlin.String/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/execute.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/fetchAll/#io.github.smyrgeorge.sqlx4k.Statement#io.github.smyrgeorge.sqlx4k.RowMapper[TypeParam(bounds=[kotlin.Any?])]/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/fetch-all.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/fetchAll/#io.github.smyrgeorge.sqlx4k.Statement/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/fetch-all.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/fetchAll/#kotlin.String/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/fetch-all.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/migrate/#kotlin.String/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/migrate.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/poolIdleSize/#/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/pool-idle-size.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/poolSize/#/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/pool-size.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL.Companion///PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-companion/index.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL.Companion/encoders/#/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-companion/encoders.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL.Tx///PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-tx/index.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL.Tx/Tx/#[Error type: Unresolved type for CPointer<out CPointed>][[Error type: Unresolved type for CPointed]]/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-tx/-tx.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL.Tx/Tx/#io.r2dbc.spi.Connection/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[jvm]-postgre-s-q-l/-tx/-tx.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL.Tx/commit/#/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-tx/commit.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL.Tx/execute/#io.github.smyrgeorge.sqlx4k.Statement/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-tx/execute.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL.Tx/execute/#kotlin.String/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-tx/execute.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL.Tx/fetchAll/#io.github.smyrgeorge.sqlx4k.Statement#io.github.smyrgeorge.sqlx4k.RowMapper[TypeParam(bounds=[kotlin.Any?])]/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-tx/fetch-all.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL.Tx/fetchAll/#io.github.smyrgeorge.sqlx4k.Statement/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-tx/fetch-all.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL.Tx/fetchAll/#kotlin.String/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-tx/fetch-all.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL.Tx/rollback/#/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-tx/rollback.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL.Tx/status/#/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-tx/status.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL///PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/index.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/PostgreSQL/#kotlin.String#kotlin.String#kotlin.String#io.github.smyrgeorge.sqlx4k.Driver.Pool.Options/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-postgre-s-q-l.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/begin/#/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/begin.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/close/#/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/close.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/execute/#io.github.smyrgeorge.sqlx4k.Statement/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/execute.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/execute/#kotlin.String/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/execute.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/fetchAll/#io.github.smyrgeorge.sqlx4k.Statement#io.github.smyrgeorge.sqlx4k.RowMapper[TypeParam(bounds=[kotlin.Any?])]/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/fetch-all.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/fetchAll/#io.github.smyrgeorge.sqlx4k.Statement/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/fetch-all.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/fetchAll/#kotlin.String/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/fetch-all.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/listen/#kotlin.String#kotlin.Function1[io.github.smyrgeorge.sqlx4k.postgres.Notification,kotlin.Unit]/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/listen.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/listen/#kotlin.collections.List[kotlin.String]#kotlin.Function1[io.github.smyrgeorge.sqlx4k.postgres.Notification,kotlin.Unit]/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/listen.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/migrate/#kotlin.String/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/migrate.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/notify/#kotlin.String#kotlin.String/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/notify.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/poolIdleSize/#/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/pool-idle-size.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/poolSize/#/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/pool-size.html
 module:sqlx4k
 io.github.smyrgeorge.sqlx4k
 io.github.smyrgeorge.sqlx4k.annotation
