@@ -6,7 +6,7 @@ plugins {
 kotlin {
     sourceSets {
         @Suppress("unused")
-        val nativeMain by getting {
+        val commonMain by getting {
             dependencies {
                 implementation(project(":sqlx4k-postgres"))
             }
