@@ -56,7 +56,7 @@ Please look at this issue: [#18](https://github.com/smyrgeorge/sqlx4k/issues/18)
 
 We support the following targets:
 
-- jvm (only PostgreSQL is supported at the moment)
+- jvm (only PostgreSQL and MySQL are supported at the moment)
 - iosArm64
 - androidNativeX64
 - androidNativeArm64
