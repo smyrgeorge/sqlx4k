@@ -7,8 +7,8 @@
 ![GitHub issues](https://img.shields.io/github/issues/smyrgeorge/sqlx4k)
 [![Kotlin](https://img.shields.io/badge/kotlin-2.2.0-blue.svg?logo=kotlin)](http://kotlinlang.org)
 
-![](https://img.shields.io/static/v1?label=&message=Jvm&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=Platforms&color=grey)
+![](https://img.shields.io/static/v1?label=&message=Jvm&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=Linux&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=macOS&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=Windows&color=blue)
