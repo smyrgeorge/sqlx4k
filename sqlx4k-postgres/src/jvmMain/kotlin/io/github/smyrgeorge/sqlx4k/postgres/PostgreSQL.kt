@@ -39,13 +39,12 @@ import kotlin.time.toJavaDuration
  * @param password The password used for authentication.
  * @param options Optional pool configuration, defaulting to `Driver.Pool.Options`.
  */
-@Suppress("SqlSourceToSinkFlow")
 class PostgreSQL(
     url: String,
     username: String,
     password: String,
     options: Driver.Pool.Options = Driver.Pool.Options(),
-) : Driver, Driver.Pool, Driver.Transactional, Driver.Migrate {
+) : IPostgresSQL {
 
     private val pool: ConnectionPool = createConnectionPool(
         url = url,
@@ -70,6 +69,7 @@ class PostgreSQL(
     override fun poolIdleSize(): Int = pool.metrics.getOrElse { error("No metrics available.") }.idleSize()
 
     override suspend fun execute(sql: String): Result<Long> = runCatching {
+        @Suppress("SqlSourceToSinkFlow")
         pool.create().awaitSingle().createStatement(sql).execute().awaitSingle().rowsUpdated.awaitSingle()
     }
 
@@ -77,6 +77,7 @@ class PostgreSQL(
         execute(statement.render(encoders))
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
+        @Suppress("SqlSourceToSinkFlow")
         pool.create().awaitSingle().createStatement(sql).execute().awaitSingle().toResultSet()
     }
 
@@ -91,11 +92,11 @@ class PostgreSQL(
         return Result.success(Tx(con))
     }
 
-    suspend fun listen(channel: String, f: (Notification) -> Unit) {
+    override suspend fun listen(channel: String, f: (Notification) -> Unit) {
         listen(listOf(channel), f)
     }
 
-    suspend fun listen(channels: List<String>, f: (Notification) -> Unit) {
+    override suspend fun listen(channels: List<String>, f: (Notification) -> Unit) {
         error("This feature is not yet implemented.")
     }
 
@@ -104,7 +105,7 @@ class PostgreSQL(
      * because only the text type is supported by postgres.
      * https://www.postgresql.org/docs/current/sql-notify.html
      */
-    suspend fun notify(channel: String, value: String) {
+    override suspend fun notify(channel: String, value: String) {
         require(channel.isNotBlank()) { "Channel cannot be blank." }
         val notify = Statement.create("select pg_notify(:chanel, :value);")
             .bind("chanel", channel)
@@ -147,6 +148,7 @@ class PostgreSQL(
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
                 isOpenOrError()
+                @Suppress("SqlSourceToSinkFlow")
                 connection.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitSingle()
             }
         }
@@ -157,6 +159,7 @@ class PostgreSQL(
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 isOpenOrError()
+                @Suppress("SqlSourceToSinkFlow")
                 connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
             }
         }
@@ -224,7 +227,6 @@ class PostgreSQL(
             val rows = map { r, _ -> r.toRow() }.asFlow().toList()
             val meta = if (rows.isEmpty()) ResultSet.Metadata(emptyList())
             else rows.first().toMetadata()
-            // TODO: handle error?
             return ResultSet(rows, null, meta)
         }
     }

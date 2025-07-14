@@ -13,7 +13,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import sqlx4k.*
-import kotlin.concurrent.AtomicInt
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 
@@ -42,7 +44,7 @@ class PostgreSQL(
     username: String,
     password: String,
     options: Driver.Pool.Options = Driver.Pool.Options(),
-) : Driver, Driver.Pool, Driver.Transactional, Driver.Migrate {
+) : IPostgresSQL {
     init {
         sqlx4k_of(
             url = url,
@@ -92,11 +94,11 @@ class PostgreSQL(
         }
     }
 
-    suspend fun listen(channel: String, f: (Notification) -> Unit) {
+    override suspend fun listen(channel: String, f: (Notification) -> Unit) {
         listen(listOf(channel), f)
     }
 
-    suspend fun listen(channels: List<String>, f: (Notification) -> Unit) {
+    override suspend fun listen(channels: List<String>, f: (Notification) -> Unit) {
         val channelId: Int = listenerId()
         val channel = Channel<Notification>(capacity = Channel.UNLIMITED)
 
@@ -126,7 +128,7 @@ class PostgreSQL(
      * because only the text type is supported by postgres.
      * https://www.postgresql.org/docs/current/sql-notify.html
      */
-    suspend fun notify(channel: String, value: String) {
+    override suspend fun notify(channel: String, value: String) {
         require(channel.isNotBlank()) { "Channel cannot be blank." }
         val notify = Statement.create("select pg_notify(:chanel, :value);")
             .bind("chanel", channel)
@@ -210,7 +212,10 @@ class PostgreSQL(
         val encoders = Statement.ValueEncoderRegistry()
 
         // Will eventually overflow, but it doesn't matter, is the desired behaviour.
-        private fun listenerId(): Int = listenerId.incrementAndGet()
+        @OptIn(ExperimentalAtomicApi::class)
+        private fun listenerId(): Int = listenerId.incrementAndFetch()
+
+        @OptIn(ExperimentalAtomicApi::class)
         private val listenerId = AtomicInt(0)
 
         private val channels: MutableMap<Int, Channel<Notification>> = mutableMapOf()

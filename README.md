@@ -13,6 +13,7 @@
 ![](https://img.shields.io/static/v1?label=&message=Windows&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=iOS&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=Android&color=blue)
+![](https://img.shields.io/static/v1?label=&message=Jvm&color=blue)
 
 A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLite, written for Kotlin Multiplatform.
 
@@ -63,7 +64,7 @@ We support the following targets:
 - linuxArm64
 - linuxX64
 - mingwX64
-- jvm (in progress, check `feature/jvm-postgres` branch)
+- jvm (only PostgreSQL is supported at the moment)
 - wasmWasi (potential future candidate)
 
 ## Features
@@ -119,9 +120,8 @@ val options = Driver.Pool.Options.builder()
  *  postgresql://localhost
  *  postgresql://localhost:5433
  *  postgresql://localhost/mydb
- *  postgresql://user@localhost
- *  postgresql://user:secret@localhost
- *  postgresql://localhost?dbname=mydb&user=postgres&password=postgres
+ *
+ * Additionaly you can use the `postgreSQL` function, if you are working in a multiplatform setup.
  */
 val db = PostgreSQL(
     url = "postgresql://localhost:15432/test",
@@ -129,7 +129,6 @@ val db = PostgreSQL(
     password = "postgres",
     options = options
 )
-
 
 /**
  *  The connection URL should follow the nex pattern,
@@ -150,7 +149,7 @@ val db = MySQL(
  * `sqlite://data.db`           | Open the file `data.db` in the current directory.
  * `sqlite:///data.db`          | Open the file `data.db` from the root (`/`) directory.
  * `sqlite://data.db?mode=ro`   | Open the file `data.db` for read-only access.
-*/
+ */
 val db = SQLite(
     url = "sqlite://test.db", // If the `test.db` file is not found, a new db will be created.
     options = options
