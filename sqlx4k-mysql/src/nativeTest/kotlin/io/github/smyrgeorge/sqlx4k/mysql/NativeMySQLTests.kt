@@ -9,7 +9,7 @@ class NativeMySQLTests {
         .maxConnections(10)
         .build()
 
-    val db = MySQL(
+    val db = mySQL(
         url = "mysql://localhost:13306/test",
         username = "mysql",
         password = "mysql",
