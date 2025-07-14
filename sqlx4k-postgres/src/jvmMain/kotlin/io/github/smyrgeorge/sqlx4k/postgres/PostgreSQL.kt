@@ -14,24 +14,39 @@ import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.net.URI
 import kotlin.jvm.optionals.getOrElse
 import kotlin.time.toJavaDuration
 
+/**
+ * PostgreSQL class provides mechanisms to interact with a PostgreSQL database.
+ * It implements `Driver`, `Driver.Pool`, and `Driver.Transactional` interfaces,
+ * offering functionalities such as connection pooling, executing queries,
+ * fetching data, and handling transactions.
+ *
+ *  The URL scheme designator can be either `postgresql://` or `postgres://`.
+ *  Each of the URL parts is optional.
+ *
+ *  postgresql://
+ *  postgresql://localhost
+ *  postgresql://localhost:5433
+ *  postgresql://localhost/mydb
+ *
+ * @param url The URL of the PostgreSQL database to connect to.
+ * @param username The username used for authentication.
+ * @param password The password used for authentication.
+ * @param options Optional pool configuration, defaulting to `Driver.Pool.Options`.
+ */
 @Suppress("SqlSourceToSinkFlow")
 class PostgreSQL(
     url: String,
-    host: String,
-    port: Int,
-    database: String,
     username: String,
     password: String,
     options: Driver.Pool.Options = Driver.Pool.Options(),
 ) : Driver, Driver.Pool, Driver.Transactional, Driver.Migrate {
 
     private val pool: ConnectionPool = createConnectionPool(
-        host = host,
-        port = port,
-        database = database,
+        url = url,
         username = username,
         password = password,
         options = options
@@ -142,18 +157,18 @@ class PostgreSQL(
         val encoders = Statement.ValueEncoderRegistry()
 
         private fun createConnectionPool(
-            host: String,
-            port: Int,
-            database: String,
+            url: String,
             username: String,
             password: String,
             options: Driver.Pool.Options
         ): ConnectionPool {
+            val url = URI(url)
+
             val connectionFactory = PostgresqlConnectionFactory(
                 PostgresqlConnectionConfiguration.builder()
-                    .host(host)
-                    .port(port)
-                    .database(database)
+                    .host(url.host)
+                    .port(url.port.takeIf { it > 0 } ?: 5432)
+                    .database(url.path.removePrefix("/"))
                     .username(username)
                     .password(password)
                     .build()

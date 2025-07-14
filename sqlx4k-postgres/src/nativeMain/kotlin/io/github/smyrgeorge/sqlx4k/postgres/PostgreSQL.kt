@@ -31,9 +31,6 @@ import kotlin.experimental.ExperimentalNativeApi
  *  postgresql://localhost
  *  postgresql://localhost:5433
  *  postgresql://localhost/mydb
- *  postgresql://user@localhost
- *  postgresql://user:secret@localhost
- *  postgresql://localhost?dbname=mydb&user=postgres&password=postgres
  *
  * @param url The URL of the PostgreSQL database to connect to.
  * @param username The username used for authentication.

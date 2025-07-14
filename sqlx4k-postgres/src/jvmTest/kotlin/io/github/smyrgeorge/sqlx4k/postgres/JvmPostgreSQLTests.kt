@@ -30,9 +30,6 @@ class JvmPostgreSQLTests {
 
     val db = PostgreSQL(
         url = "postgresql://localhost:15432/test",
-        host = "localhost",
-        port = 15432,
-        database = "test",
         username = "postgres",
         password = "postgres",
         options = options
