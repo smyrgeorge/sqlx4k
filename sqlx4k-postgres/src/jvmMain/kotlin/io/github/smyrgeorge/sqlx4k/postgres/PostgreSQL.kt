@@ -157,8 +157,9 @@ class PostgreSQL(
             return Notification(name, value)
         }
 
-        // TODO: validate channels.
         require(channels.isNotEmpty()) { "Channels cannot be empty." }
+        channels.forEach { validateChannelName(it) }
+
         val sql = channels.joinToString { "LISTEN $it;" }
 
         PgChannelScope.launch {
@@ -189,7 +190,7 @@ class PostgreSQL(
      * @throws IllegalArgumentException If the `channel` parameter is blank.
      */
     override suspend fun notify(channel: String, value: String) {
-        require(channel.isNotBlank()) { "Channel cannot be blank." }
+        validateChannelName(channel)
         val notify = Statement.create("select pg_notify(:chanel, :value);")
             .bind("chanel", channel)
             .bind("value", value)
