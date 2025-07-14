@@ -123,7 +123,7 @@ class MultiplatformLibConventions : Plugin<Project> {
                             executable = if (useCross) cross else cargo
                             args(
                                 "build",
-                                "--manifest-path", file("rust_lib/Cargo.toml").absolutePath,
+                                "--manifest-path", file("src/rust/Cargo.toml").absolutePath,
                                 "--target=$target",
                                 "--release"
                             )
