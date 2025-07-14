@@ -16,6 +16,7 @@ import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import reactor.pool.PoolShutdownException
 import java.net.URI
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
@@ -59,31 +60,45 @@ class PostgreSQL(
     }
 
     override suspend fun close(): Result<Unit> = runCatching {
-        pool.disposeLater().awaitFirstOrNull()
+        try {
+            pool.disposeLater().awaitFirstOrNull()
+        } catch (e: Exception) {
+            SQLError(SQLError.Code.Database, e.message).ex()
+        }
     }
 
     override fun poolSize(): Int = pool.metrics.getOrElse { error("No metrics available.") }.allocatedSize()
     override fun poolIdleSize(): Int = pool.metrics.getOrElse { error("No metrics available.") }.idleSize()
 
     override suspend fun execute(sql: String): Result<Long> = runCatching {
-        val con = pool.create().awaitSingle()
-
         @Suppress("SqlSourceToSinkFlow")
-        val res = con.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
-        con.close().awaitFirstOrNull()
-        res
+        with(pool.acquire()) {
+            val res = try {
+                createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
+            } catch (e: Exception) {
+                SQLError(SQLError.Code.Database, e.message).ex()
+            } finally {
+                close().awaitFirstOrNull()
+            }
+            res
+        }
     }
 
     override suspend fun execute(statement: Statement): Result<Long> =
         execute(statement.render(encoders))
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
-        val con = pool.create().awaitSingle()
-
         @Suppress("SqlSourceToSinkFlow")
-        val res = con.createStatement(sql).execute().awaitSingle().toResultSet()
-        con.close().awaitFirstOrNull()
-        res
+        with(pool.acquire()) {
+            val res = try {
+                createStatement(sql).execute().awaitSingle().toResultSet()
+            } catch (e: Exception) {
+                SQLError(SQLError.Code.Database, e.message).ex()
+            } finally {
+                close().awaitFirstOrNull()
+            }
+            res
+        }
     }
 
     override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
@@ -93,8 +108,15 @@ class PostgreSQL(
         fetchAll(statement.render(encoders), rowMapper)
 
     override suspend fun begin(): Result<Transaction> = runCatching {
-        val con: Connection = pool.create().awaitSingle().also { it.beginTransaction().awaitFirstOrNull() }
-        return Result.success(Tx(con))
+        with(pool.acquire()) {
+            try {
+                beginTransaction().awaitFirstOrNull()
+            } catch (e: Exception) {
+                close().awaitFirstOrNull()
+                SQLError(SQLError.Code.Database, e.message).ex()
+            }
+            Tx(this)
+        }
     }
 
     /**
@@ -177,6 +199,17 @@ class PostgreSQL(
         execute(notify).getOrThrow()
     }
 
+    private suspend fun ConnectionPool.acquire(): Connection {
+        return try {
+            create().awaitSingle()
+        } catch (e: Exception) {
+            when (e) {
+                is PoolShutdownException -> SQLError(SQLError.Code.PoolClosed, e.message).ex()
+                else -> SQLError(SQLError.Code.Pool, e.message).ex()
+            }
+        }
+    }
+
     /**
      * Represents a transactional context for executing SQL operations with commit and rollback capabilities.
      *
@@ -197,8 +230,13 @@ class PostgreSQL(
             mutex.withLock {
                 isOpenOrError()
                 _status = Transaction.Status.Closed
-                connection.commitTransaction().awaitFirstOrNull()
-                connection.close().awaitFirstOrNull()
+                try {
+                    connection.commitTransaction().awaitFirstOrNull()
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message).ex()
+                } finally {
+                    connection.close().awaitFirstOrNull()
+                }
             }
         }
 
@@ -206,8 +244,13 @@ class PostgreSQL(
             mutex.withLock {
                 isOpenOrError()
                 _status = Transaction.Status.Closed
-                connection.rollbackTransaction().awaitFirstOrNull()
-                connection.close().awaitFirstOrNull()
+                try {
+                    connection.rollbackTransaction().awaitFirstOrNull()
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message).ex()
+                } finally {
+                    connection.close().awaitFirstOrNull()
+                }
             }
         }
 
