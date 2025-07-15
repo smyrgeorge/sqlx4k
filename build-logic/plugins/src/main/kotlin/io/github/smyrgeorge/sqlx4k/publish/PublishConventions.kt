@@ -28,23 +28,13 @@ class PublishConventions : Plugin<Project> {
         }
 
         // Set Maven Central credentials as project properties
-        local.getProperty("mavenCentralUsername")?.let {
-            project.extensions.extraProperties.set("mavenCentralUsername", it)
-        }
-        local.getProperty("mavenCentralPassword")?.let {
-            project.extensions.extraProperties.set("mavenCentralPassword", it)
-        }
+        local.getProperty("mavenCentralUsername")?.let { project.setProperty("mavenCentralUsername", it) }
+        local.getProperty("mavenCentralPassword")?.let { project.setProperty("mavenCentralPassword", it) }
 
         // Set signing properties as project properties
-        local.getProperty("signing.keyId")?.let {
-            project.extensions.extraProperties.set("signing.keyId", it)
-        }
-        local.getProperty("signing.password")?.let {
-            project.extensions.extraProperties.set("signing.password", it)
-        }
-        local.getProperty("signing.secretKeyRingFile")?.let {
-            project.extensions.extraProperties.set("signing.secretKeyRingFile", it)
-        }
+        local.getProperty("signing.keyId")?.let { project.setProperty("signing.keyId", it) }
+        local.getProperty("signing.password")?.let { project.setProperty("signing.password", it) }
+        local.getProperty("signing.secretKeyRingFile")?.let { project.setProperty("signing.secretKeyRingFile", it) }
     }
 
     override fun apply(project: Project) {
