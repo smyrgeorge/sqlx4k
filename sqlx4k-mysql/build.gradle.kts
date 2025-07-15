@@ -22,9 +22,9 @@ kotlin {
         }
         val jvmMain by getting {
             dependencies {
-                implementation("io.r2dbc:r2dbc-pool:1.0.2.RELEASE")
-                implementation("io.asyncer:r2dbc-mysql:1.4.0")
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactive:1.10.2")
+                implementation(libs.r2dbc.mysql)
+                implementation(libs.r2dbc.pool)
+                implementation(libs.kotlinx.coroutines.reactive)
             }
         }
     }
