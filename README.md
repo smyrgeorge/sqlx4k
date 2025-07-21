@@ -67,6 +67,11 @@ We support the following targets:
 - mingwX64
 - wasmWasi (potential future candidate)
 
+## Next steps
+
+- Enhance code-generation module.
+- Add support for SQLite JVM target.
+
 ## Features
 
 ### Async-io
