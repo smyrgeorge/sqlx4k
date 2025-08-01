@@ -120,7 +120,8 @@ class MultiplatformLibConventions : Plugin<Project> {
                     val exec = project.serviceOf<ExecOperations>()
                     doLast {
                         exec.exec {
-                            executable = if (useCross) cross else cargo
+                            @Suppress("SimplifyBooleanWithConstants", "KotlinConstantConditions")
+                            executable = if (CROSS_ENABLED && useCross) cross else cargo
                             args(
                                 "build",
                                 "--manifest-path", file("src/rust/Cargo.toml").absolutePath,
@@ -133,5 +134,9 @@ class MultiplatformLibConventions : Plugin<Project> {
                 tasks.getByName(interopProcessingTaskName) { dependsOn(cargo) }
             }
         }
+    }
+
+    companion object {
+        private const val CROSS_ENABLED: Boolean = false
     }
 }
