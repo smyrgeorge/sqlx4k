@@ -40,6 +40,7 @@ typedef struct Sqlx4kResult {
   char *error_message;
   unsigned long long rows_affected;
   void *tx;
+  void *rt;
   struct Sqlx4kSchema *schema;
   int size;
   struct Sqlx4kRow *rows;
@@ -56,27 +57,32 @@ Sqlx4kResult *sqlx4k_of(const char *url,
                         int idle_timeout_milis,
                         int max_lifetime_milis);
 
-int sqlx4k_pool_size(void);
+int sqlx4k_pool_size(void *rt);
 
-int sqlx4k_pool_idle_size(void);
+int sqlx4k_pool_idle_size(void *rt);
 
-void sqlx4k_close(void *callback, void (*fun)(Ptr, Sqlx4kResult*));
+void sqlx4k_close(void *rt, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
 
-void sqlx4k_query(const char *sql, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
+void sqlx4k_query(void *rt, const char *sql, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
 
-void sqlx4k_fetch_all(const char *sql, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
+void sqlx4k_fetch_all(void *rt, const char *sql, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
 
-void sqlx4k_tx_begin(void *callback, void (*fun)(Ptr, Sqlx4kResult*));
+void sqlx4k_tx_begin(void *rt, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
 
-void sqlx4k_tx_commit(void *tx, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
+void sqlx4k_tx_commit(void *rt, void *tx, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
 
-void sqlx4k_tx_rollback(void *tx, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
+void sqlx4k_tx_rollback(void *rt, void *tx, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
 
-void sqlx4k_tx_query(void *tx, const char *sql, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
+void sqlx4k_tx_query(void *rt,
+                     void *tx,
+                     const char *sql,
+                     void *callback,
+                     void (*fun)(Ptr, Sqlx4kResult*));
 
-void sqlx4k_tx_fetch_all(void *tx,
+void sqlx4k_tx_fetch_all(void *rt,
+                         void *tx,
                          const char *sql,
                          void *callback,
                          void (*fun)(Ptr, Sqlx4kResult*));
 
-void sqlx4k_migrate(const char *path, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
+void sqlx4k_migrate(void *rt, const char *path, void *callback, void (*fun)(Ptr, Sqlx4kResult*));

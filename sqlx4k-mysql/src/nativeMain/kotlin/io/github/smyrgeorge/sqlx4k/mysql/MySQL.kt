@@ -1,13 +1,34 @@
 package io.github.smyrgeorge.sqlx4k.mysql
 
-import io.github.smyrgeorge.sqlx4k.*
-import io.github.smyrgeorge.sqlx4k.impl.extensions.*
+import io.github.smyrgeorge.sqlx4k.Driver
+import io.github.smyrgeorge.sqlx4k.DriverNativeUtils
+import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.RowMapper
+import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.impl.extensions.rowsAffectedOrError
+import io.github.smyrgeorge.sqlx4k.impl.extensions.rtOrError
+import io.github.smyrgeorge.sqlx4k.impl.extensions.sqlx
+import io.github.smyrgeorge.sqlx4k.impl.extensions.throwIfError
+import io.github.smyrgeorge.sqlx4k.impl.extensions.toResultSet
+import io.github.smyrgeorge.sqlx4k.impl.extensions.use
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import sqlx4k.*
+import sqlx4k.sqlx4k_close
+import sqlx4k.sqlx4k_fetch_all
+import sqlx4k.sqlx4k_migrate
+import sqlx4k.sqlx4k_of
+import sqlx4k.sqlx4k_pool_idle_size
+import sqlx4k.sqlx4k_pool_size
+import sqlx4k.sqlx4k_query
+import sqlx4k.sqlx4k_tx_begin
+import sqlx4k.sqlx4k_tx_commit
+import sqlx4k.sqlx4k_tx_fetch_all
+import sqlx4k.sqlx4k_tx_query
+import sqlx4k.sqlx4k_tx_rollback
 
 /**
  * The `MySQL` class provides a driver implementation for interacting with a MySQL database.
@@ -31,39 +52,37 @@ class MySQL(
     password: String,
     options: Driver.Pool.Options = Driver.Pool.Options(),
 ) : IMySQL {
-    init {
-        sqlx4k_of(
-            url = url,
-            username = username,
-            password = password,
-            min_connections = options.minConnections ?: -1,
-            max_connections = options.maxConnections,
-            acquire_timeout_milis = options.acquireTimeout?.inWholeMilliseconds?.toInt() ?: -1,
-            idle_timeout_milis = options.idleTimeout?.inWholeMilliseconds?.toInt() ?: -1,
-            max_lifetime_milis = options.maxLifetime?.inWholeMilliseconds?.toInt() ?: -1,
-        ).throwIfError()
-    }
+    private val rt: CPointer<out CPointed> = sqlx4k_of(
+        url = url,
+        username = username,
+        password = password,
+        min_connections = options.minConnections ?: -1,
+        max_connections = options.maxConnections,
+        acquire_timeout_milis = options.acquireTimeout?.inWholeMilliseconds?.toInt() ?: -1,
+        idle_timeout_milis = options.idleTimeout?.inWholeMilliseconds?.toInt() ?: -1,
+        max_lifetime_milis = options.maxLifetime?.inWholeMilliseconds?.toInt() ?: -1,
+    ).rtOrError()
 
     override suspend fun migrate(path: String): Result<Unit> = runCatching {
-        sqlx { c -> sqlx4k_migrate(path, c, DriverNativeUtils.fn) }.throwIfError()
+        sqlx { c -> sqlx4k_migrate(rt, path, c, DriverNativeUtils.fn) }.throwIfError()
     }
 
     override suspend fun close(): Result<Unit> = runCatching {
-        sqlx { c -> sqlx4k_close(c, DriverNativeUtils.fn) }.throwIfError()
+        sqlx { c -> sqlx4k_close(rt, c, DriverNativeUtils.fn) }.throwIfError()
     }
 
-    override fun poolSize(): Int = sqlx4k_pool_size()
-    override fun poolIdleSize(): Int = sqlx4k_pool_idle_size()
+    override fun poolSize(): Int = sqlx4k_pool_size(rt)
+    override fun poolIdleSize(): Int = sqlx4k_pool_idle_size(rt)
 
     override suspend fun execute(sql: String): Result<Long> = runCatching {
-        sqlx { c -> sqlx4k_query(sql, c, DriverNativeUtils.fn) }.rowsAffectedOrError()
+        sqlx { c -> sqlx4k_query(rt, sql, c, DriverNativeUtils.fn) }.rowsAffectedOrError()
     }
 
     override suspend fun execute(statement: Statement): Result<Long> =
         execute(statement.render(encoders))
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> {
-        val res = sqlx { c -> sqlx4k_fetch_all(sql, c, DriverNativeUtils.fn) }
+        val res = sqlx { c -> sqlx4k_fetch_all(rt, sql, c, DriverNativeUtils.fn) }
         return res.use { it.toResultSet() }.toResult()
     }
 
@@ -74,9 +93,9 @@ class MySQL(
         fetchAll(statement.render(encoders), rowMapper)
 
     override suspend fun begin(): Result<Transaction> = runCatching {
-        sqlx { c -> sqlx4k_tx_begin(c, DriverNativeUtils.fn) }.use {
+        sqlx { c -> sqlx4k_tx_begin(rt, c, DriverNativeUtils.fn) }.use {
             it.throwIfError()
-            Tx(it.tx!!)
+            Tx(rt, it.tx!!)
         }
     }
 
@@ -89,6 +108,7 @@ class MySQL(
      * @property tx The transaction pointer representing the current state and context of the transaction.
      */
     class Tx(
+        private val rt: CPointer<out CPointed>,
         private var tx: CPointer<out CPointed>
     ) : Transaction {
         private val mutex = Mutex()
@@ -99,7 +119,7 @@ class MySQL(
             mutex.withLock {
                 isOpenOrError()
                 _status = Transaction.Status.Closed
-                sqlx { c -> sqlx4k_tx_commit(tx, c, DriverNativeUtils.fn) }.throwIfError()
+                sqlx { c -> sqlx4k_tx_commit(rt, tx, c, DriverNativeUtils.fn) }.throwIfError()
             }
         }
 
@@ -107,14 +127,14 @@ class MySQL(
             mutex.withLock {
                 isOpenOrError()
                 _status = Transaction.Status.Closed
-                sqlx { c -> sqlx4k_tx_rollback(tx, c, DriverNativeUtils.fn) }.throwIfError()
+                sqlx { c -> sqlx4k_tx_rollback(rt, tx, c, DriverNativeUtils.fn) }.throwIfError()
             }
         }
 
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
                 isOpenOrError()
-                sqlx { c -> sqlx4k_tx_query(tx, sql, c, DriverNativeUtils.fn) }.use {
+                sqlx { c -> sqlx4k_tx_query(rt, tx, sql, c, DriverNativeUtils.fn) }.use {
                     tx = it.tx!!
                     it.throwIfError()
                     it.rows_affected.toLong()
@@ -128,7 +148,7 @@ class MySQL(
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 isOpenOrError()
-                sqlx { c -> sqlx4k_tx_fetch_all(tx, sql, c, DriverNativeUtils.fn) }.use {
+                sqlx { c -> sqlx4k_tx_fetch_all(rt, tx, sql, c, DriverNativeUtils.fn) }.use {
                     tx = it.tx!!
                     it.toResultSet()
                 }.toResult()
