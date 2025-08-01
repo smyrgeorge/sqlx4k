@@ -103,7 +103,7 @@ inline fun <T> CPointer<Sqlx4kResult>?.use(block: (Sqlx4kResult) -> T): T {
 fun CPointer<Sqlx4kResult>?.throwIfError(): Unit = use { it.throwIfError() }
 fun CPointer<Sqlx4kResult>?.rtOrError(): CPointer<out CPointed> = use {
     it.throwIfError()
-    it.rt!!
+    it.rt ?: SQLError(SQLError.Code.Pool, "Unexpected behaviour while creating the pool.").ex()
 }
 fun CPointer<Sqlx4kResult>?.rowsAffectedOrError(): Long = use {
     it.throwIfError()
