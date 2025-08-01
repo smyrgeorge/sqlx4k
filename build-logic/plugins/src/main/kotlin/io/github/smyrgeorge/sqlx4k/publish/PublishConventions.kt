@@ -5,10 +5,7 @@ import com.vanniktech.maven.publish.KotlinMultiplatform
 import com.vanniktech.maven.publish.MavenPublishBaseExtension
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.gradle.internal.extensions.core.extra
 import org.gradle.kotlin.dsl.configure
-import java.io.File
-import java.util.*
 
 @Suppress("unused")
 class PublishConventions : Plugin<Project> {
@@ -21,26 +18,7 @@ class PublishConventions : Plugin<Project> {
         "sqlx4k-sqlite" to "A high-performance Kotlin Native database driver for SQLite.",
     )
 
-    private fun Project.loadPublishProperties() {
-        val local = Properties()
-        File(project.rootProject.rootDir, "local.properties").also {
-            if (!it.exists()) return@loadPublishProperties
-            it.inputStream().use { s -> local.load(s) }
-        }
-
-        // Set Maven Central credentials as project properties
-        local.getProperty("mavenCentralUsername")?.let { project.extra["mavenCentralUsername"] = it }
-        local.getProperty("mavenCentralPassword")?.let { project.extra["mavenCentralPassword"] = it }
-
-        // Set signing properties as project properties
-        local.getProperty("signing.keyId")?.let { project.extra["signing.keyId"] = it }
-        local.getProperty("signing.password")?.let { project.extra["signing.password"] = it }
-        local.getProperty("signing.secretKeyRingFile")?.let { project.extra["signing.secretKeyRingFile"] = it }
-    }
-
     override fun apply(project: Project) {
-        project.loadPublishProperties()
-
         project.plugins.apply("com.vanniktech.maven.publish")
         project.extensions.configure<MavenPublishBaseExtension> {
             // sources publishing is always enabled by the Kotlin Multiplatform plugin
