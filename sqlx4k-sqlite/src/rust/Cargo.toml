@@ -23,6 +23,8 @@ sqlx = { version = "0.8.6", features = [
     "runtime-tokio", # Use the tokio runtime without enabling a TLS backend.
     "sqlite",        # Add support for the Postgres database server.
 ] }
+# https://crates.io/crates/hex
+hex = "0.4.3"
 
 [build-dependencies]
 # https://crates.io/crates/cbindgen

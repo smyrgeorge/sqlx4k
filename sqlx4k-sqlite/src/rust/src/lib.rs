@@ -450,14 +450,30 @@ fn sqlx4k_row_of(row: &SqliteRow) -> Sqlx4kRow {
             .columns()
             .iter()
             .map(|c| {
-                let value: Option<&str> = row.get_unchecked(c.ordinal());
-                Sqlx4kColumn {
-                    ordinal: c.ordinal() as c_int,
-                    value: if value.is_none() {
+                let value_ref: SqliteValueRef = row.try_get_raw(c.ordinal()).unwrap();
+                let info: std::borrow::Cow<SqliteTypeInfo> = value_ref.type_info();
+                let type_info = info.name();
+                let value = if type_info == "BLOB" {
+                    let bytes: Option<&[u8]> = row.get_unchecked(c.ordinal());
+                    if bytes.is_none() {
+                        null_mut()
+                    } else {
+                        CString::new(hex::encode(bytes.unwrap()))
+                            .unwrap()
+                            .into_raw()
+                    }
+                } else {
+                    let value: Option<&str> = row.get_unchecked(c.ordinal());
+                    if value.is_none() {
                         null_mut()
                     } else {
                         CString::new(value.unwrap()).unwrap().into_raw()
-                    },
+                    }
+                };
+
+                Sqlx4kColumn {
+                    ordinal: c.ordinal() as c_int,
+                    value,
                 }
             })
             .collect();

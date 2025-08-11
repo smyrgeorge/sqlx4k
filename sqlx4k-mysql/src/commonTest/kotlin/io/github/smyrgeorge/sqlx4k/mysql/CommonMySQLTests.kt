@@ -15,12 +15,14 @@ import kotlinx.datetime.LocalTime
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
+@Suppress("SqlNoDataSourceInspection")
 class CommonMySQLTests(
     private val db: IMySQL
 ) {
 
     @OptIn(ExperimentalUuidApi::class)
     fun `Test basic type mappings`() = runBlocking {
+        // language=SQL
         val types = """
             select
                    null as nil,

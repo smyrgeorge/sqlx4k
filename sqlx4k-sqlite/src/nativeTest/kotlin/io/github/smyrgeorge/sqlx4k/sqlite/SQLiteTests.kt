@@ -27,6 +27,7 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalUuidApi::class)
+@Suppress("SqlNoDataSourceInspection")
 class SQLiteTests {
 
     val options = Driver.Pool.Options.builder()
@@ -40,6 +41,7 @@ class SQLiteTests {
 
     @Test
     fun `Test basic type mappings`() = runBlocking {
+        // language=SQL
         val types = """
             select
                    null as nil,
@@ -58,7 +60,8 @@ class SQLiteTests {
                    date('2025-03-25') as date,
                    time('07:31:43') as time,
                    '22d64ef8-f6b3-43da-8869-2ee9d31be9d5' as uuid,
-                   hex('aa') as blob
+                   X'aa' as blob,
+                   hex('aa') as blob_hex
             ;
         """.trimIndent()
 
@@ -82,6 +85,7 @@ class SQLiteTests {
             assertThat(row.get(14).asLocalTime()).isEqualTo(LocalTime.parse("07:31:43"))
             assertThat(row.get(15).asUuid()).isEqualTo(Uuid.parse("22d64ef8-f6b3-43da-8869-2ee9d31be9d5"))
             assertThat(row.get(16).asByteArray()).isEqualTo("aa".encodeToByteArray())
+            assertThat(row.get(17).asString().hexToByteArray()).isEqualTo("aa".encodeToByteArray())
         }
     }
 }

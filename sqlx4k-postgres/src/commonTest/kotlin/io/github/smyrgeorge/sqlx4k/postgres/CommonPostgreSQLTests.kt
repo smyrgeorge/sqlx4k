@@ -17,12 +17,14 @@ import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
+@Suppress("SqlNoDataSourceInspection")
 class CommonPostgreSQLTests(
     private val db: IPostgresSQL
 ) {
 
     @OptIn(ExperimentalUuidApi::class, ExperimentalTime::class)
     fun `Test basic type mappings`() = runBlocking {
+        // language=SQL
         val types = """
             select
                    null as nil,
