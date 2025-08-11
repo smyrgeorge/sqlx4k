@@ -55,12 +55,6 @@ private fun Sqlx4kSchema.toMetadata(): ResultSet.Metadata {
  * @return A ResultSet containing structured data from the Sqlx4kResult
  */
 fun Sqlx4kResult.toResultSet(): ResultSet {
-    // Process error information if present
-    val error: SQLError? = if (isError()) toError() else null
-
-    // Get schema information
-    val metadata = if (schema != null) schema!!.pointed.toMetadata() else ResultSet.Metadata(emptyList())
-
     // Process rows
     val rows = List(size) { rowIndex ->
         val row = requireNotNull(rows) { "Rows cannot be null" }[rowIndex]
@@ -80,6 +74,12 @@ fun Sqlx4kResult.toResultSet(): ResultSet {
 
         ResultSet.Row(columns)
     }
+
+    // Process error information if present
+    val error: SQLError? = if (isError()) toError() else null
+
+    // Get schema information
+    val metadata = if (schema != null) schema!!.pointed.toMetadata() else ResultSet.Metadata(emptyList())
 
     return ResultSet(rows, error, metadata)
 }
