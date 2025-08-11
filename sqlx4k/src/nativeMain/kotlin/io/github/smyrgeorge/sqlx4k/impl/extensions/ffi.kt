@@ -4,7 +4,13 @@ package io.github.smyrgeorge.sqlx4k.impl.extensions
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
-import kotlinx.cinterop.*
+import kotlinx.cinterop.CPointed
+import kotlinx.cinterop.CPointer
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.StableRef
+import kotlinx.cinterop.get
+import kotlinx.cinterop.pointed
+import kotlinx.cinterop.toKString
 import sqlx4k.Sqlx4kResult
 import sqlx4k.Sqlx4kSchema
 import sqlx4k.sqlx4k_free_result
@@ -53,8 +59,7 @@ fun Sqlx4kResult.toResultSet(): ResultSet {
     val error: SQLError? = if (isError()) toError() else null
 
     // Get schema information
-    val schema = requireNotNull(schema) { "Schema cannot be null" }.pointed
-    val metadata = schema.toMetadata()
+    val metadata = if (schema != null) schema!!.pointed.toMetadata() else ResultSet.Metadata(emptyList())
 
     // Process rows
     val rows = List(size) { rowIndex ->
@@ -63,7 +68,7 @@ fun Sqlx4kResult.toResultSet(): ResultSet {
         // Process columns for this row
         val columns = List(row.size) { colIndex ->
             val column = requireNotNull(row.columns) { "Row columns cannot be null" }[colIndex]
-            val schemaColumn = requireNotNull(schema.columns) { "Schema columns cannot be null" }[colIndex]
+            val schemaColumn = requireNotNull(schema!!.pointed.columns) { "Schema columns cannot be null" }[colIndex]
 
             ResultSet.Row.Column(
                 ordinal = column.ordinal,
@@ -105,13 +110,14 @@ fun CPointer<Sqlx4kResult>?.rtOrError(): CPointer<out CPointed> = use {
     it.throwIfError()
     it.rt ?: SQLError(SQLError.Code.Pool, "Unexpected behaviour while creating the pool.").ex()
 }
+
 fun CPointer<Sqlx4kResult>?.rowsAffectedOrError(): Long = use {
     it.throwIfError()
     it.rows_affected.toLong()
 }
 
 /**
- * Executes a SQLx operation asynchronously using Kotlin coroutines.
+ * Executes an SQLx operation asynchronously using Kotlin coroutines.
  *
  * This function transforms a callback-based SQLx operation into a suspending function,
  * allowing for more readable asynchronous code. It creates a stable reference to the

@@ -60,12 +60,13 @@ class SQLiteTests {
                    date('2025-03-25') as date,
                    time('07:31:43') as time,
                    '22d64ef8-f6b3-43da-8869-2ee9d31be9d5' as uuid,
-                   X'aa' as blob,
+                   X'6161' as blob,
                    hex('aa') as blob_hex
             ;
         """.trimIndent()
 
         val row = db.fetchAll(types).getOrThrow().first()
+        println(row)
 
         assertAll {
             assertThat(row.get(0).asStringOrNull()).isNull()

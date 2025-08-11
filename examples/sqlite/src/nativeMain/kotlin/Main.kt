@@ -3,6 +3,7 @@ import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
 import io.github.smyrgeorge.sqlx4k.impl.extensions.errorOrNull
 import io.github.smyrgeorge.sqlx4k.sqlite.SQLite
+import io.github.smyrgeorge.sqlx4k.sqlite.extensions.asByteArray
 import kotlinx.coroutines.*
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.measureTime

@@ -46,6 +46,7 @@ class CommonMySQLTests(
         """.trimIndent()
 
         val row = db.fetchAll(types).getOrThrow().first()
+        println(row)
 
         assertAll {
             assertThat(row.get(0).asStringOrNull()).isNull()
