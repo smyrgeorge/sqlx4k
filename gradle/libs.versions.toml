@@ -12,7 +12,7 @@ dokka = "2.0.0"
 # https://github.com/willowtreeapps/assertk
 assertk = "0.28.1"
 # https://github.com/google/ksp/releases
-ksp = "2.2.0-2.0.2"
+ksp = "2.2.10-2.0.2"
 # https://plugins.gradle.org/plugin/org.springframework.boot
 spring-boot = "3.5.4"
 # https://plugins.gradle.org/plugin/io.spring.dependency-management
