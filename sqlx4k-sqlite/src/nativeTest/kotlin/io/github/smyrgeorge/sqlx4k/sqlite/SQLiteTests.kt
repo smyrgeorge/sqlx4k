@@ -41,7 +41,7 @@ class SQLiteTests {
 
     @Test
     fun `Test basic type mappings`() = runBlocking {
-        // language=SQL
+        // language=SQLite
         val types = """
             select
                    null as nil,
@@ -86,7 +86,7 @@ class SQLiteTests {
             assertThat(row.get(14).asLocalTime()).isEqualTo(LocalTime.parse("07:31:43"))
             assertThat(row.get(15).asUuid()).isEqualTo(Uuid.parse("22d64ef8-f6b3-43da-8869-2ee9d31be9d5"))
             assertThat(row.get(16).asByteArray()).isEqualTo("aa".encodeToByteArray())
-            assertThat(row.get(17).asString().hexToByteArray()).isEqualTo("aa".encodeToByteArray())
+            assertThat(row.get(17).asByteArray()).isEqualTo("aa".encodeToByteArray())
         }
     }
 }

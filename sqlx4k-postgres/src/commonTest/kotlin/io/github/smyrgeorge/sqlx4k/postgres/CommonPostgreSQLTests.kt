@@ -24,7 +24,7 @@ class CommonPostgreSQLTests(
 
     @OptIn(ExperimentalUuidApi::class, ExperimentalTime::class)
     fun `Test basic type mappings`() = runBlocking {
-        // language=SQL
+        // language=PostgreSQL
         val types = """
             select
                    null as nil,

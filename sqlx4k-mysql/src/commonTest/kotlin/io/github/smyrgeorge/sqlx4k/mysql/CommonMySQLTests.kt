@@ -22,7 +22,7 @@ class CommonMySQLTests(
 
     @OptIn(ExperimentalUuidApi::class)
     fun `Test basic type mappings`() = runBlocking {
-        // language=SQL
+        // language=MySQL
         val types = """
             select
                    null as nil,
