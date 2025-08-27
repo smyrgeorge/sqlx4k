@@ -15,26 +15,9 @@ import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
 class ExtendedStatement(private val sql: String) : AbstractStatement(sql) {
 
     /**
-     * A regular expression used to match positional PostgreSQL-style parameters in a SQL query string.
-     *
-     * The regex pattern matches placeholders in the format `$1`, `$2`, and so on, where the `$` symbol
-     * is followed by one or more digits representing the positional parameter index.
-     *
-     * This regex is utilized to locate all PostgreSQL-style positional parameters within a given SQL
-     * query string for processing or parameter replacement in the SQL statement.
-     */
-    private val pgParametersRegex =
-        "\\$\\d++(?=(?:[^']*(?:'[^']*')?)*[^']*$)(?=(?:[^\"]*(?:\"[^\"]*\")?)*[^\"]*$)(?=(?:[^`]*(?:`[^`]*`)?)*[^`]*$)".toRegex()
-
-    /**
-     * A list of positional parameter indices extracted from the SQL statement.
-     *
-     * The `pgParameters` list contains the zero-based indices of the positional parameters
-     * found within the `sql` statement. The indices are determined using the `pgParametersRegex`
-     * regular expression within the `extractPgParameters` method.
-     *
-     * This property is primarily used to track the parameters in the SQL statement
-     * and bind values or encode them during statement rendering.
+     * A list of positional PostgreSQL-style parameter indices extracted from the SQL statement.
+     * The list is [0, 1, 2, ...] sized to the number of occurrences of $n placeholders.
+     * Extraction skips comments, quoted and dollar-quoted strings.
      */
     private val pgParameters: List<Int> = extractPgParameters()
 
@@ -77,7 +60,7 @@ class ExtendedStatement(private val sql: String) : AbstractStatement(sql) {
      * @return A string representing the fully rendered SQL statement with all parameters encoded.
      */
     override fun render(encoders: ValueEncoderRegistry): String =
-        super.render(encoders).renderPositionalParameters(encoders)
+        sql.renderPgParameters(encoders)
 
     /**
      * Replaces positional parameters in the SQL statement with their corresponding encoded values.
@@ -86,25 +69,42 @@ class ExtendedStatement(private val sql: String) : AbstractStatement(sql) {
      * @return The SQL statement with all positional parameters replaced by their encoded values.
      * @throws SQLError if a value for a positional parameter index is not supplied.
      */
-    private fun String.renderPositionalParameters(encoders: ValueEncoderRegistry): String {
-        return pgParametersRegex.replace(this) { matchResult ->
-            // Extract the number from the match, the regex matches patterns like "$1", "$2", etc.
-            val indexStr = matchResult.value.substring(1)
-            val index = indexStr.toIntOrNull() ?: SQLError(
-                code = SQLError.Code.PositionalParameterValueNotSupplied,
-                message = "Invalid positional parameter index '$indexStr'."
-            ).ex()
-            val adjustedIndex = index - 1
-            if (!pgParametersValues.containsKey(adjustedIndex)) {
-                SQLError(
-                    code = SQLError.Code.PositionalParameterValueNotSupplied,
-                    message = "Value for positional parameter index '$adjustedIndex' was not supplied."
-                ).ex()
+    private fun String.renderPgParameters(encoders: ValueEncoderRegistry): String =
+            renderWithScanner { i, c, sb ->
+                if (c != '$') return@renderWithScanner null
+                // attempt $<digits> (but skip dollar-quoted start, already handled by scanner)
+                var j = i + 1
+                if (j < length && this[j].isDigit()) {
+                    while (j < length && this[j].isDigit()) j++
+                    val numStr = substring(i + 1, j)
+                    val idx1 = numStr.toIntOrNull() ?: return@renderWithScanner null
+                    val zeroIdx = idx1 - 1
+                    if (!pgParametersValues.containsKey(zeroIdx)) {
+                        SQLError(
+                            code = SQLError.Code.PositionalParameterValueNotSupplied,
+                            message = "Value for positional parameter index '$zeroIdx' was not supplied."
+                        ).ex()
+                    }
+                    sb.append(pgParametersValues[zeroIdx].encodeValue(encoders))
+                    return@renderWithScanner j
+                }
+                null
             }
-            pgParametersValues[adjustedIndex].encodeValue(encoders)
-        }
-    }
 
-    private fun extractPgParameters(): List<Int> =
-        pgParametersRegex.findAll(sql).mapIndexed { idx, _ -> idx }.toList()
+    private fun extractPgParameters(): List<Int> {
+        var maxIndex = 0
+        val s = sql
+        s.scanWithExtractor { i, c ->
+            if (c != '$') return@scanWithExtractor null
+            var j = i + 1
+            if (j < length && this[j].isDigit()) {
+                while (j < length && this[j].isDigit()) j++
+                val idx1 = substring(i + 1, j).toIntOrNull() ?: 0
+                if (idx1 > maxIndex) maxIndex = idx1
+                return@scanWithExtractor j
+            }
+            null
+        }
+        return (0 until maxIndex).toList()
+    }
 }

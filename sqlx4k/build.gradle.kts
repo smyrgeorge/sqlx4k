@@ -1,6 +1,7 @@
 plugins {
     id("io.github.smyrgeorge.sqlx4k.multiplatform.lib")
     id("io.github.smyrgeorge.sqlx4k.publish")
+    id("io.github.smyrgeorge.sqlx4k.dokka")
 }
 
 kotlin {

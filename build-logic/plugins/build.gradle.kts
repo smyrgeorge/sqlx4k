@@ -20,10 +20,15 @@ gradlePlugin {
             id = "io.github.smyrgeorge.sqlx4k.publish"
             implementationClass = "io.github.smyrgeorge.sqlx4k.publish.PublishConventions"
         }
+        create("dokka") {
+            id = "io.github.smyrgeorge.sqlx4k.dokka"
+            implementationClass = "io.github.smyrgeorge.sqlx4k.dokka.DokkaConventions"
+        }
     }
 }
 
 dependencies {
     compileOnly(libs.gradle.kotlin.plugin)
     compileOnly(libs.gradle.publish.plugin)
+    compileOnly(libs.gradle.dokka.plugin)
 }

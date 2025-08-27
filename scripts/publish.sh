@@ -22,9 +22,9 @@ export CXX_x86_64_w64_mingw32=x86_64-w64-mingw32-g++
 
 ./gradlew clean build -Ptargets=all
 
-./gradlew :dokkaHtmlMultiModule
+./gradlew :dokka:dokkaGenerate
 rm -rf ./docs/*
-cp -R ./build/dokka/htmlMultiModule/* ./docs/
+cp -R ./dokka/build/dokka/htmlMultiModule/* ./docs/
 
 version=$(./gradlew properties -q | awk '/^version:/ {print $2}')
 git add --all

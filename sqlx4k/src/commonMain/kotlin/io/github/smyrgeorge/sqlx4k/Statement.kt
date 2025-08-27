@@ -64,20 +64,25 @@ interface Statement {
         return when (this) {
             null -> "null"
             is String -> {
+                // Fast path: if no single quote present, avoid replace allocation
+                if (indexOf('\'') < 0) return "'${this}'"
                 // https://stackoverflow.com/questions/12316953/insert-text-with-single-quotes-in-postgresql
                 // https://stackoverflow.com/questions/9596652/how-to-escape-apostrophe-a-single-quote-in-mysql
                 // https://stackoverflow.com/questions/603572/escape-single-quote-character-for-use-in-an-sqlite-query
                 "'${replace("'", "''")}'"
             }
 
+            is Char -> "'${if (this == '\'') "''" else this}'"
             is Boolean, is Number -> toString()
             is LocalDate, is LocalTime, is LocalDateTime, is Instant -> toString()
-            is Array<*> -> joinToString(", ", "(", ")") { it.encodeValue(encoders) }
-            is IntArray -> joinToString(", ", "(", ")") { it.encodeValue(encoders) }
-            is DoubleArray -> joinToString(", ", "(", ")") { it.encodeValue(encoders) }
-            is FloatArray -> joinToString(", ", "(", ")") { it.encodeValue(encoders) }
-            is BooleanArray -> joinToString(", ", "(", ")") { it.encodeValue(encoders) }
-            is List<*>, is Set<*> -> joinToString(", ", "(", ")") { it.encodeValue(encoders) }
+            is BooleanArray -> asIterable().encodeTuple(encoders)
+            is ShortArray -> asIterable().encodeTuple(encoders)
+            is IntArray -> asIterable().encodeTuple(encoders)
+            is LongArray -> asIterable().encodeTuple(encoders)
+            is FloatArray -> asIterable().encodeTuple(encoders)
+            is DoubleArray -> asIterable().encodeTuple(encoders)
+            is Array<*> -> asIterable().encodeTuple(encoders)
+            is Iterable<*> -> encodeTuple(encoders)
 
             else -> {
                 val error = SQLError(
@@ -90,6 +95,13 @@ interface Statement {
             }
         }
     }
+
+    /**
+     * Helper to encode a collection/array of values as a SQL tuple like (a, b, c).
+     * Uses encodeValue for each element; nulls become null without quotes.
+     */
+    private fun Iterable<*>.encodeTuple(encoders: ValueEncoderRegistry): String =
+        joinToString(", ", "(", ")") { it.encodeValue(encoders) }
 
     /**
      * An interface for encoding values of type `T` into a format suitable for

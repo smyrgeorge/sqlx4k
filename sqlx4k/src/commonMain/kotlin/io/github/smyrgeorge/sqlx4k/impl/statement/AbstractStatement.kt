@@ -16,61 +16,21 @@ import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
  */
 abstract class AbstractStatement(private val sql: String) : Statement {
 
-    /**
-     * A regular expression used to match positional parameter placeholders in an SQL string.
-     *
-     * The pattern identifies placeholders denoted by `?` that are not enclosed by single quotes,
-     * double quotes, or backticks. This ensures that the regex only matches placeholders used
-     * for positional parameter binding, excluding those that appear as part of string literals
-     * or other enclosed constructs within the SQL statement.
-     *
-     * This regex is utilized for tasks such as extracting positional parameters or replacing
-     * their placeholders with bound values during SQL rendering.
-     */
-    private val positionalParametersRegex =
-        "(\\?)(?=(?:[^']*(?:'[^']*')?)*[^']*$)(?=(?:[^\"]*(?:\"[^\"]*\")?)*[^\"]*$)(?=(?:[^`]*(?:`[^`]*`)?)*[^`]*$)".toRegex()
-
-    /**
-     * A regular expression used to identify named parameter placeholders within a SQL query string.
-     *
-     * The regex pattern matches named parameters that follow a colon (:) and consist of an alphabetic
-     * character (a-z or A-Z) followed by zero or more alphanumeric characters or underscores. It ensures
-     * that the matched parameter is not preceded by a colon (e.g., "::") or followed by invalid characters.
-     *
-     * This regex is utilized in methods that process or extract named parameters from a SQL query to either
-     * replace them with bound values or perform validation.
-     */
-    private val nameParameterRegex = """(?<![:']):(?!:)([a-zA-Z][a-zA-Z0-9_]*)(?![a-zA-Z0-9_:'"])""".toRegex()
+    // Note: We avoid regex-based matching for SQL placeholders because it is
+    // difficult to make regex reliably skip over comments and dollar-quoted strings.
+    // Instead, we implement a small state machine scanner for correctness and safety.
 
     /**
      * A set containing the names of all named parameters extracted from the SQL statement.
-     *
-     * Named parameters are placeholders in a SQL query identified using a specific syntax (e.g., `:name`).
-     * This variable is populated using the `extractNamedParameters` function, which scans the SQL query
-     * for named parameters and collects the names into a set. These parameters can then be bound with
-     * specific values before rendering the final SQL query.
-     *
-     * This set is used to:
-     * - Validate the existence of named parameters during the binding process.
-     * - Ensure that all named parameters are provided with values before the SQL query is rendered.
-     *
-     * Named parameters allow for more readable and flexible query construction, as they use descriptive
-     * names rather than indices.
+     * It is populated using a parser that skips over string literals, comments and
+     * PostgreSQL dollar-quoted strings.
      */
     private val namedParameters: Set<String> = extractNamedParameters()
 
     /**
      * A collection of positional parameter indexes extracted from the SQL query.
-     *
-     * This list contains the zero-based indexes of all positional parameters
-     * found in the associated SQL string. The parameters are identified
-     * using a specific regular expression pattern and are maintained in the
-     * order they appear in the SQL query.
-     *
-     * The positional parameters are typically placeholders in the SQL,
-     * used for binding values to specific positions during execution.
-     *
-     * @see extractPositionalParameters for the logic used to populate this list.
+     * The list is simply [0, 1, 2, ...] with size equal to the count of
+     * positional '?' placeholders found by the parser.
      */
     private val positionalParameters: List<Int> = extractPositionalParameters()
 
@@ -152,48 +112,38 @@ abstract class AbstractStatement(private val sql: String) : Statement {
         sql.renderPositionalParameters(encoders).renderNamedParameters(encoders)
 
     /**
-     * Replaces positional parameter placeholders within a string with their corresponding bound values.
-     *
-     * @param encoders The `ValueEncoderRegistry` used to encode the bound parameter values.
-     * @return The string with all positional parameter placeholders replaced by their encoded values.
-     * @throws SQLError if a value for a positional parameter is not supplied.
+     * Replaces positional '?' placeholders with encoded values, skipping content inside
+     * quotes, comments, and dollar-quoted strings.
      */
     private fun String.renderPositionalParameters(encoders: ValueEncoderRegistry): String {
-        // Create an iterator over the list of positional parameters.
-        val paramsIterator = positionalParameters.iterator()
-        // Use the regex's replace function to process all placeholders in one pass.
-        return positionalParametersRegex.replace(this) {
-            // Check for missing parameter values.
-            if (!paramsIterator.hasNext()) {
+        val it = positionalParameters.iterator()
+        return renderWithScanner { i, c, sb ->
+            if (c != '?') return@renderWithScanner null
+
+            if (!it.hasNext()) {
                 SQLError(
                     code = SQLError.Code.PositionalParameterValueNotSupplied,
                     message = "Not enough positional parameter values provided."
                 ).ex()
             }
-            val index = paramsIterator.next()
+            val index = it.next()
             if (!positionalParametersValues.containsKey(index)) {
                 SQLError(
                     code = SQLError.Code.PositionalParameterValueNotSupplied,
                     message = "Value for positional parameter index '$index' was not supplied."
                 ).ex()
             }
-            // Encode the value and return its string representation.
-            positionalParametersValues[index].encodeValue(encoders)
+            sb.append(positionalParametersValues[index].encodeValue(encoders))
+            i + 1
         }
     }
 
     /**
      * Renders the SQL string by replacing named parameter placeholders with their corresponding bound values.
-     *
-     * @param encoders The `ValueEncoderRegistry` used to encode parameter values.
-     * @return A string representing the rendered SQL statement with all named parameters substituted by their bound values.
-     * @throws SQLError if a value for a named parameter is not supplied.
+     * Skips content inside comments and quoted/dollar-quoted strings.
      */
     private fun String.renderNamedParameters(encoders: ValueEncoderRegistry): String {
-        // If there are no named parameters to replace, return the original string
         if (namedParameters.isEmpty()) return this
-
-        // Pre-validate all parameters are bound to fail early
         for (name in namedParameters) {
             if (!namedParametersValues.containsKey(name)) {
                 SQLError(
@@ -203,23 +153,353 @@ abstract class AbstractStatement(private val sql: String) : Statement {
             }
         }
 
-        // Use the regex's replace function to process all named parameters in one pass
-        return nameParameterRegex.replace(this) { match ->
-            val paramName = match.groupValues[1]
-            // Only replace parameters that were identified during extraction
-            if (paramName in namedParameters) {
-                namedParametersValues[paramName].encodeValue(encoders)
-            } else {
-                // This should not happen if the extraction was correct
-                // But keep the original text just in case
-                match.value
+        return renderWithScanner { i, c, sb ->
+            if (c != ':') return@renderWithScanner null
+
+            // Skip PostgreSQL type casts '::'
+            if (i + 1 < length && this[i + 1] == ':') {
+                sb.append("::")
+                return@renderWithScanner i + 2
             }
+            if (i + 1 < length && isIdentStart(this[i + 1])) {
+                var j = i + 2
+                while (j < length && isIdentPart(this[j])) j++
+                val name = this.substring(i + 1, j)
+                if (name in namedParameters) {
+                    sb.append(namedParametersValues[name].encodeValue(encoders))
+                    return@renderWithScanner j
+                }
+            }
+            null
         }
     }
 
-    private fun extractNamedParameters(): Set<String> =
-        nameParameterRegex.findAll(sql).map { it.value.substring(1) }.toHashSet()
+    /**
+     * Processes the string using a SQL scanner that skips comments, quotes, and dollar-quoted strings,
+     * delegating the handling of normal-context characters to a provided callback function.
+     *
+     * The callback function is invoked for each unprocessed character and may decide to process it
+     * or let the scanner continue its default operation.
+     *
+     * @param onNormalChar A callback function called for each unprocessed character
+     * in the string. The function takes the current string (`String`), the current index (`i`),
+     * the current character (`c`), and the `StringBuilder` (`sb`) being constructed.
+     * It may return a new index to control scanner processing or `null` to indicate the character
+     * was not handled by the callback.
+     * @return A new string resulting from the scanned and processed input, including any changes made
+     * by the callback and the default handling of characters.
+     */
+    @Suppress("DuplicatedCode")
+    protected inline fun String.renderWithScanner(
+        onNormalChar: String.(i: Int, c: Char, sb: StringBuilder) -> Int?
+    ): String {
+        val sb = StringBuilder(length)
+        var i = 0
+        var inSQ = false
+        var inDQ = false
+        var inBT = false
+        var inLine = false
+        var inBlock = false
+        var dollarTag: String? = null
 
-    private fun extractPositionalParameters(): List<Int> =
-        positionalParametersRegex.findAll(sql).mapIndexed { idx, _ -> idx }.toList()
+        while (i < length) {
+            val c = this[i]
+
+            // Handle comment endings
+            if (inLine) {
+                sb.append(c)
+                if (c == '\n') inLine = false
+                i++
+                continue
+            }
+            if (inBlock) {
+                sb.append(c)
+                if (c == '*' && i + 1 < length && this[i + 1] == '/') {
+                    sb.append('/')
+                    i += 2
+                    inBlock = false
+                } else {
+                    i++
+                }
+                continue
+            }
+
+            // Handle dollar-quoted string
+            if (dollarTag != null) {
+                sb.append(c)
+                if (c == '$') {
+                    val tag = startsWithDollarTagAt(i)
+                    if (tag == dollarTag) {
+                        if (tag.length > 1) {
+                            sb.append(this, i + 1, i + tag.length)
+                            i += tag.length
+                        } else {
+                            i++
+                        }
+                        dollarTag = null
+                        continue
+                    }
+                }
+                i++
+                continue
+            }
+
+            // Handle quoted strings
+            if (inSQ) {
+                sb.append(c)
+                if (c == '\'') {
+                    if (i + 1 < length && this[i + 1] == '\'') {
+                        sb.append('\'')
+                        i += 2
+                    } else {
+                        i++
+                        inSQ = false
+                    }
+                } else i++
+                continue
+            }
+            if (inDQ) {
+                sb.append(c)
+                if (c == '"') {
+                    if (i + 1 < length && this[i + 1] == '"') {
+                        sb.append('"')
+                        i += 2
+                    } else {
+                        i++
+                        inDQ = false
+                    }
+                } else i++
+                continue
+            }
+            if (inBT) {
+                sb.append(c)
+                if (c == '`') {
+                    i++
+                    inBT = false
+                } else i++
+                continue
+            }
+
+            // Start of contexts
+            if (c == '-' && i + 1 < length && this[i + 1] == '-') {
+                sb.append("--")
+                i += 2
+                inLine = true
+                continue
+            }
+            if (c == '/' && i + 1 < length && this[i + 1] == '*') {
+                sb.append("/*")
+                i += 2
+                inBlock = true
+                continue
+            }
+            if (c == '\'') {
+                sb.append(c); i++; inSQ = true; continue
+            }
+            if (c == '"') {
+                sb.append(c); i++; inDQ = true; continue
+            }
+            if (c == '`') {
+                sb.append(c); i++; inBT = true; continue
+            }
+            if (c == '$') {
+                val tag = startsWithDollarTagAt(i)
+                if (tag != null) {
+                    sb.append(tag)
+                    i += tag.length
+                    dollarTag = tag
+                    continue
+                }
+            }
+
+            // Delegate to the callback for normal characters
+            val consumed = onNormalChar(this, i, c, sb)
+            if (consumed != null) {
+                i = consumed; continue
+            }
+
+            // Default: copy character
+            sb.append(c)
+            i++
+        }
+        return sb.toString()
+    }
+
+    /**
+     * Scans a string containing SQL content, skipping over comments, quotes, and dollar-quoted strings,
+     * and invokes a callback for processing characters within the normal SQL context.
+     * The callback can optionally return a new index to control the scanning process
+     * or `null` to continue with the normal flow.
+     *
+     * @param onNormalChar A lambda function that is called for each character in the normal SQL context.
+     * The function takes three parameters:
+     * - `i`: The current index of the character being processed.
+     * - `c`: The character at the current index.
+     * The lambda can return a new index to move the scanning position elsewhere or `null`
+     * to indicate no special handling.
+     */
+    @Suppress("DuplicatedCode")
+    protected inline fun String.scanWithExtractor(
+        onNormalChar: String.(i: Int, c: Char) -> Int?
+    ) {
+        var i = 0
+        var inSQ = false
+        var inDQ = false
+        var inBT = false
+        var inLine = false
+        var inBlock = false
+        var dollarTag: String? = null
+        while (i < length) {
+            val c = this[i]
+            if (inLine) {
+                if (c == '\n') inLine = false; i++; continue
+            }
+            if (inBlock) {
+                if (c == '*' && i + 1 < length && this[i + 1] == '/') {
+                    i += 2; inBlock = false
+                } else i++; continue
+            }
+            if (dollarTag != null) {
+                if (c == '$') {
+                    val tag = startsWithDollarTagAt(i); if (tag == dollarTag) {
+                        i += tag.length; dollarTag = null; continue
+                    }
+                }; i++; continue
+            }
+            if (inSQ) {
+                if (c == '\'') {
+                    if (i + 1 < length && this[i + 1] == '\'') i += 2 else {
+                        i++; inSQ = false
+                    }
+                } else i++; continue
+            }
+            if (inDQ) {
+                if (c == '"') {
+                    if (i + 1 < length && this[i + 1] == '"') i += 2 else {
+                        i++; inDQ = false
+                    }
+                } else i++; continue
+            }
+            if (inBT) {
+                if (c == '`') {
+                    i++; inBT = false
+                } else i++; continue
+            }
+
+            if (c == '-' && i + 1 < length && this[i + 1] == '-') {
+                i += 2; inLine = true; continue
+            }
+            if (c == '/' && i + 1 < length && this[i + 1] == '*') {
+                i += 2; inBlock = true; continue
+            }
+            if (c == '\'') {
+                i++; inSQ = true; continue
+            }
+            if (c == '"') {
+                i++; inDQ = true; continue
+            }
+            if (c == '`') {
+                i++; inBT = true; continue
+            }
+            if (c == '$') {
+                val tag = startsWithDollarTagAt(i); if (tag != null) {
+                    i += tag.length; dollarTag = tag; continue
+                }
+            }
+
+            val consumed = onNormalChar(this, i, c)
+            if (consumed != null) {
+                i = consumed; continue
+            }
+            i++
+        }
+    }
+
+    /**
+     * Checks if the character sequence starts with a "dollar tag" at the given index.
+     *
+     * A "dollar tag" is defined as a sequence beginning with a dollar sign ('$'),
+     * followed by alphanumeric characters or underscores, and ending with another
+     * dollar sign ('$'). If a valid dollar tag is found at the specified index,
+     * it is extracted and returned; otherwise, null is returned.
+     *
+     * @param start The starting index in the character sequence to check for the dollar tag.
+     * @return The extracted dollar tag if it exists at the specified index, or null if no valid dollar tag is found.
+     */
+    protected fun CharSequence.startsWithDollarTagAt(start: Int): String? {
+        if (start + 1 >= length) return null
+        if (this[start] != '$') return null
+        var j = start + 1
+        while ((j < length && this[j].isLetterOrDigit()) || (j < length && this[j] == '_')) j++
+        if (j < length && this[j] == '$') return substring(start, j + 1)
+        return null
+    }
+
+    /**
+     * Determines if the given character can represent the start of an identifier.
+     *
+     * @param ch The character to check.
+     * @return True if the character is an uppercase or lowercase English letter, false otherwise.
+     */
+    protected fun isIdentStart(ch: Char) = ch == '_' || ch in 'a'..'z' || ch in 'A'..'Z'
+
+    /**
+     * Determines if the given character can be part of an identifier.
+     *
+     * This includes characters that can start an identifier, the underscore character ('_'), and digits.
+     *
+     * @param ch The character to check.
+     * @return True if the character can be part of an identifier, false otherwise.
+     */
+    protected fun isIdentPart(ch: Char) = isIdentStart(ch) || ch == '_' || ch.isDigit()
+
+    /**
+     * Extracts all named parameters from the SQL statement.
+     *
+     * Named parameters are identified by a colon (`:`) followed by a valid identifier.
+     * The method skips over content inside comments, quotes, or PostgreSQL type casts (`::`)
+     * to ensure accurate extraction of named parameters.
+     *
+     * @return A set containing unique named parameter names found in the SQL statement.
+     */
+    private fun extractNamedParameters(): Set<String> {
+        val s = sql
+        val names = linkedSetOf<String>()
+        s.scanWithExtractor { i, c ->
+            if (c != ':') return@scanWithExtractor null
+            // Skip PostgreSQL type casts '::'
+            if (i + 1 < length && this[i + 1] == ':') return@scanWithExtractor i + 2
+            if (i + 1 < length && isIdentStart(this[i + 1])) {
+                var j = i + 2
+                while (j < length && isIdentPart(this[j])) j++
+                names.add(substring(i + 1, j))
+                return@scanWithExtractor j
+            }
+            null
+        }
+        return names
+    }
+
+    /**
+     * Extracts all positional parameter placeholders from the SQL statement.
+     *
+     * Positional parameters are denoted by the `?` character. The method scans the SQL string,
+     * skipping over content such as comments, quotes, and dollar-quoted sections,
+     * to ensure accurate identification of placeholders.
+     *
+     * @return A list of integers representing the indices of all positional parameters
+     * found in the SQL statement. Each index corresponds to the order in which the
+     * parameters appear, starting from 0.
+     */
+    private fun extractPositionalParameters(): List<Int> {
+        var count = 0
+        val s = sql
+        s.scanWithExtractor { i, c ->
+            if (c == '?') {
+                count++; return@scanWithExtractor i + 1
+            }
+            null
+        }
+        return (0 until count).toList()
+    }
 }

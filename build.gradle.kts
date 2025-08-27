@@ -2,9 +2,9 @@ group = "io.github.smyrgeorge"
 version = "0.71.0"
 
 plugins {
-    alias(libs.plugins.dokka)
-    alias(libs.plugins.pubhish) apply false
     alias(libs.plugins.kotlin.multiplatform) apply false
+    alias(libs.plugins.pubhish) apply false
+    alias(libs.plugins.dokka) apply false
 }
 
 repositories {
@@ -17,12 +17,5 @@ subprojects {
 
     repositories {
         mavenCentral()
-    }
-
-    // Dokka config
-    run {
-        if (!project.name.startsWith("sqlx4k")) return@run
-        // Run with ./gradlew :dokkaHtmlMultiModule
-        apply(plugin = "org.jetbrains.dokka")
     }
 }
