@@ -127,7 +127,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
                 ).ex()
             }
             val index = it.next()
-            if (!positionalParametersValues.containsKey(index)) {
+            if (index !in positionalParametersValues) {
                 SQLError(
                     code = SQLError.Code.PositionalParameterValueNotSupplied,
                     message = "Value for positional parameter index '$index' was not supplied."
@@ -145,7 +145,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
     private fun String.renderNamedParameters(encoders: ValueEncoderRegistry): String {
         if (namedParameters.isEmpty()) return this
         for (name in namedParameters) {
-            if (!namedParametersValues.containsKey(name)) {
+            if (name !in namedParametersValues) {
                 SQLError(
                     code = SQLError.Code.NamedParameterValueNotSupplied,
                     message = "Value for named parameter '$name' was not supplied."
@@ -164,7 +164,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
             if (i + 1 < length && isIdentStart(this[i + 1])) {
                 var j = i + 2
                 while (j < length && isIdentPart(this[j])) j++
-                val name = this.substring(i + 1, j)
+                val name = substring(i + 1, j)
                 if (name in namedParameters) {
                     sb.append(namedParametersValues[name].encodeValue(encoders))
                     return@renderWithScanner j
@@ -189,9 +189,8 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * @return A new string resulting from the scanned and processed input, including any changes made
      * by the callback and the default handling of characters.
      */
-    @Suppress("DuplicatedCode")
     protected inline fun String.renderWithScanner(
-        onNormalChar: String.(i: Int, c: Char, sb: StringBuilder) -> Int?
+        crossinline onNormalChar: String.(i: Int, c: Char, sb: StringBuilder) -> Int?
     ): String {
         val sb = StringBuilder(length)
         var i = 0
@@ -245,6 +244,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
             }
 
             // Handle quoted strings
+            @Suppress("DuplicatedCode")
             if (inSQ) {
                 sb.append(c)
                 if (c == '\'') {
@@ -258,6 +258,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
                 } else i++
                 continue
             }
+            @Suppress("DuplicatedCode")
             if (inDQ) {
                 sb.append(c)
                 if (c == '"') {
@@ -325,94 +326,26 @@ abstract class AbstractStatement(private val sql: String) : Statement {
         return sb.toString()
     }
 
+
     /**
-     * Scans a string containing SQL content, skipping over comments, quotes, and dollar-quoted strings,
-     * and invokes a callback for processing characters within the normal SQL context.
-     * The callback can optionally return a new index to control the scanning process
-     * or `null` to continue with the normal flow.
+     * Scans a string using the provided callback for normal-context characters.
+     * Each character is passed to the callback along with its index, allowing custom processing.
      *
-     * @param onNormalChar A lambda function that is called for each character in the normal SQL context.
-     * The function takes three parameters:
-     * - `i`: The current index of the character being processed.
-     * - `c`: The character at the current index.
-     * The lambda can return a new index to move the scanning position elsewhere or `null`
-     * to indicate no special handling.
+     * The scanning process leverages `renderWithScanner` internally, enabling reuse of its scanning
+     * logic while discarding the rendered output. Only the side-effects and index control from the
+     * callback are utilized during the scanning process.
+     *
+     * @param onNormalChar A callback function invoked for each character in normal context.
+     * The function takes the string (`String`) it operates on, the current index (`i`) of the character,
+     * and the current character (`c`). Returning a new index alters the scan position, while returning
+     * `null` continues the scan from the default next index.
      */
-    @Suppress("DuplicatedCode")
-    protected inline fun String.scanWithExtractor(
+    protected fun String.scanWithExtractor(
         onNormalChar: String.(i: Int, c: Char) -> Int?
     ) {
-        var i = 0
-        var inSQ = false
-        var inDQ = false
-        var inBT = false
-        var inLine = false
-        var inBlock = false
-        var dollarTag: String? = null
-        while (i < length) {
-            val c = this[i]
-            if (inLine) {
-                if (c == '\n') inLine = false; i++; continue
-            }
-            if (inBlock) {
-                if (c == '*' && i + 1 < length && this[i + 1] == '/') {
-                    i += 2; inBlock = false
-                } else i++; continue
-            }
-            if (dollarTag != null) {
-                if (c == '$') {
-                    val tag = startsWithDollarTagAt(i); if (tag == dollarTag) {
-                        i += tag.length; dollarTag = null; continue
-                    }
-                }; i++; continue
-            }
-            if (inSQ) {
-                if (c == '\'') {
-                    if (i + 1 < length && this[i + 1] == '\'') i += 2 else {
-                        i++; inSQ = false
-                    }
-                } else i++; continue
-            }
-            if (inDQ) {
-                if (c == '"') {
-                    if (i + 1 < length && this[i + 1] == '"') i += 2 else {
-                        i++; inDQ = false
-                    }
-                } else i++; continue
-            }
-            if (inBT) {
-                if (c == '`') {
-                    i++; inBT = false
-                } else i++; continue
-            }
-
-            if (c == '-' && i + 1 < length && this[i + 1] == '-') {
-                i += 2; inLine = true; continue
-            }
-            if (c == '/' && i + 1 < length && this[i + 1] == '*') {
-                i += 2; inBlock = true; continue
-            }
-            if (c == '\'') {
-                i++; inSQ = true; continue
-            }
-            if (c == '"') {
-                i++; inDQ = true; continue
-            }
-            if (c == '`') {
-                i++; inBT = true; continue
-            }
-            if (c == '$') {
-                val tag = startsWithDollarTagAt(i); if (tag != null) {
-                    i += tag.length; dollarTag = tag; continue
-                }
-            }
-
-            val consumed = onNormalChar(this, i, c)
-            if (consumed != null) {
-                i = consumed; continue
-            }
-            i++
-        }
+        // Reuse the full scanner from renderWithScanner to avoid code duplication.
+        // We discard the rendered String and only use the scanning side-effects and index control.
+        renderWithScanner { i, c, _ -> onNormalChar(this, i, c) }
     }
 
     /**
@@ -431,8 +364,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
         if (this[start] != '$') return null
         var j = start + 1
         while ((j < length && this[j].isLetterOrDigit()) || (j < length && this[j] == '_')) j++
-        if (j < length && this[j] == '$') return substring(start, j + 1)
-        return null
+        return if (j < length && this[j] == '$') substring(start, j + 1) else null
     }
 
     /**
@@ -441,7 +373,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * @param ch The character to check.
      * @return True if the character is an uppercase or lowercase English letter, false otherwise.
      */
-    protected fun isIdentStart(ch: Char) = ch == '_' || ch in 'a'..'z' || ch in 'A'..'Z'
+    private fun isIdentStart(ch: Char) = ch == '_' || ch in 'a'..'z' || ch in 'A'..'Z'
 
     /**
      * Determines if the given character can be part of an identifier.
@@ -451,7 +383,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * @param ch The character to check.
      * @return True if the character can be part of an identifier, false otherwise.
      */
-    protected fun isIdentPart(ch: Char) = isIdentStart(ch) || ch == '_' || ch.isDigit()
+    private fun isIdentPart(ch: Char) = isIdentStart(ch) || ch == '_' || ch.isDigit()
 
     /**
      * Extracts all named parameters from the SQL statement.
@@ -500,6 +432,6 @@ abstract class AbstractStatement(private val sql: String) : Statement {
             }
             null
         }
-        return (0 until count).toList()
+        return List(count) { it }
     }
 }
