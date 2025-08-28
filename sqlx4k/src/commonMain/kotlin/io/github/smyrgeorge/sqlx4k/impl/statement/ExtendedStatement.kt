@@ -79,7 +79,7 @@ class ExtendedStatement(private val sql: String) : AbstractStatement(sql) {
                     val numStr = substring(i + 1, j)
                     val idx1 = numStr.toIntOrNull() ?: return@renderWithScanner null
                     val zeroIdx = idx1 - 1
-                    if (!pgParametersValues.containsKey(zeroIdx)) {
+                    if (zeroIdx !in pgParametersValues) {
                         SQLError(
                             code = SQLError.Code.PositionalParameterValueNotSupplied,
                             message = "Value for positional parameter index '$zeroIdx' was not supplied."
@@ -105,6 +105,6 @@ class ExtendedStatement(private val sql: String) : AbstractStatement(sql) {
             }
             null
         }
-        return (0 until maxIndex).toList()
+        return List(maxIndex) { it }
     }
 }
