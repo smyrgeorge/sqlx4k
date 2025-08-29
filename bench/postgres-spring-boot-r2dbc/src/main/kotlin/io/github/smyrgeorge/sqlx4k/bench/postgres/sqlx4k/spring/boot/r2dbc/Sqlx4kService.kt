@@ -1,4 +1,4 @@
-package io.github.smyrgeorge.sqlx4k.bench.postgres.spring.boot.r2dbc
+package io.github.smyrgeorge.sqlx4k.bench.postgres.sqlx4k.spring.boot.r2dbc
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async

@@ -126,7 +126,7 @@ val options = Driver.Pool.Options.builder()
  *  postgresql://localhost:5433
  *  postgresql://localhost/mydb
  *
- * Additionaly you can use the `postgreSQL` function, if you are working in a multiplatform setup.
+ * Additionally, you can use the `postgreSQL` function, if you are working in a multiplatform setup.
  */
 val db = PostgreSQL(
     url = "postgresql://localhost:15432/test",
@@ -201,7 +201,7 @@ db.transaction {
     execute("delete from sqlx4k;").getOrThrow()
     fetchAll("select * from sqlx4k;").getOrThrow().forEach { println(it) }
     // At the end of the block will auto commit the transaction.
-    // If any error occurs will automatically trigger the rollback method.
+    // If any error occurs, it will automatically trigger the rollback method.
 }
 ```
 
@@ -221,7 +221,8 @@ ksp {
 }
 
 dependencies {
-    ksp(implementation("io.github.smyrgeorge:sqlx4k-codegen:x.y.z")) // Will generate code for all available targets.
+    // Will generate code for macosArm64. Add more targets if you want.
+    add("kspMacosArm64", implementation("io.github.smyrgeorge:sqlx4k-codegen:x.y.z"))
 }
 ```
 
@@ -238,18 +239,12 @@ data class Sqlx4k(
 )
 ```
 
-We also need to create the function definitions for the generated code:
+Generated functions:
 
 ```kotlin
-// Filename: GeneratedQueries (same as `output-filename`).
-// Also the package should be the same as `output-package`.
-// package io.github.smyrgeorge.sqlx4k.examples.postgres
-
-// We only need to declare the functions,
-// the actual code will be auto-generated. 
-expect fun Sqlx4k.insert(): Statement
-expect fun Sqlx4k.update(): Statement
-expect fun Sqlx4k.delete(): Statement
+fun Sqlx4k.insert(): Statement
+fun Sqlx4k.update(): Statement
+fun Sqlx4k.delete(): Statement
 ```
 
 Then in your code you can use it like:
@@ -279,8 +274,8 @@ val res: List<Sqlx4k> = db.fetchAll("select * from sqlx4k limit 100;", Sqlx4kRow
 
 ### Database Migrations
 
-Run any pending migrations against the database; and, validate previously applied migrations against the current
-migration source to detect accidental changes in previously-applied migrations.
+Run any pending migrations against the database; and validate previously applied migrations against the current
+migration source to detect accidental changes in previously applied migrations.
 
 ```kotlin
 db.migrate("./db/migrations").getOrThrow()
@@ -314,7 +309,7 @@ You will need the `Rust` toolchain to build this project.
 Check here: https://rustup.rs/
 
 > [!NOTE]  
-> By default the project will build only for your system architecture-os (e.g. `macosArm64`, `linuxArm64`, etc.)
+> By default, the project will build only for your system architecture-os (e.g. `macosArm64`, `linuxArm64`, etc.)
 
 Also, make sure that you have installed all the necessary targets (only if you want to build for all targets):
 
@@ -348,7 +343,7 @@ You can also build for specific targets.
 ./gradlew build -Ptargets=macosArm64,macosX64
 ```
 
-To build for all available target run:
+To build for all available targets, run:
 
 ```shell
 ./gradlew build -Ptargets=all
@@ -362,7 +357,7 @@ To build for all available target run:
 
 ## Run
 
-First you need to run start-up the postgres instance.
+First, you need to run start-up the postgres instance.
 
 ```shell
 docker compose up -d
@@ -400,33 +395,4 @@ Then run the tool:
 
 ```shell
 leaks -atExit -- ./bench/postgres-sqlx4k/build/bin/macosArm64/releaseExecutable/postgres-sqlx4k.kexe
-```
-
-Sample output:
-
-```text
-Process:         postgres-sqlx4k.kexe [31096]
-Path:            /Users/USER/*/postgres-sqlx4k.kexe
-Load Address:    0x100938000
-Identifier:      postgres-sqlx4k.kexe
-Version:         0
-Code Type:       ARM64
-Platform:        macOS
-Parent Process:  leaks [31095]
-
-Date/Time:       2025-04-01 00:29:35.315 +0200
-Launch Time:     2025-04-01 00:28:07.164 +0200
-OS Version:      macOS 15.3.1 (24D70)
-Report Version:  7
-Analysis Tool:   /Applications/Xcode.app/Contents/Developer/usr/bin/leaks
-Analysis Tool Version:  Xcode 16.2 (16C5032a)
-
-Physical footprint:         21.2M
-Physical footprint (peak):  24.2M
-Idle exit:                  untracked
-----
-
-leaks Report Version: 4.0, multi-line stacks
-Process 31096: 1741 nodes malloced for 547 KB
-Process 31096: 0 leaks for 0 total leaked bytes.
 ```

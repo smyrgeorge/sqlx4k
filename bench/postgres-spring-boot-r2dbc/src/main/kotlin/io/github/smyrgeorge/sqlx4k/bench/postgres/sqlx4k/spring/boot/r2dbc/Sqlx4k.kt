@@ -1,4 +1,4 @@
-package io.github.smyrgeorge.sqlx4k.bench.postgres.spring.boot.r2dbc
+package io.github.smyrgeorge.sqlx4k.bench.postgres.sqlx4k.spring.boot.r2dbc
 
 import org.springframework.data.annotation.Id
 import org.springframework.data.relational.core.mapping.Table

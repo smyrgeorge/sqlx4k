@@ -1,5 +1,3 @@
-@file:Suppress("UnnecessaryVariable")
-
 package io.github.smyrgeorge.sqlx4k.processor
 
 import com.google.devtools.ksp.processing.CodeGenerator
@@ -48,7 +46,7 @@ class TableProcessor(
         // Processing each class declaration, annotated with @Function.
         symbols.forEach { it.accept(Visitor(file), Unit) }
 
-        // Don't forget to close the out stream.
+        // Remember to close the out stream.
         file.close()
 
         val unableToProcess = symbols.filterNot { it.validate() }.toList()
@@ -120,7 +118,7 @@ class TableProcessor(
                 .map { it.name() }
 
             file += "\n"
-            file += "actual fun ${clazz.name()}.insert(): Statement {\n"
+            file += "fun ${clazz.name()}.insert(): Statement {\n"
             file += "    // language=SQL\n"
             file += "    val sql = \"insert into $table(${props.map { it.toSnakeCase() }.joinToString()})"
             file += " values (${props.joinToString { "?" }})"
@@ -171,7 +169,7 @@ class TableProcessor(
                 .map { it.name() }
 
             file += "\n"
-            file += "actual fun ${clazz.name()}.update(): Statement {\n"
+            file += "fun ${clazz.name()}.update(): Statement {\n"
             file += "    // language=SQL\n"
             file += "    val sql = \"update $table"
             file += " set ${props.joinToString { p -> "${p.toSnakeCase()} = ?" }}"
@@ -207,7 +205,7 @@ class TableProcessor(
             }
 
             file += "\n"
-            file += "actual fun ${clazz.name()}.delete(): Statement {\n"
+            file += "fun ${clazz.name()}.delete(): Statement {\n"
             file += "    // language=SQL\n"
             file += "    val sql = \"delete from $table where ${id.name().toSnakeCase()} = ?;\"\n"
             file += "    val statement = Statement.create(sql)\n"
