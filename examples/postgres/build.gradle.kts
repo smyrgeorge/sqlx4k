@@ -1,4 +1,5 @@
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 
 plugins {
     id("io.github.smyrgeorge.sqlx4k.multiplatform.binaries")
@@ -34,6 +35,10 @@ targetsOf(project).forEach {
     project.tasks.getByName("compileKotlin$it") {
         dependsOn("kspCommonMainKotlinMetadata")
     }
+}
+
+tasks.withType<KotlinCompilationTask<*>> {
+    dependsOn("kspCommonMainKotlinMetadata")
 }
 
 fun targetsOf(project: Project): List<String> {

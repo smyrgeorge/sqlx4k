@@ -1,4 +1,5 @@
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 
 plugins {
     id("io.github.smyrgeorge.sqlx4k.multiplatform.binaries")
@@ -28,6 +29,10 @@ dependencies {
     add("kspCommonMainMetadata", project(":sqlx4k-codegen"))
     // You can also enable the code generation only for a specific target
     // add("kspMacosArm64", project(":sqlx4k-codegen"))
+}
+
+tasks.withType<KotlinCompilationTask<*>> {
+    dependsOn("kspCommonMainKotlinMetadata")
 }
 
 targetsOf(project).forEach {
