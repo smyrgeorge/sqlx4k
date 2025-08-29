@@ -17,9 +17,6 @@
 
 A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLite, written for Kotlin Multiplatform.
 
-> [!IMPORTANT]  
-> The project is in a very early stage; thus, breaking changes should be expected.
-
 📖 [Documentation](https://smyrgeorge.github.io/sqlx4k/)
 
 🏠 [Homepage](https://smyrgeorge.github.io/) (under construction)
