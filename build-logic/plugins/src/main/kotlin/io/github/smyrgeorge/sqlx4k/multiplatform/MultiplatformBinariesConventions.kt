@@ -13,6 +13,14 @@ class MultiplatformBinariesConventions : Plugin<Project> {
         project.plugins.apply("org.jetbrains.kotlin.multiplatform")
         project.extensions.configure<KotlinMultiplatformExtension> {
             val availableTargets = mapOf(
+                Pair("jvm") {
+                    jvm {
+                        @OptIn(ExperimentalKotlinGradlePluginApi::class)
+                        mainRun {
+                            mainClass.set("MainKt")
+                        }
+                    }
+                },
                 Pair("iosArm64") { iosArm64 { binaries { executable() } } },
                 Pair("androidNativeArm64") { androidNativeArm64 { binaries { executable() } } },
                 Pair("androidNativeX64") { androidNativeX64 { binaries { executable() } } },
@@ -22,14 +30,6 @@ class MultiplatformBinariesConventions : Plugin<Project> {
                 Pair("linuxX64") { linuxX64 { binaries { executable() } } },
                 Pair("mingwX64") { mingwX64 { binaries { executable() } } },
             )
-
-            println("Enabling target jvm")
-            jvm {
-                @OptIn(ExperimentalKotlinGradlePluginApi::class)
-                mainRun {
-                    mainClass.set("MainKt")
-                }
-            }
 
             targets.forEach {
                 println("Enabling target $it")

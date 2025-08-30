@@ -63,6 +63,7 @@ object Utils {
         (project.properties["targets"] as? String)?.let {
             when (it) {
                 "all" -> listOf(
+                    "jvm",
                     "iosArm64",
                     "androidNativeX64",
                     "androidNativeArm64",
@@ -75,5 +76,5 @@ object Utils {
 
                 else -> it.split(",").map { t -> t.trim() }
             }
-        } ?: listOf(defaultTarget) // Default for local development.
+        } ?: listOf("jvm", defaultTarget) // Default for local development.
 }

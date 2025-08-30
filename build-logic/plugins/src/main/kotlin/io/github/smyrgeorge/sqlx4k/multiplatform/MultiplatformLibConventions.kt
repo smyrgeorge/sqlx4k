@@ -70,6 +70,7 @@ class MultiplatformLibConventions : Plugin<Project> {
         project.plugins.apply("org.jetbrains.kotlin.multiplatform")
         project.extensions.configure<KotlinMultiplatformExtension> {
             val availableTargets = mapOf(
+                Pair("jvm") { jvm() },
                 Pair("iosArm64") { iosArm64 { rust("aarch64-apple-ios", !os.isMacOsX) } },
                 Pair("androidNativeArm64") { androidNativeArm64 { rust("aarch64-linux-android", true) } },
                 Pair("androidNativeX64") { androidNativeX64 { rust("x86_64-linux-android", true) } },
@@ -79,9 +80,6 @@ class MultiplatformLibConventions : Plugin<Project> {
                 Pair("linuxX64") { linuxX64 { rust("x86_64-unknown-linux-gnu", !os.isLinux) } },
                 Pair("mingwX64") { mingwX64 { rust("x86_64-pc-windows-gnu", true) } },
             )
-
-            println("Enabling target jvm")
-            jvm()
 
             targets.forEach {
                 println("Enabling target $it")
