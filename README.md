@@ -214,7 +214,6 @@ plugins {
 // Then you need to configure the processor (will generate the necessary code files).
 ksp {
     arg("output-package", "io.github.smyrgeorge.sqlx4k.examples.postgres")
-    arg("output-filename", "GeneratedQueries")
 }
 
 dependencies {
@@ -269,7 +268,7 @@ object Sqlx4kRowMapper : RowMapper<Sqlx4k> {
 val res: List<Sqlx4k> = db.fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow()
 ```
 
-### Database Migrations
+### Database Migrations (only for native targets for the moment)
 
 Run any pending migrations against the database; and validate previously applied migrations against the current
 migration source to detect accidental changes in previously applied migrations.

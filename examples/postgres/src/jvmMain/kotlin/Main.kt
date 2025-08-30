@@ -46,12 +46,12 @@ class Main {
         db.execute("insert into sqlx4k (id, test) values (65, 'test');").getOrThrow()
 
         runCatching {
-            val st = Statement.Companion.create("select * from sqlx4k where id = ?")
+            val st = Statement.create("select * from sqlx4k where id = ?")
                 .bind(0, 66)
                 .render()
             println("Statement: $st")
 
-            val st1 = Statement.Companion.create("? ? ?")
+            val st1 = Statement.create("? ? ?")
                 .bind(0, "test")
                 .bind(1, "'test'")
                 .bind(2, "';select *;--")

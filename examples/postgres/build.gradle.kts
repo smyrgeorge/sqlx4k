@@ -22,7 +22,6 @@ kotlin {
 
 ksp {
     arg("output-package", "io.github.smyrgeorge.sqlx4k.examples.postgres")
-    arg("output-filename", "GeneratedQueries")
 }
 
 dependencies {

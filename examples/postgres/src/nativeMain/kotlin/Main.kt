@@ -2,6 +2,7 @@ import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4k
+import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4kRepositoryImpl
 import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4kRowMapper
 import io.github.smyrgeorge.sqlx4k.examples.postgres.insert
 import io.github.smyrgeorge.sqlx4k.impl.extensions.errorOrNull
@@ -61,7 +62,7 @@ fun main() {
             println("Statement error: ${it.message}")
         }
 
-        val res: List<Sqlx4k> = db.fetchAll("select * from sqlx4k;", Sqlx4kRowMapper).getOrThrow()
+        val res: List<Sqlx4k> = db.fetchAll(Sqlx4kRepositoryImpl.selectAll(), Sqlx4kRowMapper).getOrThrow()
         println(res)
 
 //        You can map in also in place.
@@ -97,10 +98,10 @@ fun main() {
         val r0 = db.fetchAll(types).getOrThrow()
         println(r0)
 
-        val r1 = db.fetchAll("select * from sqlx4k;", Sqlx4kRowMapper).getOrThrow()
+        val r1 = db.fetchAll(Sqlx4kRepositoryImpl.selectAll(), Sqlx4kRowMapper).getOrThrow()
         println(r1)
 
-        val r2 = db.fetchAll("select * from sqlx4k;", Sqlx4kRowMapper).getOrThrow()
+        val r2 = db.fetchAll(Sqlx4kRepositoryImpl.selectAll(), Sqlx4kRowMapper).getOrThrow()
         println(r2)
 
         db.fetchAll("select 1;").getOrThrow().forEach { println(it) }

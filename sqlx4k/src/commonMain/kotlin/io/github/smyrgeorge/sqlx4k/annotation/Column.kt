@@ -8,4 +8,5 @@ package io.github.smyrgeorge.sqlx4k.annotation
  * @property update Indicates if the property should be included during update operations.
  */
 @Target(AnnotationTarget.PROPERTY)
+@Retention(AnnotationRetention.SOURCE)
 annotation class Column(val insert: Boolean = true, val update: Boolean = true)
