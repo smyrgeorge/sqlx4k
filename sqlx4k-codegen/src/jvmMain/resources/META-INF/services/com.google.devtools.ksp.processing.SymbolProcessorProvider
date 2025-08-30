@@ -1,2 +1,2 @@
 io.github.smyrgeorge.sqlx4k.processor.TableProcessorProvider
-io.github.smyrgeorge.sqlx4k.processor.QueryProcessorProvider
+io.github.smyrgeorge.sqlx4k.processor.RepositoryProcessorProvider

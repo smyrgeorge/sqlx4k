@@ -240,13 +240,13 @@ class TableProcessor(
         /**
          * The option key used to specify the output filename for the generated SQL classes.
          */
-        const val FILENAME_OPTION = "output-filename"
+        private const val FILENAME_OPTION = "output-filename"
 
-        const val INSERT_PROPERTY_NAME = "insert"
-        const val UPDATE_PROPERTY_NAME = "update"
-        const val COLUMN_ANNOTATION_NAME = "Column"
-        const val ID_ANNOTATION_NAME = "Id"
-        const val TABLE_ANNOTATION_NAME = "Table"
-        const val TABLE_ANNOTATION = "io.github.smyrgeorge.sqlx4k.annotation.Table"
+        private const val INSERT_PROPERTY_NAME = "insert"
+        private const val UPDATE_PROPERTY_NAME = "update"
+        private const val COLUMN_ANNOTATION_NAME = "Column"
+        private const val ID_ANNOTATION_NAME = "Id"
+        private const val TABLE_ANNOTATION_NAME = "Table"
+        private const val TABLE_ANNOTATION = "io.github.smyrgeorge.sqlx4k.annotation.Table"
     }
 }

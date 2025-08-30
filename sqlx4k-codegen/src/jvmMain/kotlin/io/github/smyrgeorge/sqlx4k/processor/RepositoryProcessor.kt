@@ -5,30 +5,19 @@ import com.google.devtools.ksp.symbol.*
 import com.google.devtools.ksp.validate
 import java.io.OutputStream
 
-/**
- * Processes @Query annotations on interface functions and generates an implementation class.
- *
- * Rules:
- * - Only interfaces are supported. If the type is not an interface, it is ignored with a warning.
- * - Multiple functions per interface are supported.
- * - If the interface name is "Test", a class named "TheImpl" will be created; otherwise, the
- *   class will be named "<InterfaceName>Impl".
- * - Follows the same config options as TableProcessor: output-package and output-filename.
- * - Does not use KotlinPoet; uses direct OutputStream writing just like TableProcessor.
- */
 @Suppress("DuplicatedCode")
-class QueryProcessor(
+class RepositoryProcessor(
     private val options: Map<String, String>,
     private val logger: KSPLogger,
     private val codeGenerator: CodeGenerator,
 ) : SymbolProcessor {
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
-        val symbols = resolver
-            .getSymbolsWithAnnotation(QUERY_ANNOTATION)
-            .filterIsInstance<KSFunctionDeclaration>()
+        val repoSymbols = resolver
+            .getSymbolsWithAnnotation(REPOSITORY_ANNOTATION)
+            .filterIsInstance<KSClassDeclaration>()
 
-        if (!symbols.iterator().hasNext()) return emptyList()
+        if (!repoSymbols.iterator().hasNext()) return emptyList()
 
         val outputPackage = options[TableProcessor.PACKAGE_OPTION]
             ?: error("Missing ${TableProcessor.PACKAGE_OPTION} option")
@@ -46,19 +35,19 @@ class QueryProcessor(
         file += "package $outputPackage\n"
         file += "\nimport io.github.smyrgeorge.sqlx4k.Statement\n"
 
-        // Group functions by their containing interface
-        val grouped = symbols
-            .filter { it.validate() }
-            .mapNotNull { fn ->
-                val parent = fn.parentDeclaration as? KSClassDeclaration ?: return@mapNotNull null
-                parent to fn
-            }
-            .groupBy({ it.first }, { it.second })
-
-        grouped.forEach { (iface, fns) ->
+        // For each repository interface, find methods annotated with @Query
+        val validatedRepos = repoSymbols.filter { it.validate() }
+        validatedRepos.forEach { iface ->
             if (iface.classKind != ClassKind.INTERFACE) {
-                error("@Query is only supported on interface functions (${iface.qualifiedName?.asString()}).")
+                error("@Repository is only supported on interfaces (${iface.qualifiedName?.asString()}).")
             }
+
+            val fns = iface.declarations
+                .filterIsInstance<KSFunctionDeclaration>()
+                .filter { fn -> fn.annotations.any { it.name() == QUERY_ANNOTATION_NAME } }
+                .toList()
+
+            if (fns.isEmpty()) return@forEach
 
             // Determine implementation class name
             val implName = iface.name() + "Impl"
@@ -101,7 +90,7 @@ class QueryProcessor(
 
         file.close()
 
-        val unableToProcess = symbols.filterNot { it.validate() }.toList()
+        val unableToProcess = repoSymbols.filterNot { it.validate() }.toList()
         return unableToProcess
     }
 
@@ -116,8 +105,8 @@ class QueryProcessor(
         /**
          * The option key used to specify the output filename for the generated SQL classes.
          */
-        const val FILENAME_OPTION = "output-filename"
-        const val QUERY_ANNOTATION_NAME = "Query"
-        const val QUERY_ANNOTATION = "io.github.smyrgeorge.sqlx4k.annotation.Query"
+        private const val FILENAME_OPTION = "output-filename"
+        private const val QUERY_ANNOTATION_NAME = "Query"
+        private const val REPOSITORY_ANNOTATION = "io.github.smyrgeorge.sqlx4k.annotation.Repository"
     }
 }

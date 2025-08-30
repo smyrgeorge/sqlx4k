@@ -233,22 +233,48 @@ data class Sqlx4k(
     val id: Int,
     val test: String
 )
+
+@Repository
+interface Sqlx4kRepository {
+    @Query("SELECT * FROM sqlx4k WHERE id = :id")
+    suspend fun selectById(id: Int): Statement
+    @Query("SELECT * FROM sqlx4k")
+    suspend fun selectAll(): Statement
+}
 ```
 
-Generated functions:
+Generated code:
 
 ```kotlin
 fun Sqlx4k.insert(): Statement
 fun Sqlx4k.update(): Statement
 fun Sqlx4k.delete(): Statement
+
+object Sqlx4kRepositoryImpl : Sqlx4kRepository {
+    override suspend fun selectById(id: Int): Statement {
+        // language=SQL
+        val statement = Statement.create("SELECT * FROM sqlx4k WHERE id = :id")
+        statement.bind(0, id)
+        return statement
+    }
+    override suspend fun selectAll(): Statement {
+        // language=SQL
+        val statement = Statement.create("SELECT * FROM sqlx4k")
+        return statement
+    }
+}
 ```
 
 Then in your code you can use it like:
 
 ```kotlin
+// Execute the generated insert query.
 val insert: Statement = Sqlx4k(id = 66, test = "test").insert()
 val affected = db.execute(insert).getOrThrow()
 println("AFFECTED: $affected")
+
+// Execute a generated query.
+val res: ResultSet = db.fetchAll(Sqlx4kRepositoryImpl.selectAll()).getOrThrow()
 ```
 
 For more details take a look at the `postgres` example.
