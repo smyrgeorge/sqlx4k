@@ -202,7 +202,7 @@ db.transaction {
 }
 ```
 
-### Auto generate basic `CRUD` (insert/update/delete) queries
+### Auto generate basic `CRUD` (insert/update/delete) queries and `@Repository` implementations
 
 For this operation you will need to include the `KSP` plugin to your project.
 
@@ -246,22 +246,14 @@ interface Sqlx4kRepository {
 Generated code:
 
 ```kotlin
-fun Sqlx4k.insert(): Statement
-fun Sqlx4k.update(): Statement
-fun Sqlx4k.delete(): Statement
+// See the `postgres` example for more details...
+fun Sqlx4k.insert(): Statement {...}
+fun Sqlx4k.update(): Statement {...}
+fun Sqlx4k.delete(): Statement {...}
 
 object Sqlx4kRepositoryImpl : Sqlx4kRepository {
-    override suspend fun selectById(id: Int): Statement {
-        // language=SQL
-        val statement = Statement.create("SELECT * FROM sqlx4k WHERE id = :id")
-        statement.bind(0, id)
-        return statement
-    }
-    override suspend fun selectAll(): Statement {
-        // language=SQL
-        val statement = Statement.create("SELECT * FROM sqlx4k")
-        return statement
-    }
+    override suspend fun selectById(id: Int): Statement {...}
+    override suspend fun selectAll(): Statement {...}
 }
 ```
 
