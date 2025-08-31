@@ -93,7 +93,21 @@ data class Migration(
          */
         internal fun createTableIfNotExists(table: String, dialect: Dialect): Statement {
             val sql = when (dialect) {
-                Dialect.MySQL, Dialect.PostgreSQL ->
+                Dialect.MySQL ->
+                    // language=SQL
+                    """
+                        CREATE TABLE IF NOT EXISTS ?
+                        (
+                            version        BIGINT      NOT NULL PRIMARY KEY,
+                            name           TEXT        NOT NULL,
+                            installed_on   DATETIME(6) NOT NULL DEFAULT now(6),
+                            checksum       TEXT        NOT NULL,
+                            execution_time BIGINT      NOT NULL,
+                            UNIQUE (version)
+                        );
+                    """.trimIndent()
+
+                Dialect.PostgreSQL ->
                     // language=SQL
                     """
                         CREATE TABLE IF NOT EXISTS ?
@@ -132,7 +146,7 @@ data class Migration(
          */
         internal fun selectAll(table: String): Statement {
             // language=SQL
-            val sql = "SELECT * FROM ? ORDER BY version"
+            val sql = "SELECT * FROM ? ORDER BY version;"
             return Statement.create(sql).bind(0, NoQuotingString(table))
         }
     }
