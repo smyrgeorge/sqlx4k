@@ -67,7 +67,6 @@ We support the following targets:
 ## Next steps (contributions are welcome)
 
 - Enhance code-generation module.
-- Database Migrations in all targets (currently only available for native targets).
 - Add support for SQLite JVM target.
 
 ## Features
@@ -287,19 +286,21 @@ object Sqlx4kRowMapper : RowMapper<Sqlx4k> {
 val res: List<Sqlx4k> = db.fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow()
 ```
 
-### Database Migrations (only for native targets for the moment)
+### Database Migrations
 
 Run any pending migrations against the database; and validate previously applied migrations against the current
 migration source to detect accidental changes in previously applied migrations.
 
 ```kotlin
-db.migrate("./db/migrations").getOrThrow()
+db.migrate(path = "./db/migrations").getOrThrow()
+// You can also ovveride the default migration table name.
+// db.migrate(path = "./db/migrations", table = "_sqlx4k_migrations").getOrThrow()
 println("Migrations completed.")
 ```
 
-This process will create a table with name `_sqlx_migrations`.
+This process will create a table with name `_sqlx4k_migrations`.
 
-For more information, take a look at the example.
+For more information, take a look at the examples.
 
 ### Listen/Notify (only for PostgreSQL)
 

@@ -186,19 +186,18 @@ interface Driver {
      */
     interface Migrate {
         /**
-         * Executes database migrations from the specified path.
+         * Executes database migrations by applying SQL scripts located in the specified directory.
          *
-         * This method applies schema or data migrations to a database. It expects
-         * migration files to be located in the specified directory. The default
-         * path points to `./db/migrations`. The method returns a `Result` indicating
-         * the success or failure of the migration process.
+         * This method is used to apply schema or data migrations to a database. It processes SQL scripts
+         * found in the specified path directory and tracks their execution in a migrations table.
+         * If a script has already been executed (tracked in the migrations table), it will be skipped
+         * during subsequent migrations.
          *
-         * @param path The file path to the directory containing migration scripts.
-         *             Defaults to `./db/migrations`.
-         * @return A [Result] object wrapping [Unit]. The success state indicates that
-         *         the migrations were applied successfully, while a failure state
-         *         contains information about the encountered error.
+         * @param path The file path to the directory containing migration scripts. Defaults to "./db/migrations".
+         * @param table The name of the database table used to track applied migrations. Defaults to "_sqlx4k_migrations".
+         * @return A [Result] wrapping [Unit], indicating success or failure. If an error occurs during migration,
+         *         the result contains details of the failure.
          */
-        suspend fun migrate(path: String = "./db/migrations"): Result<Unit>
+        suspend fun migrate(path: String = "./db/migrations", table: String = "_sqlx4k_migrations"): Result<Unit>
     }
 }

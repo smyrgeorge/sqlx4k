@@ -1,6 +1,8 @@
 package io.github.smyrgeorge.sqlx4k
 
+import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.statement.SimpleStatement
+import io.github.smyrgeorge.sqlx4k.impl.types.NoQuotingString
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
@@ -72,9 +74,19 @@ interface Statement {
                 "'${replace("'", "''")}'"
             }
 
+            is NoQuotingString -> {
+                // Fast path: if no single quote present, avoid replace allocation
+                if (value.indexOf('\'') < 0) return "$this"
+                // https://stackoverflow.com/questions/12316953/insert-text-with-single-quotes-in-postgresql
+                // https://stackoverflow.com/questions/9596652/how-to-escape-apostrophe-a-single-quote-in-mysql
+                // https://stackoverflow.com/questions/603572/escape-single-quote-character-for-use-in-an-sqlite-query
+                value.replace("'", "''")
+            }
+
             is Char -> "'${if (this == '\'') "''" else this}'"
             is Boolean, is Number -> toString()
-            is LocalDate, is LocalTime, is LocalDateTime, is Instant -> toString()
+            is Instant -> "'${toTimestampString()}'"
+            is LocalDate, is LocalTime, is LocalDateTime -> "'${this}'"
             is BooleanArray -> asIterable().encodeTuple(encoders)
             is ShortArray -> asIterable().encodeTuple(encoders)
             is IntArray -> asIterable().encodeTuple(encoders)

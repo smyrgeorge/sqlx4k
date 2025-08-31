@@ -20,6 +20,12 @@ fun main() {
             password = "mysql"
         )
 
+        runCatching {
+            val path = "./db/migrations"
+            val res = db.migrate(path)
+            println("Migrations completed. $res")
+        }
+
         db.execute("drop table if exists sqlx4k;").getOrThrow()
         val error = db.execute("select * from sqlx4kk").errorOrNull()
         println(error)

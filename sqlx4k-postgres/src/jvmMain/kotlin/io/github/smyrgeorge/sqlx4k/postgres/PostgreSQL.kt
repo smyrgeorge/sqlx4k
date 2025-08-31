@@ -1,6 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.postgres
 
 import io.github.smyrgeorge.sqlx4k.*
+import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.r2dbc.pool.ConnectionPool
 import io.r2dbc.pool.ConnectionPoolConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionConfiguration
@@ -56,9 +57,8 @@ class PostgreSQL(
         runBlocking { launch { runCatching { warmup().awaitSingle() } } }
     }
 
-    override suspend fun migrate(path: String): Result<Unit> {
-        error("This feature is not yet implemented for the JVM platform.")
-    }
+    override suspend fun migrate(path: String, table: String): Result<Unit> =
+        Migrator.migrate(this, path, table, Dialect.PostgreSQL)
 
     override suspend fun close(): Result<Unit> = runCatching {
         try {

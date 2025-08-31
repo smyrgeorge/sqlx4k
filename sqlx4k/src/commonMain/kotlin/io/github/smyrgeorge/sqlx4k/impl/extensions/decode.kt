@@ -42,15 +42,14 @@ fun ResultSet.Row.Column.asLocalDate(): LocalDate = LocalDate.parse(asString())
 fun ResultSet.Row.Column.asLocalDateOrNull(): LocalDate? = asStringOrNull()?.let { LocalDate.parse(it) }
 fun ResultSet.Row.Column.asLocalTime(): LocalTime = LocalTime.parse(asString())
 fun ResultSet.Row.Column.asLocalTimeOrNull(): LocalTime? = asStringOrNull()?.let { LocalTime.parse(it) }
+
+private val localDateTimeFormatter: DateTimeFormat<LocalDateTime> = LocalDateTime.Format {
+    @OptIn(FormatStringsInDatetimeFormats::class)
+    byUnicodePattern("yyyy-MM-dd HH:mm:ss[.SSSSSS]")
+}
+
 fun ResultSet.Row.Column.asLocalDateTime(): LocalDateTime = LocalDateTime.parse(asString(), localDateTimeFormatter)
-fun ResultSet.Row.Column.asLocalDateTimeOrNull(): LocalDateTime? =
-    asStringOrNull()?.let { LocalDateTime.parse(it, localDateTimeFormatter) }
-
-@OptIn(ExperimentalTime::class)
-fun ResultSet.Row.Column.asInstant(): Instant = asString().toInstantSqlx4k()
-
-@OptIn(ExperimentalTime::class)
-fun ResultSet.Row.Column.asInstantOrNull(): Instant? = asStringOrNull()?.toInstantSqlx4k()
+fun ResultSet.Row.Column.asLocalDateTimeOrNull(): LocalDateTime? = asStringOrNull()?.let { LocalDateTime.parse(it, localDateTimeFormatter) }
 
 inline fun <reified T : Enum<T>> String.toEnum(): T =
     try {
@@ -59,14 +58,57 @@ inline fun <reified T : Enum<T>> String.toEnum(): T =
         SQLError(SQLError.Code.CannotDecodeEnumValue, "Cannot decode enum value '$this'.").ex()
     }
 
+
+@OptIn(ExperimentalTime::class)
+fun ResultSet.Row.Column.asInstant(): Instant = asString().toInstantSqlx4k()
+
+@OptIn(ExperimentalTime::class)
+fun ResultSet.Row.Column.asInstantOrNull(): Instant? = asStringOrNull()?.toInstantSqlx4k()
+
+// Match: "yyyy-MM-dd HH:mm:ss[.fraction][(Z|+HH|+HHMM|+HH:MM|-HH|-HHMM|-HH:MM)]" (offset optional)
+private val timestampRegex = Regex("""^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)(Z|[+-]\d{2}(?::?\d{2})?)?$""")
+
 @OptIn(ExperimentalTime::class)
 private fun String.toInstantSqlx4k(): Instant {
-    val split = split("+")
-    @OptIn(ExperimentalTime::class)
-    return LocalDateTime.parse(split[0], localDateTimeFormatter).toInstant(UtcOffset(hours = split[1].toInt()))
-}
+    fun normalizeFractionTo6(s: String): String {
+        val dot = s.indexOf('.')
+        if (dot < 0) return s
+        val frac = s.substring(dot + 1)
+        val normalized = when {
+            frac.length == 6 -> frac
+            frac.length < 6 -> frac.padEnd(6, '0')
+            else -> frac.take(6)
+        }
+        return s.take(dot + 1) + normalized
+    }
 
-private val localDateTimeFormatter: DateTimeFormat<LocalDateTime> = LocalDateTime.Format {
-    @OptIn(FormatStringsInDatetimeFormats::class)
-    byUnicodePattern("yyyy-MM-dd HH:mm:ss[.SSSSSS]")
+    fun parseUtcOffset(s: String): UtcOffset {
+        if (s == "Z" || s == "z") return UtcOffset.ZERO
+        val sign = if (s[0] == '-') -1 else 1
+        val body = s.substring(1)
+        val (hh, mm) = when {
+            body.contains(":") -> {
+                val parts = body.split(":")
+                if (parts.size != 2) error("Invalid offset: '$s'")
+                parts[0] to parts[1]
+            }
+
+            body.length == 2 -> body to "00"
+            body.length == 4 -> body.take(2) to body.substring(2)
+            else -> error("Invalid offset: '$s'")
+        }
+        val hours = hh.toIntOrNull() ?: error("Invalid offset hours in '$s'")
+        val minutes = mm.toIntOrNull() ?: error("Invalid offset minutes in '$s'")
+        return UtcOffset(hours = sign * hours, minutes = sign * minutes)
+    }
+
+    val m = timestampRegex.matchEntire(trim())
+        ?: error("Invalid timestamp with optional offset: '$this'")
+
+    val dateTimePart = normalizeFractionTo6(m.groupValues[1])
+    val offsetPart = m.groupValues.getOrNull(2)
+
+    val ldt = LocalDateTime.parse(dateTimePart, localDateTimeFormatter)
+    val offset = if (offsetPart.isNullOrEmpty()) UtcOffset.ZERO else parseUtcOffset(offsetPart)
+    return ldt.toInstant(offset)
 }

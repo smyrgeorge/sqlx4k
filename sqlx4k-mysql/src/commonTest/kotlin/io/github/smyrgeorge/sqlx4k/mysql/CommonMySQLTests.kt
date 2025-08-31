@@ -12,6 +12,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -20,7 +22,7 @@ class CommonMySQLTests(
     private val db: IMySQL
 ) {
 
-    @OptIn(ExperimentalUuidApi::class)
+    @OptIn(ExperimentalUuidApi::class, ExperimentalTime::class)
     fun `Test basic type mappings`() = runBlocking {
         // language=MySQL
         val types = """
@@ -37,7 +39,7 @@ class CommonMySQLTests(
                    '' as string_1,
                    'aa' as string_2,
                    cast('2025-03-25 07:31:43' as datetime) as datetime,
-                   1, -- cast('2025-03-25 07:31:43.330068+00' as timestamp) as timestampz,
+                   cast('2025-03-25 07:31:43.330068' as datetime(6)) as timestampz,
                    cast('2025-03-25' as date) as date,
                    cast('07:31:43' as time) as time,
                    '22d64ef8-f6b3-43da-8869-2ee9d31be9d5' as uuid,
@@ -61,7 +63,7 @@ class CommonMySQLTests(
             assertThat(row.get(9).asString()).isEqualTo("")
             assertThat(row.get(10).asString()).isEqualTo("aa")
             assertThat(row.get(11).asLocalDateTime()).isEqualTo(LocalDateTime.parse("2025-03-25T07:31:43"))
-//            assertThat(row.get(12).asInstant()).isEqualTo(Instant.parse("2025-03-25T07:31:43.330068Z"))
+            assertThat(row.get(12).asInstant()).isEqualTo(Instant.parse("2025-03-25T07:31:43.330068Z"))
             assertThat(row.get(13).asLocalDate()).isEqualTo(LocalDate.parse("2025-03-25"))
             assertThat(row.get(14).asLocalTime()).isEqualTo(LocalTime.parse("07:31:43"))
             assertThat(row.get(15).asUuid()).isEqualTo(Uuid.parse("22d64ef8-f6b3-43da-8869-2ee9d31be9d5"))

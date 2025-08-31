@@ -9,6 +9,7 @@ import io.asyncer.r2dbc.mysql.codec.CodecContext
 import io.asyncer.r2dbc.mysql.codec.CodecRegistry
 import io.asyncer.r2dbc.mysql.extension.CodecRegistrar
 import io.github.smyrgeorge.sqlx4k.*
+import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufAllocator
 import io.r2dbc.pool.ConnectionPool
@@ -58,9 +59,8 @@ class MySQL(
         runBlocking { launch { runCatching { warmup().awaitSingle() } } }
     }
 
-    override suspend fun migrate(path: String): Result<Unit> {
-        error("This feature is not yet implemented for the JVM platform.")
-    }
+    override suspend fun migrate(path: String, table: String): Result<Unit> =
+        Migrator.migrate(this, path, table, Dialect.MySQL)
 
     override suspend fun close(): Result<Unit> = runCatching {
         try {

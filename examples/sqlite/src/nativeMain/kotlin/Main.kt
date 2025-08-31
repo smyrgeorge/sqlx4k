@@ -3,7 +3,6 @@ import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
 import io.github.smyrgeorge.sqlx4k.impl.extensions.errorOrNull
 import io.github.smyrgeorge.sqlx4k.sqlite.SQLite
-import io.github.smyrgeorge.sqlx4k.sqlite.extensions.asByteArray
 import kotlinx.coroutines.*
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.measureTime
@@ -16,6 +15,12 @@ fun main() {
         ): Unit = withContext(context) { map { async { f(it) } }.awaitAll() }
 
         val db = SQLite(url = "sqlite://test.db")
+
+        runCatching {
+            val path = "./db/migrations"
+            val res = db.migrate(path)
+            println("Migrations completed. $res")
+        }
 
         db.execute("drop table if exists sqlx4k;").getOrThrow()
         val error = db.execute("select * from sqlx4kk").errorOrNull()

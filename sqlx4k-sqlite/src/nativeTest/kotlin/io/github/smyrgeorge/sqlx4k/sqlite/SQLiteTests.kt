@@ -55,7 +55,7 @@ class SQLiteTests {
                    cast('a' as char) as char,
                    '' as string_1,
                    'aa' as string_2,
-                   datetime('2025-03-25 07:31:43.330068') as datetime,
+                   datetime('2025-03-25 07:31:43') as datetime,
                    1, -- datetime('2025-03-25 07:31:43.330068+00') as timestampz,
                    date('2025-03-25') as date,
                    time('07:31:43') as time,

@@ -14,6 +14,7 @@ kotlin {
             dependencies {
                 api(libs.kotlinx.coroutines.core)
                 api(libs.kotlinx.datetime)
+                implementation(libs.okio)
             }
         }
         val commonTest by getting {

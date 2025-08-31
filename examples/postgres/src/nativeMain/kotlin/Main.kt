@@ -32,8 +32,8 @@ fun main() {
 
         runCatching {
             val path = "./db/migrations"
-            db.migrate(path).getOrThrow()
-            println("Migrations completed.")
+            val res = db.migrate(path)
+            println("Migrations completed. $res")
         }
 
         db.execute("drop table if exists sqlx4k;").getOrThrow()

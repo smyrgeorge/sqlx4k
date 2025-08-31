@@ -10,4 +10,6 @@ package io.github.smyrgeorge.sqlx4k.impl.statement
  * @constructor Initializes the statement with the given SQL string.
  * @param sql The SQL query to be executed.
  */
-class SimpleStatement(sql: String) : AbstractStatement(sql)
+class SimpleStatement(private val sql: String) : AbstractStatement(sql) {
+    override fun toString(): String = "SimpleStatement(sql='$sql')"
+}
