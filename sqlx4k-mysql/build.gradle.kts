@@ -19,6 +19,7 @@ kotlin {
             dependencies {
                 implementation(libs.kotlin.test)
                 implementation(libs.assertk)
+                implementation(libs.okio)
             }
         }
         val jvmMain by getting {
