@@ -249,7 +249,7 @@ suspend fun doBusinessLogic() {
 // Or you can use the `withCurrent` method to get the transaction and execute the block in a new transaction scope.
 suspend fun doMoreBusinessLogic(): Unit = TransactionContext.withCurrent {
     // Continue operating within the same database transaction
-    tx.execute("update sqlx4k set test = 'updated' where id = 66;").getOrThrow()
+    execute("update sqlx4k set test = 'updated' where id = 66;").getOrThrow()
 }
 ```
 
