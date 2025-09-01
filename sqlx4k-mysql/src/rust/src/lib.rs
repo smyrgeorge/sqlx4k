@@ -1,15 +1,13 @@
-use sqlx::migrate::Migrator;
 use sqlx::mysql::{
     MySqlConnectOptions, MySqlPool, MySqlPoolOptions, MySqlRow, MySqlTypeInfo, MySqlValueRef,
 };
 use sqlx::{Column, Executor, MySql, Row, Transaction, TypeInfo, ValueRef};
 use sqlx4k::{
-    c_chars_to_str, sqlx4k_error_result_of, sqlx4k_migrate_error_result_of, Ptr, Sqlx4kColumn,
-    Sqlx4kResult, Sqlx4kRow, Sqlx4kSchema, Sqlx4kSchemaColumn,
+    c_chars_to_str, sqlx4k_error_result_of, Ptr, Sqlx4kColumn, Sqlx4kResult, Sqlx4kRow,
+    Sqlx4kSchema, Sqlx4kSchemaColumn,
 };
 use std::{
     ffi::{c_char, c_int, c_void, CString},
-    path::Path,
     ptr::null_mut,
     sync::OnceLock,
     time::Duration,
@@ -112,20 +110,6 @@ impl Sqlx4k {
         let result = Sqlx4kResult {
             tx: tx as *mut _ as *mut c_void,
             ..result
-        };
-        result.leak()
-    }
-
-    async fn migrate(&self, path: &str) -> *mut Sqlx4kResult {
-        let migrator = Migrator::new(Path::new(&path)).await;
-        let migrator = match migrator {
-            Ok(mgr) => mgr,
-            Err(err) => return sqlx4k_migrate_error_result_of(err).leak(),
-        };
-        let result = migrator.run(&self.pool).await;
-        let result = match result {
-            Ok(_) => Sqlx4kResult::default(),
-            Err(err) => sqlx4k_migrate_error_result_of(err),
         };
         result.leak()
     }
@@ -352,23 +336,6 @@ pub extern "C" fn sqlx4k_tx_fetch_all(
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
     runtime.spawn(async move {
         let result = sqlx4k.tx_fetch_all(tx, &sql).await;
-        fun(callback, result)
-    });
-}
-
-#[no_mangle]
-pub extern "C" fn sqlx4k_migrate(
-    rt: *mut c_void,
-    path: *const c_char,
-    callback: *mut c_void,
-    fun: extern "C" fn(Ptr, *mut Sqlx4kResult),
-) {
-    let callback = Ptr { ptr: callback };
-    let path = c_chars_to_str(path).to_owned();
-    let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
-    runtime.spawn(async move {
-        let result = sqlx4k.migrate(&path).await;
         fun(callback, result)
     });
 }

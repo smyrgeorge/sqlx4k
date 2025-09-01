@@ -8,7 +8,6 @@
 #define ERROR_POOL_TIMED_OUT 1
 #define ERROR_POOL_CLOSED 2
 #define ERROR_WORKER_CRASHED 3
-#define ERROR_MIGRATE 4
 
 typedef struct Ptr {
   void *ptr;
@@ -84,5 +83,3 @@ void sqlx4k_tx_fetch_all(void *rt,
                          const char *sql,
                          void *callback,
                          void (*fun)(Ptr, Sqlx4kResult*));
-
-void sqlx4k_migrate(void *rt, const char *path, void *callback, void (*fun)(Ptr, Sqlx4kResult*));

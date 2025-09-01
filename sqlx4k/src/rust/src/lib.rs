@@ -1,4 +1,3 @@
-use sqlx::migrate::MigrateError;
 use sqlx::Error;
 use std::{
     ffi::{c_char, c_int, c_ulonglong, c_void, CStr, CString},
@@ -10,7 +9,6 @@ pub const ERROR_DATABASE: c_int = 0;
 pub const ERROR_POOL_TIMED_OUT: c_int = 1;
 pub const ERROR_POOL_CLOSED: c_int = 2;
 pub const ERROR_WORKER_CRASHED: c_int = 3;
-pub const ERROR_MIGRATE: c_int = 4;
 
 #[repr(C)]
 pub struct Ptr {
@@ -176,40 +174,6 @@ pub fn sqlx4k_error_result_of(err: sqlx::Error) -> Sqlx4kResult {
         ),
         Error::WorkerCrashed => (ERROR_WORKER_CRASHED, "WorkerCrashed".to_string()),
         Error::Migrate(_) => panic!("Migrate :: Unexpected error occurred."),
-        _ => panic!("Unexpected error occurred."),
-    };
-
-    Sqlx4kResult {
-        error: code,
-        error_message: CString::new(message).unwrap().into_raw(),
-        ..Default::default()
-    }
-}
-
-pub fn sqlx4k_migrate_error_result_of(err: MigrateError) -> Sqlx4kResult {
-    let (code, message) = match err {
-        MigrateError::Execute(e) => {
-            let e = e.as_database_error().unwrap();
-            match e.code() {
-                Some(code) => (ERROR_DATABASE, format!("[{}] {}", code, e.to_string())),
-                None => (ERROR_DATABASE, format!("{}", e.to_string())),
-            }
-        }
-        MigrateError::ExecuteMigration(e, _) => {
-            let e = e.as_database_error().unwrap();
-            match e.code() {
-                Some(code) => (ERROR_DATABASE, format!("[{}] {}", code, e.to_string())),
-                None => (ERROR_DATABASE, format!("{}", e.to_string())),
-            }
-        }
-        MigrateError::Source(_) => (ERROR_MIGRATE, format!("{}", err.to_string())),
-        MigrateError::VersionMissing(_) => (ERROR_MIGRATE, format!("{}", err.to_string())),
-        MigrateError::VersionMismatch(_) => (ERROR_MIGRATE, format!("{}", err.to_string())),
-        MigrateError::VersionNotPresent(_) => (ERROR_MIGRATE, format!("{}", err.to_string())),
-        MigrateError::VersionTooOld(_, _) => (ERROR_MIGRATE, format!("{}", err.to_string())),
-        MigrateError::VersionTooNew(_, _) => (ERROR_MIGRATE, format!("{}", err.to_string())),
-        MigrateError::ForceNotSupported => (ERROR_MIGRATE, format!("{}", err.to_string())),
-        MigrateError::Dirty(_) => (ERROR_MIGRATE, format!("{}", err.to_string())),
         _ => panic!("Unexpected error occurred."),
     };
 
