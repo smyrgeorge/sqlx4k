@@ -9,13 +9,17 @@ import kotlinx.io.readByteArray
 private val fs = SystemFileSystem
 
 internal fun readEntireFileUtf8(path: String): String {
+    val buffer = Buffer()
     val source = fs.source(Path(path))
     try {
-        val buffer = Buffer()
-        source.readAtMostTo(buffer, Long.MAX_VALUE)
+        source.readAtMostTo(buffer, Int.MAX_VALUE.toLong())
         return buffer.readByteArray().decodeToString() // UTF-8 by default
+    } catch (e: Exception) {
+        println("Could not read file: ${e.message}")
+        throw e
     } finally {
         source.close()
+        buffer.close()
     }
 }
 

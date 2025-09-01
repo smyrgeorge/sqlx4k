@@ -6,9 +6,9 @@ import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.checksum
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.listMigrationFiles
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.readEntireFileUtf8
-import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.checksum
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.splitSqlStatements
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
@@ -37,8 +37,8 @@ object Migrator {
         val sortedFiles = files.sortedBy { it.version }
         // Ensure the discovered (filesystem) order is strictly monotonic by version.
         for (i in 1 until sortedFiles.size) {
-            val prev = files[i - 1]
-            val curr = files[i]
+            val prev = sortedFiles[i - 1]
+            val curr = sortedFiles[i]
             if (curr.version - prev.version > 1) {
                 SQLError(
                     SQLError.Code.Migrate,
@@ -46,7 +46,6 @@ object Migrator {
                 ).ex()
             }
         }
-
 
         val applied = driver.transaction {
             // Ensure migrations table exists.

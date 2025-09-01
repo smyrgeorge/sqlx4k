@@ -14,6 +14,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.io.Buffer
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
+import kotlin.math.absoluteValue
 import kotlin.random.Random
 
 class CommonPostgreSQLMigratorTests(
@@ -23,7 +24,7 @@ class CommonPostgreSQLMigratorTests(
     private val fs = SystemFileSystem
 
     private fun newTempDir(prefix: String): Path {
-        val dir = Path(("./build/tmp/migrator-tests/$prefix-" + Random.nextLong().toString()))
+        val dir = Path(("./build/tmp/migrator-tests/$prefix-${Random.nextLong().absoluteValue}"))
         fs.createDirectories(dir, mustCreate = false)
         return dir
     }
@@ -31,7 +32,11 @@ class CommonPostgreSQLMigratorTests(
     private fun write(dir: Path, name: String, content: String) {
         val p = Path("$dir/$name")
         val buffer = Buffer().also { it.write(content.encodeToByteArray()) }
-        fs.sink(p).write(buffer, buffer.size)
+        val sink = fs.sink(p)
+        sink.write(buffer, buffer.size)
+        sink.flush()
+        sink.close()
+        buffer.close()
     }
 
     private fun listApplied(table: String): List<Long> = runBlocking {
