@@ -236,16 +236,6 @@ This allows you to write small, composable suspend functions that either:
 - inside helper functions call `TransactionContext.current()` to participate in the same transaction without having to
   propagate `Transaction` or `Driver` parameters everywhere.
 
-Key API:
-
-- TransactionContext.new(db) { ... }: Starts a new transaction and installs it into the coroutine context for the block.
-  Commits if the block completes successfully; rolls back on exception.
-- TransactionContext.current(): Returns the current TransactionContext from the coroutine context or throws if none is
-  present.
-- TransactionContext.currentOrNull(): Returns the current TransactionContext if present, or null otherwise.
-
-Basic example (see examples/postgres/src/jvmMain/kotlin/Main.kt):
-
 ```kotlin
 import io.github.smyrgeorge.sqlx4k.impl.coroutines.TransactionContext
 import kotlinx.coroutines.runBlocking
@@ -271,7 +261,7 @@ suspend fun doBusinessLogic() {
     tx.execute("update sqlx4k set test = 'updated' where id = 66;").getOrThrow()
 }
 
-// Or you can use the `withCurrent` method to get the transaction and execute the block in a new transaction scope.
+// Or you can use the `withCurrent` method to get the transaction and execute the block in ongoid transaction.
 suspend fun doMoreBusinessLogic(): Unit = TransactionContext.withCurrent {
     // Continue operating within the same database transaction
     execute("update sqlx4k set test = 'updated' where id = 66;").getOrThrow()
