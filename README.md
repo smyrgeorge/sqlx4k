@@ -47,7 +47,7 @@ A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLi
 - [Prepared statements (named and positional parameters)](#prepared-statements)
 - [Row mappers](#rowmappers)
 - [Transactions and coroutine TransactionContext](#transactions) · [TransactionContext (coroutines)](#transactioncontext-coroutines)
-- [Code generation: CRUD and @Repository implementations](#auto-generate-basic-crud-insertupdatedelete-queries-and-repository-implementations)
+- [Code generation: CRUD and @Repository implementations](#code-generation-crud-and-repository-implementations)
 - [Database migrations](#database-migrations)
 - [PostgreSQL LISTEN/NOTIFY](#listennotify-only-for-postgresql)
 - [SQLDelight integration](#sqldelight)
@@ -264,7 +264,7 @@ suspend fun doMoreBusinessLogic(): Unit = TransactionContext.withCurrent {
 }
 ```
 
-### Auto generate basic `CRUD` (insert/update/delete) queries and `@Repository` implementations
+### Code-Generation, `CRUD` and `@Repository` Implementations
 
 For this operation you will need to include the `KSP` plugin to your project.
 
