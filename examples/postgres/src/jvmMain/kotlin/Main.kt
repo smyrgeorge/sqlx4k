@@ -3,6 +3,7 @@ import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4k
 import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4kRowMapper
+import io.github.smyrgeorge.sqlx4k.impl.coroutines.TransactionContext
 import io.github.smyrgeorge.sqlx4k.impl.extensions.errorOrNull
 import io.github.smyrgeorge.sqlx4k.postgres.Notification
 import io.github.smyrgeorge.sqlx4k.postgres.PostgreSQL
@@ -44,6 +45,22 @@ class Main {
 
         db.execute("create table if not exists sqlx4k(id integer, test text);").getOrThrow()
         db.execute("insert into sqlx4k (id, test) values (65, 'test');").getOrThrow()
+
+        suspend fun doBusinessLogic() {
+            val c = TransactionContext.current()
+            println("Transaction(${c.status}): $c")
+        }
+
+        suspend fun doMoreBusinessLogic(): Unit = TransactionContext.withCurrent {
+            println("Transaction($status): $this")
+        }
+
+        TransactionContext.new(db) {
+            println("Transaction: $this")
+            execute("insert into sqlx4k (id, test) values (66, 'test');").getOrThrow()
+            doBusinessLogic()
+            doMoreBusinessLogic()
+        }
 
         runCatching {
             val st = Statement.create("select * from sqlx4k where id = ?")

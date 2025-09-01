@@ -5,6 +5,7 @@ import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4k
 import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4kRepositoryImpl
 import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4kRowMapper
 import io.github.smyrgeorge.sqlx4k.examples.postgres.insert
+import io.github.smyrgeorge.sqlx4k.impl.coroutines.TransactionContext
 import io.github.smyrgeorge.sqlx4k.impl.extensions.errorOrNull
 import io.github.smyrgeorge.sqlx4k.postgres.Notification
 import io.github.smyrgeorge.sqlx4k.postgres.PostgreSQL
@@ -45,6 +46,25 @@ fun main() {
         val insert = Sqlx4k(id = 66, test = "test").insert()
         val affected = db.execute(insert).getOrThrow()
         println("AFFECTED: $affected")
+
+        suspend fun doBusinessLogic() {
+            val c = TransactionContext.current()
+            println("Transaction(${c.status}): $c")
+        }
+
+        suspend fun doMoreBusinessLogic(): Unit = TransactionContext.withCurrent {
+            println("Transaction($status): $this")
+            val inserted = Sqlx4kRepositoryImpl.insert(this, Sqlx4k(id = 123456, test = "test")).getOrThrow()
+            println("INSERTED: $inserted")
+        }
+
+        TransactionContext.new(db) {
+            println("Transaction: $this")
+            doBusinessLogic()
+            doMoreBusinessLogic()
+            val inserted = Sqlx4kRepositoryImpl.selectById(this, 123456).getOrThrow().first()
+            println("INSERTED: $inserted")
+        }
 
         runCatching {
             val st = Statement.create("select * from sqlx4k where id = ?")

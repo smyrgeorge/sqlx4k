@@ -202,6 +202,57 @@ db.transaction {
 }
 ```
 
+### TransactionContext (coroutines)
+
+When using coroutines, you can propagate a transaction through the coroutine context using `TransactionContext`.
+This allows you to write small, composable suspend functions that either:
+
+- start a transaction at the boundary of your use case, and
+- inside helper functions call `TransactionContext.current()` to participate in the same transaction without having to
+  propagate `Transaction` or `Driver` parameters everywhere.
+
+Key API:
+
+- TransactionContext.new(db) { ... }: Starts a new transaction and installs it into the coroutine context for the block.
+  Commits if the block completes successfully; rolls back on exception.
+- TransactionContext.current(): Returns the current TransactionContext from the coroutine context or throws if none is
+  present.
+- TransactionContext.currentOrNull(): Returns the current TransactionContext if present, or null otherwise.
+
+Basic example (see examples/postgres/src/jvmMain/kotlin/Main.kt):
+
+```kotlin
+import io.github.smyrgeorge.sqlx4k.impl.coroutines.TransactionContext
+import kotlinx.coroutines.runBlocking
+
+fun main() = runBlocking {
+    val db = // create your Driver (e.g. PostgreSQL(...))
+
+        TransactionContext.new(db) {
+            // `this` is a TransactionContext and also a Transaction (delegation),
+            // so you can call query methods directly:
+            execute("insert into sqlx4k (id, test) values (66, 'test');").getOrThrow()
+
+            // In deeper code, fetch the same context and keep using the same tx
+            doBusinessLogic()
+            doMoreBusinessLogic()
+        }
+}
+
+suspend fun doBusinessLogic() {
+    // Get the active transaction from the coroutine context
+    val tx = TransactionContext.current()
+    // Continue operating within the same database transaction
+    tx.execute("update sqlx4k set test = 'updated' where id = 66;").getOrThrow()
+}
+
+// Or you can use the `withCurrent` method to get the transaction and execute the block in a new transaction scope.
+suspend fun doMoreBusinessLogic(): Unit = TransactionContext.withCurrent {
+    // Continue operating within the same database transaction
+    tx.execute("update sqlx4k set test = 'updated' where id = 66;").getOrThrow()
+}
+```
+
 ### Auto generate basic `CRUD` (insert/update/delete) queries and `@Repository` implementations
 
 For this operation you will need to include the `KSP` plugin to your project.
@@ -236,7 +287,7 @@ data class Sqlx4k(
 
 @Repository(Sqlx4k::class, Sqlx4kRowMapper::class)
 interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
-    @Query("SELECT * FROM sqlx4k WHERE id = :id")
+    @Query("SELECT * FROM sqlx4k WHERE id = ?")
     suspend fun selectById(context: Driver, id: Int): Result<List<Sqlx4k>>
     @Query("SELECT * FROM sqlx4k")
     suspend fun selectAll(context: Driver): Result<List<Sqlx4k>>

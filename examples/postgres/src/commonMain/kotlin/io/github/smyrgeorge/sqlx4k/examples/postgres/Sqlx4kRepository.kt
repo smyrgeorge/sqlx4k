@@ -7,7 +7,7 @@ import io.github.smyrgeorge.sqlx4k.annotation.Repository
 
 @Repository(Sqlx4k::class, Sqlx4kRowMapper::class)
 interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
-    @Query("SELECT * FROM sqlx4k WHERE id = :id")
+    @Query("SELECT * FROM sqlx4k WHERE id = ?")
     suspend fun selectById(context: QueryExecutor, id: Int): Result<List<Sqlx4k>>
 
     @Query("SELECT * FROM sqlx4k")
