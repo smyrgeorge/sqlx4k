@@ -21,37 +21,13 @@ A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLi
 
 🏠 [Homepage](https://smyrgeorge.github.io/) (under construction)
 
-## Databases
-
-Currently, the driver supports:
+## Supported Databases
 
 - `PostgreSQL`
 - `MySQL`
 - `SQLite`
 
-## Usage
-
-```kotlin
-implementation("io.github.smyrgeorge:sqlx4k-postgres:x.y.z")
-// or for MySQL
-implementation("io.github.smyrgeorge:sqlx4k-mysql:x.y.z")
-// or for SQLite
-implementation("io.github.smyrgeorge:sqlx4k-sqlite:x.y.z")
-```
-
-### Windows
-
-If you are building your project on Windows, for target mingwX64, and you encounter the following error:
-
-```text
-lld-link: error: -exclude-symbols:___chkstk_ms is not allowed in .drectve
-```
-
-Please look at this issue: [#18](https://github.com/smyrgeorge/sqlx4k/issues/18)
-
-## Supported targets
-
-We support the following targets:
+## Supported Targets
 
 - jvm (only PostgreSQL and MySQL are supported at the moment)
 - iosArm64
@@ -76,7 +52,27 @@ We support the following targets:
 - [PostgreSQL LISTEN/NOTIFY](#listennotify-only-for-postgresql)
 - [SQLDelight integration](#sqldelight)
 
-## Next steps (contributions are welcome)
+## Usage
+
+```kotlin
+implementation("io.github.smyrgeorge:sqlx4k-postgres:x.y.z")
+// or for MySQL
+implementation("io.github.smyrgeorge:sqlx4k-mysql:x.y.z")
+// or for SQLite
+implementation("io.github.smyrgeorge:sqlx4k-sqlite:x.y.z")
+```
+
+### Windows
+
+If you are building your project on Windows, for target mingwX64, and you encounter the following error:
+
+```text
+lld-link: error: -exclude-symbols:___chkstk_ms is not allowed in .drectve
+```
+
+Please look at this issue: [#18](https://github.com/smyrgeorge/sqlx4k/issues/18)
+
+## Next Steps (contributions are welcome)
 
 - Enhance code-generation module.
 - Add support for SQLite JVM target.
@@ -87,7 +83,7 @@ The driver is designed with full support for non-blocking I/O, enabling seamless
 high-performance applications. By leveraging asynchronous, non-blocking operations, it ensures efficient resource
 management, reduces latency, and improves scalability.
 
-### Connection pool
+### Connection Pool
 
 ### Connection Pool Settings
 
