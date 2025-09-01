@@ -64,12 +64,22 @@ We support the following targets:
 - mingwX64
 - wasmWasi (potential future candidate)
 
+## Features
+
+- [Async I/O](#async-io)
+- [Connection pool and settings](#connection-pool)
+- [Prepared statements (named and positional parameters)](#prepared-statements)
+- [Row mappers](#rowmappers)
+- [Transactions and coroutine TransactionContext](#transactions) · [TransactionContext (coroutines)](#transactioncontext-coroutines)
+- [Code generation: CRUD and @Repository implementations](#auto-generate-basic-crud-insertupdatedelete-queries-and-repository-implementations)
+- [Database migrations](#database-migrations)
+- [PostgreSQL LISTEN/NOTIFY](#listennotify-only-for-postgresql)
+- [SQLDelight integration](#sqldelight)
+
 ## Next steps (contributions are welcome)
 
 - Enhance code-generation module.
 - Add support for SQLite JVM target.
-
-## Features
 
 ### Async-io
 
@@ -182,6 +192,21 @@ db.fetchAll(st2).getOrThrow().map {
 }
 ```
 
+### RowMapper(s)
+
+```kotlin
+object Sqlx4kRowMapper : RowMapper<Sqlx4k> {
+    override fun map(row: ResultSet.Row): Sqlx4k {
+        val id: ResultSet.Row.Column = row.get(0)
+        val test: ResultSet.Row.Column = row.get(1)
+        // Use built-in mapping methods to map the values to the corresponding type.
+        return Sqlx4k(id = id.asInt(), test = test.asString())
+    }
+}
+
+val res: List<Sqlx4k> = db.fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow()
+```
+
 ### Transactions
 
 ```kotlin
@@ -287,10 +312,12 @@ data class Sqlx4k(
 
 @Repository(Sqlx4k::class, Sqlx4kRowMapper::class)
 interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
-    @Query("SELECT * FROM sqlx4k WHERE id = ?")
+    @Query("SELECT * FROM sqlx4k WHERE id = :id")
     suspend fun selectById(context: Driver, id: Int): Result<List<Sqlx4k>>
+
     @Query("SELECT * FROM sqlx4k")
     suspend fun selectAll(context: Driver): Result<List<Sqlx4k>>
+
     @Query("SELECT count(*) FROM sqlx4k")
     suspend fun countAll(context: Driver): Result<Long>
 }
@@ -307,21 +334,6 @@ val res: List<Sqlx4k> = Sqlx4kRepositoryImpl.selectAll(db).getOrThrow()
 ```
 
 For more details take a look at the `postgres` example.
-
-### RowMapper(s)
-
-```kotlin
-object Sqlx4kRowMapper : RowMapper<Sqlx4k> {
-    override fun map(row: ResultSet.Row): Sqlx4k {
-        val id: ResultSet.Row.Column = row.get(0)
-        val test: ResultSet.Row.Column = row.get(1)
-        // Use built-in mapping methods to map the values to the corresponding type.
-        return Sqlx4k(id = id.asInt(), test = test.asString())
-    }
-}
-
-val res: List<Sqlx4k> = db.fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow()
-```
 
 ### Database Migrations
 

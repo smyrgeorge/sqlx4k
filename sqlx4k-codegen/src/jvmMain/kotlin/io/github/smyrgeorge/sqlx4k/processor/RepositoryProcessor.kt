@@ -166,9 +166,9 @@ class RepositoryProcessor(
                 file += "        val statement = Statement.create(\"$sql\")\n"
 
                 val nonContextParams = params.drop(1)
-                nonContextParams.forEachIndexed { index, p ->
-                    val pName = p.name?.asString() ?: "p${index + 1}"
-                    file += "        statement.bind($index, $pName)\n"
+                nonContextParams.forEach { p ->
+                    val pName = p.name?.asString() ?: error("All query parameters must be named when using namedParameters support")
+                    file += "        statement.bind(\"$pName\", $pName)\n"
                 }
 
                 val contextParamName = params.firstOrNull()?.name?.asString() ?: "context"
