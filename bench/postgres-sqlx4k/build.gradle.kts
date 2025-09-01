@@ -60,8 +60,8 @@ fun targetsOf(project: Project): List<String> {
         when (it) {
             "all" -> listOf(
                 "IosArm64",
-                "AndroidNativeX64",
-                "AndroidNativeArm64",
+//                "AndroidNativeX64",
+//                "AndroidNativeArm64",
                 "MacosArm64",
                 "MacosX64",
                 "LinuxArm64",

@@ -41,11 +41,11 @@
             </a>        <button class="navigation-controls--btn navigation-controls--btn_toc ui-kit_mobile-only" id="toc-toggle" type="button">Toggle table of contents
         </button>
         <div class="navigation-controls--break ui-kit_mobile-only"></div>
-        <div class="library-version" id="library-version">0.71.0
+        <div class="library-version" id="library-version">0.72.0
         </div>
         <div class="navigation-controls">
         <div class="filter-section filter-section_loading" id="filter-section">
-                <button class="platform-tag platform-selector common-like" data-active="" data-filter=":sqlx4k:dokkaHtmlPartial/commonMain">common</button>
+                <button class="platform-tag platform-selector common-like" data-active="" data-filter=":sqlx4k/commonMain">common</button>
             <div class="dropdown filter-section--dropdown" data-role="dropdown" id="filter-section-dropdown">
                 <button class="button button_dropdown filter-section--dropdown-toggle" role="combobox" data-role="dropdown-toggle" aria-controls="platform-tags-listbox" aria-haspopup="listbox" aria-expanded="false" aria-label="Toggle source sets"></button>
                 <ul role="listbox" id="platform-tags-listbox" class="dropdown--list" data-role="dropdown-listbox">
@@ -56,7 +56,7 @@
                     </div>
                         <li role="option" class="dropdown--option platform-selector-option common-like" tabindex="0">
                             <label class="checkbox">
-                                <input type="checkbox" class="checkbox--input" id=":sqlx4k:dokkaHtmlPartial/commonMain" data-filter=":sqlx4k:dokkaHtmlPartial/commonMain">
+                                <input type="checkbox" class="checkbox--input" id=":sqlx4k/commonMain" data-filter=":sqlx4k/commonMain">
                                 <span class="checkbox--icon"></span>
                                 common
                             </label>
@@ -90,7 +90,7 @@
                 </div>
             </div>
             <div id="main">
-<div class="main-content" data-page-type="package" id="content" pageids="sqlx4k::io.github.smyrgeorge.sqlx4k.annotation////PointingToDeclaration//-1907618030">
+<div class="main-content" data-page-type="package" id="content" pageids="sqlx4k::io.github.smyrgeorge.sqlx4k.annotation////PointingToDeclaration//272526764">
   <div class="breadcrumbs"><a href="../index.html">sqlx4k</a><span class="delimiter">/</span><span class="current">io.github.smyrgeorge.sqlx4k.annotation</span></div>
   <div class="cover ">
     <h1 class="cover"><span><span>Package-level</span></span> <span><span>declarations</span></span></h1>
@@ -100,47 +100,77 @@
     <div class="tabs-section-body">
       <div data-togglable="TYPE">
         <h2 class="">Types</h2>
-        <div class="table"><a data-name="794455823%2FClasslikes%2F-1907618030" anchor-label="Column" id="794455823%2FClasslikes%2F-1907618030" data-filterable-set=":sqlx4k:dokkaHtmlPartial/commonMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/commonMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/commonMain">
+        <div class="table"><a data-name="794455823%2FClasslikes%2F272526764" anchor-label="Column" id="794455823%2FClasslikes%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="-column/index.html"><span><span>Column</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="794455823%2FClasslikes%2F-1907618030"></span>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="794455823%2FClasslikes%2F272526764"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/commonMain"><div class="symbol monospace"><div class="block"><div class="block"><span class="token annotation builtin">@</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-target/index.html"><span class="token annotation builtin">Target</span></a><span class="token punctuation">(</span><span>allowedTargets<span class="token operator"> = </span><span class="token punctuation">[</span><span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-annotation-target/-p-r-o-p-e-r-t-y/index.html">AnnotationTarget.PROPERTY</a></span><wbr><span class="token punctuation">]</span></span><wbr><span class="token punctuation">)</span></div></div><span class="token keyword">annotation class </span><a href="-column/index.html">Column</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword">val </span>insert<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator"> = </span><span class="token boolean">true</span><span class="token punctuation">, </span></span><span class="parameter "><span class="token keyword">val </span>update<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator"> = </span><span class="token boolean">true</span></span></span><span class="token punctuation">)</span></div><div class="brief "><p class="paragraph">Annotation that specifies whether a property should be included in insert and update operations in database-related operations.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><div class="block"><div class="block"><span class="token annotation builtin">@</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-target/index.html"><span class="token annotation builtin">Target</span></a><span class="token punctuation">(</span><span>allowedTargets<span class="token operator"> = </span><span class="token punctuation">[</span><span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-annotation-target/-p-r-o-p-e-r-t-y/index.html">AnnotationTarget.PROPERTY</a></span><wbr><span class="token punctuation">]</span></span><wbr><span class="token punctuation">)</span></div></div><span class="token keyword">annotation class </span><a href="-column/index.html">Column</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword">val </span>insert<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator"> = </span><span class="token boolean">true</span><span class="token punctuation">, </span></span><span class="parameter "><span class="token keyword">val </span>update<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator"> = </span><span class="token boolean">true</span></span></span><span class="token punctuation">)</span></div><div class="brief "><p class="paragraph">Annotation that specifies whether a property should be included in insert and update operations in database-related operations.</p></div></div></div>
                 </div>
               </div>
             </div>
           </div>
-<a data-name="-679860502%2FClasslikes%2F-1907618030" anchor-label="Id" id="-679860502%2FClasslikes%2F-1907618030" data-filterable-set=":sqlx4k:dokkaHtmlPartial/commonMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/commonMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/commonMain">
+<a data-name="-679860502%2FClasslikes%2F272526764" anchor-label="Id" id="-679860502%2FClasslikes%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="-id/index.html"><span><span>Id</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-679860502%2FClasslikes%2F-1907618030"></span>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-679860502%2FClasslikes%2F272526764"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/commonMain"><div class="symbol monospace"><div class="block"><div class="block"><span class="token annotation builtin">@</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-target/index.html"><span class="token annotation builtin">Target</span></a><span class="token punctuation">(</span><span>allowedTargets<span class="token operator"> = </span><span class="token punctuation">[</span><span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-annotation-target/-p-r-o-p-e-r-t-y/index.html">AnnotationTarget.PROPERTY</a></span><wbr><span class="token punctuation">]</span></span><wbr><span class="token punctuation">)</span></div></div><span class="token keyword">annotation class </span><a href="-id/index.html">Id</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword">val </span>insert<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator"> = </span><span class="token boolean">false</span></span></span><span class="token punctuation">)</span></div><div class="brief "><p class="paragraph">This annotation is used to indicate that a property is an identifier for a database entity. The identifier can optionally be included in insert operations.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><div class="block"><div class="block"><span class="token annotation builtin">@</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-target/index.html"><span class="token annotation builtin">Target</span></a><span class="token punctuation">(</span><span>allowedTargets<span class="token operator"> = </span><span class="token punctuation">[</span><span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-annotation-target/-p-r-o-p-e-r-t-y/index.html">AnnotationTarget.PROPERTY</a></span><wbr><span class="token punctuation">]</span></span><wbr><span class="token punctuation">)</span></div></div><span class="token keyword">annotation class </span><a href="-id/index.html">Id</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword">val </span>insert<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator"> = </span><span class="token boolean">false</span></span></span><span class="token punctuation">)</span></div><div class="brief "><p class="paragraph">This annotation is used to indicate that a property is an identifier for a database entity. The identifier can optionally be included in insert operations.</p></div></div></div>
                 </div>
               </div>
             </div>
           </div>
-<a data-name="1900937263%2FClasslikes%2F-1907618030" anchor-label="Table" id="1900937263%2FClasslikes%2F-1907618030" data-filterable-set=":sqlx4k:dokkaHtmlPartial/commonMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/commonMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/commonMain">
+<a data-name="-119943051%2FClasslikes%2F272526764" anchor-label="Query" id="-119943051%2FClasslikes%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
-                  <div><a href="-table/index.html"><span><span>Table</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1900937263%2FClasslikes%2F-1907618030"></span>
+                  <div><a href="-query/index.html"><span><span>Query</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-119943051%2FClasslikes%2F272526764"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/commonMain"><div class="symbol monospace"><div class="block"><div class="block"><span class="token annotation builtin">@</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-target/index.html"><span class="token annotation builtin">Target</span></a><span class="token punctuation">(</span><span>allowedTargets<span class="token operator"> = </span><span class="token punctuation">[</span><span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-annotation-target/-c-l-a-s-s/index.html">AnnotationTarget.CLASS</a></span><wbr><span class="token punctuation">]</span></span><wbr><span class="token punctuation">)</span></div></div><span class="token keyword">annotation class </span><a href="-table/index.html">Table</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword">val </span>name<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span></div><div class="brief "><p class="paragraph">This annotation is used to specify the table name in a database for a data class.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><div class="block"><div class="block"><span class="token annotation builtin">@</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-target/index.html"><span class="token annotation builtin">Target</span></a><span class="token punctuation">(</span><span>allowedTargets<span class="token operator"> = </span><span class="token punctuation">[</span><span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-annotation-target/-f-u-n-c-t-i-o-n/index.html">AnnotationTarget.FUNCTION</a></span><wbr><span class="token punctuation">]</span></span><wbr><span class="token punctuation">)</span></div></div><span class="token keyword">annotation class </span><a href="-query/index.html">Query</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword">val </span>value<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span></div><div class="brief "><p class="paragraph">Annotation used to specify a query string for a database operation. This annotation is applied to functions to indicate the query that should be executed when the function is called.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-1036605541%2FClasslikes%2F272526764" anchor-label="Repository" id="-1036605541%2FClasslikes%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="-repository/index.html"><span><span>Repository</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1036605541%2FClasslikes%2F272526764"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><div class="block"><div class="block"><span class="token annotation builtin">@</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-target/index.html"><span class="token annotation builtin">Target</span></a><span class="token punctuation">(</span><span>allowedTargets<span class="token operator"> = </span><span class="token punctuation">[</span><span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-annotation-target/-c-l-a-s-s/index.html">AnnotationTarget.CLASS</a></span><wbr><span class="token punctuation">]</span></span><wbr><span class="token punctuation">)</span></div></div><span class="token keyword">annotation class </span><a href="-repository/index.html">Repository</a></div><div class="brief "><p class="paragraph">Marker annotation for repository interfaces to be processed by sqlx4k codegen.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="1900937263%2FClasslikes%2F272526764" anchor-label="Table" id="1900937263%2FClasslikes%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="-table/index.html"><span><span>Table</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1900937263%2FClasslikes%2F272526764"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><div class="block"><div class="block"><span class="token annotation builtin">@</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-target/index.html"><span class="token annotation builtin">Target</span></a><span class="token punctuation">(</span><span>allowedTargets<span class="token operator"> = </span><span class="token punctuation">[</span><span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-annotation-target/-c-l-a-s-s/index.html">AnnotationTarget.CLASS</a></span><wbr><span class="token punctuation">]</span></span><wbr><span class="token punctuation">)</span></div></div><span class="token keyword">annotation class </span><a href="-table/index.html">Table</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword">val </span>name<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span></div><div class="brief "><p class="paragraph">This annotation is used to specify the table name in a database for a data class.</p></div></div></div>
                 </div>
               </div>
             </div>

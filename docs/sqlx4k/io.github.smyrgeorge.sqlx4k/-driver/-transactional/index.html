@@ -41,11 +41,11 @@
             </a>        <button class="navigation-controls--btn navigation-controls--btn_toc ui-kit_mobile-only" id="toc-toggle" type="button">Toggle table of contents
         </button>
         <div class="navigation-controls--break ui-kit_mobile-only"></div>
-        <div class="library-version" id="library-version">0.71.0
+        <div class="library-version" id="library-version">0.72.0
         </div>
         <div class="navigation-controls">
         <div class="filter-section filter-section_loading" id="filter-section">
-                <button class="platform-tag platform-selector common-like" data-active="" data-filter=":sqlx4k:dokkaHtmlPartial/commonMain">common</button>
+                <button class="platform-tag platform-selector common-like" data-active="" data-filter=":sqlx4k/commonMain">common</button>
             <div class="dropdown filter-section--dropdown" data-role="dropdown" id="filter-section-dropdown">
                 <button class="button button_dropdown filter-section--dropdown-toggle" role="combobox" data-role="dropdown-toggle" aria-controls="platform-tags-listbox" aria-haspopup="listbox" aria-expanded="false" aria-label="Toggle source sets"></button>
                 <ul role="listbox" id="platform-tags-listbox" class="dropdown--list" data-role="dropdown-listbox">
@@ -56,7 +56,7 @@
                     </div>
                         <li role="option" class="dropdown--option platform-selector-option common-like" tabindex="0">
                             <label class="checkbox">
-                                <input type="checkbox" class="checkbox--input" id=":sqlx4k:dokkaHtmlPartial/commonMain" data-filter=":sqlx4k:dokkaHtmlPartial/commonMain">
+                                <input type="checkbox" class="checkbox--input" id=":sqlx4k/commonMain" data-filter=":sqlx4k/commonMain">
                                 <span class="checkbox--icon"></span>
                                 common
                             </label>
@@ -90,43 +90,43 @@
                 </div>
             </div>
             <div id="main">
-<div class="main-content" data-page-type="classlike" id="content" pageids="sqlx4k::io.github.smyrgeorge.sqlx4k/Driver.Transactional///PointingToDeclaration//-1907618030">
+<div class="main-content" data-page-type="classlike" id="content" pageids="sqlx4k::io.github.smyrgeorge.sqlx4k/Driver.Transactional///PointingToDeclaration//272526764">
   <div class="breadcrumbs"><a href="../../../index.html">sqlx4k</a><span class="delimiter">/</span><a href="../../index.html">io.github.smyrgeorge.sqlx4k</a><span class="delimiter">/</span><a href="../index.html">Driver</a><span class="delimiter">/</span><span class="current">Transactional</span></div>
   <div class="cover ">
     <h1 class="cover"><span><span>Transactional</span></span></h1>
-    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/commonMain"><div class="symbol monospace"><span class="token keyword">interface </span><a href="index.html">Transactional</a></div><p class="paragraph">Represents a transactional interface providing methods for handling transactions.</p><p class="paragraph">This interface offers a method to begin a transaction. Implementers of this interface are expected to handle the initialization and starting of database transactions.</p></div></div>
+    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">interface </span><a href="index.html">Transactional</a><span class="clearfix"><span class="floating-right">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/Driver.kt#L142">source</a>)</span></span></div><p class="paragraph">Represents a transactional interface providing methods for handling transactions.</p><p class="paragraph">This interface offers a method to begin a transaction. Implementers of this interface are expected to handle the initialization and starting of database transactions.</p></div></div>
   </div>
   <div class="tabbedcontent">
     <div class="tabs-section" tabs-section="tabs-section"><button class="section-tab" data-active="" data-togglable="CONSTRUCTOR,TYPE,PROPERTY,FUNCTION">Members</button></div>
     <div class="tabs-section-body">
       <div data-togglable="FUNCTION">
         <h2 class="">Functions</h2>
-        <div class="table"><a data-name="-1586088725%2FFunctions%2F-1907618030" anchor-label="begin" id="-1586088725%2FFunctions%2F-1907618030" data-filterable-set=":sqlx4k:dokkaHtmlPartial/commonMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/commonMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/commonMain">
+        <div class="table"><a data-name="-1586088725%2FFunctions%2F272526764" anchor-label="begin" id="-1586088725%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="begin.html"><span><span>begin</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1586088725%2FFunctions%2F-1907618030"></span>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1586088725%2FFunctions%2F272526764"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/commonMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="begin.html"><span class="token function">begin</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="../../-transaction/index.html">Transaction</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Begins (with default isolation level) a new transaction asynchronously.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="begin.html"><span class="token function">begin</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="../../-transaction/index.html">Transaction</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Begins (with default isolation level) a new transaction asynchronously.</p></div></div></div>
                 </div>
               </div>
             </div>
           </div>
-<a data-name="-897737159%2FFunctions%2F-1907618030" anchor-label="transaction" id="-897737159%2FFunctions%2F-1907618030" data-filterable-set=":sqlx4k:dokkaHtmlPartial/commonMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k:dokkaHtmlPartial/commonMain" data-filterable-set=":sqlx4k:dokkaHtmlPartial/commonMain">
+<a data-name="-897737159%2FFunctions%2F272526764" anchor-label="transaction" id="-897737159%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="transaction.html"><span><span>transaction</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-897737159%2FFunctions%2F-1907618030"></span>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-897737159%2FFunctions%2F272526764"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k:dokkaHtmlPartial/commonMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><span class="token operator">&lt;</span><a href="transaction.html">T</a><span class="token operator">&gt; </span><a href="transaction.html"><span class="token function">transaction</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">f<span class="token operator">: </span><span class="token keyword">suspend </span><a href="../../-transaction/index.html">Transaction</a><span class="token punctuation">.</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator"> -&gt; </span><a href="transaction.html">T</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="transaction.html">T</a></div><div class="brief "><p class="paragraph">Begins (with default isolation level) a transactional operation and executes the provided block of code within the transaction context.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><span class="token operator">&lt;</span><a href="transaction.html">T</a><span class="token operator">&gt; </span><a href="transaction.html"><span class="token function">transaction</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">f<span class="token operator">: </span><span class="token keyword">suspend </span><a href="../../-transaction/index.html">Transaction</a><span class="token punctuation">.</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator"> -&gt; </span><a href="transaction.html">T</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="transaction.html">T</a></div><div class="brief "><p class="paragraph">Begins (with default isolation level) a transactional operation and executes the provided block of code within the transaction context.</p></div></div></div>
                 </div>
               </div>
             </div>
