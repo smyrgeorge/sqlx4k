@@ -22,7 +22,7 @@ interface CrudRepository<T> {
      * @return A [Result] containing the inserted entity of type [T] if the operation is successful,
      *         or an error if the operation fails.
      */
-    suspend fun insert(context: Driver, entity: T): Result<T>
+    suspend fun insert(context: QueryExecutor, entity: T): Result<T>
 
     /**
      * Updates the given entity in the data source using the specified driver context.
@@ -36,7 +36,7 @@ interface CrudRepository<T> {
      * @return A [Result] containing the updated entity of type [T] if the operation is successful,
      *         or an error if the operation fails.
      */
-    suspend fun update(context: Driver, entity: T): Result<T>
+    suspend fun update(context: QueryExecutor, entity: T): Result<T>
 
     /**
      * Deletes the given entity from the data source using the specified driver context.
@@ -50,7 +50,7 @@ interface CrudRepository<T> {
      * @return A [Result] containing a [Unit] value if the operation is successful,
      *         or an error if the operation fails.
      */
-    suspend fun delete(context: Driver, entity: T): Result<Unit>
+    suspend fun delete(context: QueryExecutor, entity: T): Result<Unit>
 
     /**
      * Saves the given entity using the specified driver context.
@@ -58,5 +58,5 @@ interface CrudRepository<T> {
      * Performs an insert or an update depending on the value of the `@Id` property.
      * Implementations decide whether to insert or update.
      */
-    suspend fun save(context: Driver, entity: T): Result<T>
+    suspend fun save(context: QueryExecutor, entity: T): Result<T>
 }

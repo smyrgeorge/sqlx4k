@@ -7,7 +7,7 @@ package io.github.smyrgeorge.sqlx4k
  * This interface integrates with the `Driver` interface to facilitate execution
  * of SQL queries and retrieval of results within a transactional context.
  */
-interface Transaction : Driver {
+interface Transaction : QueryExecutor {
     val status: Status
 
     /**

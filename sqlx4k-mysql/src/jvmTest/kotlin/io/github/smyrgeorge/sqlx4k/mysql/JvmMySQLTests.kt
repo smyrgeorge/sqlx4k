@@ -1,11 +1,11 @@
 package io.github.smyrgeorge.sqlx4k.mysql
 
-import io.github.smyrgeorge.sqlx4k.Driver
+import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import kotlin.test.Test
 
 class JvmMySQLTests {
 
-    val options = Driver.Pool.Options.builder()
+    val options = QueryExecutor.Pool.Options.builder()
         .maxConnections(10)
         .build()
 

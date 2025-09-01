@@ -50,7 +50,7 @@ class MySQL(
     url: String,
     username: String,
     password: String,
-    options: Driver.Pool.Options = Driver.Pool.Options(),
+    options: QueryExecutor.Pool.Options = QueryExecutor.Pool.Options(),
 ) : IMySQL {
 
     private val connectionFactory: MySqlConnectionFactory = connectionFactory(url, username, password)
@@ -256,7 +256,7 @@ class MySQL(
         }
 
         private fun connectionOptions(
-            options: Driver.Pool.Options,
+            options: QueryExecutor.Pool.Options,
             connectionFactory: MySqlConnectionFactory
         ): ConnectionPoolConfiguration {
             return ConnectionPoolConfiguration.builder(connectionFactory).apply {

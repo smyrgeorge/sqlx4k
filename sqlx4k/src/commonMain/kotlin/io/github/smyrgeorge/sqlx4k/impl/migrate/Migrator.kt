@@ -16,7 +16,7 @@ import kotlin.time.measureTime
 
 object Migrator {
     suspend fun migrate(
-        driver: Driver.Transactional,
+        db: Driver,
         path: String,
         table: String,
         dialect: Dialect,
@@ -47,7 +47,7 @@ object Migrator {
             }
         }
 
-        val applied = driver.transaction {
+        val applied = db.transaction {
             // Ensure migrations table exists.
             execute(Migration.createTableIfNotExists(table, dialect)).getOrThrow()
             // Fetch already applied versions and checksums.
@@ -72,7 +72,7 @@ object Migrator {
             if (statements.isEmpty()) SQLError(SQLError.Code.Migrate, "Migration file ${file.name} is empty.").ex()
 
             // Execute all the statements (of a file) in a single transaction
-            val migration: Migration = driver.transaction {
+            val migration: Migration = db.transaction {
                 val executionTime = measureTime {
                     statements.forEach { statement ->
                         // Execute the statement

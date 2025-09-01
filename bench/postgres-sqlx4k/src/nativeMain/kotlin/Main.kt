@@ -1,4 +1,4 @@
-import io.github.smyrgeorge.sqlx4k.Driver
+import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.bench.postgres.sqlx4k.Sqlx4k
 import io.github.smyrgeorge.sqlx4k.bench.postgres.sqlx4k.Sqlx4kRowMapper
 import io.github.smyrgeorge.sqlx4k.bench.postgres.sqlx4k.insert
@@ -25,7 +25,7 @@ suspend fun <A> Iterable<A>.forEachParallel(
     f: suspend (A) -> Unit
 ): Unit = withContext(context) { map { async { f(it) } }.awaitAll() }
 
-val options = Driver.Pool.Options.builder()
+val options = QueryExecutor.Pool.Options.builder()
     .minConnections(10)
     .maxConnections(connections)
     .maxLifetime(10.minutes)

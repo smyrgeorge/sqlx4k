@@ -48,7 +48,7 @@ class PostgreSQL(
     url: String,
     username: String,
     password: String,
-    options: Driver.Pool.Options = Driver.Pool.Options(),
+    options: QueryExecutor.Pool.Options = QueryExecutor.Pool.Options(),
 ) : IPostgresSQL {
 
     private val connectionFactory: PostgresqlConnectionFactory = connectionFactory(url, username, password)
@@ -309,7 +309,7 @@ class PostgreSQL(
         }
 
         private fun connectionOptions(
-            options: Driver.Pool.Options,
+            options: QueryExecutor.Pool.Options,
             connectionFactory: PostgresqlConnectionFactory
         ): ConnectionPoolConfiguration {
             return ConnectionPoolConfiguration.builder(connectionFactory).apply {

@@ -33,7 +33,7 @@ class RepositoryProcessor(
         file += "@file:Suppress(\"unused\", \"RemoveRedundantQualifierName\", \"SqlNoDataSourceInspection\")\n\n"
         file += "package $outputPackage\n\n"
         file += "import io.github.smyrgeorge.sqlx4k.Statement\n"
-        file += "import io.github.smyrgeorge.sqlx4k.Driver\n"
+        file += "import io.github.smyrgeorge.sqlx4k.QueryExecutor\n"
 
         // For each repository interface, find methods annotated with @Query
         val validatedRepos = repoSymbols.filter { it.validate() }
@@ -116,9 +116,9 @@ class RepositoryProcessor(
                     else -> error("Invalid repository method name '$name'. Must start with one of: select, count, execute.")
                 }
 
-                // Validate first parameter: must be exactly `context: Driver`
+                // Validate first parameter: must be exactly `context: QueryExecutor`
                 if (params.isEmpty()) {
-                    error("Repository method '$name' must declare first parameter 'context: io.github.smyrgeorge.sqlx4k.Driver'")
+                    error("Repository method '$name' must declare first parameter 'context: io.github.smyrgeorge.sqlx4k.QueryExecutor'")
                 }
                 val first = params.first()
                 val firstName = first.name?.asString()
@@ -129,8 +129,8 @@ class RepositoryProcessor(
                 val firstType = first.type.resolve()
                 val firstQn = firstType.declaration.qualifiedName?.asString()
                     ?: error("Unable to resolve type of first parameter for method '$name'")
-                if (firstQn != "io.github.smyrgeorge.sqlx4k.Driver" || firstType.isMarkedNullable) {
-                    error("Repository method '$name' first parameter must be non-null io.github.smyrgeorge.sqlx4k.Driver")
+                if (firstQn != "io.github.smyrgeorge.sqlx4k.QueryExecutor" || firstType.isMarkedNullable) {
+                    error("Repository method '$name' first parameter must be non-null io.github.smyrgeorge.sqlx4k.QueryExecutor")
                 }
 
                 // Validate return type based on prefix rules
@@ -200,7 +200,7 @@ class RepositoryProcessor(
             if (implementsCrudRepositoryInterface) {
                 val domainQn = domainDecl.qualifiedName?.asString() ?: error("Cannot resolve domain type name")
                 // insert
-                file += "    override suspend fun insert(context: Driver, entity: $domainQn) = run {\n"
+                file += "    override suspend fun insert(context: QueryExecutor, entity: $domainQn) = run {\n"
                 file += "        val statement = entity.insert()\n"
                 file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
                 file += "            val one = list.firstOrNull()\n"
@@ -209,7 +209,7 @@ class RepositoryProcessor(
                 file += "        }\n"
                 file += "    }\n"
                 // update
-                file += "    override suspend fun update(context: Driver, entity: $domainQn) = run {\n"
+                file += "    override suspend fun update(context: QueryExecutor, entity: $domainQn) = run {\n"
                 file += "        val statement = entity.update()\n"
                 file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
                 file += "            val one = list.firstOrNull()\n"
@@ -218,12 +218,12 @@ class RepositoryProcessor(
                 file += "        }\n"
                 file += "    }\n"
                 // delete
-                file += "    override suspend fun delete(context: Driver, entity: $domainQn) = run {\n"
+                file += "    override suspend fun delete(context: QueryExecutor, entity: $domainQn) = run {\n"
                 file += "        val statement = entity.delete()\n"
                 file += "        context.execute(statement).map { kotlin.Unit }\n"
                 file += "    }\n"
                 // save
-                file += "    override suspend fun save(context: Driver, entity: $domainQn) = run {\n"
+                file += "    override suspend fun save(context: QueryExecutor, entity: $domainQn) = run {\n"
                 // Find @Id property on domain
                 val idProp: KSPropertyDeclaration? = domainDecl.getAllProperties().firstOrNull { p ->
                     p.annotations.any { it.shortName.asString() == "Id" || it.annotationType.resolve().declaration.qualifiedName?.asString() == "io.github.smyrgeorge.sqlx4k.annotation.Id" }

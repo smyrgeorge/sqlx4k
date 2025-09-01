@@ -5,7 +5,7 @@ import assertk.assertThat
 import assertk.assertions.isEqualTo
 import assertk.assertions.isNull
 import assertk.assertions.isTrue
-import io.github.smyrgeorge.sqlx4k.Driver
+import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asChar
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asDouble
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asFloat
@@ -30,7 +30,7 @@ import kotlin.uuid.Uuid
 @Suppress("SqlNoDataSourceInspection")
 class SQLiteTests {
 
-    val options = Driver.Pool.Options.builder()
+    val options = QueryExecutor.Pool.Options.builder()
         .maxConnections(10)
         .build()
 

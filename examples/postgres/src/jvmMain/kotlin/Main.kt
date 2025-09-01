@@ -1,4 +1,4 @@
-import io.github.smyrgeorge.sqlx4k.Driver
+import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4k
@@ -21,7 +21,7 @@ class Main {
             f: suspend (A) -> Unit
         ): Unit = withContext(context) { map { async { f(it) } }.awaitAll() }
 
-        val options = Driver.Pool.Options.builder()
+        val options = QueryExecutor.Pool.Options.builder()
             .maxConnections(20)
             .build()
 

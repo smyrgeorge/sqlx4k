@@ -1,11 +1,11 @@
 package io.github.smyrgeorge.sqlx4k.postgres
 
-import io.github.smyrgeorge.sqlx4k.Driver
+import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import kotlin.test.Test
 
 class JvmPostgreSQLTests {
 
-    private val options = Driver.Pool.Options.builder()
+    private val options = QueryExecutor.Pool.Options.builder()
         .maxConnections(10)
         .build()
 

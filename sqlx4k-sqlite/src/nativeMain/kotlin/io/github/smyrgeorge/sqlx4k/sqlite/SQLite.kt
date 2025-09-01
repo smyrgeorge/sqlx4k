@@ -28,8 +28,8 @@ import sqlx4k.*
 @OptIn(ExperimentalForeignApi::class)
 class SQLite(
     url: String,
-    options: Driver.Pool.Options = Driver.Pool.Options(),
-) : Driver, Driver.Pool, Driver.Transactional, Driver.Migrate {
+    options: QueryExecutor.Pool.Options = QueryExecutor.Pool.Options(),
+) : ISQLite {
     private val rt: CPointer<out CPointed> = sqlx4k_of(
         url = url,
         username = null,

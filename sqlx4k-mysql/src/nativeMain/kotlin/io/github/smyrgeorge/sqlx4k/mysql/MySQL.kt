@@ -30,7 +30,7 @@ class MySQL(
     url: String,
     username: String,
     password: String,
-    options: Driver.Pool.Options = Driver.Pool.Options(),
+    options: QueryExecutor.Pool.Options = QueryExecutor.Pool.Options(),
 ) : IMySQL {
     private val rt: CPointer<out CPointed> = sqlx4k_of(
         url = url,
