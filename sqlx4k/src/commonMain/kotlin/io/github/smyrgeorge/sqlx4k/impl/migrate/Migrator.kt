@@ -7,6 +7,7 @@ import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.listMigrationFiles
+import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.readEntireFileUtf8
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.sha256Hex
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.splitSqlStatements
 import kotlin.time.Clock
@@ -58,7 +59,7 @@ object Migrator {
         sortedFiles.forEach { file ->
             val name = file.name
             val version = file.version
-            val content = file.readFileUtf8()
+            val content = readEntireFileUtf8(file.path)
             val checksum = content.sha256Hex()
 
             applied[version]?.let { previous ->

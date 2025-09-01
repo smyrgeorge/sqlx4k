@@ -1,8 +1,5 @@
 package io.github.smyrgeorge.sqlx4k.impl.migrate
 
-import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.fs
-import okio.Path.Companion.toPath
-
 /**
  * Represents a migration file used for database versioning.
  *
@@ -23,8 +20,6 @@ internal data class MigrationFile(
         this.version = version
         this.description = description
     }
-
-    fun readFileUtf8(): String = fs.read(path.toPath()) { readUtf8() }
 
     companion object {
         private val fileNamePattern = Regex("""^\s*(\d+)_([A-Za-z0-9._-]+)\.sql\s*$""")
