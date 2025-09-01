@@ -62,7 +62,7 @@ fun main() {
             println("Statement error: ${it.message}")
         }
 
-        val res: List<Sqlx4k> = db.fetchAll(Sqlx4kRepositoryImpl.selectAll(), Sqlx4kRowMapper).getOrThrow()
+        val res: List<Sqlx4k> = Sqlx4kRepositoryImpl.selectAll(db).getOrThrow()
         println(res)
 
 //        You can map in also in place.
@@ -98,10 +98,10 @@ fun main() {
         val r0 = db.fetchAll(types).getOrThrow()
         println(r0)
 
-        val r1 = db.fetchAll(Sqlx4kRepositoryImpl.selectAll(), Sqlx4kRowMapper).getOrThrow()
+        val r1 = Sqlx4kRepositoryImpl.selectAll(db).getOrThrow()
         println(r1)
 
-        val r2 = db.fetchAll(Sqlx4kRepositoryImpl.selectAll(), Sqlx4kRowMapper).getOrThrow()
+        val r2 = Sqlx4kRepositoryImpl.selectAll(db).getOrThrow()
         println(r2)
 
         db.fetchAll("select 1;").getOrThrow().forEach { println(it) }

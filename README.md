@@ -234,39 +234,25 @@ data class Sqlx4k(
     val test: String
 )
 
-@Repository
-interface Sqlx4kRepository {
+@Repository(Sqlx4k::class, Sqlx4kRowMapper::class)
+interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
     @Query("SELECT * FROM sqlx4k WHERE id = :id")
-    suspend fun selectById(id: Int): Statement
+    suspend fun selectById(context: Driver, id: Int): Result<List<Sqlx4k>>
     @Query("SELECT * FROM sqlx4k")
-    suspend fun selectAll(): Statement
-}
-```
-
-Generated code:
-
-```kotlin
-// See the `postgres` example for more details...
-fun Sqlx4k.insert(): Statement {...}
-fun Sqlx4k.update(): Statement {...}
-fun Sqlx4k.delete(): Statement {...}
-
-object Sqlx4kRepositoryImpl : Sqlx4kRepository {
-    override suspend fun selectById(id: Int): Statement {...}
-    override suspend fun selectAll(): Statement {...}
+    suspend fun selectAll(context: Driver): Result<List<Sqlx4k>>
+    @Query("SELECT count(*) FROM sqlx4k")
+    suspend fun countAll(context: Driver): Result<Long>
 }
 ```
 
 Then in your code you can use it like:
 
 ```kotlin
-// Execute the generated insert query.
-val insert: Statement = Sqlx4k(id = 66, test = "test").insert()
-val affected = db.execute(insert).getOrThrow()
-println("AFFECTED: $affected")
-
+// Insert a new record.
+val record = Sqlx4k(id = 1, test = "test")
+val res: Sqlx4k = Sqlx4kRepositoryImpl.insert(db, record).getOrThrow()
 // Execute a generated query.
-val res: ResultSet = db.fetchAll(Sqlx4kRepositoryImpl.selectAll()).getOrThrow()
+val res: List<Sqlx4k> = Sqlx4kRepositoryImpl.selectAll(db).getOrThrow()
 ```
 
 For more details take a look at the `postgres` example.
