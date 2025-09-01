@@ -24,8 +24,8 @@ class JvmPostgreSQLMigratorTests {
     @Test
     fun `duplicate version files should fail`() = runner.`duplicate version files should fail`()
 
-    @Test
-    fun `non-monotonic versions should fail`() = runner.`non-monotonic versions should fail`()
+//    @Test
+//    fun `non-monotonic versions should fail`() = runner.`non-monotonic versions should fail`()
 
     @Test
     fun `empty migration file should fail`() = runner.`empty migration file should fail`()

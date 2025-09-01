@@ -1,21 +1,30 @@
 package io.github.smyrgeorge.sqlx4k.impl.migrate.utils
 
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
-import okio.ByteString.Companion.encodeUtf8
-import okio.FileSystem
-import okio.Path
-import okio.Path.Companion.toPath
-import okio.SYSTEM
+import kotlinx.io.Buffer
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
+import kotlinx.io.readByteArray
 
-private val fs = FileSystem.SYSTEM
+private val fs = SystemFileSystem
 
-internal fun readEntireFileUtf8(path: String): String = fs.read(path.toPath()) { readUtf8() }
-internal fun String.sha256Hex(): String = encodeUtf8().sha256().hex()
+internal fun readEntireFileUtf8(path: String): String {
+    val source = fs.source(Path(path))
+    try {
+        val buffer = Buffer()
+        source.readAtMostTo(buffer, Long.MAX_VALUE)
+        return buffer.readByteArray().decodeToString() // UTF-8 by default
+    } finally {
+        source.close()
+    }
+}
+
+internal fun String.checksum(): String = hashCode().toString()
 internal fun listMigrationFiles(path: String): List<MigrationFile> {
-    val dir: Path = path.toPath()
+    val dir = Path(path)
     val meta = fs.metadataOrNull(dir) ?: error("Migrations path not found: $path")
     require(meta.isDirectory) { "Migrations path not a directory: $path" }
     return fs.list(dir)
-        .filter { p -> p.name.lowercase().endsWith(".sql") && (fs.metadata(p).isRegularFile) }
+        .filter { p -> p.name.lowercase().endsWith(".sql") && (fs.metadataOrNull(p)!!.isRegularFile) }
         .map { p -> MigrationFile(name = p.name, path = p.toString()) }
 }

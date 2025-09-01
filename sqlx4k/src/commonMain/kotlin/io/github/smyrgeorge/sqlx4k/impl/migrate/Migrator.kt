@@ -8,7 +8,7 @@ import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.listMigrationFiles
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.readEntireFileUtf8
-import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.sha256Hex
+import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.checksum
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.splitSqlStatements
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
@@ -60,7 +60,7 @@ object Migrator {
             val name = file.name
             val version = file.version
             val content = readEntireFileUtf8(file.path)
-            val checksum = content.sha256Hex()
+            val checksum = content.checksum()
 
             applied[version]?.let { previous ->
                 // Check that the file has not been modified since it was applied.

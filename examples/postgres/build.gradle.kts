@@ -1,3 +1,4 @@
+import org.gradle.internal.extensions.stdlib.capitalized
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 
@@ -60,8 +61,8 @@ fun targetsOf(project: Project): List<String> {
         when (it) {
             "all" -> listOf(
                 "IosArm64",
-//                "AndroidNativeX64",
-//                "AndroidNativeArm64",
+                "AndroidNativeX64",
+                "AndroidNativeArm64",
                 "MacosArm64",
                 "MacosX64",
                 "LinuxArm64",
@@ -69,7 +70,7 @@ fun targetsOf(project: Project): List<String> {
                 "MingwX64"
             )
 
-            else -> it.split(",").map { t -> t.trim() }
+            else -> it.split(",").map { t -> t.trim().capitalized() }
         }
     } ?: listOf(defaultTarget) // Default for local development.
 }

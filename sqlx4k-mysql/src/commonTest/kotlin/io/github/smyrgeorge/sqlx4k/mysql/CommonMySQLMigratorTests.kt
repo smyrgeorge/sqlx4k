@@ -11,27 +11,27 @@ import assertk.assertions.isSuccess
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 import kotlinx.coroutines.runBlocking
-import okio.FileSystem
-import okio.Path
-import okio.Path.Companion.toPath
-import okio.SYSTEM
+import kotlinx.io.Buffer
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import kotlin.random.Random
 
 class CommonMySQLMigratorTests(
     private val db: IMySQL
 ) {
 
-    private val fs = FileSystem.SYSTEM
+    private val fs = SystemFileSystem
 
     private fun newTempDir(prefix: String): Path {
-        val dir = ("./build/tmp/migrator-tests/$prefix-" + Random.nextLong().toString()).toPath()
+        val dir = Path(("./build/tmp/migrator-tests/$prefix-" + Random.nextLong().toString()))
         fs.createDirectories(dir, mustCreate = false)
         return dir
     }
 
     private fun write(dir: Path, name: String, content: String) {
-        val p = dir / name
-        fs.write(p) { writeUtf8(content) }
+        val p = Path("$dir/$name")
+        val buffer = Buffer().also { it.write(content.encodeToByteArray()) }
+        fs.sink(p).write(buffer, buffer.size)
     }
 
     private fun listApplied(table: String): List<Long> = runBlocking {
