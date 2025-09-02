@@ -299,13 +299,13 @@ data class Sqlx4k(
 @Repository(Sqlx4k::class, Sqlx4kRowMapper::class)
 interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
     @Query("SELECT * FROM sqlx4k WHERE id = :id")
-    suspend fun selectById(context: Driver, id: Int): Result<List<Sqlx4k>>
+    suspend fun selectById(context: QueryExecutor, id: Int): Result<List<Sqlx4k>>
 
     @Query("SELECT * FROM sqlx4k")
-    suspend fun selectAll(context: Driver): Result<List<Sqlx4k>>
+    suspend fun selectAll(context: QueryExecutor): Result<List<Sqlx4k>>
 
     @Query("SELECT count(*) FROM sqlx4k")
-    suspend fun countAll(context: Driver): Result<Long>
+    suspend fun countAll(context: QueryExecutor): Result<Long>
 }
 ```
 
