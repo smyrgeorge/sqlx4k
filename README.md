@@ -21,6 +21,15 @@ A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLi
 
 🏠 [Homepage](https://smyrgeorge.github.io/) (under construction)
 
+## Development status
+
+> [!IMPORTANT]  
+> Some modules — especially the code-generation
+> facilities ([CRUD and @Repository implementations](#code-generation-crud-and-repository-implementations)) — are under
+> heavy development and may introduce breaking changes between releases as the API and behavior are refined.
+
+If you hit issues or have suggestions, please open an issue or a PR.
+
 ## Supported Databases
 
 - `PostgreSQL`
@@ -233,9 +242,6 @@ This allows you to write small, composable suspend functions that either:
   propagate `Transaction` or `Driver` parameters everywhere.
 
 ```kotlin
-import io.github.smyrgeorge.sqlx4k.impl.coroutines.TransactionContext
-import kotlinx.coroutines.runBlocking
-
 fun main() = runBlocking {
     val db = // create your Driver (e.g. PostgreSQL(...))
 
@@ -287,8 +293,6 @@ dependencies {
 Then create your data class that will be mapped to a table:
 
 ```kotlin
-// package io.github.smyrgeorge.sqlx4k.examples.postgres
-
 @Table("sqlx4k")
 data class Sqlx4k(
     @Id(insert = true) // Will be included in the insert query.
