@@ -451,3 +451,18 @@ Then run the tool:
 ```shell
 leaks -atExit -- ./bench/postgres-sqlx4k/build/bin/macosArm64/releaseExecutable/postgres-sqlx4k.kexe
 ```
+
+## Acknowledgements
+
+Under the hood, `sqlx4k` utilizes several libraries that provide the basic access to the database functionality:
+
+- `sqlx` for all native targets
+    - Repository: https://github.com/launchbadge/sqlx
+- `r2dbc-postgresql` for PostgreSQL on the JVM
+    - Repository: https://github.com/pgjdbc/r2dbc-postgresql
+- `r2dbc-mysql` for MySQL on the JVM
+    - Repository: https://github.com/asyncer-io/r2dbc-mysql
+
+## License
+
+MIT — see [LICENSE](./LICENSE).
