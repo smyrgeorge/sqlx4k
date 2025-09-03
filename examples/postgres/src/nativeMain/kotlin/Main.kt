@@ -62,7 +62,7 @@ fun main() {
             println("Transaction: $this")
             doBusinessLogic()
             doMoreBusinessLogic()
-            val inserted = Sqlx4kRepositoryImpl.selectById(this, 123456).getOrThrow().first()
+            val inserted = Sqlx4kRepositoryImpl.findOneById(this, 123456).getOrThrow()
             println("INSERTED: $inserted")
         }
 
@@ -82,7 +82,7 @@ fun main() {
             println("Statement error: ${it.message}")
         }
 
-        val res: List<Sqlx4k> = Sqlx4kRepositoryImpl.selectAll(db).getOrThrow()
+        val res: List<Sqlx4k> = Sqlx4kRepositoryImpl.findAll(db).getOrThrow()
         println(res)
 
 //        You can map in also in place.
@@ -118,10 +118,10 @@ fun main() {
         val r0 = db.fetchAll(types).getOrThrow()
         println(r0)
 
-        val r1 = Sqlx4kRepositoryImpl.selectAll(db).getOrThrow()
+        val r1 = Sqlx4kRepositoryImpl.findAll(db).getOrThrow()
         println(r1)
 
-        val r2 = Sqlx4kRepositoryImpl.selectAll(db).getOrThrow()
+        val r2 = Sqlx4kRepositoryImpl.findAll(db).getOrThrow()
         println(r2)
 
         db.fetchAll("select 1;").getOrThrow().forEach { println(it) }

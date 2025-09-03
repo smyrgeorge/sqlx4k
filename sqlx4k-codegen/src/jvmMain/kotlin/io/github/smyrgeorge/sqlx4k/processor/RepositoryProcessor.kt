@@ -11,6 +11,15 @@ class RepositoryProcessor(
     private val codeGenerator: CodeGenerator,
 ) : SymbolProcessor {
 
+    /**
+     * Processes repository symbols annotated with a specific annotation, validates these symbols,
+     * and generates Kotlin code for their associated functionality. The generated code is written
+     * to a new file using a specified file name and package.
+     *
+     * @param resolver The `Resolver` instance used to discover and resolve symbols annotated
+     *                 with the specified repository annotation.
+     * @return A list of `KSAnnotated` symbols that could not be processed due to validation errors.
+     */
     override fun process(resolver: Resolver): List<KSAnnotated> {
         val repoSymbols = resolver
             .getSymbolsWithAnnotation(REPOSITORY_ANNOTATION)
@@ -20,6 +29,7 @@ class RepositoryProcessor(
 
         val outputPackage = options[TableProcessor.PACKAGE_OPTION]
             ?: error("Missing ${TableProcessor.PACKAGE_OPTION} option")
+        logger.info("[RepositoryProcessor] Output package: $outputPackage")
 
         val outputFilename = options[FILENAME_OPTION] ?: "GeneratedRepositories"
 
@@ -38,216 +48,33 @@ class RepositoryProcessor(
         // For each repository interface, find methods annotated with @Query
         val validatedRepos = repoSymbols.filter { it.validate() }
         validatedRepos.forEach { iface ->
-            if (iface.classKind != ClassKind.INTERFACE) {
+            if (iface.classKind != ClassKind.INTERFACE)
                 error("@Repository is only supported on interfaces (${iface.qualifiedName?.asString()}).")
-            }
 
             // Extract domain and mapper from @Repository annotation on the interface
-            val repoAnn: KSAnnotation =
-                iface.annotations.firstOrNull { it.shortName.asString() == REPOSITORY_ANNOTATION_SHORT }
-                    ?: error("Missing @Repository annotation on interface ${iface.qualifiedName?.asString()}")
-
-            val domainArg: KSValueArgument? = repoAnn.arguments.firstOrNull { it.name?.asString() == "domain" }
-            val domainKSType = domainArg?.value as? KSType
-                ?: error("@Repository must declare a domain class, e.g. @Repository(Foo::class, FooRowMapper::class) on ${iface.qualifiedName?.asString()}")
-            val domainDecl = domainKSType.declaration as? KSClassDeclaration
-                ?: error("Domain type must be a class for ${iface.qualifiedName?.asString()}")
-            val hasTable = domainDecl.annotations.any { ann ->
-                val qn = ann.annotationType.resolve().declaration.qualifiedName?.asString()
-                qn == "io.github.smyrgeorge.sqlx4k.annotation.Table" || ann.shortName.asString() == "Table"
-            }
-            if (!hasTable) error("@Repository domain must be a @Table-annotated class (${domainDecl.qualifiedName?.asString()})")
-
-            val mapperArg: KSValueArgument? = repoAnn.arguments.firstOrNull { it.name?.asString() == "mapper" }
-            val mapperKSType = mapperArg?.value as? KSType
-                ?: error("@Repository must declare a mapper, e.g. @Repository(Foo::class, FooRowMapper::class) on ${iface.qualifiedName?.asString()}")
-            val mapperTypeName = mapperKSType.declaration.qualifiedName?.asString()
-                ?: error("Unable to resolve mapper type for ${iface.qualifiedName?.asString()}")
+            val (domainDecl, mapperTypeName) = parseRepositoryAnnotation(iface)
 
             val fnsAll = iface.declarations.filterIsInstance<KSFunctionDeclaration>().toList()
             if (fnsAll.isEmpty()) return@forEach
 
             // Determine implementation class name
             val implName = iface.name() + "Impl"
+            logger.info("[RepositoryProcessor] Generating implementation object $implName for ${iface.qualifiedName?.asString()}")
 
             // Emit class header
             file += "\nobject $implName : ${iface.qualifiedName?.asString()} {\n"
 
-            // Split functions into @Query-based and CRUD (insert/update/delete) without @Query
-            val queryFns = fnsAll.filter { fn -> fn.annotations.any { it.name() == QUERY_ANNOTATION_NAME } }
-            // CRUD functions are only supported if interface implements CrudRepository<Domain>
-            val implementsCrudRepositoryInterface = iface.superTypes.any { superType ->
-                val st = superType.resolve()
-                val qn = st.declaration.qualifiedName?.asString()
-                if (qn != "io.github.smyrgeorge.sqlx4k.CrudRepository") return@any false
-                // If CrudRepository is generic, ensure it matches domain when available
-                val typeArg = st.arguments.firstOrNull()?.type?.resolve()
-                val domainQn = domainDecl.qualifiedName?.asString()
-                if (typeArg == null) {
-                    // CrudRepository without type argument is not allowed; enforce matching by failing fast
-                    error("${iface.qualifiedName?.asString()} implements CrudRepository without type argument; expected CrudRepository<$domainQn>")
-                }
-                val crudArgQn = typeArg.declaration.qualifiedName?.asString()
-                    ?: error("Unable to resolve CrudRepository type argument for ${iface.qualifiedName?.asString()}")
-                if (crudArgQn != domainQn) {
-                    error("CrudRepository type argument '$crudArgQn' does not match @Repository domain '$domainQn' on ${iface.qualifiedName?.asString()}")
-                }
-                true
-            }
-
-            // Generate @Query-based methods: select/count/execute
-            queryFns.forEach { fn ->
-                val ann: KSAnnotation = fn.annotations.first { it.name() == QUERY_ANNOTATION_NAME }
-                val sqlArg: KSValueArgument = ann.arguments.first { it.name?.asString() == "value" }
-                val sql = sqlArg.value as String
-
-                val name = fn.simpleName.asString()
-                val params = fn.parameters
-                val paramSig = params.joinToString { p ->
-                    val pName = p.name?.asString() ?: "p"
-                    val pType = p.type.toString()
-                    "$pName: $pType"
-                }
-
-                val prefix = when {
-                    name.startsWith("select") -> "select"
-                    name.startsWith("count") -> "count"
-                    name.startsWith("execute") -> "execute"
-                    else -> error("Invalid repository method name '$name'. Must start with one of: select, count, execute.")
-                }
-
-                // Validate first parameter: must be exactly `context: QueryExecutor`
-                if (params.isEmpty()) {
-                    error("Repository method '$name' must declare first parameter 'context: io.github.smyrgeorge.sqlx4k.QueryExecutor'")
-                }
-                val first = params.first()
-                val firstName = first.name?.asString()
-                    ?: error("Repository method '$name' first parameter must be named 'context'")
-                if (firstName != "context") {
-                    error("Repository method '$name' first parameter must be named 'context'")
-                }
-                val firstType = first.type.resolve()
-                val firstQn = firstType.declaration.qualifiedName?.asString()
-                    ?: error("Unable to resolve type of first parameter for method '$name'")
-                if (firstQn != "io.github.smyrgeorge.sqlx4k.QueryExecutor" || firstType.isMarkedNullable) {
-                    error("Repository method '$name' first parameter must be non-null io.github.smyrgeorge.sqlx4k.QueryExecutor")
-                }
-
-                // Validate return type based on prefix rules
-                val returnType = fn.returnType?.resolve()
-                    ?: error("Unable to resolve return type for method '$name'")
-                val resultQName = returnType.declaration.qualifiedName?.asString()
-                    ?: error("Unable to resolve return type declaration for method '$name'")
-                if (resultQName != "kotlin.Result") {
-                    error("Repository method '$name' must return kotlin.Result<...> but returns '$returnType'")
-                }
-                val returnTypeArg0 = returnType.arguments.firstOrNull()?.type?.resolve()
-                    ?: error("Repository method '$name' must return kotlin.Result<...> with a type argument")
-                when (prefix) {
-                    "select" -> {
-                        val innerQName = returnTypeArg0.declaration.qualifiedName?.asString()
-                            ?: error("Unable to resolve inner type for method '$name'")
-                        if (innerQName != "kotlin.collections.List" || returnTypeArg0.isMarkedNullable) {
-                            error("Repository method '$name' with prefix 'select' must return kotlin.Result<kotlin.collections.List<*>>")
-                        }
-                    }
-
-                    "count", "execute" -> {
-                        val qn0 = returnTypeArg0.declaration.qualifiedName?.asString()
-                            ?: error("Unable to resolve inner type for method '$name'")
-                        if (qn0 != "kotlin.Long" || returnTypeArg0.isMarkedNullable) {
-                            error("Repository method '$name' with prefix '$prefix' must return kotlin.Result<kotlin.Long>")
-                        }
-                    }
-                }
-
-                file += "    override suspend fun $name($paramSig) = run {\n"
-                file += "        // language=SQL\n"
-                file += "        val statement = Statement.create(\"$sql\")\n"
-
-                val nonContextParams = params.drop(1)
-                nonContextParams.forEach { p ->
-                    val pName = p.name?.asString() ?: error("All query parameters must be named when using namedParameters support")
-                    file += "        statement.bind(\"$pName\", $pName)\n"
-                }
-
-                val contextParamName = params.firstOrNull()?.name?.asString() ?: "context"
-                when (prefix) {
-                    "select" -> {
-                        file += "        $contextParamName.fetchAll(statement, $mapperTypeName)\n"
-                    }
-
-                    "count" -> {
-                        file += "        $contextParamName.fetchAll(statement).map { rs ->\n"
-                        file += "            val row = rs.firstOrNull()\n"
-                        file += "                ?: return@run Result.failure(IllegalStateException(\"Count query returned no rows\"))\n"
-                        file += "            row.get(0).asString().toLong()\n"
-                        file += "        }\n"
-                    }
-
-                    "execute" -> {
-                        file += "        $contextParamName.execute(statement)\n"
-                    }
-
-                    else -> {
-                        file += "        error(\"Unsupported method prefix\")\n"
-                    }
-                }
-                file += "    }\n"
-            }
+            // Generate @Query-based methods according to prefixes:
+            // findAll/findAllBy/findOneBy/deleteBy/countBy/execute and also *All variants
+            fnsAll
+                .filter { fn -> fn.annotations.any { it.name() == QUERY_ANNOTATION_NAME } }
+                .forEach { fn -> emitQueryMethod(file, fn, mapperTypeName, domainDecl) }
 
             // Generate CRUD methods: insert/update/delete only if interface implements CrudRepository<Domain>
+            // CRUD functions are only supported if interface implements CrudRepository<Domain>
+            val implementsCrudRepositoryInterface = implementsCrudRepository(iface, domainDecl)
             if (implementsCrudRepositoryInterface) {
-                val domainQn = domainDecl.qualifiedName?.asString() ?: error("Cannot resolve domain type name")
-                // insert
-                file += "    override suspend fun insert(context: QueryExecutor, entity: $domainQn) = run {\n"
-                file += "        val statement = entity.insert()\n"
-                file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
-                file += "            val one = list.firstOrNull()\n"
-                file += "                ?: return@run Result.failure(IllegalStateException(\"Insert query returned no rows\"))\n"
-                file += "            one\n"
-                file += "        }\n"
-                file += "    }\n"
-                // update
-                file += "    override suspend fun update(context: QueryExecutor, entity: $domainQn) = run {\n"
-                file += "        val statement = entity.update()\n"
-                file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
-                file += "            val one = list.firstOrNull()\n"
-                file += "                ?: return@run Result.failure(IllegalStateException(\"Update query returned no rows\"))\n"
-                file += "            one\n"
-                file += "        }\n"
-                file += "    }\n"
-                // delete
-                file += "    override suspend fun delete(context: QueryExecutor, entity: $domainQn) = run {\n"
-                file += "        val statement = entity.delete()\n"
-                file += "        context.execute(statement).map { kotlin.Unit }\n"
-                file += "    }\n"
-                // save
-                file += "    override suspend fun save(context: QueryExecutor, entity: $domainQn) = run {\n"
-                // Find @Id property on domain
-                val idProp: KSPropertyDeclaration? = domainDecl.getAllProperties().firstOrNull { p ->
-                    p.annotations.any { it.shortName.asString() == "Id" || it.annotationType.resolve().declaration.qualifiedName?.asString() == "io.github.smyrgeorge.sqlx4k.annotation.Id" }
-                }
-                if (idProp == null) {
-                    file += "        error(\"No @Id property found in ${domainDecl.qualifiedName?.asString()}\")\n"
-                    file += "    }\n"
-                } else {
-                    val idName = idProp.simpleName.getShortName()
-                    val idType = idProp.type.resolve()
-                    when (val idQn = idType.declaration.qualifiedName?.asString()) {
-                        "kotlin.Int", "kotlin.Long" -> {
-                            // Valid id type: generate insert or update based on zero check
-                            val zeroLiteral = if (idQn == "kotlin.Int") "0" else "0L"
-                            file += "        if (entity.$idName == $zeroLiteral) insert(context, entity) else update(context, entity)\n"
-                            file += "    }\n"
-                        }
-
-                        else -> {
-                            file += "        error(\"@Id property '$idName' must be of type Int or Long in ${domainDecl.qualifiedName?.asString()}\")\n"
-                            file += "    }\n"
-                        }
-                    }
-                }
+                emitCrudMethods(file, domainDecl, mapperTypeName)
             }
             file += "}\n"
         }
@@ -257,17 +84,371 @@ class RepositoryProcessor(
         return unableToProcess
     }
 
-    private fun KSAnnotation.name(): String = shortName.asString()
-    private fun KSClassDeclaration.name(): String = simpleName.asString()
-
-    operator fun OutputStream.plusAssign(str: String) {
-        write(str.toByteArray())
+    /**
+     * Represents the valid prefixes for repository method names in the `RepositoryProcessor` class.
+     *
+     * These prefixes define the type of operation that a repository method performs, such as finding,
+     * deleting, counting, or executing operations on a domain model. The primary usage of this enum
+     * is to map method names to their corresponding behavior and ensure methods adhere to the expected
+     * naming conventions in the repository interface.
+     *
+     * The valid prefixes are:
+     * - `FIND_ALL`: Indicates methods that fetch all instances of a domain model.
+     * - `DELETE_ALL`: Indicates methods that delete all instances of a domain model.
+     * - `COUNT_ALL`: Indicates methods that count all instances of a domain model.
+     * - `FIND_ALL_BY`: Indicates methods that fetch multiple instances of a domain model based on certain conditions.
+     * - `FIND_ONE_BY`: Indicates methods that fetch a single instance of a domain model based on certain conditions.
+     * - `DELETE_BY`: Indicates methods that delete instances of a domain model based on certain conditions.
+     * - `COUNT_BY`: Indicates methods that count instances of a domain model based on certain conditions.
+     * - `EXECUTE`: Indicates methods that perform a custom execution, typically associated with annotated SQL queries.
+     *
+     * This enum is used internally by the `RepositoryProcessor` to parse method names, validate method
+     * signatures, and generate the appropriate method implementations for repository interfaces.
+     */
+    private enum class Prefix {
+        FIND_ONE_BY,
+        FIND_ALL_BY,
+        FIND_ALL,
+        DELETE_BY,
+        DELETE_ALL,
+        COUNT_BY,
+        COUNT_ALL,
+        EXECUTE
     }
 
+    /**
+     * Parses the method name to determine its prefix and maps it to the corresponding `Prefix` enumeration value.
+     * The method identifies valid repository method prefixes such as `findAll`, `deleteAll`, `countAll`, and more,
+     * as well as prefixes that start with specific patterns like `findAllBy`, `findOneBy`, etc.
+     * If the method name doesn't match any valid prefix, an error is thrown.
+     *
+     * @param name The name of the repository method that needs to be parsed.
+     * @return The detected `Prefix` value corresponding to the method prefix.
+     * @throws IllegalStateException if the method name does not correspond to a valid repository method prefix.
+     */
+    private fun parseMethodPrefix(name: String): Prefix = when {
+        name == "findAll" -> Prefix.FIND_ALL
+        name == "deleteAll" -> Prefix.DELETE_ALL
+        name == "countAll" -> Prefix.COUNT_ALL
+        name.startsWith("findAllBy") -> Prefix.FIND_ALL_BY
+        name.startsWith("findOneBy") -> Prefix.FIND_ONE_BY
+        name.startsWith("deleteBy") -> Prefix.DELETE_BY
+        name.startsWith("countBy") -> Prefix.COUNT_BY
+        name.startsWith("execute") -> Prefix.EXECUTE
+        else -> error("Invalid repository method name '$name'. Must be one of: findAll, deleteAll, countAll or start with: findAllBy, findOneBy, deleteBy, countBy, execute.")
+    }
+
+    /**
+     * Parses the `@Repository` annotation on a given interface and extracts the associated domain class
+     * and mapper class information.
+     *
+     * @param iface The class declaration of the interface annotated with `@Repository`.
+     * @return A pair where the first element is the class declaration of the domain type and the second
+     *         element is the fully qualified name of the mapper class.
+     * @throws IllegalStateException if the `@Repository` annotation is missing, incomplete, or improperly configured.
+     */
+    private fun parseRepositoryAnnotation(iface: KSClassDeclaration): Pair<KSClassDeclaration, String> {
+        val repoAnn = iface.annotations.firstOrNull { it.name() == REPOSITORY_ANNOTATION_SHORT }
+            ?: error("Missing @Repository annotation on interface ${iface.qualifiedName?.asString()}")
+
+        val domainArg: KSValueArgument? = repoAnn.arguments.firstOrNull { it.name?.asString() == "domain" }
+        val domainKSType = domainArg?.value as? KSType
+            ?: error("@Repository must declare a domain class, e.g. @Repository(Foo::class, FooRowMapper::class) on ${iface.qualifiedName?.asString()}")
+        val domainDecl = domainKSType.declaration as? KSClassDeclaration
+            ?: error("Domain type must be a class for ${iface.qualifiedName?.asString()}")
+        val hasTable = domainDecl.annotations.any { ann ->
+            val qn = ann.annotationType.resolve().declaration.qualifiedName?.asString()
+            qn == "io.github.smyrgeorge.sqlx4k.annotation.Table" || ann.name() == "Table"
+        }
+        if (!hasTable) error("@Repository domain must be a @Table-annotated class (${domainDecl.qualifiedName?.asString()})")
+
+        val mapperArg: KSValueArgument? = repoAnn.arguments.firstOrNull { it.name?.asString() == "mapper" }
+        val mapperKSType = mapperArg?.value as? KSType
+            ?: error("@Repository must declare a mapper, e.g. @Repository(Foo::class, FooRowMapper::class) on ${iface.qualifiedName?.asString()}")
+        val mapperTypeName = mapperKSType.declaration.qualifiedName?.asString()
+            ?: error("Unable to resolve mapper type for ${iface.qualifiedName?.asString()}")
+        return domainDecl to mapperTypeName
+    }
+
+    /**
+     * Determines if the provided interface implements `CrudRepository` with the correct domain type.
+     *
+     * This function checks if the given interface extends `CrudRepository` and validates that
+     * the type parameter of `CrudRepository` matches the expected domain type.
+     *
+     * @param iface The class declaration of the interface being checked.
+     * @param domainDecl The class declaration of the domain type referenced by the repository.
+     * @return `true` if the interface implements `CrudRepository` with the correct domain type, otherwise `false`.
+     * @throws IllegalStateException if any resolution or validation issues are encountered during the check.
+     */
+    private fun implementsCrudRepository(iface: KSClassDeclaration, domainDecl: KSClassDeclaration): Boolean {
+        val domainQn = domainDecl.qualifiedName?.asString()
+        return iface.superTypes.any { superType ->
+            val st = superType.resolve()
+            val qn = st.declaration.qualifiedName?.asString()
+            if (qn != "io.github.smyrgeorge.sqlx4k.CrudRepository") return@any false
+            val typeArg = st.arguments.firstOrNull()?.type?.resolve()
+                ?: error("${iface.qualifiedName?.asString()} implements CrudRepository without type argument; expected CrudRepository<$domainQn>")
+            val crudArgQn = typeArg.declaration.qualifiedName?.asString()
+                ?: error("Unable to resolve CrudRepository type argument for ${iface.qualifiedName?.asString()}")
+            if (crudArgQn != domainQn)
+                error("CrudRepository type argument '$crudArgQn' does not match @Repository domain '$domainQn' on ${iface.qualifiedName?.asString()}")
+            true
+        }
+    }
+
+    /**
+     * Validates that the first parameter of a repository method is correctly declared as a non-null
+     * instance of `io.github.smyrgeorge.sqlx4k.QueryExecutor` and is named `context`.
+     *
+     * @param name The name of the repository method being validated.
+     * @param params The list of parameters declared by the repository method.
+     *               The first parameter is expected to meet the required constraints.
+     */
+    private fun validateContextParameter(name: String, params: List<KSValueParameter>) {
+        if (params.isEmpty())
+            error("Repository method '$name' must declare first parameter 'context: io.github.smyrgeorge.sqlx4k.QueryExecutor'")
+        val first = params.first()
+        val firstName = first.name?.asString()
+            ?: error("Repository method '$name' first parameter must be named 'context'")
+        if (firstName != "context")
+            error("Repository method '$name' first parameter must be named 'context'")
+        val firstType = first.type.resolve()
+        val firstQn = firstType.declaration.qualifiedName?.asString()
+            ?: error("Unable to resolve type of first parameter for method '$name'")
+        if (firstQn != "io.github.smyrgeorge.sqlx4k.QueryExecutor" || firstType.isMarkedNullable)
+            error("Repository method '$name' first parameter must be non-null io.github.smyrgeorge.sqlx4k.QueryExecutor")
+    }
+
+    /**
+     * Validates the return type of a repository method based on its prefix and ensures that it complies
+     * with the expected return type structure and repository domain type.
+     *
+     * @param prefix The method prefix indicating the type of operation, such as FIND_ALL, DELETE_BY, etc.
+     * @param fn The function declaration representing the repository method being validated.
+     * @param domainDecl The class declaration of the repository's domain type to validate against.
+     */
+    private fun validateReturnTypeForPrefix(prefix: Prefix, fn: KSFunctionDeclaration, domainDecl: KSClassDeclaration) {
+        val name = fn.name()
+        val returnType = fn.returnType?.resolve()
+            ?: error("Unable to resolve return type for method '$name'")
+        val resultQName = returnType.declaration.qualifiedName?.asString()
+            ?: error("Unable to resolve return type declaration for method '$name'")
+        if (resultQName != "kotlin.Result")
+            error("Repository method '$name' must return kotlin.Result<...> but returns '$returnType'")
+        val r0 = returnType.arguments.firstOrNull()?.type?.resolve()
+            ?: error("Repository method '$name' must return kotlin.Result<...> with a type argument")
+
+        fun ensureDomain(inner: KSType, allowNullable: Boolean) {
+            val innerDecl = inner.declaration as? KSClassDeclaration
+                ?: error("Unable to resolve inner domain type for method '$name'")
+            val innerQn = innerDecl.qualifiedName?.asString()
+                ?: error("Unable to resolve inner domain type name for method '$name'")
+            val domainQn = domainDecl.qualifiedName?.asString()
+                ?: error("Unable to resolve repository domain type name")
+            if (innerQn != domainQn)
+                error("Method '$name' must use repository domain type '$domainQn' but found '$innerQn'")
+            if (!allowNullable && inner.isMarkedNullable)
+                error("Method '$name' domain return type must be non-nullable")
+        }
+
+        when (prefix) {
+            Prefix.FIND_ALL, Prefix.FIND_ALL_BY -> {
+                val listQn = r0.declaration.qualifiedName?.asString()
+                    ?: error("Unable to resolve inner type for method '$name'")
+                if (listQn != "kotlin.collections.List" || r0.isMarkedNullable)
+                    error("Method '$name' must return Result<List<T>> where T is the repository domain type")
+                val tArg = r0.arguments.firstOrNull()?.type?.resolve()
+                    ?: error("Method '$name' must return Result<List<T>> with a generic argument")
+                ensureDomain(tArg, allowNullable = false)
+            }
+
+            Prefix.FIND_ONE_BY -> {
+                ensureDomain(r0.makeNotNullable(), allowNullable = true)
+                if (!r0.isMarkedNullable)
+                    error("Method '$name' must return Result<T?> where T is the repository domain type")
+            }
+
+            Prefix.DELETE_ALL, Prefix.COUNT_ALL, Prefix.DELETE_BY, Prefix.COUNT_BY, Prefix.EXECUTE -> {
+                val qn0 = r0.declaration.qualifiedName?.asString()
+                    ?: error("Unable to resolve inner type for method '$name'")
+                if (qn0 != "kotlin.Long" || r0.isMarkedNullable)
+                    error("Method '$name' with prefix '${prefix.name.lowercase()}' must return kotlin.Result<kotlin.Long>")
+            }
+        }
+    }
+
+    /**
+     * Validates the number of parameters for a method based on its prefix and ensures adherence to the defined rules.
+     *
+     * @param prefix The method prefix indicating the type of operation the method represents, such as FIND_ALL, DELETE_BY, etc.
+     * @param name The name of the method being validated.
+     * @param params The list of parameters declared by the method.
+     */
+    private fun validateParameterArity(prefix: Prefix, name: String, params: List<KSValueParameter>) {
+        val nonContextCount = params.size - 1
+        when (prefix) {
+            Prefix.FIND_ALL, Prefix.DELETE_ALL, Prefix.COUNT_ALL -> if (nonContextCount != 0) error("Method '$name' must not have parameters other than context")
+            Prefix.FIND_ALL_BY, Prefix.FIND_ONE_BY, Prefix.DELETE_BY, Prefix.COUNT_BY -> if (nonContextCount < 1) error(
+                "Method '$name' must have more than one argument (at least one after context)"
+            )
+
+            Prefix.EXECUTE -> {}
+        }
+    }
+
+    /**
+     * Emits named parameter bindings for a given list of parameters into the specified output stream.
+     * This method assumes that parameters after the first one must be named and generates binding statements accordingly.
+     *
+     * @param file The OutputStream where the named parameter binding statements will be written.
+     * @param params A list of KSValueParameter objects representing the parameters for which bindings are generated. The first parameter is excluded from processing.
+     */
+    private fun emitNamedParameterBindings(file: OutputStream, params: List<KSValueParameter>) {
+        params.drop(1).forEach { p ->
+            val pName = p.name?.asString()
+                ?: error("All query parameters must be named when using namedParameters support")
+            file += "        statement.bind(\"$pName\", $pName)\n"
+        }
+    }
+
+    /**
+     * Emits a Kotlin method for executing a database query based on a function annotated with a custom `@Query` annotation.
+     * This method generates the implementation for the annotated function, including SQL query execution and result handling.
+     *
+     * @param file The OutputStream where the method implementation will be written.
+     * @param fn The function declaration representing the repository method annotated with `@Query`.
+     * @param mapperTypeName The fully qualified name of the result mapper type used for mapping query results to domain objects.
+     * @param domainDecl The class declaration of the domain object type associated with the repository method.
+     */
+    private fun emitQueryMethod(
+        file: OutputStream,
+        fn: KSFunctionDeclaration,
+        mapperTypeName: String,
+        domainDecl: KSClassDeclaration
+    ) {
+        val name = fn.name()
+        logger.info("[RepositoryProcessor] Generating @Query method: $name")
+        val ann: KSAnnotation = fn.annotations.first { it.name() == QUERY_ANNOTATION_NAME }
+        val sqlArg: KSValueArgument = ann.arguments.first { it.name?.asString() == "value" }
+        val sql = sqlArg.value as String
+        val params = fn.parameters
+        val paramSig = params.joinToString { p ->
+            val pName = p.name?.asString() ?: "p"
+            val pType = p.type.toString()
+            "$pName: $pType"
+        }
+        val prefix: Prefix = parseMethodPrefix(name)
+        validateContextParameter(name, params)
+        validateParameterArity(prefix, name, params)
+        validateReturnTypeForPrefix(prefix, fn, domainDecl)
+        logger.info("[RepositoryProcessor] Emitting method '$name' with prefix ${prefix.name} in ${domainDecl.qualifiedName?.asString()} using mapper $mapperTypeName")
+
+        file += "    override suspend fun $name($paramSig) = run {\n"
+        file += "        // language=SQL\n"
+        file += "        val statement = Statement.create(\"$sql\")\n"
+        emitNamedParameterBindings(file, params)
+        val contextParamName = params.firstOrNull()?.name?.asString() ?: "context"
+        when (prefix) {
+            Prefix.FIND_ALL, Prefix.FIND_ALL_BY -> {
+                file += "        $contextParamName.fetchAll(statement, $mapperTypeName)\n"
+            }
+
+            Prefix.FIND_ONE_BY -> {
+                file += "        $contextParamName.fetchAll(statement, $mapperTypeName).map { list ->\n"
+                file += "            when (list.size) {\n"
+                file += "                0 -> null\n"
+                file += "                1 -> list.first()\n"
+                file += "                else -> return@run Result.failure(IllegalStateException(\"findOneBy query returned more than one row\"))\n"
+                file += "            }\n"
+                file += "        }\n"
+            }
+
+            Prefix.DELETE_ALL, Prefix.DELETE_BY, Prefix.EXECUTE -> {
+                file += "        $contextParamName.execute(statement)\n"
+            }
+
+            Prefix.COUNT_ALL, Prefix.COUNT_BY -> {
+                file += "        $contextParamName.fetchAll(statement).map { rs ->\n"
+                file += "            val row = rs.firstOrNull()\n"
+                file += "                ?: return@run Result.failure(IllegalStateException(\"Count query returned no rows\"))\n"
+                file += "            row.get(0).asString().toLong()\n"
+                file += "        }\n"
+            }
+        }
+        file += "    }\n"
+    }
+
+    /**
+     * Emits CRUD (Create, Read, Update, Delete) methods for a repository interface to a specified output stream.
+     * The generated methods include `insert`, `update`, `delete`, and `save` implementations using a specified domain class and mapper.
+     *
+     * @param file The output stream where the generated CRUD methods will be written.
+     * @param domainDecl The class declaration of the domain object associated with the repository.
+     * @param mapperTypeName The fully qualified name of the mapper type used for mapping query results to domain objects.
+     */
+    private fun emitCrudMethods(file: OutputStream, domainDecl: KSClassDeclaration, mapperTypeName: String) {
+        val domainQn = domainDecl.qualifiedName?.asString() ?: error("Cannot resolve domain type name")
+        logger.info("[RepositoryProcessor] Generating CRUD methods for $domainQn")
+        // insert
+        logger.info("[RepositoryProcessor] Emitting CRUD method: insert($domainQn)")
+        file += "    override suspend fun insert(context: QueryExecutor, entity: $domainQn) = run {\n"
+        file += "        val statement = entity.insert()\n"
+        file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
+        file += "            val one = list.firstOrNull()\n"
+        file += "                ?: return@run Result.failure(IllegalStateException(\"Insert query returned no rows\"))\n"
+        file += "            one\n"
+        file += "        }\n"
+        file += "    }\n"
+        // update
+        logger.info("[RepositoryProcessor] Emitting CRUD method: update($domainQn)")
+        file += "    override suspend fun update(context: QueryExecutor, entity: $domainQn) = run {\n"
+        file += "        val statement = entity.update()\n"
+        file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
+        file += "            val one = list.firstOrNull()\n"
+        file += "                ?: return@run Result.failure(IllegalStateException(\"Update query returned no rows\"))\n"
+        file += "            one\n"
+        file += "        }\n"
+        file += "    }\n"
+        // delete
+        logger.info("[RepositoryProcessor] Emitting CRUD method: delete($domainQn)")
+        file += "    override suspend fun delete(context: QueryExecutor, entity: $domainQn) = run {\n"
+        file += "        val statement = entity.delete()\n"
+        file += "        context.execute(statement).map { kotlin.Unit }\n"
+        file += "    }\n"
+        // save
+        logger.info("[RepositoryProcessor] Emitting CRUD method: save($domainQn)")
+        file += "    override suspend fun save(context: QueryExecutor, entity: $domainQn) = run {\n"
+        val idProp: KSPropertyDeclaration? = domainDecl.getAllProperties().firstOrNull { p ->
+            p.annotations.any { it.name() == "Id" || it.annotationType.resolve().declaration.qualifiedName?.asString() == "io.github.smyrgeorge.sqlx4k.annotation.Id" }
+        }
+        if (idProp == null) {
+            file += "        error(\"No @Id property found in ${domainDecl.qualifiedName?.asString()}\")\n"
+            file += "    }\n"
+        } else {
+            val idName = idProp.simpleName.getShortName()
+            val idType = idProp.type.resolve()
+            when (val idQn = idType.declaration.qualifiedName?.asString()) {
+                "kotlin.Int", "kotlin.Long" -> {
+                    val zeroLiteral = if (idQn == "kotlin.Int") "0" else "0L"
+                    file += "        if (entity.$idName == $zeroLiteral) insert(context, entity) else update(context, entity)\n"
+                    file += "    }\n"
+                }
+
+                else -> {
+                    file += "        error(\"@Id property '$idName' must be of type Int or Long in ${domainDecl.qualifiedName?.asString()}\")\n"
+                    file += "    }\n"
+                }
+            }
+        }
+    }
+
+    private fun KSAnnotation.name(): String = shortName.asString()
+    private fun KSClassDeclaration.name(): String = simpleName.asString()
+    private fun KSFunctionDeclaration.name(): String = simpleName.asString()
+    operator fun OutputStream.plusAssign(str: String): Unit = write(str.toByteArray())
+
     companion object {
-        /**
-         * The option key used to specify the output filename for the generated SQL classes.
-         */
         private const val FILENAME_OPTION = "output-filename"
         private const val QUERY_ANNOTATION_NAME = "Query"
         private const val REPOSITORY_ANNOTATION = "io.github.smyrgeorge.sqlx4k.annotation.Repository"
