@@ -54,8 +54,8 @@ class RepositoryProcessor(
             // Extract domain and mapper from @Repository annotation on the interface
             val (domainDecl, mapperTypeName) = parseRepositoryAnnotation(iface)
 
+            // Find all methods declared in the interface
             val fnsAll = iface.declarations.filterIsInstance<KSFunctionDeclaration>().toList()
-            if (fnsAll.isEmpty()) return@forEach
 
             // Determine implementation class name
             val implName = iface.name() + "Impl"
@@ -70,12 +70,9 @@ class RepositoryProcessor(
                 .filter { fn -> fn.annotations.any { it.name() == QUERY_ANNOTATION_NAME } }
                 .forEach { fn -> emitQueryMethod(file, fn, mapperTypeName, domainDecl) }
 
-            // Generate CRUD methods: insert/update/delete only if interface implements CrudRepository<Domain>
-            // CRUD functions are only supported if interface implements CrudRepository<Domain>
-            val implementsCrudRepositoryInterface = implementsCrudRepository(iface, domainDecl)
-            if (implementsCrudRepositoryInterface) {
-                emitCrudMethods(file, domainDecl, mapperTypeName)
-            }
+            // Generate CRUD methods: insert/update/delete;
+            // Interface must implement CrudRepository<Domain> which we already validated.
+            emitCrudMethods(file, domainDecl, mapperTypeName)
             file += "}\n"
         }
         file.close()
@@ -148,53 +145,36 @@ class RepositoryProcessor(
      * @throws IllegalStateException if the `@Repository` annotation is missing, incomplete, or improperly configured.
      */
     private fun parseRepositoryAnnotation(iface: KSClassDeclaration): Pair<KSClassDeclaration, String> {
+        fun implementsCrudRepository(iface: KSClassDeclaration): KSClassDeclaration {
+            // find CrudRepository<T>
+            val st = iface.superTypes.map { it.resolve() }
+                .firstOrNull { it.declaration.qualifiedName?.asString() == "io.github.smyrgeorge.sqlx4k.CrudRepository" }
+                ?: error("@Repository interface ${iface.qualifiedName?.asString()} must extend io.github.smyrgeorge.sqlx4k.CrudRepository<T>")
+            val typeArg = st.arguments.firstOrNull()?.type?.resolve()
+                ?: error("${iface.qualifiedName?.asString()} implements CrudRepository without type argument; expected CrudRepository<T>")
+            val domainDecl = typeArg.declaration as? KSClassDeclaration
+                ?: error("CrudRepository type argument must be a class on ${iface.qualifiedName?.asString()}")
+            // ensure @Table
+            val hasTable = domainDecl.annotations.any { ann ->
+                val qn = ann.annotationType.resolve().declaration.qualifiedName?.asString()
+                qn == "io.github.smyrgeorge.sqlx4k.annotation.Table" || ann.name() == "Table"
+            }
+            if (!hasTable) error("CrudRepository generic parameter must be @Table-annotated (${domainDecl.qualifiedName?.asString()})")
+            return domainDecl
+        }
+
         val repoAnn = iface.annotations.firstOrNull { it.name() == REPOSITORY_ANNOTATION_SHORT }
             ?: error("Missing @Repository annotation on interface ${iface.qualifiedName?.asString()}")
 
-        val domainArg: KSValueArgument? = repoAnn.arguments.firstOrNull { it.name?.asString() == "domain" }
-        val domainKSType = domainArg?.value as? KSType
-            ?: error("@Repository must declare a domain class, e.g. @Repository(Foo::class, FooRowMapper::class) on ${iface.qualifiedName?.asString()}")
-        val domainDecl = domainKSType.declaration as? KSClassDeclaration
-            ?: error("Domain type must be a class for ${iface.qualifiedName?.asString()}")
-        val hasTable = domainDecl.annotations.any { ann ->
-            val qn = ann.annotationType.resolve().declaration.qualifiedName?.asString()
-            qn == "io.github.smyrgeorge.sqlx4k.annotation.Table" || ann.name() == "Table"
-        }
-        if (!hasTable) error("@Repository domain must be a @Table-annotated class (${domainDecl.qualifiedName?.asString()})")
+        // Enforce that the interface extends CrudRepository<T> and derive domain from T
+        val domainDecl = implementsCrudRepository(iface)
 
         val mapperArg: KSValueArgument? = repoAnn.arguments.firstOrNull { it.name?.asString() == "mapper" }
         val mapperKSType = mapperArg?.value as? KSType
-            ?: error("@Repository must declare a mapper, e.g. @Repository(Foo::class, FooRowMapper::class) on ${iface.qualifiedName?.asString()}")
+            ?: error("@Repository must declare a mapper, e.g. @Repository(mapper = FooRowMapper::class) on ${iface.qualifiedName?.asString()}")
         val mapperTypeName = mapperKSType.declaration.qualifiedName?.asString()
             ?: error("Unable to resolve mapper type for ${iface.qualifiedName?.asString()}")
         return domainDecl to mapperTypeName
-    }
-
-    /**
-     * Determines if the provided interface implements `CrudRepository` with the correct domain type.
-     *
-     * This function checks if the given interface extends `CrudRepository` and validates that
-     * the type parameter of `CrudRepository` matches the expected domain type.
-     *
-     * @param iface The class declaration of the interface being checked.
-     * @param domainDecl The class declaration of the domain type referenced by the repository.
-     * @return `true` if the interface implements `CrudRepository` with the correct domain type, otherwise `false`.
-     * @throws IllegalStateException if any resolution or validation issues are encountered during the check.
-     */
-    private fun implementsCrudRepository(iface: KSClassDeclaration, domainDecl: KSClassDeclaration): Boolean {
-        val domainQn = domainDecl.qualifiedName?.asString()
-        return iface.superTypes.any { superType ->
-            val st = superType.resolve()
-            val qn = st.declaration.qualifiedName?.asString()
-            if (qn != "io.github.smyrgeorge.sqlx4k.CrudRepository") return@any false
-            val typeArg = st.arguments.firstOrNull()?.type?.resolve()
-                ?: error("${iface.qualifiedName?.asString()} implements CrudRepository without type argument; expected CrudRepository<$domainQn>")
-            val crudArgQn = typeArg.declaration.qualifiedName?.asString()
-                ?: error("Unable to resolve CrudRepository type argument for ${iface.qualifiedName?.asString()}")
-            if (crudArgQn != domainQn)
-                error("CrudRepository type argument '$crudArgQn' does not match @Repository domain '$domainQn' on ${iface.qualifiedName?.asString()}")
-            true
-        }
     }
 
     /**

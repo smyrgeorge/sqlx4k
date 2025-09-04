@@ -300,7 +300,7 @@ data class Sqlx4k(
     val test: String
 )
 
-@Repository(Sqlx4k::class, Sqlx4kRowMapper::class)
+@Repository(mapper = Sqlx4kRowMapper::class)
 interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
     @Query("SELECT * FROM sqlx4k WHERE id = :id")
     suspend fun findOneById(context: QueryExecutor, id: Int): Result<Sqlx4k?>
