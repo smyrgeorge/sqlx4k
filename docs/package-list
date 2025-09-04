@@ -14,7 +14,7 @@ $dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL.Tx/fetchAll/#kotlin.Stri
 $dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL.Tx/rollback/#/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/-tx/rollback.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL.Tx/status/#/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/-tx/status.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL///PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/index.html
-$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/MySQL/#kotlin.String#kotlin.String#kotlin.String#io.github.smyrgeorge.sqlx4k.Driver.Pool.Options/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/-my-s-q-l.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/MySQL/#kotlin.String#kotlin.String#kotlin.String#io.github.smyrgeorge.sqlx4k.QueryExecutor.Pool.Options/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/-my-s-q-l.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/begin/#/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/begin.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/close/#/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/close.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/execute/#io.github.smyrgeorge.sqlx4k.Statement/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/execute.html
@@ -39,7 +39,7 @@ $dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL.Tx/fetchAll/#kot
 $dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL.Tx/rollback/#/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-tx/rollback.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL.Tx/status/#/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-tx/status.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL///PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/index.html
-$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/PostgreSQL/#kotlin.String#kotlin.String#kotlin.String#io.github.smyrgeorge.sqlx4k.Driver.Pool.Options/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-postgre-s-q-l.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/PostgreSQL/#kotlin.String#kotlin.String#kotlin.String#io.github.smyrgeorge.sqlx4k.QueryExecutor.Pool.Options/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-postgre-s-q-l.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/begin/#/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/begin.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/close/#/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/close.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/execute/#io.github.smyrgeorge.sqlx4k.Statement/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/execute.html
@@ -56,6 +56,7 @@ $dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/poolSize/#/Point
 module:sqlx4k
 io.github.smyrgeorge.sqlx4k
 io.github.smyrgeorge.sqlx4k.annotation
+io.github.smyrgeorge.sqlx4k.impl.coroutines
 io.github.smyrgeorge.sqlx4k.impl.extensions
 io.github.smyrgeorge.sqlx4k.impl.migrate
 io.github.smyrgeorge.sqlx4k.impl.statement
