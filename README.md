@@ -313,6 +313,10 @@ interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
 }
 ```
 
+> [!NOTE]  
+> Besides your @Query methods, because your interface extends `CrudRepository<T>`, the generator also adds the CRUD
+> helper methods automatically: `insert`, `update`, `delete`, and `save`.
+
 Then in your code you can use it like:
 
 ```kotlin
