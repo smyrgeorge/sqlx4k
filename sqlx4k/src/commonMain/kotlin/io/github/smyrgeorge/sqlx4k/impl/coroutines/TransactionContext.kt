@@ -16,7 +16,7 @@ import kotlin.coroutines.CoroutineContext
  * @constructor Creates a `TransactionContext` instance that delegates to the specified `Transaction`.
  * @property tx The transaction instance to be integrated into the coroutine context.
  *
- * @see io.github.smyrgeorge.sqlx4k.Transaction
+ * @see Transaction
  * @see Element
  */
 class TransactionContext(
@@ -50,7 +50,36 @@ class TransactionContext(
                 withContext(ctx) { f(ctx) }
             }
 
-        suspend inline fun <T> withCurrent(crossinline f: suspend TransactionContext.() -> T): T = current().f()
+        /**
+         * Executes the provided suspend function within the current [TransactionContext].
+         *
+         * This method ensures the function is executed with the currently active transaction context
+         * retrieved from the coroutine context. If no active [TransactionContext] is found, an error
+         * is thrown.
+         *
+         * @param T The return type of the suspend function.
+         * @param f A suspend function to be executed within the current [TransactionContext],
+         *          with the context being its receiver.
+         * @return The result of executing the provided suspend function within the current [TransactionContext].
+         * @throws IllegalStateException if no active [TransactionContext] is found in the coroutine context.
+         */
+        suspend inline fun <T> withCurrent(crossinline f: suspend TransactionContext.() -> T): T =
+            current().f()
+
+        /**
+         * Executes a given suspend function within the current [TransactionContext] if it exists,
+         * otherwise starts a new transaction using the provided [Driver] and executes the function
+         * in the new context.
+         *
+         * @param T The result type of the operation performed within the transaction context.
+         * @param db The database [Driver] used to manage the transaction and provide access to
+         *           the underlying database if a new transaction is started.
+         * @param f A suspend function block that performs operations within the provided or current
+         *          [TransactionContext].
+         * @return The result of the operation performed within the transaction context.
+         */
+        suspend inline fun <T> withCurrent(db: Driver, crossinline f: suspend TransactionContext.() -> T): T =
+            currentOrNull()?.f() ?: new(db, f)
 
         /**
          * Retrieves the current [TransactionContext] from the coroutine context.

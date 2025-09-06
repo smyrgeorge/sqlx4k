@@ -242,18 +242,24 @@ This allows you to write small, composable suspend functions that either:
   propagate `Transaction` or `Driver` parameters everywhere.
 
 ```kotlin
+val db = PostgreSQL(
+    url = "postgresql://localhost:15432/test",
+    username = "postgres",
+    password = "postgres",
+    options = options
+)
+
 fun main() = runBlocking {
-    val db = // create your Driver (e.g. PostgreSQL(...))
+    TransactionContext.new(db) {
+        // `this` is a TransactionContext and also a Transaction (delegation),
+        // so you can call query methods directly:
+        execute("insert into sqlx4k (id, test) values (66, 'test');").getOrThrow()
 
-        TransactionContext.new(db) {
-            // `this` is a TransactionContext and also a Transaction (delegation),
-            // so you can call query methods directly:
-            execute("insert into sqlx4k (id, test) values (66, 'test');").getOrThrow()
-
-            // In deeper code, fetch the same context and keep using the same tx
-            doBusinessLogic()
-            doMoreBusinessLogic()
-        }
+        // In deeper code, fetch the same context and keep using the same tx
+        doBusinessLogic()
+        doMoreBusinessLogic()
+        doExtraBusinessLogic()
+    }
 }
 
 suspend fun doBusinessLogic() {
@@ -263,10 +269,15 @@ suspend fun doBusinessLogic() {
     tx.execute("update sqlx4k set test = 'updated' where id = 66;").getOrThrow()
 }
 
-// Or you can use the `withCurrent` method to get the transaction and execute the block in ongoid transaction.
+// Or you can use the `withCurrent` method to get the transaction and execute the block in ongoing transaction.
 suspend fun doMoreBusinessLogic(): Unit = TransactionContext.withCurrent {
     // Continue operating within the same database transaction
-    execute("update sqlx4k set test = 'updated' where id = 66;").getOrThrow()
+}
+
+// You can also pass the db instance to `withCurrent`.
+// If a transaction is already active, the block runs within it; otherwise, a new transaction is started for the block.
+suspend fun doExtraBusinessLogic(): Unit = TransactionContext.withCurrent(db) {
+    // Continue operating within the same database transaction
 }
 ```
 

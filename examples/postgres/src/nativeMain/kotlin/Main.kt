@@ -58,10 +58,17 @@ fun main() {
             println("INSERTED: $inserted")
         }
 
+        suspend fun doExtraBusinessLogic(): Unit = TransactionContext.withCurrent(db) {
+            println("Transaction($status): $this")
+            val inserted = Sqlx4kRepositoryImpl.insert(this, Sqlx4k(id = 123456, test = "test")).getOrThrow()
+            println("INSERTED: $inserted")
+        }
+
         TransactionContext.new(db) {
             println("Transaction: $this")
             doBusinessLogic()
             doMoreBusinessLogic()
+            doExtraBusinessLogic()
             val inserted = Sqlx4kRepositoryImpl.findOneById(this, 123456).getOrThrow()
             println("INSERTED: $inserted")
         }
