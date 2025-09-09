@@ -8,6 +8,12 @@ import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.impl.extensions.*
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asBoolean
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asByteArray
+import io.github.smyrgeorge.sqlx4k.postgres.extensions.asBooleanArray
+import io.github.smyrgeorge.sqlx4k.postgres.extensions.asShortArray
+import io.github.smyrgeorge.sqlx4k.postgres.extensions.asIntArray
+import io.github.smyrgeorge.sqlx4k.postgres.extensions.asLongArray
+import io.github.smyrgeorge.sqlx4k.postgres.extensions.asFloatArray
+import io.github.smyrgeorge.sqlx4k.postgres.extensions.asDoubleArray
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -43,7 +49,13 @@ class CommonPostgreSQLTests(
                    '2025-03-25'::date as date,
                    '07:31:43.330068'::time as time,
                    '22d64ef8-f6b3-43da-8869-2ee9d31be9d5'::uuid as uuid,
-                   'aa'::bytea as bytea
+                   'aa'::bytea as bytea,
+                   '{t,f}'::bool[] as bool_array,
+                   '{1,2}'::int2[] as int2_array,
+                   '{1,2,3}'::int4[] as int4_array,
+                   '{10000000000,20000000000}'::int8[] as int8_array,
+                   '{1.5,2.5}'::float4[] as float4_array,
+                   '{1.5,2.5,3.5}'::float8[] as float8_array
             ;
         """.trimIndent()
 
@@ -68,6 +80,12 @@ class CommonPostgreSQLTests(
             assertThat(row.get(14).asLocalTime()).isEqualTo(LocalTime.parse("07:31:43.330068"))
             assertThat(row.get(15).asUuid()).isEqualTo(Uuid.parse("22d64ef8-f6b3-43da-8869-2ee9d31be9d5"))
             assertThat(row.get(16).asByteArray()).isEqualTo("aa".encodeToByteArray())
+            assertThat(row.get(17).asBooleanArray().toList()).isEqualTo(listOf(true, false))
+            assertThat(row.get(18).asShortArray().toList()).isEqualTo(listOf<Short>(1, 2))
+            assertThat(row.get(19).asIntArray().toList()).isEqualTo(listOf(1, 2, 3))
+            assertThat(row.get(20).asLongArray().toList()).isEqualTo(listOf(10000000000L, 20000000000L))
+            assertThat(row.get(21).asFloatArray().toList()).isEqualTo(listOf(1.5f, 2.5f))
+            assertThat(row.get(22).asDoubleArray().toList()).isEqualTo(listOf(1.5, 2.5, 3.5))
         }
     }
 }

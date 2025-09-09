@@ -1,3 +1,4 @@
+@file:OptIn(ExperimentalTime::class, ExperimentalUuidApi::class)
 @file:Suppress("unused")
 
 package io.github.smyrgeorge.sqlx4k.impl.extensions
@@ -13,12 +14,8 @@ import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-fun ResultSet.Row.Column.asChar(): Char {
-    require(asString().length == 1) { "The column ($name) value is not a char (length != 1)." }
-    return asString()[0]
-}
-
-fun ResultSet.Row.Column.asCharOrNull(): Char? = asStringOrNull()?.get(0)
+fun ResultSet.Row.Column.asChar(): Char = asString().asChar()
+fun ResultSet.Row.Column.asCharOrNull(): Char? = asStringOrNull()?.asChar()
 fun ResultSet.Row.Column.asInt(): Int = asString().toInt()
 fun ResultSet.Row.Column.asIntOrNull(): Int? = asStringOrNull()?.toInt()
 fun ResultSet.Row.Column.asLong(): Long = asString().toLong()
@@ -29,47 +26,54 @@ fun ResultSet.Row.Column.asFloat(): Float = asString().toFloat()
 fun ResultSet.Row.Column.asFloatOrNull(): Float? = asStringOrNull()?.toFloat()
 fun ResultSet.Row.Column.asDouble(): Double = asString().toDouble()
 fun ResultSet.Row.Column.asDoubleOrNull(): Double? = asStringOrNull()?.toDouble()
-
-@OptIn(ExperimentalUuidApi::class)
+fun ResultSet.Row.Column.asBoolean(): Boolean = asString().asBoolean()
+fun ResultSet.Row.Column.asBooleanOrNull(): Boolean? = asStringOrNull()?.asBoolean()
 fun ResultSet.Row.Column.asUuid(): Uuid = Uuid.parse(asString())
-
-@OptIn(ExperimentalUuidApi::class)
 fun ResultSet.Row.Column.asUuidOrNull(): Uuid? = asStringOrNull()?.let { Uuid.parse(it) }
-
 inline fun <reified T : Enum<T>> ResultSet.Row.Column.asEnum(): T = asString().toEnum<T>()
 inline fun <reified T : Enum<T>> ResultSet.Row.Column.asEnumOrNull(): T? = asStringOrNull()?.toEnum<T>()
 fun ResultSet.Row.Column.asLocalDate(): LocalDate = LocalDate.parse(asString())
 fun ResultSet.Row.Column.asLocalDateOrNull(): LocalDate? = asStringOrNull()?.let { LocalDate.parse(it) }
 fun ResultSet.Row.Column.asLocalTime(): LocalTime = LocalTime.parse(asString())
 fun ResultSet.Row.Column.asLocalTimeOrNull(): LocalTime? = asStringOrNull()?.let { LocalTime.parse(it) }
+fun ResultSet.Row.Column.asLocalDateTime(): LocalDateTime = LocalDateTime.parse(asString(), localDateTimeFormatter)
+fun ResultSet.Row.Column.asLocalDateTimeOrNull(): LocalDateTime? = asStringOrNull()?.let { LocalDateTime.parse(it, localDateTimeFormatter) }
+fun ResultSet.Row.Column.asInstant(): Instant = asString().asInstant()
+fun ResultSet.Row.Column.asInstantOrNull(): Instant? = asStringOrNull()?.asInstant()
+fun ResultSet.Row.Column.asByteArray(): ByteArray = asString().removePrefix("\\x").hexToByteArray()
+fun ResultSet.Row.Column.asByteArrayOrNull(): ByteArray? = asStringOrNull()?.removePrefix("\\x")?.hexToByteArray()
+
+private fun String.asChar(): Char {
+    require(length == 1) { "Invalid char value: $this" }
+    return this[0]
+}
+
+private fun String.asBoolean(): Boolean {
+    return when (this) {
+        "1", "t", "true" -> true
+        "0", "f", "false" -> false
+        else -> error("Invalid boolean value: $this")
+    }
+}
+
+inline fun <reified T : Enum<T>> String.toEnum(): T {
+    return try {
+        enumValueOf<T>(this)
+    } catch (e: Exception) {
+        SQLError(SQLError.Code.CannotDecodeEnumValue, "Cannot decode enum value '$this'.").ex()
+    }
+}
 
 private val localDateTimeFormatter: DateTimeFormat<LocalDateTime> = LocalDateTime.Format {
     @OptIn(FormatStringsInDatetimeFormats::class)
     byUnicodePattern("yyyy-MM-dd HH:mm:ss[.SSSSSS]")
 }
 
-fun ResultSet.Row.Column.asLocalDateTime(): LocalDateTime = LocalDateTime.parse(asString(), localDateTimeFormatter)
-fun ResultSet.Row.Column.asLocalDateTimeOrNull(): LocalDateTime? = asStringOrNull()?.let { LocalDateTime.parse(it, localDateTimeFormatter) }
-
-inline fun <reified T : Enum<T>> String.toEnum(): T =
-    try {
-        enumValueOf<T>(this)
-    } catch (e: Exception) {
-        SQLError(SQLError.Code.CannotDecodeEnumValue, "Cannot decode enum value '$this'.").ex()
-    }
-
-
-@OptIn(ExperimentalTime::class)
-fun ResultSet.Row.Column.asInstant(): Instant = asString().toInstantSqlx4k()
-
-@OptIn(ExperimentalTime::class)
-fun ResultSet.Row.Column.asInstantOrNull(): Instant? = asStringOrNull()?.toInstantSqlx4k()
-
 // Match: "yyyy-MM-dd HH:mm:ss[.fraction][(Z|+HH|+HHMM|+HH:MM|-HH|-HHMM|-HH:MM)]" (offset optional)
 private val timestampRegex = Regex("""^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)(Z|[+-]\d{2}(?::?\d{2})?)?$""")
 
 @OptIn(ExperimentalTime::class)
-private fun String.toInstantSqlx4k(): Instant {
+private fun String.asInstant(): Instant {
     fun normalizeFractionTo6(s: String): String {
         val dot = s.indexOf('.')
         if (dot < 0) return s
