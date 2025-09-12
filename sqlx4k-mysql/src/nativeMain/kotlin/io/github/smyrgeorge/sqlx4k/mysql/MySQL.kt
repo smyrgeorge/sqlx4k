@@ -92,7 +92,7 @@ class MySQL(
     ) : Transaction {
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open
-        override val status: Transaction.Status = _status
+        override val status: Transaction.Status get() = _status
 
         override suspend fun commit(): Result<Unit> = runCatching {
             mutex.withLock {

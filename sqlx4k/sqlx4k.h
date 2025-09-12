@@ -38,6 +38,7 @@ typedef struct Sqlx4kResult {
   int error;
   char *error_message;
   unsigned long long rows_affected;
+  void *cn;
   void *tx;
   void *rt;
   struct Sqlx4kSchema *schema;
@@ -65,6 +66,24 @@ void sqlx4k_close(void *rt, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
 void sqlx4k_query(void *rt, const char *sql, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
 
 void sqlx4k_fetch_all(void *rt, const char *sql, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
+
+void sqlx4k_cn_acquire(void *rt, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
+
+void sqlx4k_cn_release(void *rt, void *cn, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
+
+void sqlx4k_cn_query(void *rt,
+                     void *cn,
+                     const char *sql,
+                     void *callback,
+                     void (*fun)(Ptr, Sqlx4kResult*));
+
+void sqlx4k_cn_fetch_all(void *rt,
+                         void *cn,
+                         const char *sql,
+                         void *callback,
+                         void (*fun)(Ptr, Sqlx4kResult*));
+
+void sqlx4k_cn_tx_begin(void *rt, void *cn, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
 
 void sqlx4k_tx_begin(void *rt, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
 

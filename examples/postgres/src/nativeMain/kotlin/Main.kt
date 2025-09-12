@@ -31,6 +31,35 @@ fun main() {
             options = options
         )
 
+        db.execute("create table if not exists sqlx4k(id integer, test text);").getOrThrow()
+        val con = db.acquire().getOrThrow()
+        val con2 = db.acquire().getOrThrow()
+        val con3 = db.acquire().getOrThrow()
+        val con4 = db.acquire().getOrThrow()
+        println("Connection: $con, Status: ${con.status}")
+        var pollSize = db.poolSize()
+        var poolIdleSize = db.poolIdleSize()
+        println("Poll Size: $pollSize, Pool Idle Size: $poolIdleSize")
+        val conInsert = Sqlx4k(id = 70, test = "test").insert()
+        val conAffected = con.execute(conInsert).getOrThrow()
+        println("Connection AFFECTED: $conAffected")
+        println("about to release $con")
+        con.release().getOrThrow()
+        println("released $con")
+        pollSize = db.poolSize()
+        poolIdleSize = db.poolIdleSize()
+        println("Poll Size: $pollSize, Pool Idle Size: $poolIdleSize")
+
+        con2.release().getOrThrow()
+        con3.release().getOrThrow()
+        con4.release().getOrThrow()
+
+        delay(1000)
+
+        pollSize = db.poolSize()
+        poolIdleSize = db.poolIdleSize()
+        println("Poll Size: $pollSize, Pool Idle Size: $poolIdleSize")
+
         runCatching {
             val path = "./db/migrations"
             val res = db.migrate(path)
@@ -60,7 +89,7 @@ fun main() {
 
         suspend fun doExtraBusinessLogic(): Unit = TransactionContext.withCurrent(db) {
             println("Transaction($status): $this")
-            val inserted = Sqlx4kRepositoryImpl.insert(this, Sqlx4k(id = 123456, test = "test")).getOrThrow()
+            val inserted = Sqlx4kRepositoryImpl.insert(this, Sqlx4k(id = 123457, test = "test")).getOrThrow()
             println("INSERTED: $inserted")
         }
 

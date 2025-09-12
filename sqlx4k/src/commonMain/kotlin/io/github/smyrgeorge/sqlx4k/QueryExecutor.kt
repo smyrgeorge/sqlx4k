@@ -83,6 +83,18 @@ interface QueryExecutor {
         fun poolIdleSize(): Int
 
         /**
+         * Acquires a connection from the connection pool.
+         *
+         * This method suspends until a connection becomes available in the pool.
+         * If the pool is closed or an error occurs during the acquisition, the
+         * returned `Result` will contain the error details.
+         *
+         * @return A `Result` containing a `Connection` if the acquisition is successful,
+         *         or an error if the operation fails.
+         */
+        suspend fun acquire(): Result<Connection> = TODO("Not yet implemented")
+
+        /**
          * Closes the connection pool, releasing all resources.
          *
          * @return A Result object indicating the success or failure of the operation.
