@@ -51,6 +51,13 @@ class SQLite(
     override fun poolSize(): Int = sqlx4k_pool_size(rt)
     override fun poolIdleSize(): Int = sqlx4k_pool_idle_size(rt)
 
+    override suspend fun acquire(): Result<Connection> = runCatching {
+        sqlx { c -> sqlx4k_cn_acquire(rt, c, DriverNativeUtils.fn) }.use {
+            it.throwIfError()
+            Cn(rt, it.cn!!)
+        }
+    }
+
     override suspend fun execute(sql: String): Result<Long> = runCatching {
         sqlx { c -> sqlx4k_query(rt, sql, c, DriverNativeUtils.fn) }.rowsAffectedOrError()
     }
@@ -73,6 +80,73 @@ class SQLite(
         sqlx { c -> sqlx4k_tx_begin(rt, c, DriverNativeUtils.fn) }.use {
             it.throwIfError()
             Tx(rt, it.tx!!)
+        }
+    }
+
+    /**
+     * Represents a native database connection that implements the `Connection` interface.
+     *
+     * This class encapsulates a low-level, pointer-based interface to interact directly with
+     * a database connection and provides methods for executing queries, transactions, and managing
+     * the connection lifecycle.
+     *
+     * @constructor Creates a new instance of the `Cn` class.
+     * @property rt A `CPointer` representing the runtime context for the connection.
+     *              This pointer is required for any database operations performed through this connection.
+     * @property cn A `CPointer` representing the native connection object.
+     */
+    class Cn(
+        private val rt: CPointer<out CPointed>,
+        private val cn: CPointer<out CPointed>
+    ) : Connection {
+        private val mutex = Mutex()
+        private var _status: Connection.Status = Connection.Status.Acquired
+        override val status: Connection.Status get() = _status
+
+        override suspend fun release(): Result<Unit> = runCatching {
+            mutex.withLock {
+                isAcquiredOrError()
+                _status = Connection.Status.Released
+                sqlx { c -> sqlx4k_cn_release(rt, cn, c, DriverNativeUtils.fn) }.throwIfError()
+            }
+        }
+
+        override suspend fun execute(sql: String): Result<Long> = runCatching {
+            mutex.withLock {
+                isAcquiredOrError()
+                sqlx { c -> sqlx4k_cn_query(rt, cn, sql, c, DriverNativeUtils.fn) }.use {
+                    it.throwIfError()
+                    it.rows_affected.toLong()
+                }
+            }
+        }
+
+        override suspend fun execute(statement: Statement): Result<Long> =
+            execute(statement.render(encoders))
+
+        override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
+            return mutex.withLock {
+                isAcquiredOrError()
+                sqlx { c -> sqlx4k_tx_fetch_all(rt, cn, sql, c, DriverNativeUtils.fn) }
+                    .use { it.toResultSet() }
+                    .toResult()
+            }
+        }
+
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+            fetchAll(statement.render(encoders))
+
+        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
+            fetchAll(statement.render(encoders), rowMapper)
+
+        override suspend fun begin(): Result<Transaction> = runCatching {
+            mutex.withLock {
+                isAcquiredOrError()
+                sqlx { c -> sqlx4k_cn_tx_begin(rt, cn, c, DriverNativeUtils.fn) }.use {
+                    it.throwIfError()
+                    Tx(rt, it.tx!!)
+                }
+            }
         }
     }
 
