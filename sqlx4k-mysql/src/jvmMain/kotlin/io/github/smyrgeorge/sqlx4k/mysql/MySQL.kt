@@ -14,7 +14,6 @@ import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufAllocator
 import io.r2dbc.pool.ConnectionPool
 import io.r2dbc.pool.ConnectionPoolConfiguration
-import io.r2dbc.spi.Connection
 import io.r2dbc.spi.Row
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -29,6 +28,7 @@ import reactor.pool.PoolShutdownException
 import java.net.URI
 import kotlin.jvm.optionals.getOrElse
 import kotlin.time.toJavaDuration
+import io.r2dbc.spi.Connection as R2dbcConnection
 
 
 /**
@@ -72,6 +72,10 @@ class MySQL(
 
     override fun poolSize(): Int = pool.metrics.getOrElse { error("No metrics available.") }.allocatedSize()
     override fun poolIdleSize(): Int = pool.metrics.getOrElse { error("No metrics available.") }.idleSize()
+
+    override suspend fun acquire(): Result<Connection> = runCatching {
+        Cn(pool.acquire())
+    }
 
     override suspend fun execute(sql: String) = runCatching {
         @Suppress("SqlSourceToSinkFlow")
@@ -122,7 +126,7 @@ class MySQL(
         }
     }
 
-    private suspend fun ConnectionPool.acquire(): Connection {
+    private suspend fun ConnectionPool.acquire(): R2dbcConnection {
         return try {
             create().awaitSingle()
         } catch (e: Exception) {
@@ -130,6 +134,71 @@ class MySQL(
                 is PoolShutdownException -> SQLError(SQLError.Code.PoolClosed, e.message).ex()
                 is PoolAcquireTimeoutException -> SQLError(SQLError.Code.PoolTimedOut, e.message).ex()
                 else -> SQLError(SQLError.Code.Pool, e.message).ex()
+            }
+        }
+    }
+
+    /**
+     * A concrete implementation of the `Connection` interface that manages a single database connection
+     * while ensuring thread-safety and proper lifecycle handling.
+     *
+     * This class wraps an `R2dbcConnection` and provides methods for executing queries, managing transactions,
+     * and fetching results. It uses a mutex to synchronize operations and ensures the connection is in the
+     * correct state before performing any operations. It tracks the connection's status internally and supports
+     * releasing resources appropriately.
+     *
+     * @constructor Creates an instance of `Cn` with the specified `R2dbcConnection`.
+     * @property connection The underlying `R2dbcConnection` used for executing database queries and transactions.
+     */
+    class Cn(
+        private val connection: R2dbcConnection
+    ) : Connection {
+        private val mutex = Mutex()
+        private var _status: Connection.Status = Connection.Status.Acquired
+        override val status: Connection.Status get() = _status
+
+        override suspend fun release(): Result<Unit> = runCatching {
+            mutex.withLock {
+                isAcquiredOrError()
+                _status = Connection.Status.Released
+                connection.close().awaitFirstOrNull()
+            }
+        }
+
+        override suspend fun execute(sql: String): Result<Long> = runCatching {
+            mutex.withLock {
+                isAcquiredOrError()
+                @Suppress("SqlSourceToSinkFlow")
+                connection.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
+            }
+        }
+
+        override suspend fun execute(statement: Statement): Result<Long> =
+            execute(statement.render(encoders))
+
+        override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
+            return mutex.withLock {
+                isAcquiredOrError()
+                @Suppress("SqlSourceToSinkFlow")
+                connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
+            }
+        }
+
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+            fetchAll(statement.render(encoders))
+
+        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
+            fetchAll(statement.render(encoders), rowMapper)
+
+        override suspend fun begin(): Result<Transaction> = runCatching {
+            mutex.withLock {
+                isAcquiredOrError()
+                try {
+                    connection.beginTransaction().awaitFirstOrNull()
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message).ex()
+                }
+                Tx(connection)
             }
         }
     }
@@ -144,7 +213,7 @@ class MySQL(
      * @param connection The database connection associated with this transaction.
      */
     class Tx(
-        private var connection: Connection
+        private var connection: R2dbcConnection
     ) : Transaction {
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open

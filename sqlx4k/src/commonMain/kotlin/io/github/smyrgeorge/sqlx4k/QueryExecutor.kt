@@ -92,7 +92,7 @@ interface QueryExecutor {
          * @return A `Result` containing a `Connection` if the acquisition is successful,
          *         or an error if the operation fails.
          */
-        suspend fun acquire(): Result<Connection> = TODO("Not yet implemented")
+        suspend fun acquire(): Result<Connection>
 
         /**
          * Closes the connection pool, releasing all resources.

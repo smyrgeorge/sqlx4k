@@ -53,6 +53,7 @@ If you hit issues or have suggestions, please open an issue or a PR.
 
 - [Async I/O](#async-io)
 - [Connection pool and settings](#connection-pool)
+- [Acquiring and using connections](#acquiring-and-using-connections)
 - [Prepared statements (named and positional parameters)](#prepared-statements)
 - [Row mappers](#rowmappers)
 - [Transactions and coroutine TransactionContext](#transactions) · [TransactionContext (coroutines)](#transactioncontext-coroutines)
@@ -83,6 +84,7 @@ Please look at this issue: [#18](https://github.com/smyrgeorge/sqlx4k/issues/18)
 
 ## Next Steps (contributions are welcome)
 
+- Write extended tests.
 - Enhance code-generation module.
 - Add support for SQLite JVM target.
 
@@ -171,6 +173,33 @@ val db = SQLite(
     url = "sqlite://test.db", // If the `test.db` file is not found, a new db will be created.
     options = options
 )
+```
+
+#### Acquiring and using connections
+
+The driver provides two complementary ways to run queries:
+
+- Directly through the database instance (recommended). Each call acquires a pooled connection, executes the work, and
+  returns it to the pool automatically.
+- Manually acquire a connection from the pool when you need to batch multiple operations on the same connection without
+  starting a transaction.
+
+Notes:
+
+- When you manually acquire a connection, you must release it to return it to the pool.
+
+Examples (PostgreSQL shown, similar for MySQL/SQLite):
+
+```kotlin
+// Manual connection acquisition (remember to release)
+val conn: Connection = db.acquire().getOrThrow()
+try {
+    conn.execute("insert into users(id, name) values (2, 'Bob');").getOrThrow()
+    val rs = conn.fetchAll("select * from users;").getOrThrow()
+    // ...
+} finally {
+    conn.release().getOrThrow() // Return to pool
+}
 ```
 
 ### Prepared Statements
