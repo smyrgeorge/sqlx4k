@@ -120,7 +120,7 @@ class PostgreSQL(
                 close().awaitFirstOrNull()
                 SQLError(SQLError.Code.Database, e.message).ex()
             }
-            Tx(this)
+            Tx(this, true)
         }
     }
 
@@ -273,22 +273,25 @@ class PostgreSQL(
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message).ex()
                 }
-                Tx(connection)
+                Tx(connection, false)
             }
         }
     }
 
     /**
-     * Represents a transactional context for executing SQL operations with commit and rollback capabilities.
+     * Represents a database transaction that utilizes a reactive connection for transactional operations.
      *
-     * This class implements the [Transaction] interface and ensures thread safety through the use of a [Mutex].
-     * It provides methods to manage the lifecycle of a transaction, execute SQL operations, and retrieve result sets.
+     * This class implements the [Transaction] interface and provides functionality to manage the lifecycle
+     * of a transaction, including committing, rolling back, and executing SQL statements. It ensures thread-safety
+     * and consistency using a coroutine-based mutex to synchronize operations on the transaction.
      *
-     * @constructor Initializes the transaction with a given database connection.
-     * @param connection The database connection associated with this transaction.
+     * @constructor Creates a new transaction instance with a specific database connection.
+     * @param connection The reactive database connection used for the transaction.
+     * @param closeConnectionAfterTx Indicates whether the connection should be closed after the transaction is finalized.
      */
     class Tx(
-        private var connection: R2dbcConnection
+        private var connection: R2dbcConnection,
+        private val closeConnectionAfterTx: Boolean
     ) : Transaction {
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open
@@ -304,7 +307,7 @@ class PostgreSQL(
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message).ex()
                 } finally {
-                    connection.close().awaitFirstOrNull()
+                    if (closeConnectionAfterTx) connection.close().awaitFirstOrNull()
                 }
             }
         }
@@ -318,7 +321,7 @@ class PostgreSQL(
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message).ex()
                 } finally {
-                    connection.close().awaitFirstOrNull()
+                    if (closeConnectionAfterTx) connection.close().awaitFirstOrNull()
                 }
             }
         }

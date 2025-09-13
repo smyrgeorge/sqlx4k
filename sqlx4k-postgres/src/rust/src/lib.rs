@@ -59,8 +59,16 @@ impl Sqlx4k {
     }
 
     async fn cn_release(&self, cn: Ptr) -> *mut Sqlx4kResult {
-        let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<Postgres>) };
-        let _cn: PoolConnection<Postgres> = unsafe { *Box::from_raw(cn) };
+        if cn.ptr.is_null() {
+            return Sqlx4kResult::default().leak();
+        }
+
+        let cn_ptr = cn.ptr as *mut PoolConnection<Postgres>;
+        unsafe {
+            // Recreate the Box and drop it, returning connection to pool
+            let _boxed: Box<PoolConnection<Postgres>> = Box::from_raw(cn_ptr);
+        }
+
         Sqlx4kResult::default().leak()
     }
 

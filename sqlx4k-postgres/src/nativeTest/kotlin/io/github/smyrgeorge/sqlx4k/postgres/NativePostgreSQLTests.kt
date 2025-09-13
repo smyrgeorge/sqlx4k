@@ -6,7 +6,7 @@ import kotlin.test.Test
 class NativePostgreSQLTests {
 
     private val options = QueryExecutor.Pool.Options.builder()
-        .maxConnections(10)
+        .maxConnections(2)
         .build()
 
     private val db = postgreSQL(

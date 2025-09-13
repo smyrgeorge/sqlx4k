@@ -58,8 +58,16 @@ impl Sqlx4k {
     }
 
     async fn cn_release(&self, cn: Ptr) -> *mut Sqlx4kResult {
-        let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<Sqlite>) };
-        let _cn: PoolConnection<Sqlite> = unsafe { *Box::from_raw(cn) };
+        if cn.ptr.is_null() {
+            return Sqlx4kResult::default().leak();
+        }
+
+        let cn_ptr = cn.ptr as *mut PoolConnection<Sqlite>;
+        unsafe {
+            // Recreate the Box and drop it, returning connection to pool
+            let _boxed: Box<PoolConnection<Sqlite>> = Box::from_raw(cn_ptr);
+        }
+
         Sqlx4kResult::default().leak()
     }
 

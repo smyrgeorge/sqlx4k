@@ -6,7 +6,7 @@ import kotlin.test.Test
 class NativeMySQLTests {
 
     val options = QueryExecutor.Pool.Options.builder()
-        .maxConnections(10)
+        .maxConnections(2)
         .build()
 
     val db = mySQL(

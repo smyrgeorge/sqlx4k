@@ -122,7 +122,7 @@ class MySQL(
                 close().awaitFirstOrNull()
                 SQLError(SQLError.Code.Database, e.message).ex()
             }
-            Tx(this)
+            Tx(this, true)
         }
     }
 
@@ -198,22 +198,25 @@ class MySQL(
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message).ex()
                 }
-                Tx(connection)
+                Tx(connection, false)
             }
         }
     }
 
     /**
-     * Represents a transactional context for executing SQL operations with commit and rollback capabilities.
+     * Represents a transaction implementation that provides functionality for managing
+     * and executing operations within a transactional context.
      *
-     * This class implements the [Transaction] interface and ensures thread safety through the use of a [Mutex].
-     * It provides methods to manage the lifecycle of a transaction, execute SQL operations, and retrieve result sets.
+     * @property connection The underlying R2DBC connection used to execute the transaction.
+     * @property closeConnectionAfterTx Indicates whether the connection should be closed after the transaction is completed.
      *
-     * @constructor Initializes the transaction with a given database connection.
-     * @param connection The database connection associated with this transaction.
+     * This class uses a [Mutex] to ensure thread-safety for the transaction's operations.
+     * It includes methods for committing, rolling back, and executing queries within
+     * the scope of the transaction.
      */
     class Tx(
-        private var connection: R2dbcConnection
+        private var connection: R2dbcConnection,
+        private val closeConnectionAfterTx: Boolean
     ) : Transaction {
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open
@@ -228,7 +231,7 @@ class MySQL(
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message).ex()
                 } finally {
-                    connection.close().awaitFirstOrNull()
+                    if (closeConnectionAfterTx) connection.close().awaitFirstOrNull()
                 }
             }
         }
@@ -242,7 +245,7 @@ class MySQL(
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message).ex()
                 } finally {
-                    connection.close().awaitFirstOrNull()
+                    if (closeConnectionAfterTx) connection.close().awaitFirstOrNull()
                 }
             }
         }
