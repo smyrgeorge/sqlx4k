@@ -1,0 +1,43 @@
+package io.github.smyrgeorge.sqlx4k.sqlite
+
+import io.github.smyrgeorge.sqlx4k.QueryExecutor
+import kotlin.test.Test
+
+class NativeSQLiteMigratorTests {
+
+    private val options = QueryExecutor.Pool.Options.builder()
+        .maxConnections(2)
+        .build()
+
+    private val db = SQLite(
+        url = "sqlite://test.db",
+        options = options
+    )
+
+    private val runner = CommonSQLiteMigratorTests(db)
+
+    @Test
+    fun `migrate happy path and idempotent`() {
+        runner.`migrate happy path and idempotent`()
+    }
+
+    @Test
+    fun `duplicate version files should fail`() {
+        runner.`duplicate version files should fail`()
+    }
+
+    @Test
+    fun `non-monotonic versions should fail`() {
+        runner.`non-monotonic versions should fail`()
+    }
+
+    @Test
+    fun `empty migration file should fail`() {
+        runner.`empty migration file should fail`()
+    }
+
+    @Test
+    fun `checksum mismatch should fail on re-run`() {
+        runner.`checksum mismatch should fail on re-run`()
+    }
+}

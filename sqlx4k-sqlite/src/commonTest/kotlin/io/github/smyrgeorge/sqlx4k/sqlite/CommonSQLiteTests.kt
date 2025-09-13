@@ -5,41 +5,23 @@ import assertk.assertThat
 import assertk.assertions.isEqualTo
 import assertk.assertions.isNull
 import assertk.assertions.isTrue
-import io.github.smyrgeorge.sqlx4k.QueryExecutor
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asChar
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asDouble
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asFloat
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalDate
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalDateTime
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalTime
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asShort
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asUuid
+import io.github.smyrgeorge.sqlx4k.impl.extensions.*
 import io.github.smyrgeorge.sqlx4k.sqlite.extensions.asBoolean
 import io.github.smyrgeorge.sqlx4k.sqlite.extensions.asByteArray
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
-import kotlin.test.Test
+import kotlin.time.ExperimentalTime
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-@OptIn(ExperimentalUuidApi::class)
 @Suppress("SqlNoDataSourceInspection")
-class SQLiteTests {
+class CommonSQLiteTests(
+    private val db: ISQLite
+) {
 
-    val options = QueryExecutor.Pool.Options.builder()
-        .maxConnections(10)
-        .build()
-
-    val db = SQLite(
-        url = "sqlite://test.db",
-        options = options
-    )
-
-    @Test
+    @OptIn(ExperimentalUuidApi::class, ExperimentalTime::class)
     fun `Test basic type mappings`() = runBlocking {
         // language=SQLite
         val types = """

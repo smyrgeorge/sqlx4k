@@ -10,16 +10,18 @@ kotlin {
         configureEach {
             languageSettings.progressiveMode = true
         }
-        val nativeMain by getting {
+        val commonMain by getting {
             dependencies {
                 api(project(":sqlx4k"))
             }
         }
-        val nativeTest by getting {
+        val commonTest by getting {
             dependencies {
                 implementation(libs.kotlin.test)
                 implementation(libs.assertk)
+                implementation(libs.kotlinx.io.core)
             }
         }
+        // No jvmMain dependencies for SQLite; JVM is not supported yet.
     }
 }
