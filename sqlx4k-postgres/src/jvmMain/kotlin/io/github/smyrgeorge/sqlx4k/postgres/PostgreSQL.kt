@@ -137,7 +137,7 @@ class PostgreSQL(
      *          containing the channel name and payload.
      * @throws IllegalArgumentException If the `channel` parameter is blank.
      */
-    override suspend fun listen(channel: String, f: (Notification) -> Unit) {
+    override suspend fun listen(channel: String, f: suspend (Notification) -> Unit) {
         listen(listOf(channel), f)
     }
 
@@ -154,7 +154,7 @@ class PostgreSQL(
      *          containing the channel name and payload.
      * @throws IllegalArgumentException If the `channels` list is empty or any channel name is blank.
      */
-    override suspend fun listen(channels: List<String>, f: (Notification) -> Unit) {
+    override suspend fun listen(channels: List<String>, f: suspend (Notification) -> Unit) {
         fun io.r2dbc.postgresql.api.Notification.toNotification(): Notification {
             require(name.isNotBlank()) { "Channel cannot be blank." }
             val value = ResultSet.Row.Column(0, name, "TEXT", parameter)

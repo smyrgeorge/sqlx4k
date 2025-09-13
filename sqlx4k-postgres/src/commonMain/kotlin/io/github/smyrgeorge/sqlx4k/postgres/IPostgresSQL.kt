@@ -11,7 +11,7 @@ interface IPostgresSQL : Driver {
      * @param f The callback function to be executed whenever a notification is received on the specified channel.
      *          The callback receives a `Notification` object containing details of the notification.
      */
-    suspend fun listen(channel: String, f: (Notification) -> Unit)
+    suspend fun listen(channel: String, f: suspend (Notification) -> Unit)
 
     /**
      * Listens for notifications on specified PostgreSQL channels and executes a callback for each received notification.
@@ -20,7 +20,7 @@ interface IPostgresSQL : Driver {
      * @param f The callback function to execute whenever a notification is received on any of the specified channels.
      *          The callback receives a `Notification` object containing details of the notification.
      */
-    suspend fun listen(channels: List<String>, f: (Notification) -> Unit)
+    suspend fun listen(channels: List<String>, f: suspend (Notification) -> Unit)
 
     /**
      * Publishes a notification to a specified PostgreSQL channel.
@@ -41,25 +41,23 @@ interface IPostgresSQL : Driver {
      * A valid PostgreSQL channel name:
      * - Must start with a letter or an underscore.
      * - May be followed by letters, digits, or underscores.
-     * - Has a maximum length of 63 characters.
+     * - Has a maximum length of 60 characters.
      *
      * @param channel The name of the PostgreSQL channel to be validated.
      * @throws IllegalArgumentException If the channel name is invalid or does not conform to the rules.
      */
     fun validateChannelName(channel: String) {
         require(channel.isNotBlank()) { "Channel cannot be blank." }
-        require(channel.matches(CHANNEL_NAME_PATTERN)) {
-            """Invalid channel name: $channel. Channel names must start with a letter or underscore,
-                    |followed by letters, digits, or underscores, with a maximum length of 63 characters.""".trimMargin()
+        // Disallow any whitespace
+        require(!channel.any { it.isWhitespace() }) { "Channel cannot contain whitespace." }
+        // Max length 60 characters (project constraint)
+        require(channel.length in 1..60) { "Channel length must be between 1 and 60 characters." }
+        // First character must be a letter or underscore
+        val first = channel.first()
+        require(first.isLetter() || first == '_') { "Channel must start with a letter or underscore." }
+        // Remaining characters must be letters, digits, or underscores
+        require(channel.drop(1).all { it.isLetterOrDigit() || it == '_' }) {
+            "Channel may contain only letters, digits, or underscores."
         }
-    }
-
-    companion object {
-        /**
-         * Regular expression pattern for validating PostgreSQL channel names.
-         * Channel names must start with a letter or underscore, followed by letters,
-         * digits, or underscores, with a maximum length of 63 characters.
-         */
-        private val CHANNEL_NAME_PATTERN = "^[a-zA-Z_][a-zA-Z0-9_]{0,62}$".toRegex()
     }
 }

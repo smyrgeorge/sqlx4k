@@ -109,7 +109,7 @@ class PostgreSQL(
      * @param f A callback function that is invoked for each notification received. The function accepts a `Notification` object
      *          containing the channel name and the notification payload.
      */
-    override suspend fun listen(channel: String, f: (Notification) -> Unit) {
+    override suspend fun listen(channel: String, f: suspend (Notification) -> Unit) {
         listen(listOf(channel), f)
     }
 
@@ -125,7 +125,7 @@ class PostgreSQL(
      *          and the notification payload.
      * @throws IllegalArgumentException If the `channels` list is empty.
      */
-    override suspend fun listen(channels: List<String>, f: (Notification) -> Unit) {
+    override suspend fun listen(channels: List<String>, f: suspend (Notification) -> Unit) {
         require(channels.isNotEmpty()) { "Channels cannot be empty." }
         channels.forEach { validateChannelName(it) }
 
