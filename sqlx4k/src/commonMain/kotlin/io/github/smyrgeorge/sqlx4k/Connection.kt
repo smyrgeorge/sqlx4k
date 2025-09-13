@@ -20,7 +20,7 @@ interface Connection : QueryExecutor, QueryExecutor.Transactional {
      *
      * @throws SQLError If the connection has already been released.
      */
-    fun isAcquiredOrError() {
+    fun assertIsAcquired() {
         if (status == Status.Released) {
             SQLError(SQLError.Code.ConnectionIsReleased, "Connection has already been released.").ex()
         }

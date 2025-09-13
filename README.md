@@ -84,7 +84,6 @@ Please look at this issue: [#18](https://github.com/smyrgeorge/sqlx4k/issues/18)
 
 ## Next Steps (contributions are welcome)
 
-- Write extended tests.
 - Enhance code-generation module.
 - Add support for SQLite JVM target.
 

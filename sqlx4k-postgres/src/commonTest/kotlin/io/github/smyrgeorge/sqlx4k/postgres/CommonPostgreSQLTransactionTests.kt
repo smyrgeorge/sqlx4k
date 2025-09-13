@@ -28,7 +28,7 @@ class CommonPostgreSQLTransactionTests(
         db.execute("create table if not exists $table(id serial primary key, v int not null);").getOrThrow()
 
         val tx = db.begin().getOrThrow()
-        assertThat(runCatching { tx.execute("insert into $table(v) values (1);").getOrThrow() }).isSuccess()
+        assertThat(tx.execute("insert into $table(v) values (1);")).isSuccess()
         tx.commit().getOrThrow()
 
         assertThat(countRows(table)).isEqualTo(1L)
@@ -41,7 +41,7 @@ class CommonPostgreSQLTransactionTests(
         db.execute("create table if not exists $table(id serial primary key, v int not null);").getOrThrow()
 
         val tx = db.begin().getOrThrow()
-        assertThat(runCatching { tx.execute("insert into $table(v) values (1);").getOrThrow() }).isSuccess()
+        assertThat(tx.execute("insert into $table(v) values (1);")).isSuccess()
         tx.rollback().getOrThrow()
 
         assertThat(countRows(table)).isEqualTo(0L)

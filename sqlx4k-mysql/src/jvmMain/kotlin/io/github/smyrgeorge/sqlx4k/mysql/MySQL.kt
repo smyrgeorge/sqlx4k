@@ -159,7 +159,7 @@ class MySQL(
 
         override suspend fun release(): Result<Unit> = runCatching {
             mutex.withLock {
-                isAcquiredOrError()
+                assertIsAcquired()
                 _status = Connection.Status.Released
                 connection.close().awaitFirstOrNull()
             }
@@ -167,7 +167,7 @@ class MySQL(
 
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
-                isAcquiredOrError()
+                assertIsAcquired()
                 @Suppress("SqlSourceToSinkFlow")
                 connection.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
             }
@@ -178,7 +178,7 @@ class MySQL(
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
-                isAcquiredOrError()
+                assertIsAcquired()
                 @Suppress("SqlSourceToSinkFlow")
                 connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
             }
@@ -192,7 +192,7 @@ class MySQL(
 
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
-                isAcquiredOrError()
+                assertIsAcquired()
                 try {
                     connection.beginTransaction().awaitFirstOrNull()
                 } catch (e: Exception) {
@@ -224,7 +224,7 @@ class MySQL(
 
         override suspend fun commit(): Result<Unit> = runCatching {
             mutex.withLock {
-                isOpenOrError()
+                assertIsOpen()
                 _status = Transaction.Status.Closed
                 try {
                     connection.commitTransaction().awaitFirstOrNull()
@@ -238,7 +238,7 @@ class MySQL(
 
         override suspend fun rollback(): Result<Unit> = runCatching {
             mutex.withLock {
-                isOpenOrError()
+                assertIsOpen()
                 _status = Transaction.Status.Closed
                 try {
                     connection.rollbackTransaction().awaitFirstOrNull()
@@ -252,7 +252,7 @@ class MySQL(
 
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
-                isOpenOrError()
+                assertIsOpen()
                 @Suppress("SqlSourceToSinkFlow")
                 connection.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
             }
@@ -263,7 +263,7 @@ class MySQL(
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
-                isOpenOrError()
+                assertIsOpen()
                 @Suppress("SqlSourceToSinkFlow")
                 connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
             }

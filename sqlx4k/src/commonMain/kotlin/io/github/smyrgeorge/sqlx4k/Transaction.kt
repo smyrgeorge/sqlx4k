@@ -19,9 +19,9 @@ interface Transaction : QueryExecutor {
      *
      * @throws SQLError if the transaction is closed.
      */
-    fun isOpenOrError() {
+    fun assertIsOpen() {
         if (status == Status.Closed) {
-            SQLError(SQLError.Code.TransactionIsClosed, "Transaction has already closed.").ex()
+            SQLError(SQLError.Code.TransactionIsClosed, "Transaction has already been closed.").ex()
         }
     }
 

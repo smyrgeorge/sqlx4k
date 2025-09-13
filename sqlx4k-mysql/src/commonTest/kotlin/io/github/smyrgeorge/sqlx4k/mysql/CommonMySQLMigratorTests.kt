@@ -70,17 +70,14 @@ class CommonMySQLMigratorTests(
         """.trimIndent()
             )
 
-            assertThat(runCatching { db.migrate(path = dir.toString(), table = table).getOrThrow() })
-                .isSuccess()
-
+            assertThat(db.migrate(path = dir.toString(), table = table)).isSuccess()
             assertAll {
                 assertThat(listApplied(table)).containsExactly(1L, 2L)
                 assertThat(countUsers()).isEqualTo(2L)
             }
 
             // Re-run should be idempotent
-            assertThat(runCatching { db.migrate(path = dir.toString(), table = table).getOrThrow() })
-                .isSuccess()
+            assertThat(db.migrate(path = dir.toString(), table = table)).isSuccess()
             assertAll {
                 assertThat(listApplied(table)).containsExactly(1L, 2L)
                 assertThat(countUsers()).isEqualTo(2L)
@@ -96,7 +93,7 @@ class CommonMySQLMigratorTests(
         write(dir, "1_a.sql", "select 1;")
         write(dir, "1_b.sql", "select 1;")
         val table = "_sqlx4k_migr_mysql_${Random.nextInt(100000)}"
-        val res = runCatching { db.migrate(path = dir.toString(), table = table).getOrThrow() }
+        val res = db.migrate(path = dir.toString(), table = table)
         runCatching { db.execute("DROP TABLE IF EXISTS $table CASCADE;").getOrThrow() }
         assertThat(res).isFailure()
         val ex = res.exceptionOrNull() as SQLError
@@ -108,7 +105,7 @@ class CommonMySQLMigratorTests(
         write(dir, "1_a.sql", "select 1;")
         write(dir, "3_c.sql", "select 1;")
         val table = "_sqlx4k_migr_mysql_${Random.nextInt(100000)}"
-        val res = runCatching { db.migrate(path = dir.toString(), table = table).getOrThrow() }
+        val res = db.migrate(path = dir.toString(), table = table)
         runCatching { db.execute("DROP TABLE IF EXISTS $table CASCADE;").getOrThrow() }
         assertThat(res).isFailure()
         val ex = res.exceptionOrNull() as SQLError
@@ -119,7 +116,7 @@ class CommonMySQLMigratorTests(
         val dir = newTempDir("mysql-empty")
         write(dir, "1_empty.sql", "\n   \n\t\n")
         val table = "_sqlx4k_migr_mysql_${Random.nextInt(100000)}"
-        val res = runCatching { db.migrate(path = dir.toString(), table = table).getOrThrow() }
+        val res = db.migrate(path = dir.toString(), table = table)
         runCatching { db.execute("DROP TABLE IF EXISTS $table CASCADE;").getOrThrow() }
         assertThat(res).isFailure()
         val ex = res.exceptionOrNull() as SQLError
@@ -146,7 +143,7 @@ class CommonMySQLMigratorTests(
                 content = "create table if not exists t_users (id BIGINT primary key auto_increment, name text not null); -- changed\n"
             )
 
-            val res = runCatching { db.migrate(path = dir.toString(), table = table).getOrThrow() }
+            val res = db.migrate(path = dir.toString(), table = table)
             assertThat(res).isFailure()
             val ex = res.exceptionOrNull() as SQLError
             assertThat(ex.code).isEqualTo(SQLError.Code.Migrate)

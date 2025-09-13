@@ -107,7 +107,7 @@ class MySQL(
 
         override suspend fun release(): Result<Unit> = runCatching {
             mutex.withLock {
-                isAcquiredOrError()
+                assertIsAcquired()
                 _status = Connection.Status.Released
                 sqlx { c -> sqlx4k_cn_release(rt, cn, c, DriverNativeUtils.fn) }.throwIfError()
             }
@@ -115,7 +115,7 @@ class MySQL(
 
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
-                isAcquiredOrError()
+                assertIsAcquired()
                 sqlx { c -> sqlx4k_cn_query(rt, cn, sql, c, DriverNativeUtils.fn) }.use {
                     it.throwIfError()
                     it.rows_affected.toLong()
@@ -128,8 +128,8 @@ class MySQL(
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
-                isAcquiredOrError()
-                sqlx { c -> sqlx4k_tx_fetch_all(rt, cn, sql, c, DriverNativeUtils.fn) }
+                assertIsAcquired()
+                sqlx { c -> sqlx4k_cn_fetch_all(rt, cn, sql, c, DriverNativeUtils.fn) }
                     .use { it.toResultSet() }
                     .toResult()
             }
@@ -143,7 +143,7 @@ class MySQL(
 
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
-                isAcquiredOrError()
+                assertIsAcquired()
                 sqlx { c -> sqlx4k_cn_tx_begin(rt, cn, c, DriverNativeUtils.fn) }.use {
                     it.throwIfError()
                     Tx(rt, it.tx!!)
@@ -170,7 +170,7 @@ class MySQL(
 
         override suspend fun commit(): Result<Unit> = runCatching {
             mutex.withLock {
-                isOpenOrError()
+                assertIsOpen()
                 _status = Transaction.Status.Closed
                 sqlx { c -> sqlx4k_tx_commit(rt, tx, c, DriverNativeUtils.fn) }.throwIfError()
             }
@@ -178,7 +178,7 @@ class MySQL(
 
         override suspend fun rollback(): Result<Unit> = runCatching {
             mutex.withLock {
-                isOpenOrError()
+                assertIsOpen()
                 _status = Transaction.Status.Closed
                 sqlx { c -> sqlx4k_tx_rollback(rt, tx, c, DriverNativeUtils.fn) }.throwIfError()
             }
@@ -186,7 +186,7 @@ class MySQL(
 
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
-                isOpenOrError()
+                assertIsOpen()
                 sqlx { c -> sqlx4k_tx_query(rt, tx, sql, c, DriverNativeUtils.fn) }.use {
                     tx = it.tx!!
                     it.throwIfError()
@@ -200,7 +200,7 @@ class MySQL(
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
-                isOpenOrError()
+                assertIsOpen()
                 sqlx { c -> sqlx4k_tx_fetch_all(rt, tx, sql, c, DriverNativeUtils.fn) }.use {
                     tx = it.tx!!
                     it.toResultSet()

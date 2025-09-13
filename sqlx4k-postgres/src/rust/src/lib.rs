@@ -130,8 +130,7 @@ impl Sqlx4k {
     }
 
     async fn tx_commit(&self, tx: Ptr) -> *mut Sqlx4kResult {
-        let tx = unsafe { &mut *(tx.ptr as *mut Transaction<'_, Postgres>) };
-        let tx = unsafe { *Box::from_raw(tx) };
+        let tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Postgres>) };
         let result = match tx.commit().await {
             Ok(_) => Sqlx4kResult::default(),
             Err(err) => sqlx4k_error_result_of(err),
@@ -140,8 +139,7 @@ impl Sqlx4k {
     }
 
     async fn tx_rollback(&self, tx: Ptr) -> *mut Sqlx4kResult {
-        let tx = unsafe { &mut *(tx.ptr as *mut Transaction<'_, Postgres>) };
-        let tx = unsafe { *Box::from_raw(tx) };
+        let tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Postgres>) };
         let result = match tx.rollback().await {
             Ok(_) => Sqlx4kResult::default(),
             Err(err) => sqlx4k_error_result_of(err),
@@ -150,37 +148,32 @@ impl Sqlx4k {
     }
 
     async fn tx_query(&self, tx: Ptr, sql: &str) -> *mut Sqlx4kResult {
-        let tx = unsafe { &mut *(tx.ptr as *mut Transaction<'_, Postgres>) };
-        let mut tx = unsafe { *Box::from_raw(tx) };
+        let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Postgres>) };
         let result = tx.execute(sql).await;
         let tx = Box::new(tx);
-        let tx = Box::leak(tx);
+        let tx = Box::into_raw(tx);
         let result = match result {
-            Ok(res) => {
-                res.rows_affected();
-                Sqlx4kResult {
-                    rows_affected: res.rows_affected(),
-                    ..Default::default()
-                }
-            }
+            Ok(res) => Sqlx4kResult {
+                rows_affected: res.rows_affected(),
+                ..Default::default()
+            },
             Err(err) => sqlx4k_error_result_of(err),
         };
         let result = Sqlx4kResult {
-            tx: tx as *mut _ as *mut c_void,
+            tx: tx as *mut c_void,
             ..result
         };
         result.leak()
     }
 
     async fn tx_fetch_all(&self, tx: Ptr, sql: &str) -> *mut Sqlx4kResult {
-        let tx = unsafe { &mut *(tx.ptr as *mut Transaction<'_, Postgres>) };
-        let mut tx = unsafe { *Box::from_raw(tx) };
+        let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Postgres>) };
         let result = tx.fetch_all(sql).await;
         let tx = Box::new(tx);
-        let tx = Box::leak(tx);
+        let tx = Box::into_raw(tx);
         let result = sqlx4k_result_of(result);
         let result = Sqlx4kResult {
-            tx: tx as *mut _ as *mut c_void,
+            tx: tx as *mut c_void,
             ..result
         };
         result.leak()
