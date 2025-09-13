@@ -1,4 +1,6 @@
 test.db
+test.db-shm
+test.db-wal
 test.db-journal
 
 # Created by https://www.toptal.com/developers/gitignore/api/java,rust,macos,maven,gradle,kotlin,eclipse,windows,intellij,visualstudiocode
