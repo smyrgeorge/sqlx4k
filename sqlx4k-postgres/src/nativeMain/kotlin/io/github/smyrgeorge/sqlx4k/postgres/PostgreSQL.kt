@@ -166,8 +166,8 @@ class PostgreSQL(
      */
     override suspend fun notify(channel: String, value: String) {
         validateChannelName(channel)
-        val notify = Statement.create("select pg_notify(:chanel, :value);")
-            .bind("chanel", channel)
+        val notify = Statement.create("select pg_notify(:channel, :value);")
+            .bind("channel", channel)
             .bind("value", value)
         execute(notify).getOrThrow()
     }

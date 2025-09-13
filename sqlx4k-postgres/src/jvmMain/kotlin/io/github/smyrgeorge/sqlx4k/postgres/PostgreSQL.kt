@@ -164,7 +164,13 @@ class PostgreSQL(
         require(channels.isNotEmpty()) { "Channels cannot be empty." }
         channels.forEach { validateChannelName(it) }
 
-        val sql = channels.joinToString { "LISTEN $it;" }
+        val sql = buildString {
+            for (chan in channels) {
+                append("LISTEN \"")
+                append(chan)
+                append("\";")
+            }
+        }
 
         PgChannelScope.launch {
             while (true) {
@@ -195,8 +201,8 @@ class PostgreSQL(
      */
     override suspend fun notify(channel: String, value: String) {
         validateChannelName(channel)
-        val notify = Statement.create("select pg_notify(:chanel, :value);")
-            .bind("chanel", channel)
+        val notify = Statement.create("select pg_notify(:channel, :value);")
+            .bind("channel", channel)
             .bind("value", value)
         execute(notify).getOrThrow()
     }
@@ -295,8 +301,7 @@ class PostgreSQL(
     ) : Transaction {
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open
-        override val status: Transaction.Status
-            get() = _status
+        override val status: Transaction.Status get() = _status
 
         override suspend fun commit(): Result<Unit> = runCatching {
             mutex.withLock {
