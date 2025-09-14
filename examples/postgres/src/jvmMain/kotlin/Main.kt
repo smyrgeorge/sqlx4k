@@ -1,7 +1,7 @@
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.examples.postgres.Examples
 import io.github.smyrgeorge.sqlx4k.examples.postgres.Sqlx4kRepositoryImpl
-import io.github.smyrgeorge.sqlx4k.postgres.PostgreSQL
+import io.github.smyrgeorge.sqlx4k.postgres.postgreSQL
 import kotlinx.coroutines.runBlocking
 
 fun main() = runBlocking {
@@ -9,7 +9,7 @@ fun main() = runBlocking {
         .maxConnections(10)
         .build()
 
-    val db = PostgreSQL(
+    val db = postgreSQL(
         url = "postgresql://localhost:15432/test",
         username = "postgres",
         password = "postgres",
