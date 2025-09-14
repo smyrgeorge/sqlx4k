@@ -377,7 +377,7 @@ migration source to detect accidental changes in previously applied migrations.
 db.migrate(path = "./db/migrations").getOrThrow()
 // You can also ovveride the default migration table name.
 // db.migrate(path = "./db/migrations", table = "_sqlx4k_migrations").getOrThrow()
-println("Migrations completed.")
+println("Migration completed.")
 ```
 
 This process will create a table with name `_sqlx4k_migrations`.

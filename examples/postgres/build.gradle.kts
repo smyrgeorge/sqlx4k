@@ -14,8 +14,6 @@ kotlin {
             dependencies {
                 implementation(project(":sqlx4k-postgres"))
             }
-        }
-        val nativeMain by getting {
             kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
         }
     }
