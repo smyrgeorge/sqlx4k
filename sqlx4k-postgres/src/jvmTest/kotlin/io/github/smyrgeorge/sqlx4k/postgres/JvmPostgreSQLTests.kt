@@ -20,4 +20,10 @@ class JvmPostgreSQLTests {
 
     @Test
     fun `Test basic type mappings`() = runner.`Test basic type mappings`()
+
+    @Test
+    fun `execute and fetchAll should work`() = runner.`execute and fetchAll should work`()
+
+    @Test
+    fun `execute and fetchAll with prepared statements should work`() = runner.`execute and fetchAll with prepared statements should work`()
 }
