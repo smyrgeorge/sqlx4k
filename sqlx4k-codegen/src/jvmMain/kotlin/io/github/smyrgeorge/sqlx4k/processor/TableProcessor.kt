@@ -84,9 +84,11 @@ class TableProcessor(
             clazz: KSClassDeclaration,
             props: Sequence<KSPropertyDeclaration>
         ) {
+            // Materialize all properties to avoid multiple sequence traversals
+            val allProps = props.toList()
+
             // Find insertable properties.
-            @Suppress("NAME_SHADOWING")
-            val props = props
+            val insertProps = allProps.asSequence()
                 .filter {
                     val id = it.annotations.find { a -> a.shortName() == ID_ANNOTATION_NAME }
                         ?: return@filter true
@@ -108,15 +110,19 @@ class TableProcessor(
                     (insert.value as? Boolean) ?: true
                 }
                 .map { it.simpleName() }
+                .toList()
+
+            // Returning should explicitly list all properties (snake_case), not table.*
+            val returningColumns = allProps.joinToString { it.simpleName().toSnakeCase() }
 
             file += "\n"
             file += "fun ${clazz.qualifiedName?.asString()}.insert(): Statement {\n"
             file += "    // language=SQL\n"
-            file += "    val sql = \"insert into $table(${props.map { it.toSnakeCase() }.joinToString()})"
-            file += " values (${props.joinToString { "?" }})"
-            file += " returning $table.*;\"\n"
+            file += "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }})"
+            file += " values (${insertProps.joinToString { "?" }})"
+            file += " returning ${returningColumns};\"\n"
             file += "    val statement = Statement.create(sql)\n"
-            props.forEachIndexed { index, property ->
+            insertProps.forEachIndexed { index, property ->
                 file += "    statement.bind($index, ${property})\n"
             }
             file += "    return statement\n"
@@ -136,7 +142,10 @@ class TableProcessor(
             clazz: KSClassDeclaration,
             props: Sequence<KSPropertyDeclaration>
         ) {
-            val id: KSPropertyDeclaration = props.find {
+            // Materialize all properties to avoid multiple sequence traversals
+            val allProps = props.toList()
+
+            val id: KSPropertyDeclaration = allProps.find {
                 it.annotations.any { a -> a.shortName() == ID_ANNOTATION_NAME }
             } ?: run {
                 logger.warn("Skipping $table.update() because no property found annotated with @$ID_ANNOTATION_NAME.")
@@ -144,8 +153,7 @@ class TableProcessor(
             }
 
             // Find updatable properties.
-            @Suppress("NAME_SHADOWING")
-            val props = props
+            val updateProps = allProps.asSequence()
                 // Exclude @Id from the update query,
                 .filter { it.simpleName() != id.simpleName() }
                 .filter {
@@ -159,20 +167,24 @@ class TableProcessor(
                     (update.value as? Boolean) ?: true
                 }
                 .map { it.simpleName() }
+                .toList()
+
+            // Returning should explicitly list all properties (snake_case), not table.*
+            val returningColumns = allProps.joinToString { it.simpleName().toSnakeCase() }
 
             file += "\n"
             file += "fun ${clazz.qualifiedName?.asString()}.update(): Statement {\n"
             file += "    // language=SQL\n"
             file += "    val sql = \"update $table"
-            file += " set ${props.joinToString { p -> "${p.toSnakeCase()} = ?" }}"
+            file += " set ${updateProps.joinToString { p -> "${p.toSnakeCase()} = ?" }}"
             file += " where ${id.simpleName().toSnakeCase()} = ?"
-            file += " returning $table.*;\"\n"
+            file += " returning ${returningColumns};\"\n"
 
             file += "    val statement = Statement.create(sql)\n"
-            props.forEachIndexed { index, property ->
+            updateProps.forEachIndexed { index, property ->
                 file += "    statement.bind($index, ${property})\n"
             }
-            file += "    statement.bind(${props.toList().size}, ${id.simpleName()})\n"
+            file += "    statement.bind(${updateProps.size}, ${id.simpleName()})\n"
             file += "    return statement\n"
             file += "}\n"
         }
