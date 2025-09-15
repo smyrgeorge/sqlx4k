@@ -11,6 +11,11 @@ class TableProcessor(
     private val codeGenerator: CodeGenerator,
 ) : SymbolProcessor {
 
+    private val dialect: String = when (options[DIALECT_OPTION]?.lowercase()) {
+        "mysql" -> "mysql"
+        else -> "generic"
+    }
+
     override fun process(resolver: Resolver): List<KSAnnotated> {
         val symbols = resolver
             .getSymbolsWithAnnotation(TypeNames.TABLE_ANNOTATION)
@@ -20,6 +25,8 @@ class TableProcessor(
 
         val outputPackage = options[PACKAGE_OPTION] ?: error("Missing $PACKAGE_OPTION option")
         val outputFilename = options[FILENAME_OPTION] ?: "GeneratedQueries"
+
+        logger.info("sqlx4k-codegen: TableProcessor dialect = $dialect")
 
         val file: OutputStream = codeGenerator.createNewFile(
             // Make sure to associate the generated file with sources to keep/maintain it across incremental builds.
@@ -118,12 +125,28 @@ class TableProcessor(
             file += "\n"
             file += "fun ${clazz.qualifiedName?.asString()}.insert(): Statement {\n"
             file += "    // language=SQL\n"
-            file += "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }})"
-            file += " values (${insertProps.joinToString { "?" }})"
-            file += " returning ${returningColumns};\"\n"
+            file += if (dialect == "mysql") {
+                // For MySQL, use LAST_INSERT_ID() since RETURNING is not supported
+                val idProp = allProps.find { it.annotations.any { a -> a.shortName() == ID_ANNOTATION_NAME } }
+                if (idProp == null) {
+                    logger.warn("MySQL dialect selected but no @Id found on $table. Generating INSERT without fetch.")
+                    "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }}) values (${insertProps.joinToString { "?" }});\"\n"
+                } else {
+                    val idCol = idProp.simpleName().toSnakeCase()
+                    "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }}) values (${insertProps.joinToString { "?" }}); select $returningColumns from $table where $idCol = coalesce(nullif(last_insert_id(), 0), ?);\"\n"
+                }
+            } else {
+                "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }}) values (${insertProps.joinToString { "?" }}) returning $returningColumns;\"\n"
+            }
             file += "    val statement = Statement.create(sql)\n"
             insertProps.forEachIndexed { index, property ->
                 file += "    statement.bind($index, ${property})\n"
+            }
+            if (dialect == "mysql") {
+                val idProp = allProps.find { it.annotations.any { a -> a.shortName() == ID_ANNOTATION_NAME } }
+                if (idProp != null) {
+                    file += "    statement.bind(${insertProps.size}, ${idProp.simpleName()})\n"
+                }
             }
             file += "    return statement\n"
             file += "}\n"
@@ -175,16 +198,24 @@ class TableProcessor(
             file += "\n"
             file += "fun ${clazz.qualifiedName?.asString()}.update(): Statement {\n"
             file += "    // language=SQL\n"
-            file += "    val sql = \"update $table"
-            file += " set ${updateProps.joinToString { p -> "${p.toSnakeCase()} = ?" }}"
-            file += " where ${id.simpleName().toSnakeCase()} = ?"
-            file += " returning ${returningColumns};\"\n"
+            file += if (dialect == "mysql") {
+                "    val sql = \"update $table set ${updateProps.joinToString { p -> "${p.toSnakeCase()} = ?" }} where ${
+                    id.simpleName().toSnakeCase()
+                } = ?; select $returningColumns from $table where ${id.simpleName().toSnakeCase()} = ?;\"\n"
+            } else {
+                "    val sql = \"update $table set ${updateProps.joinToString { p -> "${p.toSnakeCase()} = ?" }} where ${
+                    id.simpleName().toSnakeCase()
+                } = ? returning $returningColumns;\"\n"
+            }
 
             file += "    val statement = Statement.create(sql)\n"
             updateProps.forEachIndexed { index, property ->
                 file += "    statement.bind($index, ${property})\n"
             }
             file += "    statement.bind(${updateProps.size}, ${id.simpleName()})\n"
+            if (dialect == "mysql") {
+                file += "    statement.bind(${updateProps.size + 1}, ${id.simpleName()})\n"
+            }
             file += "    return statement\n"
             file += "}\n"
         }
@@ -238,6 +269,11 @@ class TableProcessor(
          * The option key used to specify the output filename for the generated SQL classes.
          */
         private const val FILENAME_OPTION = "output-filename"
+
+        /**
+         * The option key used to specify the SQL dialect. Supported: generic (default), mysql
+         */
+        private const val DIALECT_OPTION = "dialect"
 
         private const val INSERT_PROPERTY_NAME = "insert"
         private const val UPDATE_PROPERTY_NAME = "update"

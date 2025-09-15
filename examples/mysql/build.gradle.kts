@@ -20,6 +20,7 @@ kotlin {
 }
 
 ksp {
+    arg("dialect", "mysql")
     arg("output-package", "io.github.smyrgeorge.sqlx4k.examples.mysql")
 }
 

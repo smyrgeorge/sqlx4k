@@ -320,6 +320,9 @@ plugins {
 
 // Then you need to configure the processor (will generate the necessary code files).
 ksp {
+    // For MySQL, change the dialect to "mysql".
+    // For PostgreSQL, MariaDB, SQLite, you can skip this configuration (the "generic" dialect will be used).
+    // arg("dialect", "mysql")
     arg("output-package", "io.github.smyrgeorge.sqlx4k.examples.postgres")
 }
 
