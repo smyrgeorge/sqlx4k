@@ -17,22 +17,20 @@ import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
 abstract class AbstractStatement(private val sql: String) : Statement {
 
     // Note: We avoid regex-based matching for SQL placeholders because it is
-    // difficult to make regex reliably skip over comments and dollar-quoted strings.
+    // challenging to make regex reliably skip over comments and dollar-quoted strings.
     // Instead, we implement a small state machine scanner for correctness and safety.
 
     /**
      * A set containing the names of all named parameters extracted from the SQL statement.
-     * It is populated using a parser that skips over string literals, comments and
+     * It is populated using a parser that skips over string literals, comments, and
      * PostgreSQL dollar-quoted strings.
      */
     private val namedParameters: Set<String> = extractNamedParameters()
 
     /**
-     * A collection of positional parameter indexes extracted from the SQL query.
-     * The list is simply [0, 1, 2, ...] with size equal to the count of
-     * positional '?' placeholders found by the parser.
+     * The count of positional parameter placeholders ('?') extracted from the SQL query.
      */
-    private val positionalParameters: List<Int> = extractPositionalParameters()
+    private val positionalCount: Int = extractPositionalParameters()
 
     /**
      * A mutable map that holds the values bound to named parameters in an SQL statement.
@@ -55,7 +53,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * explicitly bound to a parameter.
      *
      * This map is used to manage parameter bindings when rendering the final SQL statement
-     * or executing the statement, and ensures that each positional parameter has a value
+     * or executing the statement and ensures that each positional parameter has a value
      * assigned before the statement is executed.
      *
      * Modifications to this map occur primarily through method calls that bind values to
@@ -72,7 +70,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * @throws SQLError if the given index is out of bounds for the available positional parameters.
      */
     override fun bind(index: Int, value: Any?): AbstractStatement {
-        if (index < 0 || index >= positionalParameters.size) {
+        if (index !in 0..<positionalCount) {
             SQLError(
                 code = SQLError.Code.PositionalParameterOutOfBounds,
                 message = "Index '$index' out of bounds."
@@ -86,7 +84,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * Binds a value to a named parameter in the statement.
      *
      * @param parameter The name of the parameter to bind the value to.
-     * @param value The value to bind to the specified named parameter. May be null.
+     * @param value The value to bind to the specified named parameter. Maybe null.
      * @return The current [Statement] instance to allow for method chaining.
      * @throws SQLError if the specified named parameter is not found.
      */
@@ -108,32 +106,40 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * @param encoders The `ValueEncoderRegistry` used to encode parameter values.
      * @return A string representing the rendered SQL statement with all parameters substituted by their bound values.
      */
-    override fun render(encoders: ValueEncoderRegistry): String =
-        sql.renderPositionalParameters(encoders).renderNamedParameters(encoders)
+    override fun render(encoders: ValueEncoderRegistry): String {
+        // Fast path: no placeholders at all
+        if (positionalCount == 0 && namedParameters.isEmpty()) return sql
+        var sql = sql
+        if (positionalCount > 0) sql = sql.renderPositionalParameters(encoders)
+        if (namedParameters.isNotEmpty()) sql = sql.renderNamedParameters(encoders)
+        return sql
+    }
 
     /**
      * Replaces positional '?' placeholders with encoded values, skipping content inside
      * quotes, comments, and dollar-quoted strings.
      */
     private fun String.renderPositionalParameters(encoders: ValueEncoderRegistry): String {
-        val it = positionalParameters.iterator()
+        if (positionalCount == 0) return this
+        var nextIndex = 0
         return renderWithScanner { i, c, sb ->
             if (c != '?') return@renderWithScanner null
 
-            if (!it.hasNext()) {
+            if (nextIndex >= positionalCount) {
                 SQLError(
                     code = SQLError.Code.PositionalParameterValueNotSupplied,
                     message = "Not enough positional parameter values provided."
                 ).ex()
             }
-            val index = it.next()
-            if (index !in positionalParametersValues) {
+            if (nextIndex !in positionalParametersValues) {
                 SQLError(
                     code = SQLError.Code.PositionalParameterValueNotSupplied,
-                    message = "Value for positional parameter index '$index' was not supplied."
+                    message = "Value for positional parameter index '$nextIndex' was not supplied."
                 ).ex()
             }
-            sb.append(positionalParametersValues[index].encodeValue(encoders))
+            sb.append(positionalParametersValues[nextIndex].encodeValue(encoders))
+            @Suppress("AssignedValueIsNeverRead")
+            nextIndex += 1
             i + 1
         }
     }
@@ -175,24 +181,13 @@ abstract class AbstractStatement(private val sql: String) : Statement {
     }
 
     /**
-     * Processes the string using a SQL scanner that skips comments, quotes, and dollar-quoted strings,
-     * delegating the handling of normal-context characters to a provided callback function.
-     *
-     * The callback function is invoked for each unprocessed character and may decide to process it
-     * or let the scanner continue its default operation.
-     *
-     * @param onNormalChar A callback function called for each unprocessed character
-     * in the string. The function takes the current string (`String`), the current index (`i`),
-     * the current character (`c`), and the `StringBuilder` (`sb`) being constructed.
-     * It may return a new index to control scanner processing or `null` to indicate the character
-     * was not handled by the callback.
-     * @return A new string resulting from the scanned and processed input, including any changes made
-     * by the callback and the default handling of characters.
+     * Shared scanner core that can optionally write output.
      */
-    protected inline fun String.renderWithScanner(
+    protected inline fun String.scan(
+        copyOutput: Boolean,
         crossinline onNormalChar: String.(i: Int, c: Char, sb: StringBuilder) -> Int?
     ): String {
-        val sb = StringBuilder(length)
+        val sb = if (copyOutput) StringBuilder(length) else StringBuilder(0)
         var i = 0
         var inSQ = false
         var inDQ = false
@@ -206,15 +201,15 @@ abstract class AbstractStatement(private val sql: String) : Statement {
 
             // Handle comment endings
             if (inLine) {
-                sb.append(c)
+                if (copyOutput) sb.append(c)
                 if (c == '\n') inLine = false
                 i++
                 continue
             }
             if (inBlock) {
-                sb.append(c)
+                if (copyOutput) sb.append(c)
                 if (c == '*' && i + 1 < length && this[i + 1] == '/') {
-                    sb.append('/')
+                    if (copyOutput) sb.append('/')
                     i += 2
                     inBlock = false
                 } else {
@@ -225,12 +220,12 @@ abstract class AbstractStatement(private val sql: String) : Statement {
 
             // Handle dollar-quoted string
             if (dollarTag != null) {
-                sb.append(c)
+                if (copyOutput) sb.append(c)
                 if (c == '$') {
                     val tag = startsWithDollarTagAt(i)
                     if (tag == dollarTag) {
                         if (tag.length > 1) {
-                            sb.append(this, i + 1, i + tag.length)
+                            if (copyOutput) sb.append(this, i + 1, i + tag.length)
                             i += tag.length
                         } else {
                             i++
@@ -246,10 +241,10 @@ abstract class AbstractStatement(private val sql: String) : Statement {
             // Handle quoted strings
             @Suppress("DuplicatedCode")
             if (inSQ) {
-                sb.append(c)
+                if (copyOutput) sb.append(c)
                 if (c == '\'') {
                     if (i + 1 < length && this[i + 1] == '\'') {
-                        sb.append('\'')
+                        if (copyOutput) sb.append('\'')
                         i += 2
                     } else {
                         i++
@@ -260,10 +255,10 @@ abstract class AbstractStatement(private val sql: String) : Statement {
             }
             @Suppress("DuplicatedCode")
             if (inDQ) {
-                sb.append(c)
+                if (copyOutput) sb.append(c)
                 if (c == '"') {
                     if (i + 1 < length && this[i + 1] == '"') {
-                        sb.append('"')
+                        if (copyOutput) sb.append('"')
                         i += 2
                     } else {
                         i++
@@ -273,7 +268,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
                 continue
             }
             if (inBT) {
-                sb.append(c)
+                if (copyOutput) sb.append(c)
                 if (c == '`') {
                     i++
                     inBT = false
@@ -283,30 +278,30 @@ abstract class AbstractStatement(private val sql: String) : Statement {
 
             // Start of contexts
             if (c == '-' && i + 1 < length && this[i + 1] == '-') {
-                sb.append("--")
+                if (copyOutput) sb.append("--")
                 i += 2
                 inLine = true
                 continue
             }
             if (c == '/' && i + 1 < length && this[i + 1] == '*') {
-                sb.append("/*")
+                if (copyOutput) sb.append("/*")
                 i += 2
                 inBlock = true
                 continue
             }
             if (c == '\'') {
-                sb.append(c); i++; inSQ = true; continue
+                if (copyOutput) sb.append(c); i++; inSQ = true; continue
             }
             if (c == '"') {
-                sb.append(c); i++; inDQ = true; continue
+                if (copyOutput) sb.append(c); i++; inDQ = true; continue
             }
             if (c == '`') {
-                sb.append(c); i++; inBT = true; continue
+                if (copyOutput) sb.append(c); i++; inBT = true; continue
             }
             if (c == '$') {
                 val tag = startsWithDollarTagAt(i)
                 if (tag != null) {
-                    sb.append(tag)
+                    if (copyOutput) sb.append(tag)
                     i += tag.length
                     dollarTag = tag
                     continue
@@ -320,22 +315,39 @@ abstract class AbstractStatement(private val sql: String) : Statement {
             }
 
             // Default: copy character
-            sb.append(c)
+            if (copyOutput) sb.append(c)
             i++
         }
-        return sb.toString()
+        return if (copyOutput) sb.toString() else this
     }
 
+    /**
+     * Processes the string using a SQL scanner that skips comments, quotes, and dollar-quoted strings,
+     * delegating the handling of normal-context characters to a provided callback function.
+     *
+     * The callback function is invoked for each unprocessed character and may decide to process it
+     * or let the scanner continue its default operation.
+     *
+     * @param onNormalChar A callback function called for each unprocessed character
+     * in the string. The function takes the current string (`String`), the current index (`i`),
+     * the current character (`c`), and the `StringBuilder` (`sb`) being constructed.
+     * It may return a new index to control scanner processing or `null` to indicate the callback
+     * did not handle the character.
+     * @return A new string resulting from the scanned and processed input, including any changes made
+     * by the callback and the default handling of characters.
+     */
+    protected inline fun String.renderWithScanner(
+        crossinline onNormalChar: String.(i: Int, c: Char, sb: StringBuilder) -> Int?
+    ): String = scan(copyOutput = true, onNormalChar = onNormalChar)
 
     /**
      * Scans a string using the provided callback for normal-context characters.
      * Each character is passed to the callback along with its index, allowing custom processing.
      *
-     * The scanning process leverages `renderWithScanner` internally, enabling reuse of its scanning
-     * logic while discarding the rendered output. Only the side-effects and index control from the
-     * callback are utilized during the scanning process.
+     * The scanning process leverages the same scanner core as renderWithScanner, while discarding
+     * the rendered output. Only the side effects and index control from the callback are used.
      *
-     * @param onNormalChar A callback function invoked for each character in normal context.
+     * @param onNormalChar A callback function invoked for each character in a normal context.
      * The function takes the string (`String`) it operates on, the current index (`i`) of the character,
      * and the current character (`c`). Returning a new index alters the scan position, while returning
      * `null` continues the scan from the default next index.
@@ -343,9 +355,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
     protected fun String.scanWithExtractor(
         onNormalChar: String.(i: Int, c: Char) -> Int?
     ) {
-        // Reuse the full scanner from renderWithScanner to avoid code duplication.
-        // We discard the rendered String and only use the scanning side-effects and index control.
-        renderWithScanner { i, c, _ -> onNormalChar(this, i, c) }
+        scan(copyOutput = false) { i, c, _ -> onNormalChar(this, i, c) }
     }
 
     /**
@@ -363,7 +373,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
         if (start + 1 >= length) return null
         if (this[start] != '$') return null
         var j = start + 1
-        while ((j < length && this[j].isLetterOrDigit()) || (j < length && this[j] == '_')) j++
+        while (j < length && (this[j].isLetterOrDigit() || this[j] == '_')) j++
         return if (j < length && this[j] == '$') substring(start, j + 1) else null
     }
 
@@ -383,7 +393,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * @param ch The character to check.
      * @return True if the character can be part of an identifier, false otherwise.
      */
-    private fun isIdentPart(ch: Char) = isIdentStart(ch) || ch == '_' || ch.isDigit()
+    private fun isIdentPart(ch: Char) = isIdentStart(ch) || ch.isDigit()
 
     /**
      * Extracts all named parameters from the SQL statement.
@@ -413,17 +423,15 @@ abstract class AbstractStatement(private val sql: String) : Statement {
     }
 
     /**
-     * Extracts all positional parameter placeholders from the SQL statement.
+     * Extracts the count of positional parameter placeholders from the SQL statement.
      *
      * Positional parameters are denoted by the `?` character. The method scans the SQL string,
      * skipping over content such as comments, quotes, and dollar-quoted sections,
      * to ensure accurate identification of placeholders.
      *
-     * @return A list of integers representing the indices of all positional parameters
-     * found in the SQL statement. Each index corresponds to the order in which the
-     * parameters appear, starting from 0.
+     * @return The count of positional parameters found in the SQL statement.
      */
-    private fun extractPositionalParameters(): List<Int> {
+    private fun extractPositionalParameters(): Int {
         var count = 0
         val s = sql
         s.scanWithExtractor { i, c ->
@@ -432,6 +440,6 @@ abstract class AbstractStatement(private val sql: String) : Statement {
             }
             null
         }
-        return List(count) { it }
+        return count
     }
 }
