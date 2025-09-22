@@ -21,15 +21,6 @@ A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLi
 
 🏠 [Homepage](https://smyrgeorge.github.io/) (under construction)
 
-## Development status
-
-> [!IMPORTANT]  
-> Some modules — especially the code-generation
-> facilities ([CRUD and @Repository implementations](#code-generation-crud-and-repository-implementations)) — are under
-> heavy development and may introduce breaking changes between releases as the API and behavior are refined.
-
-If you hit issues or have suggestions, please open an issue or a PR.
-
 ## Supported Databases
 
 - `PostgreSQL`
@@ -187,7 +178,7 @@ Notes:
 
 - When you manually acquire a connection, you must release it to return it to the pool.
 
-Examples (PostgreSQL shown, similar for MySQL/SQLite):
+Examples (PostgreSQL shown, similar to MySQL/SQLite):
 
 ```kotlin
 // Manual connection acquisition (remember to release)
@@ -297,7 +288,7 @@ suspend fun doBusinessLogic() {
     tx.execute("update sqlx4k set test = 'updated' where id = 66;").getOrThrow()
 }
 
-// Or you can use the `withCurrent` method to get the transaction and execute the block in ongoing transaction.
+// Or you can use the `withCurrent` method to get the transaction and execute the block in an ongoing transaction.
 suspend fun doMoreBusinessLogic(): Unit = TransactionContext.withCurrent {
     // Continue operating within the same database transaction
 }
@@ -476,7 +467,7 @@ See `Main.kt` file for more examples (examples modules).
 
 ## Checking for memory leaks
 
-### macOS (using leaks tool)
+### macOS (using 'leaks' tool)
 
 Check for memory leaks with the `leaks` tool.
 First sign you binary:
