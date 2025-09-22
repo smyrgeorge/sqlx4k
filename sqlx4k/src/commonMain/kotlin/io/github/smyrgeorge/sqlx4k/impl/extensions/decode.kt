@@ -5,10 +5,14 @@ package io.github.smyrgeorge.sqlx4k.impl.extensions
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
-import kotlinx.datetime.*
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.UtcOffset
 import kotlinx.datetime.format.DateTimeFormat
 import kotlinx.datetime.format.FormatStringsInDatetimeFormats
 import kotlinx.datetime.format.byUnicodePattern
+import kotlinx.datetime.toInstant
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
@@ -69,10 +73,8 @@ private val localDateTimeFormatter: DateTimeFormat<LocalDateTime> = LocalDateTim
     byUnicodePattern("yyyy-MM-dd HH:mm:ss[.SSSSSS]")
 }
 
-// Match: "yyyy-MM-dd HH:mm:ss[.fraction][(Z|+HH|+HHMM|+HH:MM|-HH|-HHMM|-HH:MM)]" (offset optional)
-private val timestampRegex = Regex("""^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)(Z|[+-]\d{2}(?::?\d{2})?)?$""")
-
-@OptIn(ExperimentalTime::class)
+// Match: "yyyy-MM-dd[ |T]HH:mm:ss[.fraction][(Z|+HH|+HHMM|+HH:MM|-HH|-HHMM|-HH:MM)]" (offset optional, space or 'T' separator)
+private val timestampRegex = Regex("""^(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?)(Z|[+-]\d{2}(?::?\d{2})?)?$""")
 private fun String.asInstant(): Instant {
     fun normalizeFractionTo6(s: String): String {
         val dot = s.indexOf('.')
@@ -81,14 +83,15 @@ private fun String.asInstant(): Instant {
         val normalized = when {
             frac.length == 6 -> frac
             frac.length < 6 -> frac.padEnd(6, '0')
-            else -> frac.take(6)
+            else -> frac.take(6) // keep microseconds precision (no rounding)
         }
         return s.take(dot + 1) + normalized
     }
 
     fun parseUtcOffset(s: String): UtcOffset {
         if (s == "Z" || s == "z") return UtcOffset.ZERO
-        val sign = if (s[0] == '-') -1 else 1
+        require(s.length >= 3) { "Invalid offset: '$s'" }
+        val sign = if (s[0] == '-') -1 else if (s[0] == '+') 1 else error("Invalid offset sign in '$s'")
         val body = s.substring(1)
         val (hh, mm) = when {
             body.contains(":") -> {
@@ -103,6 +106,9 @@ private fun String.asInstant(): Instant {
         }
         val hours = hh.toIntOrNull() ?: error("Invalid offset hours in '$s'")
         val minutes = mm.toIntOrNull() ?: error("Invalid offset minutes in '$s'")
+        // RFC 3339 permits up to ±18:00, practical TZ offsets go up to ±14:00.
+        require(hours in 0..18) { "Offset hours out of range in '$s' (expected 00..18)" }
+        require(minutes in 0..59) { "Offset minutes out of range in '$s' (expected 00..59)" }
         return UtcOffset(hours = sign * hours, minutes = sign * minutes)
     }
 
@@ -113,6 +119,10 @@ private fun String.asInstant(): Instant {
     val offsetPart = m.groupValues.getOrNull(2)
 
     val ldt = LocalDateTime.parse(dateTimePart, localDateTimeFormatter)
+    // Note: when the offset is absent, we assume UTC. Ensure your data is stored in UTC.
     val offset = if (offsetPart.isNullOrEmpty()) UtcOffset.ZERO else parseUtcOffset(offsetPart)
-    return ldt.toInstant(offset)
+
+    val kdInstant = ldt.toInstant(offset) // kotlinx.datetime.Instant
+    // Convert to kotlin.time.Instant while preserving nanoseconds
+    return Instant.fromEpochSeconds(kdInstant.epochSeconds, kdInstant.nanosecondsOfSecond.toLong())
 }
