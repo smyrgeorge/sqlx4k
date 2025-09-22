@@ -65,6 +65,7 @@ object Utils {
                 "all" -> listOf(
                     "jvm",
                     "iosArm64",
+                    "iosSimulatorArm64",
                     "androidNativeX64",
                     "androidNativeArm64",
                     "macosArm64",

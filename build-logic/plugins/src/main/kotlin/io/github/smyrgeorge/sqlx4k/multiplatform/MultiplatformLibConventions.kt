@@ -72,6 +72,7 @@ class MultiplatformLibConventions : Plugin<Project> {
             val availableTargets = mapOf(
                 Pair("jvm") { jvm() },
                 Pair("iosArm64") { iosArm64 { rust("aarch64-apple-ios", !os.isMacOsX) } },
+                Pair("iosSimulatorArm64") { iosSimulatorArm64 { rust("aarch64-apple-ios-sim", !os.isMacOsX) } },
                 Pair("androidNativeArm64") { androidNativeArm64 { rust("aarch64-linux-android", true) } },
                 Pair("androidNativeX64") { androidNativeX64 { rust("x86_64-linux-android", true) } },
                 Pair("macosArm64") { macosArm64 { rust("aarch64-apple-darwin", !os.isMacOsX) } },

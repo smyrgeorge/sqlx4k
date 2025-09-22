@@ -22,6 +22,7 @@ class MultiplatformBinariesConventions : Plugin<Project> {
                     }
                 },
                 Pair("iosArm64") { iosArm64 { binaries { executable() } } },
+                Pair("iosSimulatorArm64") { iosSimulatorArm64 { binaries { executable() } } },
                 Pair("androidNativeArm64") { androidNativeArm64 { binaries { executable() } } },
                 Pair("androidNativeX64") { androidNativeX64 { binaries { executable() } } },
                 Pair("macosArm64") { macosArm64 { binaries { executable() } } },

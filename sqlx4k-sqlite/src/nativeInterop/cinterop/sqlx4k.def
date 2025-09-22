@@ -3,6 +3,7 @@ headers = sqlx4k_sqlite.h
 compilerOpts = -I./src/rust/target
 staticLibraries = libsqlx4k_sqlite.a
 libraryPaths.ios_arm64 = ./src/rust/target/aarch64-apple-ios/release
+libraryPaths.ios_simulator_arm64 = ./src/rust/target/aarch64-apple-ios-sim/release
 libraryPaths.android_arm64 = ./src/rust/target/aarch64-linux-android/release
 libraryPaths.android_x64 = ./src/rust/target/x86_64-linux-android/release
 libraryPaths.macos_arm64 = ./src/rust/target/aarch64-apple-darwin/release

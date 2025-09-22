@@ -31,6 +31,7 @@ A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLi
 
 - jvm (only PostgreSQL and MySQL are supported at the moment)
 - iosArm64
+- iosSimulatorArm64
 - androidNativeX64
 - androidNativeArm64
 - macosArm64
@@ -407,6 +408,7 @@ Also, make sure that you have installed all the necessary targets (only if you w
 
 ```shell
 rustup target add aarch64-apple-ios
+rustup target add aarch64-apple-ios-sim
 rustup target add x86_64-linux-android
 rustup target add aarch64-linux-android
 rustup target add aarch64-apple-darwin
