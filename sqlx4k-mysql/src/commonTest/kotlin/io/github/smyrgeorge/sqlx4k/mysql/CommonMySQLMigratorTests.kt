@@ -1,5 +1,3 @@
-@file:Suppress("SqlNoDataSourceInspection", "SameParameterValue")
-
 package io.github.smyrgeorge.sqlx4k.mysql
 
 import assertk.assertAll
@@ -17,6 +15,7 @@ import kotlinx.io.files.SystemFileSystem
 import kotlin.math.absoluteValue
 import kotlin.random.Random
 
+@Suppress("SqlNoDataSourceInspection")
 class CommonMySQLMigratorTests(
     private val db: IMySQL
 ) {

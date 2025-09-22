@@ -6,9 +6,18 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isNull
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.Statement
-import io.github.smyrgeorge.sqlx4k.impl.extensions.*
-import io.github.smyrgeorge.sqlx4k.sqlite.extensions.asBoolean
-import io.github.smyrgeorge.sqlx4k.sqlite.extensions.asByteArray
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asBoolean
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asByteArray
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asChar
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asDouble
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asFloat
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalDate
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalDateTime
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalTime
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asShort
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asUuid
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -79,7 +88,8 @@ class CommonSQLiteTests(
     fun `execute and fetchAll should work`(): Unit = runBlocking {
         val table = newTable()
         runCatching { db.execute("drop table if exists $table;") }
-        db.execute("create table if not exists $table(id integer primary key autoincrement, v int not null);").getOrThrow()
+        db.execute("create table if not exists $table(id integer primary key autoincrement, v int not null);")
+            .getOrThrow()
 
         // insert a couple rows
         db.execute("insert into $table(v) values (1), (2), (3);").getOrThrow()
@@ -97,7 +107,8 @@ class CommonSQLiteTests(
     fun `execute and fetchAll with prepared statements should work`(): Unit = runBlocking {
         val table = newTable()
         runCatching { db.execute("drop table if exists $table;") }
-        db.execute("create table if not exists $table(id integer primary key autoincrement, v int not null);").getOrThrow()
+        db.execute("create table if not exists $table(id integer primary key autoincrement, v int not null);")
+            .getOrThrow()
 
         // positional parameters
         val stInsertPos: Statement = Statement.create("insert into $table(v) values (:v1), (:v2);")

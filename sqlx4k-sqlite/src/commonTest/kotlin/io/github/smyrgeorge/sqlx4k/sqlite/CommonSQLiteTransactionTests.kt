@@ -1,7 +1,11 @@
 package io.github.smyrgeorge.sqlx4k.sqlite
 
 import assertk.assertThat
-import assertk.assertions.*
+import assertk.assertions.isEqualTo
+import assertk.assertions.isFailure
+import assertk.assertions.isNotNull
+import assertk.assertions.isNull
+import assertk.assertions.isSuccess
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.coroutines.TransactionContext
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
