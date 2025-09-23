@@ -78,6 +78,11 @@ Please look at this issue: [#18](https://github.com/smyrgeorge/sqlx4k/issues/18)
 
 - Enhance code-generation module.
 - Add support for SQLite JVM target.
+- Validate queries at compile time, avoid runtime errors.
+- WASM support.
+- Pure Kotlin implementation for PostgreSQL.
+- Pure Kotlin implementation for MySQL.
+- Pure Kotlin implementation for SQLite.
 
 ### Async-io
 
@@ -418,16 +423,10 @@ rustup target add x86_64-unknown-linux-gnu
 rustup target add x86_64-pc-windows-gnu
 ```
 
-We also need to install `cross` (tool that helps with cross-compiling)
-
-```shell
-cargo install cross --git https://github.com/cross-rs/cross
-```
-
 Then, run the build.
 
 ```shell
-# will build only for macosArm64 target
+# will build only for the current target
 ./gradlew build
 ```
 
