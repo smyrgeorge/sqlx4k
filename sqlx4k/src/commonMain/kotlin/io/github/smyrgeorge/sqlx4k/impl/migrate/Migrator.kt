@@ -16,6 +16,9 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.measureTime
 
 object Migrator {
+    private val tableRegex = "_?[A-Za-z0-9_]+".toRegex()
+    private val schemaRegex = "_?[A-Za-z0-9_]+".toRegex()
+
     suspend fun migrate(
         db: Driver,
         path: String,
@@ -28,6 +31,7 @@ object Migrator {
     ): Result<Unit> = runCatching {
         require(path.isNotBlank()) { "Path cannot be blank." }
         require(table.isNotBlank()) { "Table name cannot be blank." }
+        require(tableRegex.matches(table)) { "Table name must match the regex: $tableRegex" }
 
         val files: List<MigrationFile> = listMigrationFiles(path)
         if (files.isEmpty()) return@runCatching
@@ -57,12 +61,13 @@ object Migrator {
         val table = schema?.let {
             require(dialect != Dialect.SQLite) { "SQLite does not support schemas." }
             require(it.isNotBlank()) { "Schema name cannot be blank." }
+            require(schemaRegex.matches(it)) { "Schema name must match the regex: $schemaRegex" }
+            // Ensure the schema exists.
+            if (createSchema) db.execute(Migration.createSchemaIfNotExists(it, dialect)).getOrThrow()
             "$it.$table"
         } ?: table
 
         val applied = db.transaction {
-            // Optionally, ensure schema exists when requested and supported.
-            schema?.let { if (createSchema) execute(Migration.createSchemaIfNotExists(it, dialect)).getOrThrow() }
             // Ensure migrations table exists.
             execute(Migration.createTableIfNotExists(table, dialect)).getOrThrow()
             // Fetch already applied versions and checksums.
