@@ -75,6 +75,8 @@ class PostgreSQL(
         db = this,
         path = path,
         table = table,
+        schema = null,
+        createSchema = false,
         dialect = Dialect.PostgreSQL,
         afterSuccessfulStatementExecution = afterSuccessfulStatementExecution,
         afterSuccessfullyFileMigration = afterSuccessfullyFileMigration

@@ -97,6 +97,8 @@ class PostgreSQL(
         db = this,
         path = path,
         table = table,
+        schema = null,
+        createSchema = false,
         dialect = Dialect.PostgreSQL,
         afterSuccessfulStatementExecution = afterSuccessfulStatementExecution,
         afterSuccessfullyFileMigration = afterSuccessfullyFileMigration
@@ -198,7 +200,7 @@ class PostgreSQL(
     /**
      * Sends a notification to a specific PostgreSQL channel with the given value.
      *
-     * This method utilizes the PostgreSQL `pg_notify` functionality to send a notification
+     * This method uses the PostgreSQL `pg_notify` functionality to send a notification
      * to a specified channel. The channel and value are passed as parameters. The channel name
      * must not be blank.
      *
@@ -351,12 +353,12 @@ class PostgreSQL(
          * This registry maps data types to their corresponding encoders, which convert values into a format suitable for
          * inclusion in SQL queries.
          *
-         * This registry is utilized in methods like `execute`, `fetchAll`, and other database operation methods to ensure
+         * This registry is used in methods like `execute`, `fetchAll`, and other database operation methods to ensure
          * that parameters bound to SQL statements are correctly encoded before being executed.
          */
         val encoders = Statement.ValueEncoderRegistry()
 
-        // Will eventually overflow, but it doesn't matter, is the desired behaviour.
+        // Will eventually overflow, but it doesn't matter, is the desired behavior.
         @OptIn(ExperimentalAtomicApi::class)
         private fun listenerId(): Int = listenerId.incrementAndFetch()
 

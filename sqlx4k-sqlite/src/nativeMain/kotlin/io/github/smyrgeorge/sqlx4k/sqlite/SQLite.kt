@@ -79,6 +79,8 @@ class SQLite(
         db = this,
         path = path,
         table = table,
+        schema = null, // SQLite does not support schemas.
+        createSchema = false, // SQLite does not support schemas.
         dialect = Dialect.SQLite,
         afterSuccessfulStatementExecution = afterSuccessfulStatementExecution,
         afterSuccessfullyFileMigration = afterSuccessfullyFileMigration
@@ -266,7 +268,7 @@ class SQLite(
          * This registry maps data types to their corresponding encoders, which convert values into a format suitable for
          * inclusion in SQL queries.
          *
-         * This registry is utilized in methods like `execute`, `fetchAll`, and other database operation methods to ensure
+         * This registry is used in methods like `execute`, `fetchAll`, and other database operation methods to ensure
          * that parameters bound to SQL statements are correctly encoded before being executed.
          */
         val encoders = Statement.ValueEncoderRegistry()

@@ -83,6 +83,32 @@ data class Migration(
 
     companion object {
         /**
+         * Creates a SQL statement to create a schema if it does not already exist.
+         *
+         * This method generates a `CREATE SCHEMA IF NOT EXISTS` SQL statement for
+         * database systems that support schemas. It raises an error if used with
+         * SQLite, as SQLite does not support schemas.
+         *
+         * @param schema The name of the schema to be created. Must not be blank.
+         * @param dialect The SQL dialect of the database system.
+         * @return A `Statement` instance containing the SQL command to create the schema.
+         * @throws IllegalArgumentException If the schema name is blank or the dialect is SQLite.
+         */
+        internal fun createSchemaIfNotExists(schema: String, dialect: Dialect): Statement {
+            require(schema.isNotBlank()) { "Schema name cannot be blank." }
+            require(dialect != Dialect.SQLite) { "SQLite does not support schemas." }
+            return when (dialect) {
+                Dialect.PostgreSQL, Dialect.MySQL -> {
+                    // language=SQL
+                    val sql = "CREATE SCHEMA IF NOT EXISTS ?;"
+                    Statement.create(sql).bind(0, NoQuotingString(schema))
+                }
+
+                Dialect.SQLite -> error("SQLite does not support schemas.")
+            }
+        }
+
+        /**
          * Creates a SQL `CREATE TABLE IF NOT EXISTS` statement specific to the provided database dialect.
          * The generated SQL defines a schema with columns for `version`, `name`, `installed_on`, `checksum`,
          * and `execution_time`, ensuring that the `version` column is primary and unique.
@@ -92,6 +118,7 @@ data class Migration(
          * @return A `Statement` object containing the generated SQL statement configured for binding.
          */
         internal fun createTableIfNotExists(table: String, dialect: Dialect): Statement {
+            require(table.isNotBlank()) { "Table name cannot be blank." }
             val sql = when (dialect) {
                 Dialect.MySQL ->
                     // language=SQL
@@ -145,6 +172,7 @@ data class Migration(
          * @return A `Statement` instance configured to execute the `SELECT` operation with an `ORDER BY version` clause.
          */
         internal fun selectAll(table: String): Statement {
+            require(table.isNotBlank()) { "Table name cannot be blank." }
             // language=SQL
             val sql = "SELECT * FROM ? ORDER BY version;"
             return Statement.create(sql).bind(0, NoQuotingString(table))

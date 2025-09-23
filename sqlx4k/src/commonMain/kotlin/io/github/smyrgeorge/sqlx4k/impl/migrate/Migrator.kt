@@ -20,10 +20,15 @@ object Migrator {
         db: Driver,
         path: String,
         table: String,
+        schema: String?,
+        createSchema: Boolean,
         dialect: Dialect,
         afterSuccessfulStatementExecution: suspend (Statement, Duration) -> Unit,
-        afterSuccessfullyFileMigration: suspend (Migration, Duration) -> Unit
+        afterSuccessfullyFileMigration: suspend (Migration, Duration) -> Unit,
     ): Result<Unit> = runCatching {
+        require(path.isNotBlank()) { "Path cannot be blank." }
+        require(table.isNotBlank()) { "Table name cannot be blank." }
+
         val files: List<MigrationFile> = listMigrationFiles(path)
         if (files.isEmpty()) return@runCatching
 
@@ -48,12 +53,20 @@ object Migrator {
             }
         }
 
+        // Build the qualified table name.
+        val table = schema?.let {
+            require(dialect != Dialect.SQLite) { "SQLite does not support schemas." }
+            require(it.isNotBlank()) { "Schema name cannot be blank." }
+            "$it.$table"
+        } ?: table
+
         val applied = db.transaction {
+            // Optionally, ensure schema exists when requested and supported.
+            schema?.let { if (createSchema) execute(Migration.createSchemaIfNotExists(it, dialect)).getOrThrow() }
             // Ensure migrations table exists.
             execute(Migration.createTableIfNotExists(table, dialect)).getOrThrow()
             // Fetch already applied versions and checksums.
-            fetchAll(Migration.selectAll(table), Migration.RowMapper).getOrThrow()
-                .associateBy { row -> row.version }
+            fetchAll(Migration.selectAll(table), Migration.RowMapper).getOrThrow().associateBy { it.version }
         }
 
         sortedFiles.forEach { file ->

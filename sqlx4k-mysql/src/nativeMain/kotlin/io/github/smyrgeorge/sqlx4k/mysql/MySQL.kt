@@ -81,6 +81,8 @@ class MySQL(
         db = this,
         path = path,
         table = table,
+        schema = null,
+        createSchema = false,
         dialect = Dialect.MySQL,
         afterSuccessfulStatementExecution = afterSuccessfulStatementExecution,
         afterSuccessfullyFileMigration = afterSuccessfullyFileMigration
