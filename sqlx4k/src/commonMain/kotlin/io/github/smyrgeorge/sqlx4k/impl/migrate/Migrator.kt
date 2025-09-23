@@ -11,6 +11,7 @@ import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.listMigrationFiles
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.readEntireFileUtf8
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.splitSqlStatements
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
 import kotlin.time.measureTime
 
@@ -20,8 +21,8 @@ object Migrator {
         path: String,
         table: String,
         dialect: Dialect,
-        afterSuccessfulStatementExecution: suspend (Statement) -> Unit = {},
-        afterSuccessfullyFileMigration: suspend (Migration) -> Unit = {}
+        afterSuccessfulStatementExecution: suspend (Statement, Duration) -> Unit,
+        afterSuccessfullyFileMigration: suspend (Migration, Duration) -> Unit
     ): Result<Unit> = runCatching {
         val files: List<MigrationFile> = listMigrationFiles(path)
         if (files.isEmpty()) return@runCatching
@@ -72,13 +73,13 @@ object Migrator {
             if (statements.isEmpty()) SQLError(SQLError.Code.Migrate, "Migration file ${file.name} is empty.").ex()
 
             // Execute all the statements (of a file) in a single transaction
-            val migration: Migration = db.transaction {
-                val executionTime = measureTime {
+            val (migration, duration) = db.transaction {
+                val duration = measureTime {
                     statements.forEach { statement ->
                         // Execute the statement
-                        execute(statement).getOrThrow()
+                        val duration = measureTime { execute(statement).getOrThrow() }
                         // Ensure callback exceptions surface as migration failures
-                        afterSuccessfulStatementExecution(statement)
+                        afterSuccessfulStatementExecution(statement, duration)
                     }
                 }
                 val res = Migration(
@@ -86,14 +87,14 @@ object Migrator {
                     name = name,
                     installedOn = Clock.System.now(),
                     checksum = checksum,
-                    executionTime = executionTime.inWholeMilliseconds
+                    executionTime = duration.inWholeMilliseconds
                 )
                 // Insert the result in the table.
                 execute(res.insert(table)).getOrThrow()
-                res
+                res to duration
             }
             // Callback after full-file success
-            afterSuccessfullyFileMigration(migration)
+            afterSuccessfullyFileMigration(migration, duration)
         }
     }
 }

@@ -8,7 +8,15 @@ import io.asyncer.r2dbc.mysql.codec.Codec
 import io.asyncer.r2dbc.mysql.codec.CodecContext
 import io.asyncer.r2dbc.mysql.codec.CodecRegistry
 import io.asyncer.r2dbc.mysql.extension.CodecRegistrar
-import io.github.smyrgeorge.sqlx4k.*
+import io.github.smyrgeorge.sqlx4k.Connection
+import io.github.smyrgeorge.sqlx4k.Dialect
+import io.github.smyrgeorge.sqlx4k.QueryExecutor
+import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.RowMapper
+import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufAllocator
@@ -27,6 +35,7 @@ import reactor.pool.PoolAcquireTimeoutException
 import reactor.pool.PoolShutdownException
 import java.net.URI
 import kotlin.jvm.optionals.getOrElse
+import kotlin.time.Duration
 import kotlin.time.toJavaDuration
 import io.r2dbc.spi.Connection as R2dbcConnection
 
@@ -59,8 +68,19 @@ class MySQL(
         runBlocking { launch { runCatching { warmup().awaitSingle() } } }
     }
 
-    override suspend fun migrate(path: String, table: String): Result<Unit> =
-        Migrator.migrate(this, path, table, Dialect.MySQL)
+    override suspend fun migrate(
+        path: String,
+        table: String,
+        afterSuccessfulStatementExecution: suspend (Statement, Duration) -> Unit,
+        afterSuccessfullyFileMigration: suspend (Migration, Duration) -> Unit
+    ): Result<Unit> = Migrator.migrate(
+        db = this,
+        path = path,
+        table = table,
+        dialect = Dialect.MySQL,
+        afterSuccessfulStatementExecution = afterSuccessfulStatementExecution,
+        afterSuccessfullyFileMigration = afterSuccessfullyFileMigration
+    )
 
     override suspend fun close(): Result<Unit> = runCatching {
         try {

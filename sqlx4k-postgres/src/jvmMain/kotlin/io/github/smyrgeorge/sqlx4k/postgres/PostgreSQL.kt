@@ -1,6 +1,14 @@
 package io.github.smyrgeorge.sqlx4k.postgres
 
-import io.github.smyrgeorge.sqlx4k.*
+import io.github.smyrgeorge.sqlx4k.Connection
+import io.github.smyrgeorge.sqlx4k.Dialect
+import io.github.smyrgeorge.sqlx4k.QueryExecutor
+import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.RowMapper
+import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.r2dbc.pool.ConnectionPool
 import io.r2dbc.pool.ConnectionPoolConfiguration
@@ -22,6 +30,7 @@ import java.net.URI
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.jvm.optionals.getOrElse
+import kotlin.time.Duration
 import kotlin.time.toJavaDuration
 import io.r2dbc.spi.Connection as R2dbcConnection
 
@@ -57,8 +66,19 @@ class PostgreSQL(
         runBlocking { launch { runCatching { warmup().awaitSingle() } } }
     }
 
-    override suspend fun migrate(path: String, table: String): Result<Unit> =
-        Migrator.migrate(this, path, table, Dialect.PostgreSQL)
+    override suspend fun migrate(
+        path: String,
+        table: String,
+        afterSuccessfulStatementExecution: suspend (Statement, Duration) -> Unit,
+        afterSuccessfullyFileMigration: suspend (Migration, Duration) -> Unit
+    ): Result<Unit> = Migrator.migrate(
+        db = this,
+        path = path,
+        table = table,
+        dialect = Dialect.PostgreSQL,
+        afterSuccessfulStatementExecution = afterSuccessfulStatementExecution,
+        afterSuccessfullyFileMigration = afterSuccessfullyFileMigration
+    )
 
     override suspend fun close(): Result<Unit> = runCatching {
         try {
@@ -183,7 +203,7 @@ class PostgreSQL(
                     .asFlow()
                     .collect { f(it.toNotification()) }
                 con.close().awaitFirstOrNull()
-                // Automatically reconnect if connection closes.
+                // Automatically reconnect if the connection closes.
             }
         }
     }
@@ -191,7 +211,7 @@ class PostgreSQL(
     /**
      * Sends a notification to a specific PostgreSQL channel with the given value.
      *
-     * This method utilizes the PostgreSQL `pg_notify` functionality to send a notification
+     * This method uses the PostgreSQL `pg_notify` functionality to send a notification
      * to a specified channel. The channel and value are passed as parameters. The channel name
      * must not be blank.
      *
@@ -285,7 +305,7 @@ class PostgreSQL(
     }
 
     /**
-     * Represents a database transaction that utilizes a reactive connection for transactional operations.
+     * Represents a database transaction that uses a reactive connection for transactional operations.
      *
      * This class implements the [Transaction] interface and provides functionality to manage the lifecycle
      * of a transaction, including committing, rolling back, and executing SQL statements. It ensures thread-safety
@@ -363,7 +383,7 @@ class PostgreSQL(
          * This registry maps data types to their corresponding encoders, which convert values into a format suitable for
          * inclusion in SQL queries.
          *
-         * This registry is utilized in methods like `execute`, `fetchAll`, and other database operation methods to ensure
+         * This registry is used in methods like `execute`, `fetchAll`, and other database operation methods to ensure
          * that parameters bound to SQL statements are correctly encoded before being executed.
          */
         val encoders = Statement.ValueEncoderRegistry()

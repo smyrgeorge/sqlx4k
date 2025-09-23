@@ -1,5 +1,6 @@
 package io.github.smyrgeorge.sqlx4k
 
+import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import kotlin.time.Duration
 
 /**
@@ -115,7 +116,7 @@ interface QueryExecutor {
             val minConnections: Int? = null,
             // Set the maximum number of connections that this pool should maintain.
             val maxConnections: Int = 10,
-            // Set the maximum amount of time to spend waiting for a connection .
+            // Set the maximum amount of time to spend waiting for a connection.
             val acquireTimeout: Duration? = null,
             // Set a maximum idle duration for individual connections.
             val idleTimeout: Duration? = null,
@@ -153,7 +154,7 @@ interface QueryExecutor {
      */
     interface Transactional {
         /**
-         * Begins (with default isolation level) a new transaction asynchronously.
+         * Begins (with the default isolation level) a new transaction asynchronously.
          *
          * This method initializes and starts a new transaction with the underlying database.
          * It suspends until the transaction has started and returns a result containing
@@ -198,18 +199,27 @@ interface QueryExecutor {
      */
     interface Migrate {
         /**
-         * Executes database migrations by applying SQL scripts located in the specified directory.
+         * Executes database migrations based on the specified configurations.
          *
-         * This method is used to apply schema or data migrations to a database. It processes SQL scripts
-         * found in the specified path directory and tracks their execution in a migrations table.
-         * If a script has already been executed (tracked in the migrations table), it will be skipped
-         * during subsequent migrations.
+         * This method applies migrations from SQL files located in the given directory to the database,
+         * tracking the migration history in the provided table. It allows custom actions to be executed after
+         * the successful execution of each statement and after each file migration.
          *
-         * @param path The file path to the directory containing migration scripts. Defaults to "./db/migrations".
-         * @param table The name of the database table used to track applied migrations. Defaults to "_sqlx4k_migrations".
-         * @return A [Result] wrapping [Unit], indicating success or failure. If an error occurs during migration,
-         *         the result contains details of the failure.
+         * @param path The directory path that contains the migration files. Defaults to "./db/migrations".
+         * @param table The table used to track applied migrations. Defaults to "_sqlx4k_migrations".
+         * @param afterSuccessfulStatementExecution A callback invoked after each statement is successfully
+         * executed. The callback receives the `Statement` that was executed and the time taken for execution.
+         * Defaults to a no-op.
+         * @param afterSuccessfullyFileMigration A callback invoked after successful migration of each file.
+         * The callback receives the `Migration` representing the migration file and the time taken for the migration.
+         * Defaults to a no-op.
+         * @return A `Result` wrapping `Unit` if the migration succeeds, or containing an error if it fails.
          */
-        suspend fun migrate(path: String = "./db/migrations", table: String = "_sqlx4k_migrations"): Result<Unit>
+        suspend fun migrate(
+            path: String = "./db/migrations",
+            table: String = "_sqlx4k_migrations",
+            afterSuccessfulStatementExecution: suspend (Statement, Duration) -> Unit = { _, _ -> },
+            afterSuccessfullyFileMigration: suspend (Migration, Duration) -> Unit = { _, _ -> }
+        ): Result<Unit>
     }
 }
