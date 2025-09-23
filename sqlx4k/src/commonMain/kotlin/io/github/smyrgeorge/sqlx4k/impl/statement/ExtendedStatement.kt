@@ -109,5 +109,5 @@ class ExtendedStatement(private val sql: String) : AbstractStatement(sql) {
         return List(maxIndex) { it }
     }
 
-    override fun toString(): String = "ExtendedStatement(sql='$sql')"
+    override fun toString(): String = "ExtendedStatement(sql='${sql.take(32)}...')"
 }
