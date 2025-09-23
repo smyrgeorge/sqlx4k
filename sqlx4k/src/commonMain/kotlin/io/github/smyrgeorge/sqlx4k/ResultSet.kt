@@ -244,7 +244,7 @@ class ResultSet(
          * Retrieves the next row in the result set.
          *
          * @return The next row in the result set.
-         * @throws IllegalStateException if the index is out of bounds or if an error occurs while fetching the raw data.
+         * @throws IllegalStateException if the index is out of bounds, or if an error occurs while fetching the raw data.
          */
         override fun next(): Row {
             if (current == 0) rs.throwIfError()

@@ -2,6 +2,7 @@ package io.github.smyrgeorge.sqlx4k.impl.statement
 
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
+import io.github.smyrgeorge.sqlx4k.impl.extensions.encodeValue
 
 /**
  * The `ExtendedStatement` class provides an implementation that extends the functionality
@@ -29,7 +30,7 @@ class ExtendedStatement(private val sql: String) : AbstractStatement(sql) {
      * parameters in the SQL statement, while the corresponding values represent
      * the parameter values. These values can be `null` for nullable parameters.
      *
-     * This map is primarily utilized to manage, bind, and retrieve parameter values
+     * This map is primarily used to manage, bind, and retrieve parameter values
      * during statement preparation and rendering processes.
      */
     private val pgParametersValues: MutableMap<Int, Any?> = mutableMapOf()
@@ -70,26 +71,26 @@ class ExtendedStatement(private val sql: String) : AbstractStatement(sql) {
      * @throws SQLError if a value for a positional parameter index is not supplied.
      */
     private fun String.renderPgParameters(encoders: ValueEncoderRegistry): String =
-            renderWithScanner { i, c, sb ->
-                if (c != '$') return@renderWithScanner null
-                // attempt $<digits> (but skip dollar-quoted start, already handled by scanner)
-                var j = i + 1
-                if (j < length && this[j].isDigit()) {
-                    while (j < length && this[j].isDigit()) j++
-                    val numStr = substring(i + 1, j)
-                    val idx1 = numStr.toIntOrNull() ?: return@renderWithScanner null
-                    val zeroIdx = idx1 - 1
-                    if (zeroIdx !in pgParametersValues) {
-                        SQLError(
-                            code = SQLError.Code.PositionalParameterValueNotSupplied,
-                            message = "Value for positional parameter index '$zeroIdx' was not supplied."
-                        ).ex()
-                    }
-                    sb.append(pgParametersValues[zeroIdx].encodeValue(encoders))
-                    return@renderWithScanner j
+        renderWithScanner { i, c, sb ->
+            if (c != '$') return@renderWithScanner null
+            // attempt $<digits> (but skip dollar-quoted start, already handled by scanner)
+            var j = i + 1
+            if (j < length && this[j].isDigit()) {
+                while (j < length && this[j].isDigit()) j++
+                val numStr = substring(i + 1, j)
+                val idx1 = numStr.toIntOrNull() ?: return@renderWithScanner null
+                val zeroIdx = idx1 - 1
+                if (zeroIdx !in pgParametersValues) {
+                    SQLError(
+                        code = SQLError.Code.PositionalParameterValueNotSupplied,
+                        message = "Value for positional parameter index '$zeroIdx' was not supplied."
+                    ).ex()
                 }
-                null
+                sb.append(pgParametersValues[zeroIdx].encodeValue(encoders))
+                return@renderWithScanner j
             }
+            null
+        }
 
     private fun extractPgParameters(): List<Int> {
         var maxIndex = 0

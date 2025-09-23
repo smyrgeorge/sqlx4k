@@ -14,7 +14,7 @@ class SQLError(
      * Throws the current instance of [SQLError].
      *
      * This method is used to propagate the current [SQLError] instance as an
-     * exception. It is typically utilized within other methods to handle or
+     * exception. It is typically used within other methods to handle or
      * signal specific error conditions associated with database operations.
      *
      * @return Nothing, since this method always throws an exception.
@@ -26,7 +26,7 @@ class SQLError(
      * Represents various error codes that can occur while interacting with a database or performing related operations.
      */
     enum class Code {
-        // IMPORTANT: Do not change the order the errors.
+        // IMPORTANT: Do not change the order of the errors.
         // Error from the underlying driver:
         Database,
         PoolTimedOut,

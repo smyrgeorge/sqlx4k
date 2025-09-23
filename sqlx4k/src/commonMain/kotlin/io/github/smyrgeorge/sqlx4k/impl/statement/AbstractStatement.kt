@@ -3,6 +3,7 @@ package io.github.smyrgeorge.sqlx4k.impl.statement
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
+import io.github.smyrgeorge.sqlx4k.impl.extensions.encodeValue
 
 /**
  * Represents an abstract implementation of a SQL statement that supports binding
