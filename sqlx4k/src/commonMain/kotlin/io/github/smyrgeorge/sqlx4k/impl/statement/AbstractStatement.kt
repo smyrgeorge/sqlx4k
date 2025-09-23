@@ -5,21 +5,17 @@ import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
 
 /**
- * Base class for SQL statements, providing functionality for binding parameters and rendering SQL.
+ * Represents an abstract implementation of a SQL statement that supports binding
+ * of positional and named parameters, along with rendering the statement into
+ * a complete and executable SQL string.
  *
- * Represents an abstract SQL statement that supports both positional and named parameters.
- * Handles the extraction, management, and substitution of these parameters in the SQL string
- * to facilitate parameterized query execution.
- *
- * This class is designed for extensibility and reuse, offering methods to bind parameters,
- * render the SQL statement, and leverage encoder registries for value serialization.
+ * This class provides foundational methods for handling parameterized SQL statements,
+ * including binding values to parameters, encoding values using a registry,
+ * and rendering the final SQL string. It also includes utility methods for parsing
+ * and processing SQL strings to extract or replace placeholders and handle specific
+ * SQL constructs such as comments, quotes, and dollar-quoted strings.
  */
 abstract class AbstractStatement(private val sql: String) : Statement {
-
-    // Note: We avoid regex-based matching for SQL placeholders because it is
-    // challenging to make regex reliably skip over comments and dollar-quoted strings.
-    // Instead, we implement a small state machine scanner for correctness and safety.
-
     /**
      * A set containing the names of all named parameters extracted from the SQL statement.
      * It is populated using a parser that skips over string literals, comments, and
@@ -184,10 +180,10 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * Shared scanner core that can optionally write output.
      */
     protected inline fun String.scan(
-        copyOutput: Boolean,
+        writeOutput: Boolean,
         crossinline onNormalChar: String.(i: Int, c: Char, sb: StringBuilder) -> Int?
     ): String {
-        val sb = if (copyOutput) StringBuilder(length) else StringBuilder(0)
+        val sb = if (writeOutput) StringBuilder(length) else StringBuilder(0)
         var i = 0
         var inSQ = false
         var inDQ = false
@@ -201,15 +197,15 @@ abstract class AbstractStatement(private val sql: String) : Statement {
 
             // Handle comment endings
             if (inLine) {
-                if (copyOutput) sb.append(c)
+                if (writeOutput) sb.append(c)
                 if (c == '\n') inLine = false
                 i++
                 continue
             }
             if (inBlock) {
-                if (copyOutput) sb.append(c)
+                if (writeOutput) sb.append(c)
                 if (c == '*' && i + 1 < length && this[i + 1] == '/') {
-                    if (copyOutput) sb.append('/')
+                    if (writeOutput) sb.append('/')
                     i += 2
                     inBlock = false
                 } else {
@@ -220,12 +216,12 @@ abstract class AbstractStatement(private val sql: String) : Statement {
 
             // Handle dollar-quoted string
             if (dollarTag != null) {
-                if (copyOutput) sb.append(c)
+                if (writeOutput) sb.append(c)
                 if (c == '$') {
                     val tag = startsWithDollarTagAt(i)
                     if (tag == dollarTag) {
                         if (tag.length > 1) {
-                            if (copyOutput) sb.append(this, i + 1, i + tag.length)
+                            if (writeOutput) sb.append(this, i + 1, i + tag.length)
                             i += tag.length
                         } else {
                             i++
@@ -241,10 +237,10 @@ abstract class AbstractStatement(private val sql: String) : Statement {
             // Handle quoted strings
             @Suppress("DuplicatedCode")
             if (inSQ) {
-                if (copyOutput) sb.append(c)
+                if (writeOutput) sb.append(c)
                 if (c == '\'') {
                     if (i + 1 < length && this[i + 1] == '\'') {
-                        if (copyOutput) sb.append('\'')
+                        if (writeOutput) sb.append('\'')
                         i += 2
                     } else {
                         i++
@@ -255,10 +251,10 @@ abstract class AbstractStatement(private val sql: String) : Statement {
             }
             @Suppress("DuplicatedCode")
             if (inDQ) {
-                if (copyOutput) sb.append(c)
+                if (writeOutput) sb.append(c)
                 if (c == '"') {
                     if (i + 1 < length && this[i + 1] == '"') {
-                        if (copyOutput) sb.append('"')
+                        if (writeOutput) sb.append('"')
                         i += 2
                     } else {
                         i++
@@ -268,7 +264,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
                 continue
             }
             if (inBT) {
-                if (copyOutput) sb.append(c)
+                if (writeOutput) sb.append(c)
                 if (c == '`') {
                     i++
                     inBT = false
@@ -278,30 +274,30 @@ abstract class AbstractStatement(private val sql: String) : Statement {
 
             // Start of contexts
             if (c == '-' && i + 1 < length && this[i + 1] == '-') {
-                if (copyOutput) sb.append("--")
+                if (writeOutput) sb.append("--")
                 i += 2
                 inLine = true
                 continue
             }
             if (c == '/' && i + 1 < length && this[i + 1] == '*') {
-                if (copyOutput) sb.append("/*")
+                if (writeOutput) sb.append("/*")
                 i += 2
                 inBlock = true
                 continue
             }
             if (c == '\'') {
-                if (copyOutput) sb.append(c); i++; inSQ = true; continue
+                if (writeOutput) sb.append(c); i++; inSQ = true; continue
             }
             if (c == '"') {
-                if (copyOutput) sb.append(c); i++; inDQ = true; continue
+                if (writeOutput) sb.append(c); i++; inDQ = true; continue
             }
             if (c == '`') {
-                if (copyOutput) sb.append(c); i++; inBT = true; continue
+                if (writeOutput) sb.append(c); i++; inBT = true; continue
             }
             if (c == '$') {
                 val tag = startsWithDollarTagAt(i)
                 if (tag != null) {
-                    if (copyOutput) sb.append(tag)
+                    if (writeOutput) sb.append(tag)
                     i += tag.length
                     dollarTag = tag
                     continue
@@ -315,10 +311,10 @@ abstract class AbstractStatement(private val sql: String) : Statement {
             }
 
             // Default: copy character
-            if (copyOutput) sb.append(c)
+            if (writeOutput) sb.append(c)
             i++
         }
-        return if (copyOutput) sb.toString() else this
+        return if (writeOutput) sb.toString() else this
     }
 
     /**
@@ -338,7 +334,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      */
     protected inline fun String.renderWithScanner(
         crossinline onNormalChar: String.(i: Int, c: Char, sb: StringBuilder) -> Int?
-    ): String = scan(copyOutput = true, onNormalChar = onNormalChar)
+    ): String = scan(writeOutput = true, onNormalChar = onNormalChar)
 
     /**
      * Scans a string using the provided callback for normal-context characters.
@@ -355,7 +351,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
     protected fun String.scanWithExtractor(
         onNormalChar: String.(i: Int, c: Char) -> Int?
     ) {
-        scan(copyOutput = false) { i, c, _ -> onNormalChar(this, i, c) }
+        scan(writeOutput = false) { i, c, _ -> onNormalChar(this, i, c) }
     }
 
     /**
