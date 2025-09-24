@@ -33,8 +33,8 @@ object Examples {
         println("\n=== Migrate (SQLite) ===")
         db.migrate(
             path = path,
-            afterSuccessfulStatementExecution = { s, d -> println("Migration of statement: $s, took $d") },
-            afterSuccessfullyFileMigration = { m, d -> println("Migration of file: $m, took $d") }
+            afterStatementExecution = { s, d -> println("Migration of statement: $s, took $d") },
+            afterFileMigration = { m, d -> println("Migration of file: $m, took $d") }
         ).getOrThrow()
         println("Migration completed.")
     }

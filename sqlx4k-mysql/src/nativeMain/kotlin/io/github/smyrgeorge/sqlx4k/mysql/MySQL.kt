@@ -75,8 +75,8 @@ class MySQL(
     override suspend fun migrate(
         path: String,
         table: String,
-        afterSuccessfulStatementExecution: suspend (Statement, Duration) -> Unit,
-        afterSuccessfullyFileMigration: suspend (Migration, Duration) -> Unit
+        afterStatementExecution: suspend (Statement, Duration) -> Unit,
+        afterFileMigration: suspend (Migration, Duration) -> Unit
     ): Result<Unit> = Migrator.migrate(
         db = this,
         path = path,
@@ -84,8 +84,8 @@ class MySQL(
         schema = null,
         createSchema = false,
         dialect = Dialect.MySQL,
-        afterSuccessfulStatementExecution = afterSuccessfulStatementExecution,
-        afterSuccessfullyFileMigration = afterSuccessfullyFileMigration
+        afterStatementExecution = afterStatementExecution,
+        afterFileMigration = afterFileMigration
     )
 
     override suspend fun close(): Result<Unit> = runCatching {

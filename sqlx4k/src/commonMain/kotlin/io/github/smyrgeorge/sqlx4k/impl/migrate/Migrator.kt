@@ -26,8 +26,8 @@ object Migrator {
         schema: String?,
         createSchema: Boolean,
         dialect: Dialect,
-        afterSuccessfulStatementExecution: suspend (Statement, Duration) -> Unit,
-        afterSuccessfullyFileMigration: suspend (Migration, Duration) -> Unit,
+        afterStatementExecution: suspend (Statement, Duration) -> Unit,
+        afterFileMigration: suspend (Migration, Duration) -> Unit,
     ): Result<Unit> = runCatching {
         require(path.isNotBlank()) { "Path cannot be blank." }
         require(table.isNotBlank()) { "Table name cannot be blank." }
@@ -97,7 +97,7 @@ object Migrator {
                         // Execute the statement
                         val duration = measureTime { execute(statement).getOrThrow() }
                         // Ensure callback exceptions surface as migration failures
-                        afterSuccessfulStatementExecution(statement, duration)
+                        afterStatementExecution(statement, duration)
                     }
                 }
                 val res = Migration(
@@ -112,7 +112,7 @@ object Migrator {
                 res to duration
             }
             // Callback after full-file success
-            afterSuccessfullyFileMigration(migration, duration)
+            afterFileMigration(migration, duration)
         }
     }
 }

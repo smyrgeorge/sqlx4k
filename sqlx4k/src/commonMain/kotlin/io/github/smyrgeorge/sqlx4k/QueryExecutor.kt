@@ -207,10 +207,10 @@ interface QueryExecutor {
          *
          * @param path The directory path that contains the migration files. Defaults to "./db/migrations".
          * @param table The table used to track applied migrations. Defaults to "_sqlx4k_migrations".
-         * @param afterSuccessfulStatementExecution A callback invoked after each statement is successfully
+         * @param afterStatementExecution A callback invoked after each statement is successfully
          * executed. The callback receives the `Statement` that was executed and the time taken for execution.
          * Defaults to a no-op.
-         * @param afterSuccessfullyFileMigration A callback invoked after successful migration of each file.
+         * @param afterFileMigration A callback invoked after successful migration of each file.
          * The callback receives the `Migration` representing the migration file and the time taken for the migration.
          * Defaults to a no-op.
          * @return A `Result` wrapping `Unit` if the migration succeeds, or containing an error if it fails.
@@ -218,8 +218,8 @@ interface QueryExecutor {
         suspend fun migrate(
             path: String = "./db/migrations",
             table: String = "_sqlx4k_migrations",
-            afterSuccessfulStatementExecution: suspend (Statement, Duration) -> Unit = { _, _ -> },
-            afterSuccessfullyFileMigration: suspend (Migration, Duration) -> Unit = { _, _ -> }
+            afterStatementExecution: suspend (Statement, Duration) -> Unit = { _, _ -> },
+            afterFileMigration: suspend (Migration, Duration) -> Unit = { _, _ -> }
         ): Result<Unit>
     }
 }
