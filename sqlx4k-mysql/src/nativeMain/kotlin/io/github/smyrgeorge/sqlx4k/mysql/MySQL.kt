@@ -77,7 +77,7 @@ class MySQL(
         table: String,
         afterStatementExecution: suspend (Statement, Duration) -> Unit,
         afterFileMigration: suspend (Migration, Duration) -> Unit
-    ): Result<Unit> = Migrator.migrate(
+    ): Result<Migration.Result> = Migrator.migrate(
         db = this,
         path = path,
         table = table,

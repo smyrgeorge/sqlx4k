@@ -199,27 +199,26 @@ interface QueryExecutor {
      */
     interface Migrate {
         /**
-         * Executes database migrations based on the specified configurations.
+         * Executes database migrations based on the provided configurations and callbacks.
          *
-         * This method applies migrations from SQL files located in the given directory to the database,
-         * tracking the migration history in the provided table. It allows custom actions to be executed after
-         * the successful execution of each statement and after each file migration.
+         * This function is responsible for applying migrations stored in SQL files
+         * located in a specified directory to the database. It supports tracking migration
+         * states using a dedicated table and allows the execution of custom logic via
+         * provided callback functions after each statement and file execution.
          *
-         * @param path The directory path that contains the migration files. Defaults to "./db/migrations".
-         * @param table The table used to track applied migrations. Defaults to "_sqlx4k_migrations".
-         * @param afterStatementExecution A callback invoked after each statement is successfully
-         * executed. The callback receives the `Statement` that was executed and the time taken for execution.
-         * Defaults to a no-op.
-         * @param afterFileMigration A callback invoked after successful migration of each file.
-         * The callback receives the `Migration` representing the migration file and the time taken for the migration.
-         * Defaults to a no-op.
-         * @return A `Result` wrapping `Unit` if the migration succeeds, or containing an error if it fails.
+         * @param path The path to the directory containing migration files. Defaults to "./db/migrations".
+         * @param table The name of the database table used for tracking applied migrations. Defaults to "_sqlx4k_migrations".
+         * @param afterStatementExecution A suspendable callback function executed after each SQL statement execution.
+         *                                 It receives the executed `Statement` and the `Duration` it took to execute the statement.
+         * @param afterFileMigration A suspendable callback function executed after each migration file is applied.
+         *                           It receives the `Migration` object representing the file and the `Duration` it took to apply the migration.
+         * @return A `Result` object representing the outcome of the entire migration process, encapsulating success or failure.
          */
         suspend fun migrate(
             path: String = "./db/migrations",
             table: String = "_sqlx4k_migrations",
             afterStatementExecution: suspend (Statement, Duration) -> Unit = { _, _ -> },
             afterFileMigration: suspend (Migration, Duration) -> Unit = { _, _ -> }
-        ): Result<Unit>
+        ): Result<Migration.Result>
     }
 }

@@ -9,6 +9,7 @@ import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInstant
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 import io.github.smyrgeorge.sqlx4k.impl.types.NoQuotingString
+import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import io.github.smyrgeorge.sqlx4k.RowMapper as Sqlx4kRowMapper
@@ -29,6 +30,17 @@ data class Migration(
     val checksum: String,
     val executionTime: Long
 ) {
+
+    data class Result(
+        val applied: Int,
+        val validated: Int,
+        val executionTime: Duration
+    ) {
+        companion object {
+            val Empty = Result(0, 0, Duration.ZERO)
+        }
+    }
+
     /**
      * Prepares an SQL `INSERT` statement for the specified table.
      *

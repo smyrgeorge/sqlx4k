@@ -50,12 +50,12 @@ object Examples {
      */
     suspend fun migrate(db: IPostgresSQL, path: String = "./db/migrations") {
         println("\n=== Migrate ===")
-        db.migrate(
+        val res = db.migrate(
             path = path,
             afterStatementExecution = { s, d -> println("Migration of statement: $s, took $d") },
             afterFileMigration = { m, d -> println("Migration of file: $m, took $d") }
         ).getOrThrow()
-        println("Migration completed.")
+        println("Migration completed. $res")
     }
 
     /**
