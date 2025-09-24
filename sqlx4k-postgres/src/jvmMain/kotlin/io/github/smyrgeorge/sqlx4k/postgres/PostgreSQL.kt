@@ -71,7 +71,7 @@ class PostgreSQL(
         table: String,
         afterStatementExecution: suspend (Statement, Duration) -> Unit,
         afterFileMigration: suspend (Migration, Duration) -> Unit
-    ): Result<Migration.Result> = Migrator.migrate(
+    ): Result<Migrator.Results> = Migrator.migrate(
         db = this,
         path = path,
         table = table,

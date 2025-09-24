@@ -1,6 +1,7 @@
 package io.github.smyrgeorge.sqlx4k
 
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
+import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import kotlin.time.Duration
 
 /**
@@ -219,6 +220,6 @@ interface QueryExecutor {
             table: String = "_sqlx4k_migrations",
             afterStatementExecution: suspend (Statement, Duration) -> Unit = { _, _ -> },
             afterFileMigration: suspend (Migration, Duration) -> Unit = { _, _ -> }
-        ): Result<Migration.Result>
+        ): Result<Migrator.Results>
     }
 }

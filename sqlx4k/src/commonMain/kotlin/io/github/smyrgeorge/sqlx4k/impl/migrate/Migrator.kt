@@ -16,6 +16,27 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.measureTime
 
 object Migrator {
+
+    /**
+     * Represents the results of a specific operation, typically within the context of migrations
+     * or data processing tasks.
+     *
+     * @property total The total number of items or actions processed.
+     * @property applied The number of items or actions successfully applied.
+     * @property validated The number of items or actions validated successfully.
+     * @property executionTime The overall time taken to execute the operation.
+     */
+    data class Results(
+        val total: Int,
+        val applied: Int,
+        val validated: Int,
+        val executionTime: Duration
+    ) {
+        companion object {
+            val Empty = Results(0, 0, 0, Duration.ZERO)
+        }
+    }
+
     private val tableRegex = "_?[A-Za-z0-9_]+".toRegex()
     private val schemaRegex = "_?[A-Za-z0-9_]+".toRegex()
 
@@ -28,14 +49,15 @@ object Migrator {
         dialect: Dialect,
         afterStatementExecution: suspend (Statement, Duration) -> Unit,
         afterFileMigration: suspend (Migration, Duration) -> Unit,
-    ): Result<Migration.Result> = runCatching {
+    ): Result<Results> = runCatching {
         require(path.isNotBlank()) { "Path cannot be blank." }
         require(table.isNotBlank()) { "Table name cannot be blank." }
         require(tableRegex.matches(table)) { "Table name must match the regex: $tableRegex" }
 
         val files: List<MigrationFile> = listMigrationFiles(path)
-        if (files.isEmpty()) return@runCatching Migration.Result.Empty
+        if (files.isEmpty()) return@runCatching Results.Empty
 
+        var totalCount = 0
         var appliedCount = 0
         var validatedCount = 0
         val executionTime = measureTime {
@@ -76,6 +98,8 @@ object Migrator {
                 // Fetch already applied versions and checksums.
                 fetchAll(Migration.selectAll(table), Migration.RowMapper).getOrThrow().associateBy { it.version }
             }
+
+            totalCount = files.size
 
             // Apply migrations.
             sortedFiles.forEach { file ->
@@ -125,6 +149,6 @@ object Migrator {
             }
         }
 
-        return@runCatching Migration.Result(appliedCount, validatedCount, executionTime)
+        return@runCatching Results(totalCount, appliedCount, validatedCount, executionTime)
     }
 }
