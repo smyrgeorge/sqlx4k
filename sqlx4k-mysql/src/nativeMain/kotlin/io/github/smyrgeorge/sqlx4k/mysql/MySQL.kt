@@ -75,14 +75,16 @@ class MySQL(
     override suspend fun migrate(
         path: String,
         table: String,
+        schema: String?,
+        createSchema: Boolean,
         afterStatementExecution: suspend (Statement, Duration) -> Unit,
         afterFileMigration: suspend (Migration, Duration) -> Unit
     ): Result<Migrator.Results> = Migrator.migrate(
         db = this,
         path = path,
         table = table,
-        schema = null,
-        createSchema = false,
+        schema = schema,
+        createSchema = createSchema,
         dialect = Dialect.MySQL,
         afterStatementExecution = afterStatementExecution,
         afterFileMigration = afterFileMigration

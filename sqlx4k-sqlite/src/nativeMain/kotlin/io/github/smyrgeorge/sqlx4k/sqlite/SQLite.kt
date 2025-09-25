@@ -73,6 +73,8 @@ class SQLite(
     override suspend fun migrate(
         path: String,
         table: String,
+        schema: String?,
+        createSchema: Boolean,
         afterStatementExecution: suspend (Statement, Duration) -> Unit,
         afterFileMigration: suspend (Migration, Duration) -> Unit
     ): Result<Migrator.Results> = Migrator.migrate(

@@ -32,4 +32,7 @@ class NativeMySQLMigratorTests {
 
     @Test
     fun `checksum mismatch should fail on re-run`() = runner.`checksum mismatch should fail on re-run`()
+
+    @Test
+    fun `file level transaction rollback on failure`() = runner.`file level transaction rollback on failure`()
 }

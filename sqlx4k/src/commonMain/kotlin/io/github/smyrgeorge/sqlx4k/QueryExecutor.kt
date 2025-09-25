@@ -200,24 +200,25 @@ interface QueryExecutor {
      */
     interface Migrate {
         /**
-         * Executes database migrations based on the provided configurations and callbacks.
+         * Applies database migrations using the SQL files located in the specified path directory.
+         * Utilizes the provided settings to manage schema creation, migration tracking, and callback operations
+         * for monitoring the progress of statements and file migrations.
          *
-         * This function is responsible for applying migrations stored in SQL files
-         * located in a specified directory to the database. It supports tracking migration
-         * states using a dedicated table and allows the execution of custom logic via
-         * provided callback functions after each statement and file execution.
-         *
-         * @param path The path to the directory containing migration files. Defaults to "./db/migrations".
-         * @param table The name of the database table used for tracking applied migrations. Defaults to "_sqlx4k_migrations".
-         * @param afterStatementExecution A suspendable callback function executed after each SQL statement execution.
-         *                                 It receives the executed `Statement` and the `Duration` it took to execute the statement.
-         * @param afterFileMigration A suspendable callback function executed after each migration file is applied.
-         *                           It receives the `Migration` object representing the file and the `Duration` it took to apply the migration.
-         * @return A `Result` object representing the outcome of the entire migration process, encapsulating success or failure.
+         * @param path The directory path containing the SQL migration files. Default is "./db/migrations".
+         * @param table The name of the database table used to record and track applied migrations. Default is "_sqlx4k_migrations".
+         * @param schema The database schema where migrations will be applied. If null, the default schema will be used.
+         * @param createSchema When true, creates the schema if it does not already exist.
+         * @param afterStatementExecution A callback triggered after the execution of each SQL statement.
+         * Takes a `Statement` and the execution `Duration` as arguments.
+         * @param afterFileMigration A callback triggered after the migration of each SQL file.
+         * Takes a `Migration` and the execution `Duration` as arguments.
+         * @return A `Result` object containing the results of the migration process.
          */
         suspend fun migrate(
             path: String = "./db/migrations",
             table: String = "_sqlx4k_migrations",
+            schema: String? = null, // The default schema will be used if not provided.
+            createSchema: Boolean = false, // Whether to create the schema if it does not exist.
             afterStatementExecution: suspend (Statement, Duration) -> Unit = { _, _ -> },
             afterFileMigration: suspend (Migration, Duration) -> Unit = { _, _ -> }
         ): Result<Migrator.Results>
