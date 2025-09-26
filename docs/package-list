@@ -34,7 +34,7 @@ $dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/execute/#kotlin.String/P
 $dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/fetchAll/#io.github.smyrgeorge.sqlx4k.Statement#io.github.smyrgeorge.sqlx4k.RowMapper[TypeParam(bounds=[kotlin.Any?])]/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/fetch-all.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/fetchAll/#io.github.smyrgeorge.sqlx4k.Statement/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/fetch-all.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/fetchAll/#kotlin.String/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/fetch-all.html
-$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/migrate/#kotlin.String#kotlin.String/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/migrate.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/migrate/#kotlin.String#kotlin.String#kotlin.String?#kotlin.Boolean#kotlin.coroutines.SuspendFunction2[io.github.smyrgeorge.sqlx4k.Statement,kotlin.time.Duration,kotlin.Unit]#kotlin.coroutines.SuspendFunction2[io.github.smyrgeorge.sqlx4k.impl.migrate.Migration,kotlin.time.Duration,kotlin.Unit]/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/migrate.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/poolIdleSize/#/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/pool-idle-size.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.mysql/MySQL/poolSize/#/PointingToDeclaration/sqlx4k-mysql/io.github.smyrgeorge.sqlx4k.mysql/[native]-my-s-q-l/pool-size.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL.Cn///PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/-cn/index.html
@@ -73,7 +73,7 @@ $dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/fetchAll/#io.git
 $dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/fetchAll/#kotlin.String/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/fetch-all.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/listen/#kotlin.String#kotlin.coroutines.SuspendFunction1[io.github.smyrgeorge.sqlx4k.postgres.Notification,kotlin.Unit]/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/listen.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/listen/#kotlin.collections.List[kotlin.String]#kotlin.coroutines.SuspendFunction1[io.github.smyrgeorge.sqlx4k.postgres.Notification,kotlin.Unit]/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/listen.html
-$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/migrate/#kotlin.String#kotlin.String/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/migrate.html
+$dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/migrate/#kotlin.String#kotlin.String#kotlin.String?#kotlin.Boolean#kotlin.coroutines.SuspendFunction2[io.github.smyrgeorge.sqlx4k.Statement,kotlin.time.Duration,kotlin.Unit]#kotlin.coroutines.SuspendFunction2[io.github.smyrgeorge.sqlx4k.impl.migrate.Migration,kotlin.time.Duration,kotlin.Unit]/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/migrate.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/notify/#kotlin.String#kotlin.String/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/notify.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/poolIdleSize/#/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/pool-idle-size.html
 $dokka.location:io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL/poolSize/#/PointingToDeclaration/sqlx4k-postgres/io.github.smyrgeorge.sqlx4k.postgres/[native]-postgre-s-q-l/pool-size.html
@@ -89,10 +89,8 @@ module:sqlx4k-codegen
 io.github.smyrgeorge.sqlx4k.processor
 module:sqlx4k-mysql
 io.github.smyrgeorge.sqlx4k.mysql
-io.github.smyrgeorge.sqlx4k.mysql.extensions
 module:sqlx4k-postgres
 io.github.smyrgeorge.sqlx4k.postgres
 io.github.smyrgeorge.sqlx4k.postgres.extensions
 module:sqlx4k-sqlite
 io.github.smyrgeorge.sqlx4k.sqlite
-io.github.smyrgeorge.sqlx4k.sqlite.extensions
