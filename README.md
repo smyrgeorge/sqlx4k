@@ -321,6 +321,8 @@ ksp {
     // For PostgreSQL, MariaDB, SQLite, you can skip this configuration (the "generic" dialect will be used).
     // arg("dialect", "mysql")
     arg("output-package", "io.github.smyrgeorge.sqlx4k.examples.postgres")
+    // Validates the SQL syntax in the @Query (default is true). Disable this befaviour with:
+    // arg("validate-sql-syntax", "false")
 }
 
 dependencies {
@@ -341,6 +343,8 @@ data class Sqlx4k(
 
 @Repository(mapper = Sqlx4kRowMapper::class)
 interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
+    // The processor will validate the SQL syntax in the @Query methods.
+    // If you want to disable this validation, you can set the "validate-sql-syntax" arg to "false".
     @Query("SELECT * FROM sqlx4k WHERE id = :id")
     suspend fun findOneById(context: QueryExecutor, id: Int): Result<Sqlx4k?>
 
@@ -502,6 +506,8 @@ Under the hood, `sqlx4k` utilizes several libraries that provide the basic acces
     - Repository: https://github.com/pgjdbc/r2dbc-postgresql
 - `r2dbc-mysql` for MySQL on the JVM
     - Repository: https://github.com/asyncer-io/r2dbc-mysql
+- `JSqlParser`: for SQL syntax validation
+    - Repository: https://github.com/JSQLParser/JSqlParser
 
 ## License
 

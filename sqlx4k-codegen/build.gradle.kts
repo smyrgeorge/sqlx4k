@@ -5,14 +5,15 @@ plugins {
 }
 
 kotlin {
+    @Suppress("unused")
     sourceSets {
         configureEach {
             languageSettings.progressiveMode = true
         }
-        @Suppress("unused")
         val jvmMain by getting {
             dependencies {
                 implementation(libs.ksp)
+                implementation(libs.jsqlparser)
             }
         }
     }

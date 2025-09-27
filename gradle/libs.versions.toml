@@ -26,6 +26,9 @@ r2dbc-pool = "1.0.2.RELEASE"
 r2dbc-mysql = "1.4.1"
 # https://github.com/pgjdbc/r2dbc-postgresql
 r2dbc-postgresql = "1.0.7.RELEASE"
+# https://central.sonatype.com/artifact/com.github.jsqlparser/jsqlparser
+# https://github.com/JSQLParser/JSqlParser
+jsqlparser = "5.3"
 
 [libraries]
 gradle-kotlin-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
@@ -41,6 +44,7 @@ assertk = { module = "com.willowtreeapps.assertk:assertk", version.ref = "assert
 r2dbc-pool = { module = "io.r2dbc:r2dbc-pool", version.ref = "r2dbc-pool" }
 r2dbc-mysql = { module = "io.asyncer:r2dbc-mysql", version.ref = "r2dbc-mysql" }
 r2dbc-postgresql = { module = "org.postgresql:r2dbc-postgresql", version.ref = "r2dbc-postgresql" }
+jsqlparser = { module = "com.github.jsqlparser:jsqlparser", version.ref = "jsqlparser" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

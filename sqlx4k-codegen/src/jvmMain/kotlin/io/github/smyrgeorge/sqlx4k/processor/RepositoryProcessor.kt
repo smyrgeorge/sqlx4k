@@ -3,6 +3,7 @@ package io.github.smyrgeorge.sqlx4k.processor
 import com.google.devtools.ksp.processing.*
 import com.google.devtools.ksp.symbol.*
 import com.google.devtools.ksp.validate
+import net.sf.jsqlparser.parser.CCJSqlParserUtil
 import java.io.OutputStream
 
 class RepositoryProcessor(
@@ -30,6 +31,9 @@ class RepositoryProcessor(
         val outputPackage = options[TableProcessor.PACKAGE_OPTION]
             ?: error("Missing ${TableProcessor.PACKAGE_OPTION} option")
         logger.info("[RepositoryProcessor] Output package: $outputPackage")
+
+        val validateSqlSyntax = options[VALIDATE_SQL_SYNTAX_OPTION]?.toBoolean() ?: true
+        logger.info("[RepositoryProcessor] Validate SQL syntax: $validateSqlSyntax")
 
         val outputFilename = "GeneratedRepositories"
 
@@ -68,7 +72,7 @@ class RepositoryProcessor(
             // findAll/findAllBy/findOneBy/deleteBy/countBy/execute and also *All variants
             fnsAll
                 .filter { fn -> fn.annotations.any { it.qualifiedName() == TypeNames.QUERY_ANNOTATION } }
-                .forEach { fn -> emitQueryMethod(file, fn, mapperTypeName, domainDecl) }
+                .forEach { fn -> emitQueryMethod(file, fn, validateSqlSyntax, mapperTypeName, domainDecl) }
 
             // Generate CRUD methods: insert/update/delete;
             // Interface must implement CrudRepository<Domain> which we already validated.
@@ -304,14 +308,20 @@ class RepositoryProcessor(
     private fun emitQueryMethod(
         file: OutputStream,
         fn: KSFunctionDeclaration,
+        validateSqlSyntax: Boolean,
         mapperTypeName: String,
         domainDecl: KSClassDeclaration
     ) {
         val name = fn.simpleName()
         logger.info("[RepositoryProcessor] Generating @Query method: $name")
-        val ann: KSAnnotation = fn.annotations.first { it.qualifiedName() == TypeNames.QUERY_ANNOTATION }
-        val sqlArg: KSValueArgument = ann.arguments.first { it.name?.asString() == "value" }
-        val sql = sqlArg.value as String
+
+        val sql: String = fn.annotations.first { it.qualifiedName() == TypeNames.QUERY_ANNOTATION }
+            .arguments.firstOrNull { it.name?.asString() == "value" }
+            ?.value as? String
+            ?: error("Unable to generate query method (could not extract sql query from the @Query): $fn")
+
+        if (validateSqlSyntax) validateSqlSyntax(fn.simpleName(), sql)
+
         val params = fn.parameters
         val paramSig = params.joinToString { p ->
             val pName = p.name?.asString() ?: "p"
@@ -407,8 +417,7 @@ class RepositoryProcessor(
             file += "    }\n"
         } else {
             val idName = idProp.simpleName.getShortName()
-            val idType = idProp.type.resolve()
-            when (val idQn = idType.declaration.qualifiedName()) {
+            when (val idQn = idProp.type.resolve().declaration.qualifiedName()) {
                 TypeNames.KOTLIN_INT, TypeNames.KOTLIN_LONG -> {
                     val zeroLiteral = if (idQn == TypeNames.KOTLIN_INT) "0" else "0L"
                     file += "        if (entity.$idName == $zeroLiteral) insert(context, entity) else update(context, entity)\n"
@@ -423,10 +432,31 @@ class RepositoryProcessor(
         }
     }
 
+    private fun validateSqlSyntax(fn: String, sql: String) {
+        try {
+            CCJSqlParserUtil.parse(sql)
+        } catch (e: Exception) {
+            val cause = e.message?.removePrefix("net.sf.jsqlparser.parser.ParseException: ")
+            error("Invalid SQL in function $fn: $cause")
+        }
+    }
+
     operator fun OutputStream.plusAssign(str: String): Unit = write(str.toByteArray())
     private fun KSClassDeclaration.qualifiedName(): String? = qualifiedName?.asString()
     private fun KSDeclaration.qualifiedName(): String? = qualifiedName?.asString()
     private fun KSFunctionDeclaration.simpleName(): String = simpleName.asString()
     private fun KSClassDeclaration.simpleName(): String = simpleName.asString()
     private fun KSAnnotation.qualifiedName(): String? = annotationType.resolve().declaration.qualifiedName?.asString()
+
+    companion object {
+        /**
+         * Represents an option key used to enable or disable SQL syntax validation during the processing
+         * of repository methods. Methods marked with the SQL validation flag will have their provided SQL
+         * queries checked for syntax errors before being incorporated into the generated code.
+         *
+         * This key is typically used internally by the code generator to determine whether to invoke
+         * the SQL syntax validation logic.
+         */
+        private const val VALIDATE_SQL_SYNTAX_OPTION: String = "validate-sql-syntax"
+    }
 }
