@@ -9,6 +9,7 @@ object TypeNames {
     const val TABLE_ANNOTATION = "io.github.smyrgeorge.sqlx4k.annotation.Table"
     const val ID_ANNOTATION = "io.github.smyrgeorge.sqlx4k.annotation.Id"
     const val COLUMN_ANNOTATION = "io.github.smyrgeorge.sqlx4k.annotation.Column"
+    const val QUERY_ANNOTATION = "io.github.smyrgeorge.sqlx4k.annotation.Query"
 
     // Core interfaces/classes
     const val CRUD_REPOSITORY = "io.github.smyrgeorge.sqlx4k.CrudRepository"

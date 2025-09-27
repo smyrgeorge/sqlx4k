@@ -31,7 +31,7 @@ class RepositoryProcessor(
             ?: error("Missing ${TableProcessor.PACKAGE_OPTION} option")
         logger.info("[RepositoryProcessor] Output package: $outputPackage")
 
-        val outputFilename = options[FILENAME_OPTION] ?: "GeneratedRepositories"
+        val outputFilename = "GeneratedRepositories"
 
         val file: OutputStream = codeGenerator.createNewFile(
             dependencies = Dependencies(false, *resolver.getAllFiles().toList().toTypedArray()),
@@ -67,7 +67,7 @@ class RepositoryProcessor(
             // Generate @Query-based methods according to prefixes:
             // findAll/findAllBy/findOneBy/deleteBy/countBy/execute and also *All variants
             fnsAll
-                .filter { fn -> fn.annotations.any { it.shortName() == QUERY_ANNOTATION_NAME } }
+                .filter { fn -> fn.annotations.any { it.qualifiedName() == TypeNames.QUERY_ANNOTATION } }
                 .forEach { fn -> emitQueryMethod(file, fn, mapperTypeName, domainDecl) }
 
             // Generate CRUD methods: insert/update/delete;
@@ -155,15 +155,15 @@ class RepositoryProcessor(
             val domainDecl = typeArg.declaration as? KSClassDeclaration
                 ?: error("CrudRepository type argument must be a class on ${iface.qualifiedName()}")
             // ensure @Table
-            val hasTable = domainDecl.annotations.any { ann ->
-                val qn = ann.annotationType.resolve().declaration.qualifiedName()
-                qn == TypeNames.TABLE_ANNOTATION || ann.shortName() == "Table"
+            val hasTable = domainDecl.annotations.any {
+                val qn = it.qualifiedName()
+                qn == TypeNames.TABLE_ANNOTATION
             }
             if (!hasTable) error("CrudRepository generic parameter must be @Table-annotated (${domainDecl.qualifiedName()})")
             return domainDecl
         }
 
-        val repoAnn = iface.annotations.firstOrNull { it.shortName() == REPOSITORY_ANNOTATION_SHORT }
+        val repoAnn = iface.annotations.firstOrNull { it.qualifiedName() == TypeNames.REPOSITORY_ANNOTATION }
             ?: error("Missing @Repository annotation on interface ${iface.qualifiedName()}")
 
         // Enforce that the interface extends CrudRepository<T> and derive domain from T
@@ -309,7 +309,7 @@ class RepositoryProcessor(
     ) {
         val name = fn.simpleName()
         logger.info("[RepositoryProcessor] Generating @Query method: $name")
-        val ann: KSAnnotation = fn.annotations.first { it.shortName() == QUERY_ANNOTATION_NAME }
+        val ann: KSAnnotation = fn.annotations.first { it.qualifiedName() == TypeNames.QUERY_ANNOTATION }
         val sqlArg: KSValueArgument = ann.arguments.first { it.name?.asString() == "value" }
         val sql = sqlArg.value as String
         val params = fn.parameters
@@ -400,7 +400,7 @@ class RepositoryProcessor(
         logger.info("[RepositoryProcessor] Emitting CRUD method: save($domainQn)")
         file += "    override suspend fun save(context: QueryExecutor, entity: $domainQn) = run {\n"
         val idProp: KSPropertyDeclaration? = domainDecl.getAllProperties().firstOrNull { p ->
-            p.annotations.any { it.shortName() == "Id" || it.annotationType.resolve().declaration.qualifiedName() == TypeNames.ID_ANNOTATION }
+            p.annotations.any { it.qualifiedName() == TypeNames.ID_ANNOTATION }
         }
         if (idProp == null) {
             file += "        error(\"No @Id property found in ${domainDecl.qualifiedName()}\")\n"
@@ -428,11 +428,5 @@ class RepositoryProcessor(
     private fun KSDeclaration.qualifiedName(): String? = qualifiedName?.asString()
     private fun KSFunctionDeclaration.simpleName(): String = simpleName.asString()
     private fun KSClassDeclaration.simpleName(): String = simpleName.asString()
-    private fun KSAnnotation.shortName(): String = shortName.asString()
-
-    companion object {
-        private const val FILENAME_OPTION = "output-filename"
-        private const val QUERY_ANNOTATION_NAME = "Query"
-        private const val REPOSITORY_ANNOTATION_SHORT = "Repository"
-    }
+    private fun KSAnnotation.qualifiedName(): String? = annotationType.resolve().declaration.qualifiedName?.asString()
 }

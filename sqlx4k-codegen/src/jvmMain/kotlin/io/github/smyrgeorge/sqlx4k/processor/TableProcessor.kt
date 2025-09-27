@@ -24,7 +24,7 @@ class TableProcessor(
         if (!symbols.iterator().hasNext()) return emptyList()
 
         val outputPackage = options[PACKAGE_OPTION] ?: error("Missing $PACKAGE_OPTION option")
-        val outputFilename = options[FILENAME_OPTION] ?: "GeneratedQueries"
+        val outputFilename = "GeneratedQueries"
 
         logger.info("sqlx4k-codegen: TableProcessor dialect = $dialect")
 
@@ -57,7 +57,7 @@ class TableProcessor(
         override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
             // Getting the @Table annotation object.
             val table: KSAnnotation = classDeclaration.annotations.first {
-                it.shortName() == TABLE_ANNOTATION_NAME
+                it.qualifiedName() == TypeNames.TABLE_ANNOTATION
             }
 
             // Getting the 'name' argument object from the @Table.
@@ -97,8 +97,10 @@ class TableProcessor(
             // Find insertable properties.
             val insertProps = allProps.asSequence()
                 .filter {
-                    val id = it.annotations.find { a -> a.shortName() == ID_ANNOTATION_NAME }
-                        ?: return@filter true
+                    val id =
+                        it.annotations.find { a ->
+                            a.qualifiedName() == TypeNames.ID_ANNOTATION
+                        } ?: return@filter true
 
                     val insert: KSValueArgument = id.arguments.first { a ->
                         a.name?.asString() == INSERT_PROPERTY_NAME
@@ -107,8 +109,10 @@ class TableProcessor(
                     (insert.value as? Boolean) ?: false
                 }
                 .filter {
-                    val column = it.annotations.find { a -> a.shortName() == COLUMN_ANNOTATION_NAME }
-                        ?: return@filter true
+                    val column =
+                        it.annotations.find { a ->
+                            a.qualifiedName() == TypeNames.COLUMN_ANNOTATION
+                        } ?: return@filter true
 
                     val insert: KSValueArgument = column.arguments.first { a ->
                         a.name?.asString() == INSERT_PROPERTY_NAME
@@ -127,7 +131,8 @@ class TableProcessor(
             file += "    // language=SQL\n"
             file += if (dialect == "mysql") {
                 // For MySQL, use LAST_INSERT_ID() since RETURNING is not supported
-                val idProp = allProps.find { it.annotations.any { a -> a.shortName() == ID_ANNOTATION_NAME } }
+                val idProp =
+                    allProps.find { it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION } }
                 if (idProp == null) {
                     logger.warn("MySQL dialect selected but no @Id found on $table. Generating INSERT without fetch.")
                     "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }}) values (${insertProps.joinToString { "?" }});\"\n"
@@ -143,7 +148,8 @@ class TableProcessor(
                 file += "    statement.bind($index, ${property})\n"
             }
             if (dialect == "mysql") {
-                val idProp = allProps.find { it.annotations.any { a -> a.shortName() == ID_ANNOTATION_NAME } }
+                val idProp =
+                    allProps.find { it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION } }
                 if (idProp != null) {
                     file += "    statement.bind(${insertProps.size}, ${idProp.simpleName()})\n"
                 }
@@ -169,9 +175,9 @@ class TableProcessor(
             val allProps = props.toList()
 
             val id: KSPropertyDeclaration = allProps.find {
-                it.annotations.any { a -> a.shortName() == ID_ANNOTATION_NAME }
+                it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
             } ?: run {
-                logger.warn("Skipping $table.update() because no property found annotated with @$ID_ANNOTATION_NAME.")
+                logger.warn("Skipping $table.update() because no property found annotated with @Id.")
                 return
             }
 
@@ -180,8 +186,9 @@ class TableProcessor(
                 // Exclude @Id from the update query,
                 .filter { it.simpleName() != id.simpleName() }
                 .filter {
-                    val column = it.annotations.find { a -> a.shortName() == COLUMN_ANNOTATION_NAME }
-                        ?: return@filter true
+                    val column = it.annotations.find { a ->
+                        a.qualifiedName() == TypeNames.COLUMN_ANNOTATION
+                    } ?: return@filter true
 
                     val update: KSValueArgument = column.arguments.first { a ->
                         a.name?.asString() == UPDATE_PROPERTY_NAME
@@ -233,9 +240,9 @@ class TableProcessor(
             props: Sequence<KSPropertyDeclaration>
         ) {
             val id: KSPropertyDeclaration = props.find {
-                it.annotations.any { a -> a.shortName() == ID_ANNOTATION_NAME }
+                it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
             } ?: run {
-                logger.warn("Skipping $table.delete() because no property found annotated with @$ID_ANNOTATION_NAME.")
+                logger.warn("Skipping $table.delete() because no property found annotated with @Id.")
                 return
             }
 
@@ -251,8 +258,8 @@ class TableProcessor(
     }
 
     operator fun OutputStream.plusAssign(str: String): Unit = write(str.toByteArray())
+    private fun KSAnnotation.qualifiedName(): String? = annotationType.resolve().declaration.qualifiedName?.asString()
     private fun KSPropertyDeclaration.simpleName(): String = simpleName.name()
-    private fun KSAnnotation.shortName(): String = shortName.asString()
     private fun KSName.name(): String = getShortName()
     private fun String.toSnakeCase(): String {
         val pattern = "(?<=.)[A-Z]".toRegex()
@@ -266,19 +273,11 @@ class TableProcessor(
         const val PACKAGE_OPTION = "output-package"
 
         /**
-         * The option key used to specify the output filename for the generated SQL classes.
-         */
-        private const val FILENAME_OPTION = "output-filename"
-
-        /**
          * The option key used to specify the SQL dialect. Supported: generic (default), mysql
          */
         private const val DIALECT_OPTION = "dialect"
 
         private const val INSERT_PROPERTY_NAME = "insert"
         private const val UPDATE_PROPERTY_NAME = "update"
-        private const val COLUMN_ANNOTATION_NAME = "Column"
-        private const val ID_ANNOTATION_NAME = "Id"
-        private const val TABLE_ANNOTATION_NAME = "Table"
     }
 }
