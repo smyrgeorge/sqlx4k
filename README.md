@@ -21,15 +21,15 @@ A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLi
 
 🏠 [Homepage](https://smyrgeorge.github.io/) (under construction)
 
-### 📰 Articles
+#### 📰 Articles
 
-Short deep‑dive posts covering Kotlin/Native, FFI, and Rust↔Kotlin interop used in sqlx4k:
+Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop used in sqlx4k:
 
-- *Introduction to the Kotlin Native and FFI*
-  [Part 1](https://smyrgeorge.github.io/posts/sqlx4k---introduction-to-the-kotlin-native-and-ffi-part-1/)
-  [Part 2](https://smyrgeorge.github.io/posts/sqlx4k---introduction-to-the-kotlin-native-and-ffi-part-2/)
-- *Interoperability between Kotlin and Rust, using FFI*
-  [Part 1](https://smyrgeorge.github.io/posts/sqlx4k---interoperability-between-kotlin-and-rust-using-ffi-part-1/)
+- *Introduction to the Kotlin Native and FFI:*
+  [[Part 1]](https://smyrgeorge.github.io/posts/sqlx4k---introduction-to-the-kotlin-native-and-ffi-part-1/),
+  [[Part 2]](https://smyrgeorge.github.io/posts/sqlx4k---introduction-to-the-kotlin-native-and-ffi-part-2/)
+- *Interoperability between Kotlin and Rust, using FFI:*
+  [[Part 1]](https://smyrgeorge.github.io/posts/sqlx4k---interoperability-between-kotlin-and-rust-using-ffi-part-1/),
   (Part 2 soon)
 
 ## Features
@@ -58,7 +58,7 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust↔Kotlin interop u
 - Pure Kotlin implementation for MySQL.
 - Pure Kotlin implementation for SQLite.
 
-## Supported Databases
+### Supported Databases
 
 - `PostgreSQL`
 - `MySQL`
