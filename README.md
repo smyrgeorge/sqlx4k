@@ -21,68 +21,48 @@ A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLi
 
 🏠 [Homepage](https://smyrgeorge.github.io/) (under construction)
 
-## Supported Databases
+### 📰 Articles
 
-- `PostgreSQL`
-- `MySQL`
-- `SQLite`
+Short deep‑dive posts covering Kotlin/Native, FFI, and Rust↔Kotlin interop used in sqlx4k:
 
-## Supported Targets
-
-- jvm (only PostgreSQL and MySQL are supported at the moment)
-- iosArm64
-- iosSimulatorArm64
-- androidNativeX64
-- androidNativeArm64
-- macosArm64
-- macosX64
-- linuxArm64
-- linuxX64
-- mingwX64
-- wasmWasi (potential future candidate)
+- *Introduction to the Kotlin Native and FFI*
+  [Part 1](https://smyrgeorge.github.io/posts/sqlx4k---introduction-to-the-kotlin-native-and-ffi-part-1/)
+  [Part 2](https://smyrgeorge.github.io/posts/sqlx4k---introduction-to-the-kotlin-native-and-ffi-part-2/)
+- *Interoperability between Kotlin and Rust, using FFI*
+  [Part 1](https://smyrgeorge.github.io/posts/sqlx4k---interoperability-between-kotlin-and-rust-using-ffi-part-1/)
+  (Part 2 soon)
 
 ## Features
 
+- [Supported databases](#supported-databases)
 - [Async I/O](#async-io)
 - [Connection pool and settings](#connection-pool)
 - [Acquiring and using connections](#acquiring-and-using-connections)
 - [Prepared statements (named and positional parameters)](#prepared-statements)
 - [Row mappers](#rowmappers)
 - [Transactions and coroutine TransactionContext](#transactions) · [TransactionContext (coroutines)](#transactioncontext-coroutines)
-- [Code generation: CRUD and @Repository implementations](#code-generation-crud-and-repository-implementations)
+- [Code generation: CRUD and @Repository implementations](#code-generation-crud-and-repository-implementations) · [SQL syntax validation (compile-time)](#sql-syntax-validation-compile-time)
 - [Database migrations](#database-migrations)
 - [PostgreSQL LISTEN/NOTIFY](#listennotify-only-for-postgresql)
 - [SQLDelight integration](#sqldelight)
+- [Supported targets](#supported-targets)
 
-## Usage
+### Next Steps (contributions are welcome)
 
-```kotlin
-implementation("io.github.smyrgeorge:sqlx4k-postgres:x.y.z")
-// or for MySQL
-implementation("io.github.smyrgeorge:sqlx4k-mysql:x.y.z")
-// or for SQLite
-implementation("io.github.smyrgeorge:sqlx4k-sqlite:x.y.z")
-```
-
-### Windows
-
-If you are building your project on Windows, for target mingwX64, and you encounter the following error:
-
-```text
-lld-link: error: -exclude-symbols:___chkstk_ms is not allowed in .drectve
-```
-
-Please look at this issue: [#18](https://github.com/smyrgeorge/sqlx4k/issues/18)
-
-## Next Steps (contributions are welcome)
-
-- Enhance code-generation module.
+- Validate queries at compile time (avoid runtime errors)
+    - Syntax checking is already supported (using the `@Query` annotation). ✅
+    - Validate queries by accessing the DB schema
 - Add support for SQLite JVM target.
-- Validate queries at compile time, avoid runtime errors.
-- WASM support.
+- WASM support (?).
 - Pure Kotlin implementation for PostgreSQL.
 - Pure Kotlin implementation for MySQL.
 - Pure Kotlin implementation for SQLite.
+
+## Supported Databases
+
+- `PostgreSQL`
+- `MySQL`
+- `SQLite`
 
 ### Async-io
 
@@ -315,13 +295,19 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-// Then you need to configure the processor (will generate the necessary code files).
+// Then you need to configure the processor (it will generate the necessary code files).
 ksp {
-    // For MySQL, change the dialect to "mysql".
-    // For PostgreSQL, MariaDB, SQLite, you can skip this configuration (the "generic" dialect will be used).
+    // Optional: pick SQL dialect for CRUD generation from @Table classes.
+    // Currently only "mysql" is special-cased; everything else falls back to a generic ANSI-like dialect.
+    // This setting affects the shape of INSERT/UPDATE/DELETE that TableProcessor emits.
+    // It does NOT affect @Query validation (see notes below).
     // arg("dialect", "mysql")
+
+    // Required: where to place the generated sources.
     arg("output-package", "io.github.smyrgeorge.sqlx4k.examples.postgres")
-    // Validates the SQL syntax in the @Query (default is true). Disable this befaviour with:
+
+    // Compile-time SQL syntax checking for @Query methods (default = true).
+    // Set to "false" to turn it off if you use vendor-specific syntax not understood by the parser.
     // arg("validate-sql-syntax", "false")
 }
 
@@ -356,7 +342,7 @@ interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
 }
 ```
 
-> [!NOTE]  
+> [!NOTE]
 > Besides your @Query methods, because your interface extends `CrudRepository<T>`, the generator also adds the CRUD
 > helper methods automatically: `insert`, `update`, `delete`, and `save`.
 
@@ -370,7 +356,36 @@ val res: Sqlx4k = Sqlx4kRepositoryImpl.insert(db, record).getOrThrow()
 val res: List<Sqlx4k> = Sqlx4kRepositoryImpl.selectAll(db).getOrThrow()
 ```
 
-For more details take a look at the `postgres` example.
+For more details take a look at the [examples](./examples).
+
+#### SQL syntax validation (compile-time)
+
+- What it is: during code generation, sqlx4k parses the SQL string in each @Query method using `JSqlParser`. If the
+  parser detects a syntax error, the build fails early with a clear error message pointing to the offending repository
+  method.
+- What it checks: only SQL syntax. It does not verify that tables/columns exist, parameter names match, or types are
+  compatible.
+- When it runs: at KSP processing time, before your code is compiled/run.
+- Dialect notes: validation is dialect-agnostic and aims for an ANSI/portable subset. Some vendor-specific features
+  (e.g., certain MySQL or PostgreSQL extensions) may not be recognized. If you hit a false positive, you can disable
+  validation per module with ksp arg validate-sql-syntax=false.
+- Most reliable with: SELECT, INSERT, UPDATE, DELETE statements. DDL or very advanced constructs may not be fully
+  supported.
+
+Example of a build error you might see if your query is malformed:
+
+```
+> Task :compileKotlin
+Invalid SQL in function findAllBy: Encountered "FROMM" at line 1, column 15
+```
+
+Tip: keep it enabled to catch typos early; if you rely heavily on vendor-specific syntax not yet supported by the
+parser,
+turn it off with:
+
+```kotlin
+ksp { arg("validate-sql-syntax", "false") }
+```
 
 ### Database Migrations
 
@@ -406,6 +421,40 @@ db.listen("chan0") { notification: Postgres.Notification ->
 ### SQLDelight
 
 Check here: https://github.com/smyrgeorge/sqlx4k-sqldelight
+
+## Supported Targets
+
+- jvm (only PostgreSQL and MySQL are supported at the moment)
+- iosArm64
+- iosSimulatorArm64
+- androidNativeX64
+- androidNativeArm64
+- macosArm64
+- macosX64
+- linuxArm64
+- linuxX64
+- mingwX64
+- wasmWasi (potential future candidate)
+
+## Usage
+
+```kotlin
+implementation("io.github.smyrgeorge:sqlx4k-postgres:x.y.z")
+// or for MySQL
+implementation("io.github.smyrgeorge:sqlx4k-mysql:x.y.z")
+// or for SQLite
+implementation("io.github.smyrgeorge:sqlx4k-sqlite:x.y.z")
+```
+
+### Windows
+
+If you are building your project on Windows, for target mingwX64, and you encounter the following error:
+
+```text
+lld-link: error: -exclude-symbols:___chkstk_ms is not allowed in .drectve
+```
+
+Please look at this issue: [#18](https://github.com/smyrgeorge/sqlx4k/issues/18)
 
 ## Compilation
 
@@ -462,15 +511,24 @@ First, you need to run start-up the postgres instance.
 docker compose up -d
 ```
 
-Then run the `main` method.
+And then run the examples.
 
 ```shell
-./sqlx4k-postgres-examples/build/bin/macosArm64/releaseExecutable/sqlx4k-postgres-examples.kexe
+# For macosArm64
+./examples/postgres/build/bin/macosArm64/releaseExecutable/postgres.kexe
+./examples/mysql/build/bin/macosArm64/releaseExecutable/mysql.kexe
+./examples/sqlite/build/bin/macosArm64/releaseExecutable/sqlite.kexe
+# If you run in another platform consider running the correct tartge.
 ```
 
 ## Examples
 
-See `Main.kt` file for more examples (examples modules).
+Here are small, self‑contained snippets for the most common tasks.
+For full runnable apps, see the modules under:
+
+- PostgreSQL: [examples/postgres](./examples/postgres)
+- MySQL: [examples/mysql](./examples/mysql)
+- SQLite: [examples/sqlite](./examples/sqlite)
 
 ## Checking for memory leaks
 
@@ -498,16 +556,22 @@ leaks -atExit -- ./bench/postgres-sqlx4k/build/bin/macosArm64/releaseExecutable/
 
 ## Acknowledgements
 
-Under the hood, `sqlx4k` utilizes several libraries that provide the basic access to the database functionality:
+sqlx4k stands on the shoulders of excellent open-source projects:
 
-- `sqlx` for all native targets
-    - Repository: https://github.com/launchbadge/sqlx
-- `r2dbc-postgresql` for PostgreSQL on the JVM
-    - Repository: https://github.com/pgjdbc/r2dbc-postgresql
-- `r2dbc-mysql` for MySQL on the JVM
-    - Repository: https://github.com/asyncer-io/r2dbc-mysql
-- `JSqlParser`: for SQL syntax validation
-    - Repository: https://github.com/JSQLParser/JSqlParser
+- Data access engines
+    - Native targets (Kotlin/Native): sqlx (Rust)
+        - https://github.com/launchbadge/sqlx
+    - JVM targets:
+        - PostgreSQL: r2dbc-postgresql
+            - https://github.com/pgjdbc/r2dbc-postgresql
+        - MySQL: r2dbc-mysql
+            - https://github.com/asyncer-io/r2dbc-mysql
+
+- Build-time tooling
+    - JSqlParser — used by the code generator to parse @Query SQL at build time for syntax validation.
+        - https://github.com/JSQLParser/JSqlParser
+
+Huge thanks to the maintainers and contributors of these projects.
 
 ## License
 
