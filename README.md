@@ -380,8 +380,7 @@ Invalid SQL in function findAllBy: Encountered "FROMM" at line 1, column 15
 ```
 
 Tip: keep it enabled to catch typos early; if you rely heavily on vendor-specific syntax not yet supported by the
-parser,
-turn it off with:
+parser, turn it off with:
 
 ```kotlin
 ksp { arg("validate-sql-syntax", "false") }
@@ -401,9 +400,8 @@ val res = db.migrate(
 println("Migration completed. $res")
 ```
 
-This process will create a table with name `_sqlx4k_migrations`.
-
-For more information, take a look at the examples.
+This process will create a table with name `_sqlx4k_migrations`. For more information, take a look at
+the [examples](#examples).
 
 ### Listen/Notify (only for PostgreSQL)
 
