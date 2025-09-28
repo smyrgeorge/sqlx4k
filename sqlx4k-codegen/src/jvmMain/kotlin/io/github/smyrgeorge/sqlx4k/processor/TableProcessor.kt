@@ -203,7 +203,7 @@ class TableProcessor(
             val returningColumns = allProps.joinToString { it.simpleName().toSnakeCase() }
 
             file += "\n"
-            file += "fun ${clazz.qualifiedName?.asString()}.update(): Statement {\n"
+            file += "fun ${clazz.qualifiedName()}.update(): Statement {\n"
             file += "    // language=SQL\n"
             file += if (dialect == "mysql") {
                 "    val sql = \"update $table set ${updateProps.joinToString { p -> "${p.toSnakeCase()} = ?" }} where ${
@@ -247,7 +247,7 @@ class TableProcessor(
             }
 
             file += "\n"
-            file += "fun ${clazz.qualifiedName?.asString()}.delete(): Statement {\n"
+            file += "fun ${clazz.qualifiedName()}.delete(): Statement {\n"
             file += "    // language=SQL\n"
             file += "    val sql = \"delete from $table where ${id.simpleName().toSnakeCase()} = ?;\"\n"
             file += "    val statement = Statement.create(sql)\n"
@@ -258,9 +258,9 @@ class TableProcessor(
     }
 
     operator fun OutputStream.plusAssign(str: String): Unit = write(str.toByteArray())
+    private fun KSPropertyDeclaration.simpleName(): String = simpleName.getShortName()
+    private fun KSClassDeclaration.qualifiedName(): String? = qualifiedName?.asString()
     private fun KSAnnotation.qualifiedName(): String? = annotationType.resolve().declaration.qualifiedName?.asString()
-    private fun KSPropertyDeclaration.simpleName(): String = simpleName.name()
-    private fun KSName.name(): String = getShortName()
     private fun String.toSnakeCase(): String {
         val pattern = "(?<=.)[A-Z]".toRegex()
         return replace(pattern, "_$0").lowercase()

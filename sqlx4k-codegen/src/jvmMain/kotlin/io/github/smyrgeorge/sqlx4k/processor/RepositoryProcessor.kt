@@ -449,10 +449,10 @@ class RepositoryProcessor(
     }
 
     operator fun OutputStream.plusAssign(str: String): Unit = write(str.toByteArray())
-    private fun KSClassDeclaration.qualifiedName(): String? = qualifiedName?.asString()
     private fun KSDeclaration.qualifiedName(): String? = qualifiedName?.asString()
-    private fun KSFunctionDeclaration.simpleName(): String = simpleName.asString()
     private fun KSClassDeclaration.simpleName(): String = simpleName.asString()
+    private fun KSFunctionDeclaration.simpleName(): String = simpleName.asString()
+    private fun KSClassDeclaration.qualifiedName(): String? = qualifiedName?.asString()
     private fun KSAnnotation.qualifiedName(): String? = annotationType.resolve().declaration.qualifiedName?.asString()
 
     companion object {
