@@ -32,8 +32,8 @@ class RepositoryProcessor(
             ?: error("Missing ${TableProcessor.PACKAGE_OPTION} option")
         logger.info("[RepositoryProcessor] Output package: $outputPackage")
 
-        val validateSqlSyntax = options[VALIDATE_SQL_SYNTAX_OPTION]?.toBoolean() ?: true
-        logger.info("[RepositoryProcessor] Validate SQL syntax: $validateSqlSyntax")
+        val globalCheckSqlSyntax = options[VALIDATE_SQL_SYNTAX_OPTION]?.toBoolean() ?: true
+        logger.info("[RepositoryProcessor] Validate SQL syntax: $globalCheckSqlSyntax")
 
         val outputFilename = "GeneratedRepositories"
 
@@ -72,7 +72,14 @@ class RepositoryProcessor(
             // findAll/findAllBy/findOneBy/deleteBy/countBy/execute and also *All variants
             fnsAll
                 .filter { fn -> fn.annotations.any { it.qualifiedName() == TypeNames.QUERY_ANNOTATION } }
-                .forEach { fn -> emitQueryMethod(file, fn, validateSqlSyntax, mapperTypeName, domainDecl) }
+                .forEach { fn ->
+                    val queryAnn = fn.annotations.first { it.qualifiedName() == TypeNames.QUERY_ANNOTATION }
+                    val localCheckSqlSyntax = queryAnn.arguments
+                        .firstOrNull { it.name?.asString() == "checkSyntax" }
+                        ?.value as? Boolean ?: true
+                    val doCheckSyntax = globalCheckSqlSyntax && localCheckSqlSyntax
+                    emitQueryMethod(file, fn, doCheckSyntax, mapperTypeName, domainDecl)
+                }
 
             // Generate CRUD methods: insert/update/delete;
             // Interface must implement CrudRepository<Domain> which we already validated.

@@ -368,7 +368,8 @@ For more details take a look at the [examples](./examples).
 - When it runs: at KSP processing time, before your code is compiled/run.
 - Dialect notes: validation is dialect-agnostic and aims for an ANSI/portable subset. Some vendor-specific features
   (e.g., certain MySQL or PostgreSQL extensions) may not be recognized. If you hit a false positive, you can disable
-  validation per module with ksp arg validate-sql-syntax=false.
+  validation per module with ksp arg validate-sql-syntax=false, or disable it per query with
+  `@Query(checkSyntax = false)`.
 - Most reliable with: SELECT, INSERT, UPDATE, DELETE statements. DDL or very advanced constructs may not be fully
   supported.
 
@@ -380,10 +381,22 @@ Invalid SQL in function findAllBy: Encountered "FROMM" at line 1, column 15
 ```
 
 Tip: keep it enabled to catch typos early; if you rely heavily on vendor-specific syntax not yet supported by the
-parser, turn it off with:
+parser, turn it off either globally or just for a specific method:
+
+- Globally (module-wide):
 
 ```kotlin
 ksp { arg("validate-sql-syntax", "false") }
+```
+
+- Per query:
+
+```kotlin
+@Repository(mapper = UserMapper::class)
+interface UserRepository {
+    @Query("select * from users where id = :id", checkSyntax = false)
+    suspend fun findOneById(context: QueryExecutor, id: Int): Result<User?>
+}
 ```
 
 ### Database Migrations
