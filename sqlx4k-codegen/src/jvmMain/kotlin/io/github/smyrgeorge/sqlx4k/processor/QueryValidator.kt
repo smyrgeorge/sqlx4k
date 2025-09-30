@@ -2,6 +2,7 @@ package io.github.smyrgeorge.sqlx4k.processor
 
 import net.sf.jsqlparser.parser.CCJSqlParserUtil
 import net.sf.jsqlparser.statement.alter.Alter
+import net.sf.jsqlparser.statement.alter.AlterOperation
 import net.sf.jsqlparser.statement.create.table.CreateTable
 import net.sf.jsqlparser.statement.drop.Drop
 import org.apache.calcite.adapter.java.JavaTypeFactory
@@ -13,13 +14,19 @@ import org.apache.calcite.prepare.CalciteCatalogReader
 import org.apache.calcite.rel.type.RelDataType
 import org.apache.calcite.rel.type.RelDataTypeFactory
 import org.apache.calcite.schema.impl.AbstractTable
+import org.apache.calcite.sql.SqlCall
+import org.apache.calcite.sql.SqlIdentifier
+import org.apache.calcite.sql.SqlKind
+import org.apache.calcite.sql.SqlLiteral
+import org.apache.calcite.sql.SqlNode
 import org.apache.calcite.sql.`fun`.SqlStdOperatorTable
 import org.apache.calcite.sql.parser.SqlParser
 import org.apache.calcite.sql.type.SqlTypeName
+import org.apache.calcite.sql.util.SqlBasicVisitor
+import org.apache.calcite.sql.validate.SqlConformanceEnum
 import org.apache.calcite.sql.validate.SqlValidator
 import org.apache.calcite.sql.validate.SqlValidatorCatalogReader
 import org.apache.calcite.sql.validate.SqlValidatorUtil
-import org.apache.calcite.sql.validate.SqlValidatorWithHints
 import java.io.File
 import java.util.*
 
@@ -27,19 +34,33 @@ object QueryValidator {
     private lateinit var tables: List<TableDef>
     private lateinit var validator: SqlValidator
 
+    private val calciteParserConfig = SqlParser.Config.DEFAULT
+        .withConformance(SqlConformanceEnum.STRICT_2003)
+        .withLex(Lex.JAVA) // Avoid automatic UPPER-casing
+
     fun validateQuerySyntax(fn: String, sql: String) {
         try {
             CCJSqlParserUtil.parse(sql)
         } catch (e: Exception) {
             val cause = e.message?.removePrefix("net.sf.jsqlparser.parser.ParseException: ")
-            error("Invalid SQL in function $fn: $cause")
+            error("Invalid SQL syntax ($fn): $cause")
         }
     }
 
-    fun validateQuerySchema(sql: String) {
-        // Use a lex that preserves/lowercases identifiers (avoid automatic UPPER-casing)
-        val config = SqlParser.Config.DEFAULT.withLex(Lex.JAVA)
-        validator.validate(SqlParser.create(sql, config).parseStmt())
+    fun validateQuerySchema(fn: String, sql: String) {
+        try {
+            val parser = SqlParser.create(sql, calciteParserConfig)
+            val sqlNode = parser.parseStmt()
+
+            // Standard Calcite validation.
+            val validatedNode = validator.validate(sqlNode)
+
+            // Custom literal type checking.
+            validateLiteralTypes(validatedNode)
+        } catch (e: Exception) {
+            val cause = e.message ?: "Unknown error"
+            error("Invalid SQL ($fn): $cause")
+        }
     }
 
     fun load(path: String) {
@@ -82,9 +103,9 @@ object QueryValidator {
                         val table = schema[tableName] ?: error("ALTER TABLE on unknown table $tableName")
 
                         stmt.alterExpressions.forEach { expr ->
-                            when (expr.operation.name) {
+                            when (expr.operation) {
                                 // ADD COLUMN
-                                "ADD" -> {
+                                AlterOperation.ADD -> {
                                     expr.colDataTypeList?.forEach { colType ->
                                         val colName = expr.columnName
                                         table.columns.add(ColumnDef(colName, colType.colDataType.dataType))
@@ -92,27 +113,18 @@ object QueryValidator {
                                 }
 
                                 // DROP COLUMN
-                                "DROP" -> {
+                                AlterOperation.DROP -> {
                                     val colName = expr.columnName
                                     table.columns.removeIf { it.name.equals(colName, ignoreCase = true) }
                                 }
 
-                                else -> {
-                                    println("⚠️ Unsupported ALTER operation: ${expr.operation}")
-                                }
+                                else -> println("⚠️ Unsupported ALTER operation: ${expr.operation}")
                             }
                         }
                     }
 
-                    is Drop -> {
-                        val tableName = stmt.name.name
-                        val res = schema.remove(tableName)
-                        if (res == null) println("⚠️ DROP TABLE on unknown table $tableName")
-                    }
-
-                    else -> {
-                        println("⚠️ Skipping unsupported statement: ${stmt.javaClass.simpleName}")
-                    }
+                    is Drop -> schema.remove(stmt.name.name)
+                    else -> Unit
                 }
             }
         }
@@ -121,15 +133,12 @@ object QueryValidator {
         this.validator = createCalciteValidator()
     }
 
-    private fun createCalciteValidator(): SqlValidatorWithHints {
+    private fun createCalciteValidator(): SqlValidator {
         val rootSchema = CalciteSchema.createRootSchema(true).apply {
-            tables.forEach { t ->
-                this.add(t.name, MigrationTable(t.columns))
-            }
+            tables.forEach { add(it.name, MigrationTable(it.columns)) }
         }
 
         val typeFactory: JavaTypeFactory = JavaTypeFactoryImpl()
-
         val catalogReader: SqlValidatorCatalogReader = CalciteCatalogReader(
             /* rootSchema = */ rootSchema,
             /* defaultSchema = */ listOf(), // search path (empty = root)
@@ -137,13 +146,80 @@ object QueryValidator {
             /* config = */ CalciteConnectionConfigImpl(Properties())
         )
 
-        val validator: SqlValidatorWithHints = SqlValidatorUtil.newValidator(
+        val config = SqlValidator.Config.DEFAULT
+            .withConformance(SqlConformanceEnum.STRICT_2003)
+            .withTypeCoercionEnabled(false)
+
+        return SqlValidatorUtil.newValidator(
             /* opTab = */ SqlStdOperatorTable.instance(),
             /* catalogReader = */ catalogReader,
             /* typeFactory = */ typeFactory,
-            /* config = */ SqlValidator.Config.DEFAULT
+            /* config = */ config
         )
-        return validator
+    }
+
+    private fun validateLiteralTypes(query: SqlNode) {
+        fun checkLiteralAgainstType(literal: SqlNode, targetType: RelDataType, context: SqlCall) {
+            if (literal !is SqlLiteral) return
+            val literalTypeName = literal.typeName
+            val targetTypeName = targetType.sqlTypeName
+
+            // Check for incompatible types
+            val isIncompatible = literalTypeName.family != targetTypeName.family
+            if (isIncompatible) {
+                val position = literal.parserPosition
+                val contextSql = context.toSqlString(null, false)
+                error("Type mismatch: cannot compare column of type $targetTypeName with literal of type $literalTypeName (sql: $contextSql, value: '${literal.toValue()}') at line ${position?.lineNum ?: "?"}, column ${position?.columnNum ?: "?"}")
+            }
+        }
+
+        fun checkTypeCompatibility(left: SqlNode?, right: SqlNode?, validator: SqlValidator, call: SqlCall) {
+            if (left == null || right == null) return
+            val leftType = validator.getValidatedNodeType(left) ?: return
+            val rightType = validator.getValidatedNodeType(right) ?: return
+
+            // Check if one side is a literal and the other is a column/identifier
+            when {
+                right is SqlLiteral && left is SqlIdentifier -> checkLiteralAgainstType(right, leftType, call)
+                left is SqlLiteral && right is SqlIdentifier -> checkLiteralAgainstType(left, rightType, call)
+                // Both are literals, or both are columns - let Calcite handle it
+                else -> {}
+            }
+        }
+
+        query.accept(object : SqlBasicVisitor<Void?>() {
+            override fun visit(call: SqlCall): Void? {
+                when (call.operator.kind) {
+                    SqlKind.EQUALS,
+                    SqlKind.NOT_EQUALS,
+                    SqlKind.LESS_THAN,
+                    SqlKind.LESS_THAN_OR_EQUAL,
+                    SqlKind.GREATER_THAN,
+                    SqlKind.GREATER_THAN_OR_EQUAL -> {
+                        val operands = call.operandList
+                        if (operands.size == 2) {
+                            checkTypeCompatibility(operands[0], operands[1], validator, call)
+                        }
+                    }
+
+                    SqlKind.IN -> {
+                        val operands = call.operandList
+                        if (operands.size >= 2) {
+                            val columnType = validator.getValidatedNodeType(operands[0])
+                            if (columnType != null) {
+                                for (i in 1 until operands.size) {
+                                    checkLiteralAgainstType(operands[i], columnType, call)
+                                }
+                            }
+                        }
+                    }
+
+                    else -> {}
+                }
+
+                return super.visit(call)
+            }
+        })
     }
 
     data class ColumnDef(val name: String, val type: String)
@@ -168,7 +244,7 @@ object QueryValidator {
                     // Text/char family
                     "CHAR", "CHARACTER", "NCHAR" -> typeFactory.createSqlType(SqlTypeName.CHAR, 1_000)
                     "VARCHAR", "CHARACTER VARYING", "NVARCHAR", "TEXT", "TINYTEXT", "MEDIUMTEXT", "LONGTEXT", "CLOB" ->
-                        typeFactory.createSqlType(SqlTypeName.VARCHAR, Integer.MAX_VALUE)
+                        typeFactory.createSqlType(SqlTypeName.VARCHAR, Int.MAX_VALUE)
 
                     // UUID
                     "UUID" -> typeFactory.createSqlType(SqlTypeName.CHAR, 36)
@@ -189,16 +265,16 @@ object QueryValidator {
 
                     // Binary / blob
                     "BYTEA", "BLOB", "LONGBLOB", "MEDIUMBLOB", "TINYBLOB", "BINARY", "VARBINARY" ->
-                        typeFactory.createSqlType(SqlTypeName.VARBINARY, Integer.MAX_VALUE)
+                        typeFactory.createSqlType(SqlTypeName.VARBINARY, Int.MAX_VALUE)
 
                     // JSON and similar complex types mapped to text
-                    "JSON", "JSONB", "ENUM" -> typeFactory.createSqlType(SqlTypeName.VARCHAR, Integer.MAX_VALUE)
+                    "JSON", "JSONB", "ENUM" -> typeFactory.createSqlType(SqlTypeName.VARCHAR, Int.MAX_VALUE)
 
                     // Money and another numeric-ish
                     "MONEY" -> typeFactory.createSqlType(SqlTypeName.DECIMAL, 19, 4)
                     else -> {
                         println("⚠️ Unsupported column type (fallback to string): $t")
-                        typeFactory.createSqlType(SqlTypeName.VARCHAR, 1_000)
+                        typeFactory.createSqlType(SqlTypeName.VARCHAR, Int.MAX_VALUE)
                     }
                 }
                 builder.add(col.name, type)

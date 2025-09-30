@@ -10,6 +10,4 @@ import kotlin.reflect.KClass
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.SOURCE)
-annotation class Repository(
-    val mapper: KClass<out RowMapper<*>>
-)
+annotation class Repository(val mapper: KClass<out RowMapper<*>>)

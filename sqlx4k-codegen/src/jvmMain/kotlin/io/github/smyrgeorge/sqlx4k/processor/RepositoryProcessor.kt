@@ -47,9 +47,11 @@ class RepositoryProcessor(
         val globalCheckSqlSyntax = options[VALIDATE_SQL_SYNTAX_OPTION]?.toBoolean() ?: true
         logger.info("[RepositoryProcessor] Validate SQL syntax: $globalCheckSqlSyntax")
 
+        val globalCheckSqlSchema = options[VALIDATE_SQL_SCHEMA_OPTION]?.toBoolean() ?: false
+        logger.info("[RepositoryProcessor] Validate SQL schema: $globalCheckSqlSchema")
         val schemaMigrationsPath = options[SCHEMA_MIGRATIONS_PATH_OPTION] ?: "./set-the-path-to-schema-migrations"
 
-        if (ENABLE_SCHEMA_VALIDATION) QueryValidator.load(schemaMigrationsPath)
+        if (globalCheckSqlSchema) QueryValidator.load(schemaMigrationsPath)
 
         val outputFilename = "GeneratedRepositories"
 
@@ -90,11 +92,15 @@ class RepositoryProcessor(
                 .filter { fn -> fn.annotations.any { it.qualifiedName() == TypeNames.QUERY_ANNOTATION } }
                 .forEach { fn ->
                     val queryAnn = fn.annotations.first { it.qualifiedName() == TypeNames.QUERY_ANNOTATION }
-                    val localCheckSqlSyntax = queryAnn.arguments
+                    val localCheckSyntax = queryAnn.arguments
                         .firstOrNull { it.name?.asString() == "checkSyntax" }
                         ?.value as? Boolean ?: true
-                    val doCheckSyntax = globalCheckSqlSyntax && localCheckSqlSyntax
-                    emitQueryMethod(file, fn, doCheckSyntax, mapperTypeName, domainDecl)
+                    val localCheckSchema = queryAnn.arguments
+                        .firstOrNull { it.name?.asString() == "checkSchema" }
+                        ?.value as? Boolean ?: true
+                    val doCheckSyntax = globalCheckSqlSyntax && localCheckSyntax
+                    val doCheckSchema = globalCheckSqlSchema && localCheckSchema
+                    emitQueryMethod(file, fn, doCheckSyntax, doCheckSchema, mapperTypeName, domainDecl)
                 }
 
             // Generate CRUD methods: insert/update/delete;
@@ -331,7 +337,8 @@ class RepositoryProcessor(
     private fun emitQueryMethod(
         file: OutputStream,
         fn: KSFunctionDeclaration,
-        validateSqlSyntax: Boolean,
+        validateSyntax: Boolean,
+        validateSchema: Boolean,
         mapperTypeName: String,
         domainDecl: KSClassDeclaration
     ) {
@@ -343,9 +350,6 @@ class RepositoryProcessor(
             ?.value as? String
             ?: error("Unable to generate query method (could not extract sql query from the @Query): $fn")
 
-        if (validateSqlSyntax) QueryValidator.validateQuerySyntax(fn.simpleName(), sql)
-        if (ENABLE_SCHEMA_VALIDATION) QueryValidator.validateQuerySchema(sql)
-
         val params = fn.parameters
         val paramSig = params.joinToString { p ->
             val pName = p.name?.asString() ?: "p"
@@ -356,6 +360,10 @@ class RepositoryProcessor(
         validateContextParameter(name, params)
         validateParameterArity(prefix, name, params)
         validateReturnTypeForPrefix(prefix, fn, domainDecl)
+
+        if (validateSyntax) QueryValidator.validateQuerySyntax(fn.simpleName(), sql)
+        if (validateSchema) QueryValidator.validateQuerySchema(fn.simpleName(), sql)
+
         logger.info("[RepositoryProcessor] Emitting method '$name' with prefix ${prefix.name} in ${domainDecl.qualifiedName()} using mapper $mapperTypeName")
 
         file += "    override suspend fun $name($paramSig) = run {\n"
@@ -475,6 +483,14 @@ class RepositoryProcessor(
         private const val VALIDATE_SQL_SYNTAX_OPTION: String = "validate-sql-syntax"
 
         /**
+         * Represents the option key used to enable or disable SQL schema validation
+         * during the repository processing phase. When this option is set, the
+         * processor validates the defined schema against the repository's domain
+         * and query definitions to ensure consistency and correctness.
+         */
+        private const val VALIDATE_SQL_SCHEMA_OPTION: String = "validate-sql-schema"
+
+        /**
          * Represents the option key used for specifying the path to schema migration files
          * during repository processing and code generation.
          *
@@ -484,7 +500,5 @@ class RepositoryProcessor(
          * to be provided as part of the processing environment or tool configuration.
          */
         private const val SCHEMA_MIGRATIONS_PATH_OPTION: String = "schema-migrations-path"
-
-        private const val ENABLE_SCHEMA_VALIDATION = false
     }
 }
