@@ -14,6 +14,8 @@ kotlin {
             dependencies {
                 implementation(libs.ksp)
                 implementation(libs.jsqlparser)
+                implementation(libs.calcite.core)
+                implementation(libs.calcite.server)
             }
         }
     }

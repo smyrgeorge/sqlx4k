@@ -29,6 +29,9 @@ r2dbc-postgresql = "1.0.7.RELEASE"
 # https://central.sonatype.com/artifact/com.github.jsqlparser/jsqlparser
 # https://github.com/JSQLParser/JSqlParser
 jsqlparser = "5.3"
+# https://mvnrepository.com/artifact/org.apache.calcite/calcite-core/1.40.0
+# https://github.com/apache/calcite
+calcite = "1.40.0"
 
 [libraries]
 gradle-kotlin-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
@@ -45,11 +48,13 @@ r2dbc-pool = { module = "io.r2dbc:r2dbc-pool", version.ref = "r2dbc-pool" }
 r2dbc-mysql = { module = "io.asyncer:r2dbc-mysql", version.ref = "r2dbc-mysql" }
 r2dbc-postgresql = { module = "org.postgresql:r2dbc-postgresql", version.ref = "r2dbc-postgresql" }
 jsqlparser = { module = "com.github.jsqlparser:jsqlparser", version.ref = "jsqlparser" }
+calcite-core = { module = "org.apache.calcite:calcite-core", version.ref = "calcite" }
+calcite-server = { module = "org.apache.calcite:calcite-server", version.ref = "calcite" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 pubhish = { id = "com.vanniktech.maven.publish", version.ref = "publish" }
-ksp = { id ="com.google.devtools.ksp", version.ref = "ksp" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
 kotlin-spring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }

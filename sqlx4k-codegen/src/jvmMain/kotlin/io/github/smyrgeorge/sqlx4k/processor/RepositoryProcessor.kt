@@ -1,7 +1,20 @@
 package io.github.smyrgeorge.sqlx4k.processor
 
-import com.google.devtools.ksp.processing.*
-import com.google.devtools.ksp.symbol.*
+import com.google.devtools.ksp.processing.CodeGenerator
+import com.google.devtools.ksp.processing.Dependencies
+import com.google.devtools.ksp.processing.KSPLogger
+import com.google.devtools.ksp.processing.Resolver
+import com.google.devtools.ksp.processing.SymbolProcessor
+import com.google.devtools.ksp.symbol.ClassKind
+import com.google.devtools.ksp.symbol.KSAnnotated
+import com.google.devtools.ksp.symbol.KSAnnotation
+import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSDeclaration
+import com.google.devtools.ksp.symbol.KSFunctionDeclaration
+import com.google.devtools.ksp.symbol.KSPropertyDeclaration
+import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.KSValueArgument
+import com.google.devtools.ksp.symbol.KSValueParameter
 import com.google.devtools.ksp.validate
 import net.sf.jsqlparser.parser.CCJSqlParserUtil
 import java.io.OutputStream
@@ -34,6 +47,10 @@ class RepositoryProcessor(
 
         val globalCheckSqlSyntax = options[VALIDATE_SQL_SYNTAX_OPTION]?.toBoolean() ?: true
         logger.info("[RepositoryProcessor] Validate SQL syntax: $globalCheckSqlSyntax")
+
+        val schemaMigrationsPath = options[SCHEMA_MIGRATIONS_PATH_OPTION] ?: "./set-the-path-to-schema-migrations"
+
+        if (ENABLE_SCHEMA_VALIDATION) QueryValidator.load(schemaMigrationsPath)
 
         val outputFilename = "GeneratedRepositories"
 
@@ -328,6 +345,7 @@ class RepositoryProcessor(
             ?: error("Unable to generate query method (could not extract sql query from the @Query): $fn")
 
         if (validateSqlSyntax) validateSqlSyntax(fn.simpleName(), sql)
+        if (ENABLE_SCHEMA_VALIDATION) QueryValidator.validateQuery(sql)
 
         val params = fn.parameters
         val paramSig = params.joinToString { p ->
@@ -465,5 +483,18 @@ class RepositoryProcessor(
          * the SQL syntax validation logic.
          */
         private const val VALIDATE_SQL_SYNTAX_OPTION: String = "validate-sql-syntax"
+
+        /**
+         * Represents the option key used for specifying the path to schema migration files
+         * during repository processing and code generation.
+         *
+         * This constant is used to configure and resolve the directory containing
+         * schema migration scripts, which are typically required for database structure
+         * migration or initialization. The value associated with this option is expected
+         * to be provided as part of the processing environment or tool configuration.
+         */
+        private const val SCHEMA_MIGRATIONS_PATH_OPTION: String = "schema-migrations-path"
+
+        private const val ENABLE_SCHEMA_VALIDATION = false
     }
 }
