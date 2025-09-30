@@ -21,6 +21,7 @@ kotlin {
 
 ksp {
     arg("output-package", "io.github.smyrgeorge.sqlx4k.examples.postgres")
+    arg("schema-migrations-path", "./db/migrations")
 }
 
 dependencies {

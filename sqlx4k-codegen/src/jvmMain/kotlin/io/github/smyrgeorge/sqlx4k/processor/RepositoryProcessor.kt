@@ -16,7 +16,6 @@ import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSValueArgument
 import com.google.devtools.ksp.symbol.KSValueParameter
 import com.google.devtools.ksp.validate
-import net.sf.jsqlparser.parser.CCJSqlParserUtil
 import java.io.OutputStream
 
 class RepositoryProcessor(
@@ -344,8 +343,8 @@ class RepositoryProcessor(
             ?.value as? String
             ?: error("Unable to generate query method (could not extract sql query from the @Query): $fn")
 
-        if (validateSqlSyntax) validateSqlSyntax(fn.simpleName(), sql)
-        if (ENABLE_SCHEMA_VALIDATION) QueryValidator.validateQuery(sql)
+        if (validateSqlSyntax) QueryValidator.validateQuerySyntax(fn.simpleName(), sql)
+        if (ENABLE_SCHEMA_VALIDATION) QueryValidator.validateQuerySchema(sql)
 
         val params = fn.parameters
         val paramSig = params.joinToString { p ->
@@ -454,15 +453,6 @@ class RepositoryProcessor(
                     file += "    }\n"
                 }
             }
-        }
-    }
-
-    private fun validateSqlSyntax(fn: String, sql: String) {
-        try {
-            CCJSqlParserUtil.parse(sql)
-        } catch (e: Exception) {
-            val cause = e.message?.removePrefix("net.sf.jsqlparser.parser.ParseException: ")
-            error("Invalid SQL in function $fn: $cause")
         }
     }
 
