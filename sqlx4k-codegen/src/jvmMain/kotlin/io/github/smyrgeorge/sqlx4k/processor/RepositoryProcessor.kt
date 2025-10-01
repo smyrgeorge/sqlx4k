@@ -221,6 +221,7 @@ class RepositoryProcessor(
      *               The first parameter is expected to meet the required constraints.
      */
     private fun validateContextParameter(name: String, params: List<KSValueParameter>) {
+        if (ENABLE_CONTEXT_PARAMETERS) return
         if (params.isEmpty())
             error("Repository method '$name' must declare first parameter 'context: ${TypeNames.QUERY_EXECUTOR}'")
         val first = params.first()
@@ -301,7 +302,7 @@ class RepositoryProcessor(
      * @param params The list of parameters declared by the method.
      */
     private fun validateParameterArity(prefix: Prefix, name: String, params: List<KSValueParameter>) {
-        val nonContextCount = params.size - 1
+        val nonContextCount = if (ENABLE_CONTEXT_PARAMETERS) params.size else params.size - 1
         when (prefix) {
             Prefix.FIND_ALL, Prefix.DELETE_ALL, Prefix.COUNT_ALL -> if (nonContextCount != 0) error("Method '$name' must not have parameters other than context")
             Prefix.FIND_ALL_BY, Prefix.FIND_ONE_BY, Prefix.DELETE_BY, Prefix.COUNT_BY -> if (nonContextCount < 1) error(
@@ -325,7 +326,8 @@ class RepositoryProcessor(
         val statement = Statement.create(sql)
         if (statement.extractedPositionalParameters > 0)
             error("Method '$name' uses positional parameters in @Query (only named parameters are supported).")
-        val parameters = fn.parameters.drop(1) // Exclude 'context' argument.
+        // Exclude 'context' argument.
+        val parameters = if (ENABLE_CONTEXT_PARAMETERS) fn.parameters else fn.parameters.drop(1)
         if (parameters.size != statement.extractedNamedParameters.size)
             error("Method '$name' has ${parameters.size} parameters but @Query statement has ${statement.extractedNamedParameters.size} named parameters.")
         parameters.forEach { p ->
@@ -395,11 +397,18 @@ class RepositoryProcessor(
 
         logger.info("[RepositoryProcessor] Emitting method '$name' with prefix ${prefix.name} in ${domainDecl.qualifiedName()} using mapper $mapperTypeName")
 
+        if (ENABLE_CONTEXT_PARAMETERS) {
+            file += "    context(context: QueryExecutor)\n"
+        }
         file += "    override suspend fun $name($paramSig) = run {\n"
         file += "        // language=SQL\n"
         file += "        val statement = Statement.create(\"$sql\")\n"
         emitNamedParameterBindings(file, params)
-        val contextParamName = params.firstOrNull()?.name?.asString() ?: "context"
+
+        val contextParamName =
+            if (ENABLE_CONTEXT_PARAMETERS) "context"
+            else params.firstOrNull()?.name?.asString() ?: "context"
+
         when (prefix) {
             Prefix.FIND_ALL, Prefix.FIND_ALL_BY -> {
                 file += "        $contextParamName.fetchAll(statement, $mapperTypeName)\n"
@@ -443,7 +452,12 @@ class RepositoryProcessor(
         logger.info("[RepositoryProcessor] Generating CRUD methods for $domainQn")
         // insert
         logger.info("[RepositoryProcessor] Emitting CRUD method: insert($domainQn)")
-        file += "    override suspend fun insert(context: QueryExecutor, entity: $domainQn) = run {\n"
+        if (ENABLE_CONTEXT_PARAMETERS) {
+            file += "    context(context: QueryExecutor)\n"
+            file += "    override suspend fun insert(entity: $domainQn) = run {\n"
+        } else {
+            file += "    override suspend fun insert(context: QueryExecutor, entity: $domainQn) = run {\n"
+        }
         file += "        val statement = entity.insert()\n"
         file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
         file += "            val one = list.firstOrNull()\n"
@@ -453,7 +467,12 @@ class RepositoryProcessor(
         file += "    }\n"
         // update
         logger.info("[RepositoryProcessor] Emitting CRUD method: update($domainQn)")
-        file += "    override suspend fun update(context: QueryExecutor, entity: $domainQn) = run {\n"
+        if (ENABLE_CONTEXT_PARAMETERS) {
+            file += "    context(context: QueryExecutor)\n"
+            file += "    override suspend fun update(entity: $domainQn) = run {\n"
+        } else {
+            file += "    override suspend fun update(context: QueryExecutor, entity: $domainQn) = run {\n"
+        }
         file += "        val statement = entity.update()\n"
         file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
         file += "            val one = list.firstOrNull()\n"
@@ -463,13 +482,23 @@ class RepositoryProcessor(
         file += "    }\n"
         // delete
         logger.info("[RepositoryProcessor] Emitting CRUD method: delete($domainQn)")
-        file += "    override suspend fun delete(context: QueryExecutor, entity: $domainQn) = run {\n"
+        if (ENABLE_CONTEXT_PARAMETERS) {
+            file += "    context(context: QueryExecutor)\n"
+            file += "    override suspend fun delete(entity: $domainQn) = run {\n"
+        } else {
+            file += "    override suspend fun delete(context: QueryExecutor, entity: $domainQn) = run {\n"
+        }
         file += "        val statement = entity.delete()\n"
         file += "        context.execute(statement).map { kotlin.Unit }\n"
         file += "    }\n"
         // save
         logger.info("[RepositoryProcessor] Emitting CRUD method: save($domainQn)")
-        file += "    override suspend fun save(context: QueryExecutor, entity: $domainQn) = run {\n"
+        if (ENABLE_CONTEXT_PARAMETERS) {
+            file += "    context(context: QueryExecutor)\n"
+            file += "    override suspend fun save(entity: $domainQn) = run {\n"
+        } else {
+            file += "    override suspend fun save(context: QueryExecutor, entity: $domainQn) = run {\n"
+        }
         val idProp: KSPropertyDeclaration? = domainDecl.getAllProperties().firstOrNull { p ->
             p.annotations.any { it.qualifiedName() == TypeNames.ID_ANNOTATION }
         }
@@ -536,5 +565,7 @@ class RepositoryProcessor(
          * to be provided as part of the processing environment or tool configuration.
          */
         private const val SCHEMA_MIGRATIONS_PATH_OPTION: String = "schema-migrations-path"
+
+        private const val ENABLE_CONTEXT_PARAMETERS: Boolean = false
     }
 }
