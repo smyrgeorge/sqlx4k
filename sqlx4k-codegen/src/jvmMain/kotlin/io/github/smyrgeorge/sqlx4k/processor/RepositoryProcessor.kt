@@ -44,6 +44,9 @@ class RepositoryProcessor(
             ?: error("Missing ${TableProcessor.PACKAGE_OPTION} option")
         logger.info("[RepositoryProcessor] Output package: $outputPackage")
 
+        val useContextParameters = options[ENABLE_CONTEXT_PARAMETERS_OPTION]?.toBoolean() ?: false
+        logger.info("[RepositoryProcessor] Enable context parameters: $useContextParameters")
+
         val globalCheckSqlSyntax = options[VALIDATE_SQL_SYNTAX_OPTION]?.toBoolean() ?: true
         logger.info("[RepositoryProcessor] Validate SQL syntax: $globalCheckSqlSyntax")
 
@@ -76,7 +79,7 @@ class RepositoryProcessor(
                 error("@Repository is only supported on interfaces (${repo.qualifiedName()}).")
 
             // Extract domain and mapper from @Repository annotation on the interface
-            val (domainDecl, mapperTypeName) = parseRepositoryAnnotation(repo)
+            val (domainDecl, mapperTypeName) = parseRepositoryAnnotation(repo, useContextParameters)
 
             // Find all methods declared in the interface
             val fnsAll = repo.declarations.filterIsInstance<KSFunctionDeclaration>().toList()
@@ -102,12 +105,25 @@ class RepositoryProcessor(
                         ?.value as? Boolean ?: true
                     val doCheckSyntax = globalCheckSqlSyntax && localCheckSyntax
                     val doCheckSchema = globalCheckSqlSchema && localCheckSchema
-                    emitQueryMethod(file, fn, doCheckSyntax, doCheckSchema, mapperTypeName, domainDecl)
+                    emitQueryMethod(
+                        file = file,
+                        fn = fn,
+                        validateSyntax = doCheckSyntax,
+                        validateSchema = doCheckSchema,
+                        mapperTypeName = mapperTypeName,
+                        domainDecl = domainDecl,
+                        useContextParameters = useContextParameters
+                    )
                 }
 
             // Generate CRUD methods: insert/update/delete;
             // Interface must implement CrudRepository<Domain> which we already validated.
-            emitCrudMethods(file, domainDecl, mapperTypeName)
+            emitCrudMethods(
+                file = file,
+                domainDecl = domainDecl,
+                mapperTypeName = mapperTypeName,
+                useContextParameters = useContextParameters
+            )
             file += "}\n"
         }
         file.close()
@@ -171,18 +187,34 @@ class RepositoryProcessor(
     }
 
     /**
-     * Parses the `@Repository` annotation on a given interface and extracts the associated domain class
-     * and mapper class information.
+     * Parses the `@Repository` annotation on the provided repository interface, validates its conformance to the
+     * expected structure, and extracts the associated domain type and mapper information.
      *
-     * @param repo The class declaration of the interface annotated with `@Repository`.
-     * @return A pair where the first element is the class declaration of the domain type and the second
-     *         element is the fully qualified name of the mapper class.
-     * @throws IllegalStateException if the `@Repository` annotation is missing, incomplete, or improperly configured.
+     * This method ensures that the annotated repository interface extends the correct base interface
+     * (e.g., `CrudRepository` or `CrudRepositoryWithContextParameters`) with a valid domain type parameter. Additionally,
+     * it verifies that the domain type is annotated with `@Table` and that a mapper is explicitly declared within
+     * the `@Repository` annotation.
+     *
+     * @param repo The repository interface represented as a `KSClassDeclaration`. This class declaration must
+     *             be annotated with `@Repository` and implement the appropriate `CrudRepository` interface.
+     * @param useContextParameters A flag indicating whether the `CrudRepositoryWithContextParameters` interface
+     *                              is being used instead of the standard `CrudRepository`.
+     * @return A pair containing the `KSClassDeclaration` of the domain type associated with the repository and
+     *         the fully qualified name of the mapper type specified in the `@Repository` annotation.
+     * @throws IllegalStateException if the repository interface does not conform to the expected structure, such as
+     *         - Missing `@Repository` annotation
+     *         - Not extending the appropriate `CrudRepository` interface
+     *         - Incorrectly specified domain type
+     *         - Domain type not annotated with `@Table`
+     *         - Missing or unresolved mapper type in the `@Repository` annotation
      */
-    private fun parseRepositoryAnnotation(repo: KSClassDeclaration): Pair<KSClassDeclaration, String> {
+    private fun parseRepositoryAnnotation(
+        repo: KSClassDeclaration,
+        useContextParameters: Boolean
+    ): Pair<KSClassDeclaration, String> {
         fun implementsCrudRepository(repo: KSClassDeclaration): KSClassDeclaration {
             val repoTypeName =
-                if (ENABLE_CONTEXT_PARAMETERS) TypeNames.CRUD_REPOSITORY_WITH_CONTEXT_PARAMETERS
+                if (useContextParameters) TypeNames.CRUD_REPOSITORY_WITH_CONTEXT_PARAMETERS
                 else TypeNames.CRUD_REPOSITORY
             val repoSimpleName = repoTypeName.substringAfterLast(".")
             // find CrudRepository<T> or CrudRepositoryWithContextParameters<T>
@@ -217,15 +249,21 @@ class RepositoryProcessor(
     }
 
     /**
-     * Validates that the first parameter of a repository method is correctly declared as a non-null
-     * instance of `io.github.smyrgeorge.sqlx4k.QueryExecutor` and is named `context`.
+     * Validates the context parameter for a repository method, ensuring that it meets the required structure and conventions
+     * when the context parameter is expected.
      *
      * @param name The name of the repository method being validated.
      * @param params The list of parameters declared by the repository method.
-     *               The first parameter is expected to meet the required constraints.
+     * @param useContextParameters A flag indicating whether context parameters are used in the repository.
+     *                              If `true`, context parameter validation is skipped.
      */
-    private fun validateContextParameter(name: String, params: List<KSValueParameter>) {
-        if (ENABLE_CONTEXT_PARAMETERS) return
+    private fun validateContextParameter(
+        name: String,
+        params: List<KSValueParameter>,
+        useContextParameters: Boolean
+    ) {
+        // TODO: somehow validate that method has context(context: QueryExecutor).
+        if (useContextParameters) return
         if (params.isEmpty())
             error("Repository method '$name' must declare first parameter 'context: ${TypeNames.QUERY_EXECUTOR}'")
         val first = params.first()
@@ -241,14 +279,17 @@ class RepositoryProcessor(
     }
 
     /**
-     * Validates the return type of the repository method based on its prefix and ensures that it complies
-     * with the expected return type structure and repository domain type.
+     * Validates the return type of a repository method based on its prefix and domain type.
      *
-     * @param prefix The method prefix indicating the type of operation, such as FIND_ALL, DELETE_BY, etc.
-     * @param fn The function declaration representing the repository method being validated.
-     * @param domainDecl The class declaration of the repository's domain type to validate against.
+     * @param prefix The prefix of the method, used to determine its behavior and expected return type.
+     * @param fn The function declaration representing the repository method to validate.
+     * @param domainDecl The class declaration of the repository's domain type.
      */
-    private fun validateReturnType(prefix: Prefix, fn: KSFunctionDeclaration, domainDecl: KSClassDeclaration) {
+    private fun validateReturnType(
+        prefix: Prefix,
+        fn: KSFunctionDeclaration,
+        domainDecl: KSClassDeclaration
+    ) {
         val name = fn.simpleName()
         val returnType = fn.returnType?.resolve()
             ?: error("Unable to resolve return type for method '$name'")
@@ -299,14 +340,21 @@ class RepositoryProcessor(
     }
 
     /**
-     * Validates the number of parameters for a method based on its prefix and ensures adherence to the defined rules.
+     * Validates the arity of the parameters in a repository method based on its prefix and other constraints.
      *
-     * @param prefix The method prefix indicating the type of operation the method represents, such as FIND_ALL, DELETE_BY, etc.
+     * @param prefix The prefix of the method, which determines the expected parameter count and validation rules.
      * @param name The name of the method being validated.
      * @param params The list of parameters declared by the method.
+     * @param useContextParameters A flag indicating whether the method uses context parameters.
+     *      If true, context parameters are excluded from standard parameter arity validation.
      */
-    private fun validateParameterArity(prefix: Prefix, name: String, params: List<KSValueParameter>) {
-        val nonContextCount = if (ENABLE_CONTEXT_PARAMETERS) params.size else params.size - 1
+    private fun validateParameterArity(
+        prefix: Prefix,
+        name: String,
+        params: List<KSValueParameter>,
+        useContextParameters: Boolean
+    ) {
+        val nonContextCount = if (useContextParameters) params.size else params.size - 1
         when (prefix) {
             Prefix.FIND_ALL, Prefix.DELETE_ALL, Prefix.COUNT_ALL -> if (nonContextCount != 0) error("Method '$name' must not have parameters other than context")
             Prefix.FIND_ALL_BY, Prefix.FIND_ONE_BY, Prefix.DELETE_BY, Prefix.COUNT_BY -> if (nonContextCount < 1) error(
@@ -318,20 +366,32 @@ class RepositoryProcessor(
     }
 
     /**
-     * Validates the parameters of a repository method against the SQL query and ensures consistency
-     * between the method signature and the query's named parameters.
+     * Validates the parameters in a repository method in the context of a SQL query.
      *
-     * @param sql The SQL query string provided in the `@Query` annotation.
-     * @param fn The function declaration of the repository method being validated.
-     *           This includes information about the method name and its parameters.
+     * This method checks the compatibility between the parameters declared in a repository method
+     * and the named parameters used in the associated SQL query.
+     *
+     * @param sql The SQL query string associated with the repository method.
+     * @param fn The repository method declaration (`KSFunctionDeclaration`) containing parameters to be validated.
+     * @param useContextParameters A flag indicating whether the method uses context parameters. If `true`,
+     *                              the first parameter (assumed to be the context parameter) is excluded from validation.
+     * @throws IllegalStateException If:
+     * - Positional parameters are used in the SQL query.
+     * - The number of method parameters does not match the number of named parameters in the SQL query.
+     * - Any method parameter is missing a corresponding named parameter in the SQL query.
+     * - Any method parameter lacks a name.
      */
-    fun validateParameters(sql: String, fn: KSFunctionDeclaration) {
+    fun validateParameters(
+        sql: String,
+        fn: KSFunctionDeclaration,
+        useContextParameters: Boolean
+    ) {
         val name = fn.simpleName()
         val statement = Statement.create(sql)
         if (statement.extractedPositionalParameters > 0)
             error("Method '$name' uses positional parameters in @Query (only named parameters are supported).")
         // Exclude 'context' argument.
-        val parameters = if (ENABLE_CONTEXT_PARAMETERS) fn.parameters else fn.parameters.drop(1)
+        val parameters = if (useContextParameters) fn.parameters else fn.parameters.drop(1)
         if (parameters.size != statement.extractedNamedParameters.size)
             error("Method '$name' has ${parameters.size} parameters but @Query statement has ${statement.extractedNamedParameters.size} named parameters.")
         parameters.forEach { p ->
@@ -349,7 +409,10 @@ class RepositoryProcessor(
      * @param file The OutputStream where the named parameter-binding statements will be written.
      * @param params A list of KSValueParameter objects representing the parameters for which bindings are generated. The first parameter is excluded from processing.
      */
-    private fun emitNamedParameterBindings(file: OutputStream, params: List<KSValueParameter>) {
+    private fun emitNamedParameterBindings(
+        file: OutputStream,
+        params: List<KSValueParameter>
+    ) {
         params.drop(1).forEach { p ->
             val pName = p.name?.asString()
                 ?: error("All query parameters must be named when using namedParameters support")
@@ -358,15 +421,15 @@ class RepositoryProcessor(
     }
 
     /**
-     * Generates and writes the implementation for a repository method annotated with `@Query` into the provided output stream.
-     * The method performs various validations such as syntax, schema, parameter consistency, and expected return type prior to generation.
+     * Generates the implementation of a repository method annotated with `@Query`.
      *
-     * @param file The output stream where the generated method implementation will be written.
-     * @param fn The function declaration of the repository method to be emitted. This includes the method name, parameters, and annotations.
-     * @param validateSyntax A flag indicating whether the SQL query syntax should be validated before emitting the method.
-     * @param validateSchema A flag indicating whether the SQL query schema consistency should be validated before emitting the method.
-     * @param mapperTypeName The fully qualified name of the mapper type used for mapping query results to domain objects.
-     * @param domainDecl The class declaration of the domain type associated with the repository being processed.
+     * @param file The output stream where the generated method will be written.
+     * @param fn The function declaration representing the annotated method.
+     * @param validateSyntax A flag indicating whether the SQL syntax should be validated.
+     * @param validateSchema A flag indicating whether the SQL query should be validated against the schema.
+     * @param mapperTypeName The name of the mapper used for mapping query results.
+     * @param domainDecl The class declaration representing the domain entity associated with this repository.
+     * @param useContextParameters A flag indicating whether context parameters are used in the generated method.
      */
     private fun emitQueryMethod(
         file: OutputStream,
@@ -374,7 +437,8 @@ class RepositoryProcessor(
         validateSyntax: Boolean,
         validateSchema: Boolean,
         mapperTypeName: String,
-        domainDecl: KSClassDeclaration
+        domainDecl: KSClassDeclaration,
+        useContextParameters: Boolean
     ) {
         val name = fn.simpleName()
         val prefix: Prefix = parseMethodPrefix(name)
@@ -392,16 +456,16 @@ class RepositoryProcessor(
             "$pName: $pType"
         }
 
-        validateContextParameter(name, params)
-        validateParameterArity(prefix, name, params)
-        validateParameters(sql, fn)
+        validateContextParameter(name, params, useContextParameters)
+        validateParameterArity(prefix, name, params, useContextParameters)
+        validateParameters(sql, fn, useContextParameters)
         validateReturnType(prefix, fn, domainDecl)
         if (validateSyntax) SqlValidator.validateQuerySyntax(fn.simpleName(), sql)
         if (validateSchema) SqlValidator.validateQuerySchema(fn.simpleName(), sql)
 
         logger.info("[RepositoryProcessor] Emitting method '$name' with prefix ${prefix.name} in ${domainDecl.qualifiedName()} using mapper $mapperTypeName")
 
-        if (ENABLE_CONTEXT_PARAMETERS) {
+        if (useContextParameters) {
             file += "    context(context: QueryExecutor)\n"
         }
         file += "    override suspend fun $name($paramSig) = run {\n"
@@ -410,7 +474,7 @@ class RepositoryProcessor(
         emitNamedParameterBindings(file, params)
 
         val contextParamName =
-            if (ENABLE_CONTEXT_PARAMETERS) "context"
+            if (useContextParameters) "context"
             else params.firstOrNull()?.name?.asString() ?: "context"
 
         when (prefix) {
@@ -444,19 +508,25 @@ class RepositoryProcessor(
     }
 
     /**
-     * Emits CRUD (Create, Read, Update, Delete) methods for a repository interface to a specified output stream.
-     * The generated methods include `insert`, `update`, `delete`, and `save` implementations using a specified domain class and mapper.
+     * Generates CRUD methods (insert, update, delete, save) for the provided domain class and writes
+     * the method definitions to the specified output stream.
      *
-     * @param file The output stream where the generated CRUD methods will be written.
-     * @param domainDecl The class declaration of the domain object associated with the repository.
-     * @param mapperTypeName The fully qualified name of the mapper type used for mapping query results to domain objects.
+     * @param file the output stream where the generated CRUD methods will be written
+     * @param domainDecl the class declaration of the domain object for which CRUD methods are generated
+     * @param mapperTypeName the name of the mapper type used to map query results to the domain object
+     * @param useContextParameters whether to include `QueryExecutor` as a context parameter in the method signatures
      */
-    private fun emitCrudMethods(file: OutputStream, domainDecl: KSClassDeclaration, mapperTypeName: String) {
+    private fun emitCrudMethods(
+        file: OutputStream,
+        domainDecl: KSClassDeclaration,
+        mapperTypeName: String,
+        useContextParameters: Boolean
+    ) {
         val domainQn = domainDecl.qualifiedName() ?: error("Cannot resolve domain type name")
         logger.info("[RepositoryProcessor] Generating CRUD methods for $domainQn")
         // insert
         logger.info("[RepositoryProcessor] Emitting CRUD method: insert($domainQn)")
-        if (ENABLE_CONTEXT_PARAMETERS) {
+        if (useContextParameters) {
             file += "    context(context: QueryExecutor)\n"
             file += "    override suspend fun insert(entity: $domainQn) = run {\n"
         } else {
@@ -471,7 +541,7 @@ class RepositoryProcessor(
         file += "    }\n"
         // update
         logger.info("[RepositoryProcessor] Emitting CRUD method: update($domainQn)")
-        if (ENABLE_CONTEXT_PARAMETERS) {
+        if (useContextParameters) {
             file += "    context(context: QueryExecutor)\n"
             file += "    override suspend fun update(entity: $domainQn) = run {\n"
         } else {
@@ -486,7 +556,7 @@ class RepositoryProcessor(
         file += "    }\n"
         // delete
         logger.info("[RepositoryProcessor] Emitting CRUD method: delete($domainQn)")
-        if (ENABLE_CONTEXT_PARAMETERS) {
+        if (useContextParameters) {
             file += "    context(context: QueryExecutor)\n"
             file += "    override suspend fun delete(entity: $domainQn) = run {\n"
         } else {
@@ -497,7 +567,7 @@ class RepositoryProcessor(
         file += "    }\n"
         // save
         logger.info("[RepositoryProcessor] Emitting CRUD method: save($domainQn)")
-        if (ENABLE_CONTEXT_PARAMETERS) {
+        if (useContextParameters) {
             file += "    context(context: QueryExecutor)\n"
             file += "    override suspend fun save(entity: $domainQn) = run {\n"
         } else {
@@ -514,7 +584,7 @@ class RepositoryProcessor(
             when (val idQn = idProp.type.resolve().declaration.qualifiedName()) {
                 TypeNames.KOTLIN_INT, TypeNames.KOTLIN_LONG -> {
                     val zeroLiteral = if (idQn == TypeNames.KOTLIN_INT) "0" else "0L"
-                    file += if (ENABLE_CONTEXT_PARAMETERS) {
+                    file += if (useContextParameters) {
                         "        if (entity.$idName == $zeroLiteral) insert(entity) else update(entity)\n"
                     } else {
                         "        if (entity.$idName == $zeroLiteral) insert(context, entity) else update(context, entity)\n"
@@ -574,6 +644,12 @@ class RepositoryProcessor(
          */
         private const val SCHEMA_MIGRATIONS_PATH_OPTION: String = "schema-migrations-path"
 
-        private const val ENABLE_CONTEXT_PARAMETERS: Boolean = false
+        /**
+         * Represents the option flag to enable context parameters for methods in repositories.
+         * When this option is enabled, repository methods are expected to validate the presence
+         * and correctness of a mandatory `context` parameter, which must be an instance of
+         * `io.github.smyrgeorge.sqlx4k.QueryExecutor`.
+         */
+        private const val ENABLE_CONTEXT_PARAMETERS_OPTION: String = "enable-context-parameters"
     }
 }
