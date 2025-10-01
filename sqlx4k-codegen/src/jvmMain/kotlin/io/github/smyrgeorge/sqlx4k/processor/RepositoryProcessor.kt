@@ -181,20 +181,24 @@ class RepositoryProcessor(
      */
     private fun parseRepositoryAnnotation(repo: KSClassDeclaration): Pair<KSClassDeclaration, String> {
         fun implementsCrudRepository(repo: KSClassDeclaration): KSClassDeclaration {
-            // find CrudRepository<T>
+            val repoTypeName =
+                if (ENABLE_CONTEXT_PARAMETERS) TypeNames.CRUD_REPOSITORY_WITH_CONTEXT_PARAMETERS
+                else TypeNames.CRUD_REPOSITORY
+            val repoSimpleName = repoTypeName.substringAfterLast(".")
+            // find CrudRepository<T> or CrudRepositoryWithContextParameters<T>
             val st = repo.superTypes.map { it.resolve() }
-                .firstOrNull { it.declaration.qualifiedName() == TypeNames.CRUD_REPOSITORY }
-                ?: error("@Repository interface ${repo.qualifiedName()} must extend ${TypeNames.CRUD_REPOSITORY}<T>")
+                .firstOrNull { it.declaration.qualifiedName() == repoTypeName }
+                ?: error("@Repository interface ${repo.qualifiedName()} must extend $repoTypeName<T>")
             val typeArg = st.arguments.firstOrNull()?.type?.resolve()
-                ?: error("${repo.qualifiedName()} implements CrudRepository without type argument; expected CrudRepository<T>")
+                ?: error("${repo.qualifiedName()} implements $repoSimpleName without type argument; expected $repoSimpleName<T>")
             val domainDecl = typeArg.declaration as? KSClassDeclaration
-                ?: error("CrudRepository type argument must be a class on ${repo.qualifiedName()}")
+                ?: error("$repoSimpleName type argument must be a class on ${repo.qualifiedName()}")
             // ensure @Table
             val hasTable = domainDecl.annotations.any {
                 val qn = it.qualifiedName()
                 qn == TypeNames.TABLE_ANNOTATION
             }
-            if (!hasTable) error("CrudRepository generic parameter must be @Table-annotated (${domainDecl.qualifiedName()})")
+            if (!hasTable) error("$repoSimpleName generic parameter must be @Table-annotated (${domainDecl.qualifiedName()})")
             return domainDecl
         }
 
@@ -510,7 +514,11 @@ class RepositoryProcessor(
             when (val idQn = idProp.type.resolve().declaration.qualifiedName()) {
                 TypeNames.KOTLIN_INT, TypeNames.KOTLIN_LONG -> {
                     val zeroLiteral = if (idQn == TypeNames.KOTLIN_INT) "0" else "0L"
-                    file += "        if (entity.$idName == $zeroLiteral) insert(context, entity) else update(context, entity)\n"
+                    file += if (ENABLE_CONTEXT_PARAMETERS) {
+                        "        if (entity.$idName == $zeroLiteral) insert(entity) else update(entity)\n"
+                    } else {
+                        "        if (entity.$idName == $zeroLiteral) insert(context, entity) else update(context, entity)\n"
+                    }
                     file += "    }\n"
                 }
 

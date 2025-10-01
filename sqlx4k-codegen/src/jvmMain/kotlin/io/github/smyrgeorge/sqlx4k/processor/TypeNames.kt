@@ -13,6 +13,7 @@ object TypeNames {
 
     // Core interfaces/classes
     const val CRUD_REPOSITORY = "io.github.smyrgeorge.sqlx4k.CrudRepository"
+    const val CRUD_REPOSITORY_WITH_CONTEXT_PARAMETERS = "io.github.smyrgeorge.sqlx4k.CrudRepositoryWithContextParameters"
     const val QUERY_EXECUTOR = "io.github.smyrgeorge.sqlx4k.QueryExecutor"
     const val STATEMENT = "io.github.smyrgeorge.sqlx4k.Statement"
 
