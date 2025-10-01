@@ -11,6 +11,18 @@ import kotlin.reflect.KClass
 interface Statement {
 
     /**
+     * A set containing the names of all named parameters extracted from the SQL statement.
+     * It is populated using a parser that skips over string literals, comments, and
+     * PostgreSQL dollar-quoted strings.
+     */
+    val extractedNamedParameters: Set<String>
+
+    /**
+     * The count of positional parameter placeholders ('?') extracted from the SQL query.
+     */
+    val extractedPositionalParameters: Int
+
+    /**
      * Binds a value to a positional parameter in the statement based on the given index.
      *
      * @param index The zero-based index of the positional parameter to bind the value to.

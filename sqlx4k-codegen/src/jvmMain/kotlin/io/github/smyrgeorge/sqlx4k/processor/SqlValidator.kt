@@ -30,7 +30,7 @@ import org.apache.calcite.sql.validate.SqlValidatorUtil
 import java.io.File
 import java.util.*
 
-object QueryValidator {
+object SqlValidator {
     private lateinit var tables: List<TableDef>
     private lateinit var validator: SqlValidator
 
@@ -63,7 +63,7 @@ object QueryValidator {
         }
     }
 
-    fun load(path: String) {
+    fun loadSchema(path: String) {
         fun parseFileName(name: String): Long {
             val fileNamePattern = Regex("""^\s*(\d+)_([A-Za-z0-9._-]+)\.sql\s*$""")
             val name = name.trim()
@@ -129,8 +129,8 @@ object QueryValidator {
             }
         }
 
-        this.tables = schema.values.toList()
-        this.validator = createCalciteValidator()
+        tables = schema.values.toList()
+        validator = createCalciteValidator()
     }
 
     private fun createCalciteValidator(): SqlValidator {

@@ -22,12 +22,12 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * It is populated using a parser that skips over string literals, comments, and
      * PostgreSQL dollar-quoted strings.
      */
-    private val namedParameters: Set<String> = extractNamedParameters()
+    override val extractedNamedParameters: Set<String> = extractNamedParameters()
 
     /**
      * The count of positional parameter placeholders ('?') extracted from the SQL query.
      */
-    private val positionalCount: Int = extractPositionalParameters()
+    override val extractedPositionalParameters: Int = extractPositionalParameters()
 
     /**
      * A mutable map that holds the values bound to named parameters in an SQL statement.
@@ -67,7 +67,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * @throws SQLError if the given index is out of bounds for the available positional parameters.
      */
     override fun bind(index: Int, value: Any?): AbstractStatement {
-        if (index !in 0..<positionalCount) {
+        if (index !in 0..<extractedPositionalParameters) {
             SQLError(
                 code = SQLError.Code.PositionalParameterOutOfBounds,
                 message = "Index '$index' out of bounds."
@@ -86,7 +86,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * @throws SQLError if the specified named parameter is not found.
      */
     override fun bind(parameter: String, value: Any?): AbstractStatement {
-        if (!namedParameters.contains(parameter)) {
+        if (!extractedNamedParameters.contains(parameter)) {
             SQLError(
                 code = SQLError.Code.NamedParameterNotFound,
                 message = "Parameter '$parameter' not found."
@@ -105,10 +105,10 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      */
     override fun render(encoders: ValueEncoderRegistry): String {
         // Fast path: no placeholders at all
-        if (positionalCount == 0 && namedParameters.isEmpty()) return sql
+        if (extractedPositionalParameters == 0 && extractedNamedParameters.isEmpty()) return sql
         var sql = sql
-        if (positionalCount > 0) sql = sql.renderPositionalParameters(encoders)
-        if (namedParameters.isNotEmpty()) sql = sql.renderNamedParameters(encoders)
+        if (extractedPositionalParameters > 0) sql = sql.renderPositionalParameters(encoders)
+        if (extractedNamedParameters.isNotEmpty()) sql = sql.renderNamedParameters(encoders)
         return sql
     }
 
@@ -117,12 +117,12 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * quotes, comments, and dollar-quoted strings.
      */
     private fun String.renderPositionalParameters(encoders: ValueEncoderRegistry): String {
-        if (positionalCount == 0) return this
+        if (extractedPositionalParameters == 0) return this
         var nextIndex = 0
         return renderWithScanner { i, c, sb ->
             if (c != '?') return@renderWithScanner null
 
-            if (nextIndex >= positionalCount) {
+            if (nextIndex >= extractedPositionalParameters) {
                 SQLError(
                     code = SQLError.Code.PositionalParameterValueNotSupplied,
                     message = "Not enough positional parameter values provided."
@@ -146,8 +146,8 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * Skips content inside comments and quoted/dollar-quoted strings.
      */
     private fun String.renderNamedParameters(encoders: ValueEncoderRegistry): String {
-        if (namedParameters.isEmpty()) return this
-        for (name in namedParameters) {
+        if (extractedNamedParameters.isEmpty()) return this
+        for (name in extractedNamedParameters) {
             if (name !in namedParametersValues) {
                 SQLError(
                     code = SQLError.Code.NamedParameterValueNotSupplied,
@@ -168,7 +168,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
                 var j = i + 2
                 while (j < length && isIdentPart(this[j])) j++
                 val name = substring(i + 1, j)
-                if (name in namedParameters) {
+                if (name in extractedNamedParameters) {
                     sb.append(namedParametersValues[name].encodeValue(encoders))
                     return@renderWithScanner j
                 }
