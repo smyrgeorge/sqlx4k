@@ -191,13 +191,13 @@ class RepositoryProcessor(
      * expected structure, and extracts the associated domain type and mapper information.
      *
      * This method ensures that the annotated repository interface extends the correct base interface
-     * (e.g., `CrudRepository` or `CrudRepositoryWithContextParameters`) with a valid domain type parameter. Additionally,
+     * (e.g., `CrudRepository` or `ContextCrudRepository`) with a valid domain type parameter. Additionally,
      * it verifies that the domain type is annotated with `@Table` and that a mapper is explicitly declared within
      * the `@Repository` annotation.
      *
      * @param repo The repository interface represented as a `KSClassDeclaration`. This class declaration must
      *             be annotated with `@Repository` and implement the appropriate `CrudRepository` interface.
-     * @param useContextParameters A flag indicating whether the `CrudRepositoryWithContextParameters` interface
+     * @param useContextParameters A flag indicating whether the `ContextCrudRepository` interface
      *                              is being used instead of the standard `CrudRepository`.
      * @return A pair containing the `KSClassDeclaration` of the domain type associated with the repository and
      *         the fully qualified name of the mapper type specified in the `@Repository` annotation.
@@ -214,10 +214,10 @@ class RepositoryProcessor(
     ): Pair<KSClassDeclaration, String> {
         fun implementsCrudRepository(repo: KSClassDeclaration): KSClassDeclaration {
             val repoTypeName =
-                if (useContextParameters) TypeNames.CRUD_REPOSITORY_WITH_CONTEXT_PARAMETERS
+                if (useContextParameters) TypeNames.CONTEXT_CRUD_REPOSITORY
                 else TypeNames.CRUD_REPOSITORY
             val repoSimpleName = repoTypeName.substringAfterLast(".")
-            // find CrudRepository<T> or CrudRepositoryWithContextParameters<T>
+            // find CrudRepository<T> or ContextCrudRepository<T>
             val st = repo.superTypes.map { it.resolve() }
                 .firstOrNull { it.declaration.qualifiedName() == repoTypeName }
                 ?: error("@Repository interface ${repo.qualifiedName()} must extend $repoTypeName<T>")
