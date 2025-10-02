@@ -249,21 +249,32 @@ class RepositoryProcessor(
     }
 
     /**
-     * Validates the context parameter for a repository method, ensuring that it meets the required structure and conventions
-     * when the context parameter is expected.
+     * Validates the context parameter for a given function declaration based on the specified mode.
      *
-     * @param name The name of the repository method being validated.
-     * @param params The list of parameters declared by the repository method.
-     * @param useContextParameters A flag indicating whether context parameters are used in the repository.
-     *                              If `true`, context parameter validation is skipped.
+     * @param fn The function declaration to validate.
+     * @param useContextParameters A flag indicating whether context parameters mode is enabled.
      */
     private fun validateContextParameter(
-        name: String,
-        params: List<KSValueParameter>,
+        fn: KSFunctionDeclaration,
         useContextParameters: Boolean
     ) {
-        // TODO: somehow validate that method has context(context: QueryExecutor).
-        if (useContextParameters) return
+        val name = fn.simpleName()
+        val params = fn.parameters
+        if (useContextParameters) {
+            // TODO: somehow validate that method has context(context: QueryExecutor).
+            // Ensure there is no explicit parameter of type QueryExecutor named 'context'
+            val hasExplicitContextParam = params.any { p ->
+                val pType = p.type.resolve()
+                val qn = pType.declaration.qualifiedName()
+                val pName = p.name?.asString()
+                qn == TypeNames.QUERY_EXECUTOR && pName == "context"
+            }
+            if (hasExplicitContextParam) {
+                error("Repository method '$name' must not declare parameter 'context: ${TypeNames.QUERY_EXECUTOR}' when using context parameters")
+            }
+            return
+        }
+        // Non-context-parameters mode: the first parameter must be 'context: QueryExecutor'
         if (params.isEmpty())
             error("Repository method '$name' must declare first parameter 'context: ${TypeNames.QUERY_EXECUTOR}'")
         val first = params.first()
@@ -343,17 +354,17 @@ class RepositoryProcessor(
      * Validates the arity of the parameters in a repository method based on its prefix and other constraints.
      *
      * @param prefix The prefix of the method, which determines the expected parameter count and validation rules.
-     * @param name The name of the method being validated.
-     * @param params The list of parameters declared by the method.
+     * @param fn The function declaration to validate.
      * @param useContextParameters A flag indicating whether the method uses context parameters.
      *      If true, context parameters are excluded from standard parameter arity validation.
      */
     private fun validateParameterArity(
         prefix: Prefix,
-        name: String,
-        params: List<KSValueParameter>,
+        fn: KSFunctionDeclaration,
         useContextParameters: Boolean
     ) {
+        val name = fn.simpleName()
+        val params = fn.parameters
         val nonContextCount = if (useContextParameters) params.size else params.size - 1
         when (prefix) {
             Prefix.FIND_ALL, Prefix.DELETE_ALL, Prefix.COUNT_ALL -> if (nonContextCount != 0) error("Method '$name' must not have parameters other than context")
@@ -456,8 +467,8 @@ class RepositoryProcessor(
             "$pName: $pType"
         }
 
-        validateContextParameter(name, params, useContextParameters)
-        validateParameterArity(prefix, name, params, useContextParameters)
+        validateContextParameter(fn, useContextParameters)
+        validateParameterArity(prefix, fn, useContextParameters)
         validateParameters(sql, fn, useContextParameters)
         validateReturnType(prefix, fn, domainDecl)
         if (validateSyntax) SqlValidator.validateQuerySyntax(fn.simpleName(), sql)
