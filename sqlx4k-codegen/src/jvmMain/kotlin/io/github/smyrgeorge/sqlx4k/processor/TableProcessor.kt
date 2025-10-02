@@ -109,11 +109,11 @@ class TableProcessor(
                             a.qualifiedName() == TypeNames.ID_ANNOTATION
                         } ?: return@filter true
 
-                    val insert: KSValueArgument = id.arguments.first { a ->
+                    val insert: KSValueArgument? = id.arguments.find { a ->
                         a.name?.asString() == INSERT_PROPERTY_NAME
                     }
 
-                    (insert.value as? Boolean) ?: false
+                    (insert?.value as? Boolean) ?: false
                 }
                 .filter {
                     val column =
@@ -121,11 +121,11 @@ class TableProcessor(
                             a.qualifiedName() == TypeNames.COLUMN_ANNOTATION
                         } ?: return@filter true
 
-                    val insert: KSValueArgument = column.arguments.first { a ->
+                    val insert: KSValueArgument? = column.arguments.find { a ->
                         a.name?.asString() == INSERT_PROPERTY_NAME
                     }
 
-                    (insert.value as? Boolean) ?: true
+                    (insert?.value as? Boolean) ?: true
                 }
                 .map { it.simpleName() }
                 .toList()
@@ -197,11 +197,11 @@ class TableProcessor(
                         a.qualifiedName() == TypeNames.COLUMN_ANNOTATION
                     } ?: return@filter true
 
-                    val update: KSValueArgument = column.arguments.first { a ->
+                    val update = column.arguments.find { a ->
                         a.name?.asString() == UPDATE_PROPERTY_NAME
                     }
 
-                    (update.value as? Boolean) ?: true
+                    (update?.value as? Boolean) ?: true
                 }
                 .map { it.simpleName() }
                 .toList()
