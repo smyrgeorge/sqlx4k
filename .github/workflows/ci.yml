@@ -11,7 +11,7 @@ on:
 
 jobs:
   build-apple:
-    runs-on: macos-14
+    runs-on: macos-latest
     environment: Maven Central
     steps:
       - name: Checkout Project
