@@ -21,6 +21,8 @@ kotlin {
 
 ksp {
     arg("output-package", "io.github.smyrgeorge.sqlx4k.examples.sqlite")
+    arg("validate-sql-schema", "true")
+    arg("schema-migrations-path", "./db/migrations")
 }
 
 dependencies {

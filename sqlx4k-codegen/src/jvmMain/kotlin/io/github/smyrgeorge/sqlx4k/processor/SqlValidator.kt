@@ -1,5 +1,6 @@
 package io.github.smyrgeorge.sqlx4k.processor
 
+import io.github.smyrgeorge.sqlx4k.Statement
 import net.sf.jsqlparser.parser.CCJSqlParserUtil
 import net.sf.jsqlparser.statement.alter.Alter
 import net.sf.jsqlparser.statement.alter.AlterOperation
@@ -14,11 +15,7 @@ import org.apache.calcite.prepare.CalciteCatalogReader
 import org.apache.calcite.rel.type.RelDataType
 import org.apache.calcite.rel.type.RelDataTypeFactory
 import org.apache.calcite.schema.impl.AbstractTable
-import org.apache.calcite.sql.SqlCall
-import org.apache.calcite.sql.SqlIdentifier
-import org.apache.calcite.sql.SqlKind
-import org.apache.calcite.sql.SqlLiteral
-import org.apache.calcite.sql.SqlNode
+import org.apache.calcite.sql.*
 import org.apache.calcite.sql.`fun`.SqlStdOperatorTable
 import org.apache.calcite.sql.parser.SqlParser
 import org.apache.calcite.sql.type.SqlTypeName
@@ -30,7 +27,13 @@ import org.apache.calcite.sql.validate.SqlValidatorUtil
 import java.io.File
 import java.util.*
 
+/**
+ * A utility object that provides functionality for SQL validation and schema handling.
+ * This includes methods for checking SQL query syntax, validating against schemas,
+ * managing schemas from definition files, and ensuring data type consistency during validation.
+ */
 object SqlValidator {
+    private const val VALIDATE_LITERAL_TYPES = false
     private lateinit var tables: List<TableDef>
     private lateinit var validator: SqlValidator
 
@@ -38,6 +41,14 @@ object SqlValidator {
         .withConformance(SqlConformanceEnum.STRICT_2003)
         .withLex(Lex.JAVA) // Avoid automatic UPPER-casing
 
+    /**
+     * Validates the syntax of an SQL query by attempting to parse it.
+     * If the SQL syntax is invalid, an error is thrown with a message indicating the issue.
+     *
+     * @param fn A string representing the context or identifier of the function where the validation is being invoked.
+     * This is used for naming the source of the error in the error message.
+     * @param sql The SQL query string to be validated for correct syntax.
+     */
     fun validateQuerySyntax(fn: String, sql: String) {
         try {
             CCJSqlParserUtil.parse(sql)
@@ -47,8 +58,24 @@ object SqlValidator {
         }
     }
 
+    /**
+     * Validates the provided SQL query schema against Calcite's SQL parser and validator.
+     * Optionally applies custom literal type checks if the `VALIDATE_LITERAL_TYPES` flag is enabled.
+     *
+     * @param fn A string indicating the source or context of the SQL query (e.g., function name or identifier).
+     * @param sql The SQL query string to be validated.
+     */
     fun validateQuerySchema(fn: String, sql: String) {
+        fun String.convertNamedParametersToPositional(): String {
+            var s = this
+            Statement.create(this).extractedNamedParameters.forEach { s = s.replace(":$it", "?") }
+            return s
+        }
+
         try {
+            val sql = if (VALIDATE_LITERAL_TYPES) sql else sql.convertNamedParametersToPositional()
+            require(sql.isNotBlank()) { "SQL query is blank" }
+
             val parser = SqlParser.create(sql, calciteParserConfig)
             val sqlNode = parser.parseStmt()
 
@@ -56,13 +83,26 @@ object SqlValidator {
             val validatedNode = validator.validate(sqlNode)
 
             // Custom literal type checking.
-            validateLiteralTypes(validatedNode)
+            if (VALIDATE_LITERAL_TYPES) validateLiteralTypes(validatedNode)
         } catch (e: Exception) {
             val cause = e.message ?: "Unknown error"
             error("Invalid SQL ($fn): $cause")
         }
     }
 
+    /**
+     * Loads SQL schema definitions from the specified directory, processes each `.sql` file
+     * encountered, and constructs a representation of the database schema consisting of tables
+     * and their columns.
+     *
+     * Each file in the directory is expected to follow a specific naming convention:
+     * `<version>_<name>.sql` (e.g., `001_create_users.sql`). Files are processed in order of
+     * their version prefixes, starting from the lowest.
+     *
+     * @param path The file system path to the directory containing `.sql` schema files.
+     *             It must be an existing directory, and all `.sql` files inside should adhere
+     *             to the required naming convention and contain valid SQL statements.
+     */
     fun loadSchema(path: String) {
         fun parseFileName(name: String): Long {
             val fileNamePattern = Regex("""^\s*(\d+)_([A-Za-z0-9._-]+)\.sql\s*$""")

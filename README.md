@@ -49,9 +49,12 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 
 ### Next Steps (contributions are welcome)
 
+- Create and publish sqlx4k-gradle-plugin.
+- Pure Kotlin implementation for `ConnectionPool`.
 - Validate queries at compile time (avoid runtime errors)
     - Syntax checking is already supported (using the `@Query` annotation). ✅
-    - Validate queries by accessing the DB schema
+    - Validate queries by accessing the DB schema ✅
+    - Validate query literal types (type check query parameters)
 - Add support for SQLite JVM target.
 - WASM support (?).
 - Pure Kotlin implementation for PostgreSQL.
@@ -60,9 +63,9 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 
 ### Supported Databases
 
-- `PostgreSQL`
-- `MySQL`
-- `SQLite`
+- ![MySQL](https://img.shields.io/badge/MySQL-4479A1?logo=mysql&logoColor=white)
+- ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?logo=postgresql&logoColor=white)
+- ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
 
 ### Async-io
 
@@ -360,7 +363,7 @@ For more details take a look at the [examples](./examples).
 
 #### SQL syntax validation (compile-time)
 
-- What it is: during code generation, sqlx4k parses the SQL string in each @Query method using `JSqlParser`. If the
+- What it is: during code generation, sqlx4k parses the SQL string in each `@Query` method using `JSqlParser`. If the
   parser detects a syntax error, the build fails early with a clear error message pointing to the offending repository
   method.
 - What it checks: only SQL syntax. It does not verify that tables/columns exist, parameter names match, or types are
@@ -395,6 +398,42 @@ ksp { arg("validate-sql-syntax", "false") }
 @Repository(mapper = UserMapper::class)
 interface UserRepository {
     @Query("select * from users where id = :id", checkSyntax = false)
+    suspend fun findOneById(context: QueryExecutor, id: Int): Result<User?>
+}
+```
+
+#### SQL schema validation (compile-time)
+
+- What it is: during code generation, sqlx4k can also validate your `@Query` SQL against a known database schema. It
+  loads your migration files, builds an in-memory schema, and uses Apache Calcite to validate that tables, columns,
+  and basic types referenced by the query exist and are compatible.
+- What it checks:
+    - Existence of referenced tables and columns.
+    - Basic type compatibility for literals and simple expressions.
+    - It does not execute queries or connect to a database.
+- When it runs: at KSP processing time, right after syntax validation.
+- Default: disabled. You must enable it explicitly per module.
+- Requirements: point the processor to your migrations directory so it can reconstruct the schema. The loader supports
+  a pragmatic subset of DDL: CREATE TABLE, ALTER TABLE ADD/DROP COLUMN, and DROP TABLE, processed in migration order.
+- Dialect notes: validation is based on Calcite’s SQL semantics and a simplified schema model derived from your
+  migrations. Some vendor-specific features and advanced DDL may not be fully supported.
+
+Enable module-wide schema validation by adding KSP args in your build.gradle.kts:
+
+```kotlin
+ksp {
+    arg("validate-sql-schema", "true")
+    // Path to your migration .sql files (processed in ascending file version order)
+    arg("schema-migrations-path", "./db/migrations")
+}
+```
+
+You can also disable schema checks for a specific query:
+
+```kotlin
+@Repository(mapper = UserMapper::class)
+interface UserRepository {
+    @Query("select * from users where id = :id", checkSchema = false)
     suspend fun findOneById(context: QueryExecutor, id: Int): Result<User?>
 }
 ```
@@ -581,6 +620,8 @@ sqlx4k stands on the shoulders of excellent open-source projects:
 - Build-time tooling
     - JSqlParser — used by the code generator to parse @Query SQL at build time for syntax validation.
         - https://github.com/JSQLParser/JSqlParser
+    - Apache Calcite — used by the code generator for compile-time SQL schema validation.
+        - https://calcite.apache.org/
 
 Huge thanks to the maintainers and contributors of these projects.
 
