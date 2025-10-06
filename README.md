@@ -42,8 +42,9 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 - [Row mappers](#rowmappers)
 - [Transactions and coroutine TransactionContext](#transactions) · [TransactionContext (coroutines)](#transactioncontext-coroutines)
 - [Code generation: CRUD and @Repository implementations](#code-generation-crud-and-repository-implementations)
-  - [SQL syntax validation (compile-time)](#sql-syntax-validation-compile-time)
-  - [SQL schema validation (compile-time)](#sql-schema-validation-compile-time)
+    - [Context-Parameters](#context-parameters)
+    - [SQL syntax validation (compile-time)](#sql-syntax-validation-compile-time)
+    - [SQL schema validation (compile-time)](#sql-schema-validation-compile-time)
 - [Database migrations](#database-migrations)
 - [PostgreSQL LISTEN/NOTIFY](#listennotify-only-for-postgresql)
 - [SQLDelight integration](#sqldelight)
@@ -362,6 +363,58 @@ val res: List<Sqlx4k> = Sqlx4kRepositoryImpl.selectAll(db).getOrThrow()
 ```
 
 For more details take a look at the [examples](./examples).
+
+#### Context-Parameters
+
+Optional: Using `ContextCrudRepository` with [context-parameters](https://kotlinlang.org/docs/context-parameters.html).
+
+You can opt in to generated repositories that use Kotlin context-parameters instead of passing a QueryExecutor
+parameter to every method. This switches your repository to ContextCrudRepository and makes all generated CRUD and
+@Query methods require an ambient QueryExecutor provided via a context-parameter.
+
+To enable this mode:
+
+- Add KSP argument `enable-context-parameters` set to true in your ksp configuration.
+- Make your repository interface extend ContextCrudRepository<T> instead of CrudRepository<T>.
+- Declare your @Query methods with a context(context: QueryExecutor) receiver instead of an explicit context parameter.
+
+ksp configuration example:
+
+```kotlin
+ksp {
+    // ... other args
+    arg("output-package", "io.github.smyrgeorge.sqlx4k.examples.postgres")
+    arg("enable-context-parameters", "true") // see RepositoryProcessor
+}
+```
+
+Repository interface example with context receivers:
+
+```kotlin
+@Repository(mapper = Sqlx4kRowMapper::class)
+interface Sqlx4kRepository : ContextCrudRepository<Sqlx4k> {
+    @Query("SELECT * FROM sqlx4k WHERE id = :id")
+    context(context: QueryExecutor)
+    suspend fun findOneById(id: Int): Result<Sqlx4k?>
+
+    @Query("SELECT * FROM sqlx4k")
+    context(context: QueryExecutor)
+    suspend fun findAll(): Result<List<Sqlx4k>>
+}
+```
+
+Usage with a context-parameter (no explicit db parameter on each call):
+
+```kotlin
+val record = Sqlx4k(id = 1, test = "test")
+with(db) {
+    val inserted = Sqlx4kRepositoryImpl.insert(record).getOrThrow()
+    val one = Sqlx4kRepositoryImpl.findOneById(1).getOrThrow()
+}
+```
+
+If you prefer the explicit-parameter style, keep CrudRepository<T> and do not set enable-context-parameters. In that
+case, each generated method takes a QueryExecutor (e.g., db or transaction) as the first argument.
 
 #### SQL syntax validation (compile-time)
 
