@@ -16,7 +16,7 @@ kotlin {
                 implementation(libs.ksp)
                 implementation(libs.jsqlparser)
                 implementation(libs.calcite.core)
-                implementation(libs.log4k.slf4j)
+//                implementation(libs.log4k.slf4j)
             }
         }
     }
