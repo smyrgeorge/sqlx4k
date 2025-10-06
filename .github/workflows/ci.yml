@@ -24,7 +24,7 @@ jobs:
           java-version: 17
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Setup Rust & cargo
         run: rustup target add aarch64-apple-ios aarch64-apple-darwin x86_64-apple-darwin
