@@ -41,7 +41,7 @@
             </a>        <button class="navigation-controls--btn navigation-controls--btn_toc ui-kit_mobile-only" id="toc-toggle" type="button">Toggle table of contents
         </button>
         <div class="navigation-controls--break ui-kit_mobile-only"></div>
-        <div class="library-version" id="library-version">1.1.0
+        <div class="library-version" id="library-version">1.2.0
         </div>
         <div class="navigation-controls">
         <div class="filter-section filter-section_loading" id="filter-section">
@@ -94,14 +94,44 @@
   <div class="breadcrumbs"><a href="../../index.html">sqlx4k</a><span class="delimiter">/</span><a href="../index.html">io.github.smyrgeorge.sqlx4k.annotation</a><span class="delimiter">/</span><span class="current">Query</span></div>
   <div class="cover ">
     <h1 class="cover"><span><span>Query</span></span></h1>
-    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><div class="block"><div class="block"><span class="token annotation builtin">@</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-target/index.html"><span class="token annotation builtin">Target</span></a><span class="token punctuation">(</span><span>allowedTargets<span class="token operator"> = </span><span class="token punctuation">[</span><span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-annotation-target/-f-u-n-c-t-i-o-n/index.html">AnnotationTarget.FUNCTION</a></span><wbr><span class="token punctuation">]</span></span><wbr><span class="token punctuation">)</span></div></div><span class="token keyword">annotation class </span><a href="index.html">Query</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword">val </span>value<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="clearfix"><span class="floating-right">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/annotation/Query.kt#L12">source</a>)</span></span></div><p class="paragraph">Annotation used to specify a query string for a database operation. This annotation is applied to functions to indicate the query that should be executed when the function is called.</p></div></div>
+    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><div class="block"><div class="block"><span class="token annotation builtin">@</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-target/index.html"><span class="token annotation builtin">Target</span></a><span class="token punctuation">(</span><span>allowedTargets<span class="token operator"> = </span><span class="token punctuation">[</span><span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.annotation/-annotation-target/-f-u-n-c-t-i-o-n/index.html">AnnotationTarget.FUNCTION</a></span><wbr><span class="token punctuation">]</span></span><wbr><span class="token punctuation">)</span></div></div><span class="token keyword">annotation class </span><a href="index.html">Query</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword">val </span>value<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter "><span class="token keyword">val </span>checkSyntax<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator"> = </span><span class="token boolean">true</span><span class="token punctuation">, </span></span><span class="parameter "><span class="token keyword">val </span>checkSchema<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator"> = </span><span class="token boolean">true</span></span></span><span class="token punctuation">)</span><span class="clearfix"><span class="floating-right">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/annotation/Query.kt#L12">source</a>)</span></span></div><p class="paragraph">Annotation used to define a database query for repository methods.</p></div></div>
   </div>
   <div class="tabbedcontent">
     <div class="tabs-section" tabs-section="tabs-section"><button class="section-tab" data-active="" data-togglable="CONSTRUCTOR,TYPE,PROPERTY,FUNCTION">Members</button></div>
     <div class="tabs-section-body">
       <div data-togglable="PROPERTY">
         <h2 class="">Properties</h2>
-        <div class="table"><a data-name="293494431%2FProperties%2F272526764" anchor-label="value" id="293494431%2FProperties%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+        <div class="table"><a data-name="44552199%2FProperties%2F272526764" anchor-label="checkSchema" id="44552199%2FProperties%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="check-schema.html"><span>check</span><wbr><span><span>Schema</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="44552199%2FProperties%2F272526764"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">val </span><a href="check-schema.html">checkSchema</a><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator"> = </span><span class="token boolean">true</span></div><div class="brief "><p class="paragraph">Indicates whether the schema compliance of the query should be validated.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-1604909051%2FProperties%2F272526764" anchor-label="checkSyntax" id="-1604909051%2FProperties%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="check-syntax.html"><span>check</span><wbr><span><span>Syntax</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1604909051%2FProperties%2F272526764"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">val </span><a href="check-syntax.html">checkSyntax</a><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator"> = </span><span class="token boolean">true</span></div><div class="brief "><p class="paragraph">Indicates whether the syntax of the query should be validated.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="293494431%2FProperties%2F272526764" anchor-label="value" id="293494431%2FProperties%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
           <div class="table-row" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
@@ -111,7 +141,7 @@
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">val </span><a href="value.html">value</a><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></div><div class="brief "><p class="paragraph">The query string to be executed.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">val </span><a href="value.html">value</a><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></div><div class="brief "><p class="paragraph">The SQL query string to be executed.</p></div></div></div>
                 </div>
               </div>
             </div>

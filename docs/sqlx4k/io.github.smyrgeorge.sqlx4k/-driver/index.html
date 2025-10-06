@@ -41,7 +41,7 @@
             </a>        <button class="navigation-controls--btn navigation-controls--btn_toc ui-kit_mobile-only" id="toc-toggle" type="button">Toggle table of contents
         </button>
         <div class="navigation-controls--break ui-kit_mobile-only"></div>
-        <div class="library-version" id="library-version">1.1.0
+        <div class="library-version" id="library-version">1.2.0
         </div>
         <div class="navigation-controls">
         <div class="filter-section filter-section_loading" id="filter-section">
@@ -94,24 +94,24 @@
   <div class="breadcrumbs"><a href="../../index.html">sqlx4k</a><span class="delimiter">/</span><a href="../index.html">io.github.smyrgeorge.sqlx4k</a><span class="delimiter">/</span><span class="current">Driver</span></div>
   <div class="cover ">
     <h1 class="cover"><span><span>Driver</span></span></h1>
-    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">interface </span><a href="index.html">Driver</a> : <a href="../-query-executor/index.html">QueryExecutor</a>, <a href="../-query-executor/-pool/index.html">QueryExecutor.Pool</a>, <a href="../-query-executor/-transactional/index.html">QueryExecutor.Transactional</a>, <a href="../-query-executor/-migrate/index.html">QueryExecutor.Migrate</a><span class="clearfix"><span class="floating-right">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/Driver.kt#L15">source</a>)</span></span></div><p class="paragraph">Represents a driver interface that extends various query execution and management capabilities.</p><p class="paragraph">The <code class="lang-kotlin">Driver</code> interface combines functionalities provided by the <code class="lang-kotlin">QueryExecutor</code>, <code class="lang-kotlin">QueryExecutor.Pool</code>, <code class="lang-kotlin">QueryExecutor.Transactional</code>, and <code class="lang-kotlin">QueryExecutor.Migrate</code> interfaces. It provides a unified contract for executing SQL statements, managing connection pools, handling transactions, and executing database migrations.</p><p class="paragraph">Implementing this interface allows a class to offer comprehensive database interaction and management capabilities, including query execution, connection pooling, transactional operations, and migration mechanisms.</p></div></div>
+    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">interface </span><a href="index.html">Driver</a> : <a href="../-connection-pool/index.html">ConnectionPool</a>, <a href="../-query-executor/index.html">QueryExecutor</a>, <a href="../-query-executor/-transactional/index.html">QueryExecutor.Transactional</a>, <a href="../-query-executor/-migrate/index.html">QueryExecutor.Migrate</a><span class="clearfix"><span class="floating-right">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/Driver.kt#L15">source</a>)</span></span></div><p class="paragraph">Represents a driver interface that extends various query execution and management capabilities.</p><p class="paragraph">The <code class="lang-kotlin">Driver</code> interface combines functionalities provided by the <code class="lang-kotlin">QueryExecutor</code>, <code class="lang-kotlin">QueryExecutor.Pool</code>, <code class="lang-kotlin">QueryExecutor.Transactional</code>, and <code class="lang-kotlin">QueryExecutor.Migrate</code> interfaces. It provides a unified contract for executing SQL statements, managing connection pools, handling transactions, and executing database migrations.</p><p class="paragraph">Implementing this interface allows a class to offer comprehensive database interaction and management capabilities, including query execution, connection pooling, transactional operations, and migration mechanisms.</p></div></div>
   </div>
   <div class="tabbedcontent">
     <div class="tabs-section" tabs-section="tabs-section"><button class="section-tab" data-active="" data-togglable="CONSTRUCTOR,TYPE,PROPERTY,FUNCTION">Members</button></div>
     <div class="tabs-section-body">
       <div data-togglable="FUNCTION">
         <h2 class="">Functions</h2>
-        <div class="table"><a data-name="1054884722%2FFunctions%2F272526764" anchor-label="acquire" id="1054884722%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+        <div class="table"><a data-name="-871233849%2FFunctions%2F272526764" anchor-label="acquire" id="-871233849%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
           <div class="table-row" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
-                  <div><a href="../-query-executor/-pool/acquire.html"><span><span>acquire</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1054884722%2FFunctions%2F272526764"></span>
+                  <div><a href="../-connection-pool/acquire.html"><span><span>acquire</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-871233849%2FFunctions%2F272526764"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="../-query-executor/-pool/acquire.html"><span class="token function">acquire</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="../-connection/index.html">Connection</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Acquires a connection from the connection pool.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="../-connection-pool/acquire.html"><span class="token function">acquire</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="../-connection/index.html">Connection</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Acquires a connection from the connection pool.</p></div></div></div>
                 </div>
               </div>
             </div>
@@ -131,17 +131,17 @@
               </div>
             </div>
           </div>
-<a data-name="467527504%2FFunctions%2F272526764" anchor-label="close" id="467527504%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+<a data-name="-1746764827%2FFunctions%2F272526764" anchor-label="close" id="-1746764827%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
           <div class="table-row" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
-                  <div><a href="../-query-executor/-pool/close.html"><span><span>close</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="467527504%2FFunctions%2F272526764"></span>
+                  <div><a href="../-connection-pool/close.html"><span><span>close</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1746764827%2FFunctions%2F272526764"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="../-query-executor/-pool/close.html"><span class="token function">close</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-unit/index.html">Unit</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Closes the connection pool, releasing all resources.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="../-connection-pool/close.html"><span class="token function">close</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-unit/index.html">Unit</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Closes the connection pool, releasing all resources.</p></div></div></div>
                 </div>
               </div>
             </div>
@@ -191,32 +191,32 @@
               </div>
             </div>
           </div>
-<a data-name="1981367745%2FFunctions%2F272526764" anchor-label="poolIdleSize" id="1981367745%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+<a data-name="-778743924%2FFunctions%2F272526764" anchor-label="poolIdleSize" id="-778743924%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
           <div class="table-row" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
-                  <div><a href="../-query-executor/-pool/pool-idle-size.html"><span>pool</span><wbr><span>Idle</span><wbr><span><span>Size</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1981367745%2FFunctions%2F272526764"></span>
+                  <div><a href="../-connection-pool/pool-idle-size.html"><span>pool</span><wbr><span>Idle</span><wbr><span><span>Size</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-778743924%2FFunctions%2F272526764"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">fun </span><a href="../-query-executor/-pool/pool-idle-size.html"><span class="token function">poolIdleSize</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-int/index.html">Int</a></div><div class="brief "><p class="paragraph">Retrieves the number of idle connections in the connection pool.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">fun </span><a href="../-connection-pool/pool-idle-size.html"><span class="token function">poolIdleSize</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-int/index.html">Int</a></div><div class="brief "><p class="paragraph">Retrieves the number of idle connections in the connection pool.</p></div></div></div>
                 </div>
               </div>
             </div>
           </div>
-<a data-name="571713973%2FFunctions%2F272526764" anchor-label="poolSize" id="571713973%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+<a data-name="991580416%2FFunctions%2F272526764" anchor-label="poolSize" id="991580416%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
           <div class="table-row" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
-                  <div><a href="../-query-executor/-pool/pool-size.html"><span>pool</span><wbr><span><span>Size</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="571713973%2FFunctions%2F272526764"></span>
+                  <div><a href="../-connection-pool/pool-size.html"><span>pool</span><wbr><span><span>Size</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="991580416%2FFunctions%2F272526764"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">fun </span><a href="../-query-executor/-pool/pool-size.html"><span class="token function">poolSize</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-int/index.html">Int</a></div><div class="brief "><p class="paragraph">Retrieves the current size of the connection pool.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">fun </span><a href="../-connection-pool/pool-size.html"><span class="token function">poolSize</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-int/index.html">Int</a></div><div class="brief "><p class="paragraph">Retrieves the current size of the connection pool.</p></div></div></div>
                 </div>
               </div>
             </div>
