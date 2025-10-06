@@ -1,10 +1,10 @@
 package io.github.smyrgeorge.sqlx4k.mysql
 
-import io.github.smyrgeorge.sqlx4k.QueryExecutor
+import io.github.smyrgeorge.sqlx4k.ConnectionPool
 
 expect fun mySQL(
     url: String,
     username: String,
     password: String,
-    options: QueryExecutor.Pool.Options = QueryExecutor.Pool.Options(),
+    options: ConnectionPool.Options = ConnectionPool.Options(),
 ): IMySQL

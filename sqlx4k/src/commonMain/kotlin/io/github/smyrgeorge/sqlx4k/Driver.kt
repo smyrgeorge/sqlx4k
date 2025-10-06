@@ -12,4 +12,4 @@ package io.github.smyrgeorge.sqlx4k
  * and management capabilities, including query execution, connection pooling, transactional
  * operations, and migration mechanisms.
  */
-interface Driver : QueryExecutor, QueryExecutor.Pool, QueryExecutor.Transactional, QueryExecutor.Migrate
+interface Driver : ConnectionPool, QueryExecutor, QueryExecutor.Transactional, QueryExecutor.Migrate

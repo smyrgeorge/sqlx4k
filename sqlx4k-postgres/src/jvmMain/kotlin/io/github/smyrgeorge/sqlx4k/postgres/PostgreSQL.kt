@@ -1,16 +1,8 @@
 package io.github.smyrgeorge.sqlx4k.postgres
 
-import io.github.smyrgeorge.sqlx4k.Connection
-import io.github.smyrgeorge.sqlx4k.Dialect
-import io.github.smyrgeorge.sqlx4k.QueryExecutor
-import io.github.smyrgeorge.sqlx4k.ResultSet
-import io.github.smyrgeorge.sqlx4k.RowMapper
-import io.github.smyrgeorge.sqlx4k.SQLError
-import io.github.smyrgeorge.sqlx4k.Statement
-import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.*
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
-import io.r2dbc.pool.ConnectionPool
 import io.r2dbc.pool.ConnectionPoolConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
@@ -32,6 +24,7 @@ import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.jvm.optionals.getOrElse
 import kotlin.time.Duration
 import kotlin.time.toJavaDuration
+import io.r2dbc.pool.ConnectionPool as R2dbcConnectionPool
 import io.r2dbc.spi.Connection as R2dbcConnection
 
 /**
@@ -57,12 +50,12 @@ class PostgreSQL(
     url: String,
     username: String,
     password: String,
-    options: QueryExecutor.Pool.Options = QueryExecutor.Pool.Options(),
+    options: ConnectionPool.Options = ConnectionPool.Options(),
 ) : IPostgresSQL {
 
     private val connectionFactory: PostgresqlConnectionFactory = connectionFactory(url, username, password)
     private val poolConfiguration: ConnectionPoolConfiguration = connectionOptions(options, connectionFactory)
-    private val pool: ConnectionPool = ConnectionPool(poolConfiguration).apply {
+    private val pool: R2dbcConnectionPool = R2dbcConnectionPool(poolConfiguration).apply {
         runBlocking { launch { runCatching { warmup().awaitSingle() } } }
     }
 
@@ -231,7 +224,7 @@ class PostgreSQL(
         execute(notify).getOrThrow()
     }
 
-    private suspend fun ConnectionPool.acquire(): R2dbcConnection {
+    private suspend fun R2dbcConnectionPool.acquire(): R2dbcConnection {
         return try {
             create().awaitSingle()
         } catch (e: Exception) {
@@ -411,7 +404,7 @@ class PostgreSQL(
         }
 
         private fun connectionOptions(
-            options: QueryExecutor.Pool.Options,
+            options: ConnectionPool.Options,
             connectionFactory: PostgresqlConnectionFactory
         ): ConnectionPoolConfiguration {
             return ConnectionPoolConfiguration.builder(connectionFactory).apply {

@@ -1,11 +1,11 @@
 package io.github.smyrgeorge.sqlx4k.mysql
 
-import io.github.smyrgeorge.sqlx4k.QueryExecutor
+import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import kotlin.test.Test
 
 class NativeMySQLTests {
 
-    val options = QueryExecutor.Pool.Options.builder()
+    val options = ConnectionPool.Options.builder()
         .maxConnections(2)
         .build()
 

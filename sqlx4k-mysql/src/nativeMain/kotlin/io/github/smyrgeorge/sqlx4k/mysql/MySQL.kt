@@ -1,19 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.mysql
 
-import io.github.smyrgeorge.sqlx4k.Connection
-import io.github.smyrgeorge.sqlx4k.Dialect
-import io.github.smyrgeorge.sqlx4k.DriverNativeUtils
-import io.github.smyrgeorge.sqlx4k.QueryExecutor
-import io.github.smyrgeorge.sqlx4k.ResultSet
-import io.github.smyrgeorge.sqlx4k.RowMapper
-import io.github.smyrgeorge.sqlx4k.Statement
-import io.github.smyrgeorge.sqlx4k.Transaction
-import io.github.smyrgeorge.sqlx4k.impl.extensions.rowsAffectedOrError
-import io.github.smyrgeorge.sqlx4k.impl.extensions.rtOrError
-import io.github.smyrgeorge.sqlx4k.impl.extensions.sqlx
-import io.github.smyrgeorge.sqlx4k.impl.extensions.throwIfError
-import io.github.smyrgeorge.sqlx4k.impl.extensions.toResultSet
-import io.github.smyrgeorge.sqlx4k.impl.extensions.use
+import io.github.smyrgeorge.sqlx4k.*
+import io.github.smyrgeorge.sqlx4k.impl.extensions.*
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import kotlinx.cinterop.CPointed
@@ -21,22 +9,7 @@ import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import sqlx4k.sqlx4k_close
-import sqlx4k.sqlx4k_cn_acquire
-import sqlx4k.sqlx4k_cn_fetch_all
-import sqlx4k.sqlx4k_cn_query
-import sqlx4k.sqlx4k_cn_release
-import sqlx4k.sqlx4k_cn_tx_begin
-import sqlx4k.sqlx4k_fetch_all
-import sqlx4k.sqlx4k_of
-import sqlx4k.sqlx4k_pool_idle_size
-import sqlx4k.sqlx4k_pool_size
-import sqlx4k.sqlx4k_query
-import sqlx4k.sqlx4k_tx_begin
-import sqlx4k.sqlx4k_tx_commit
-import sqlx4k.sqlx4k_tx_fetch_all
-import sqlx4k.sqlx4k_tx_query
-import sqlx4k.sqlx4k_tx_rollback
+import sqlx4k.*
 import kotlin.time.Duration
 
 /**
@@ -59,7 +32,7 @@ class MySQL(
     url: String,
     username: String,
     password: String,
-    options: QueryExecutor.Pool.Options = QueryExecutor.Pool.Options(),
+    options: ConnectionPool.Options = ConnectionPool.Options(),
 ) : IMySQL {
     private val rt: CPointer<out CPointed> = sqlx4k_of(
         url = url,

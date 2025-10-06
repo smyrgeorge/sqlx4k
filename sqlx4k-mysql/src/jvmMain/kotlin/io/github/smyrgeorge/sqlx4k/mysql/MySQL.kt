@@ -8,19 +8,11 @@ import io.asyncer.r2dbc.mysql.codec.Codec
 import io.asyncer.r2dbc.mysql.codec.CodecContext
 import io.asyncer.r2dbc.mysql.codec.CodecRegistry
 import io.asyncer.r2dbc.mysql.extension.CodecRegistrar
-import io.github.smyrgeorge.sqlx4k.Connection
-import io.github.smyrgeorge.sqlx4k.Dialect
-import io.github.smyrgeorge.sqlx4k.QueryExecutor
-import io.github.smyrgeorge.sqlx4k.ResultSet
-import io.github.smyrgeorge.sqlx4k.RowMapper
-import io.github.smyrgeorge.sqlx4k.SQLError
-import io.github.smyrgeorge.sqlx4k.Statement
-import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.*
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufAllocator
-import io.r2dbc.pool.ConnectionPool
 import io.r2dbc.pool.ConnectionPoolConfiguration
 import io.r2dbc.spi.Row
 import kotlinx.coroutines.flow.toList
@@ -37,6 +29,7 @@ import java.net.URI
 import kotlin.jvm.optionals.getOrElse
 import kotlin.time.Duration
 import kotlin.time.toJavaDuration
+import io.r2dbc.pool.ConnectionPool as R2dbcConnectionPool
 import io.r2dbc.spi.Connection as R2dbcConnection
 
 
@@ -59,12 +52,12 @@ class MySQL(
     url: String,
     username: String,
     password: String,
-    options: QueryExecutor.Pool.Options = QueryExecutor.Pool.Options(),
+    options: ConnectionPool.Options = ConnectionPool.Options(),
 ) : IMySQL {
 
     private val connectionFactory: MySqlConnectionFactory = connectionFactory(url, username, password)
     private val poolConfiguration: ConnectionPoolConfiguration = connectionOptions(options, connectionFactory)
-    private val pool: ConnectionPool = ConnectionPool(poolConfiguration).apply {
+    private val pool: R2dbcConnectionPool = R2dbcConnectionPool(poolConfiguration).apply {
         runBlocking { launch { runCatching { warmup().awaitSingle() } } }
     }
 
@@ -150,7 +143,7 @@ class MySQL(
         }
     }
 
-    private suspend fun ConnectionPool.acquire(): R2dbcConnection {
+    private suspend fun R2dbcConnectionPool.acquire(): R2dbcConnection {
         return try {
             create().awaitSingle()
         } catch (e: Exception) {
@@ -352,7 +345,7 @@ class MySQL(
         }
 
         private fun connectionOptions(
-            options: QueryExecutor.Pool.Options,
+            options: ConnectionPool.Options,
             connectionFactory: MySqlConnectionFactory
         ): ConnectionPoolConfiguration {
             return ConnectionPoolConfiguration.builder(connectionFactory).apply {

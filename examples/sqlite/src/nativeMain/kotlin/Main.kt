@@ -1,11 +1,11 @@
-import io.github.smyrgeorge.sqlx4k.QueryExecutor
+import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.examples.sqlite.Examples
 import io.github.smyrgeorge.sqlx4k.examples.sqlite.Sqlx4kRepositoryImpl
 import io.github.smyrgeorge.sqlx4k.sqlite.sqlite
 import kotlinx.coroutines.runBlocking
 
 fun main() = runBlocking {
-    val options = QueryExecutor.Pool.Options.builder()
+    val options = ConnectionPool.Options.builder()
         .maxConnections(10)
         .build()
 

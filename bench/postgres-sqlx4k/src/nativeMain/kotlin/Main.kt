@@ -1,15 +1,10 @@
-import io.github.smyrgeorge.sqlx4k.QueryExecutor
+import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.bench.postgres.sqlx4k.Sqlx4k
 import io.github.smyrgeorge.sqlx4k.bench.postgres.sqlx4k.Sqlx4kRowMapper
 import io.github.smyrgeorge.sqlx4k.bench.postgres.sqlx4k.insert
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 import io.github.smyrgeorge.sqlx4k.postgres.PostgreSQL
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
@@ -25,7 +20,7 @@ suspend fun <A> Iterable<A>.forEachParallel(
     f: suspend (A) -> Unit
 ): Unit = withContext(context) { map { async { f(it) } }.awaitAll() }
 
-val options = QueryExecutor.Pool.Options.builder()
+val options = ConnectionPool.Options.builder()
     .minConnections(10)
     .maxConnections(connections)
     .maxLifetime(10.minutes)

@@ -1,11 +1,11 @@
 package io.github.smyrgeorge.sqlx4k.mysql
 
-import io.github.smyrgeorge.sqlx4k.QueryExecutor
+import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import kotlin.test.Test
 
 class JvmMySQLTests {
 
-    val options = QueryExecutor.Pool.Options.builder()
+    val options = ConnectionPool.Options.builder()
         .maxConnections(2)
         .build()
 
@@ -25,5 +25,6 @@ class JvmMySQLTests {
     fun `execute and fetchAll should work`() = runner.`execute and fetchAll should work`()
 
     @Test
-    fun `execute and fetchAll with prepared statements should work`() = runner.`execute and fetchAll with prepared statements should work`()
+    fun `execute and fetchAll with prepared statements should work`() =
+        runner.`execute and fetchAll with prepared statements should work`()
 }
