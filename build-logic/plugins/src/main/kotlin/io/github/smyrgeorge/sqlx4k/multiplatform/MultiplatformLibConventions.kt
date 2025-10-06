@@ -8,6 +8,7 @@ import org.gradle.kotlin.dsl.get
 import org.gradle.kotlin.dsl.support.serviceOf
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
 import org.gradle.process.ExecOperations
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import java.io.File
@@ -70,7 +71,13 @@ class MultiplatformLibConventions : Plugin<Project> {
         project.plugins.apply("org.jetbrains.kotlin.multiplatform")
         project.extensions.configure<KotlinMultiplatformExtension> {
             val availableTargets = mapOf(
-                Pair("jvm") { jvm() },
+                Pair("jvm") {
+                    jvm {
+                        compilerOptions {
+                            jvmTarget.set(JvmTarget.JVM_21)
+                        }
+                    }
+                },
                 Pair("iosArm64") { iosArm64 { rust("aarch64-apple-ios", !os.isMacOsX) } },
                 Pair("iosSimulatorArm64") { iosSimulatorArm64 { rust("aarch64-apple-ios-sim", !os.isMacOsX) } },
                 Pair("androidNativeArm64") { androidNativeArm64 { rust("aarch64-linux-android", true) } },

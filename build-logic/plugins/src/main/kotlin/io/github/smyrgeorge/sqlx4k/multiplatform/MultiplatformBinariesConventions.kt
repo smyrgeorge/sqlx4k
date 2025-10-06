@@ -4,6 +4,7 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
 @Suppress("unused")
@@ -18,6 +19,9 @@ class MultiplatformBinariesConventions : Plugin<Project> {
                         @OptIn(ExperimentalKotlinGradlePluginApi::class)
                         mainRun {
                             mainClass.set("MainKt")
+                        }
+                        compilerOptions {
+                            jvmTarget.set(JvmTarget.JVM_21)
                         }
                     }
                 },

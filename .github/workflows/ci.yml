@@ -21,7 +21,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: corretto
-          java-version: 17
+          java-version: 21
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
@@ -41,13 +41,3 @@ jobs:
 
       - name: Gradle Build
         run: ./gradlew build -x test -x jvmTest -x macosArm64Test
-#        run: ./scripts/build-apple.sh
-
-#      - name: Gradle Publish
-#        run: ./gradlew publish
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
-#          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
-#          MAVEN_SIGNING_KEY: ${{ secrets.MAVEN_SIGNING_KEY }}
-#          MAVEN_SIGNING_PASSWORD: ${{ secrets.MAVEN_SIGNING_PASSWORD }}
