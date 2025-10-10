@@ -10,7 +10,7 @@ internal object LongRowMapper : RowMapper<Long> {
         return row.get(0).asLong()
     }
 
-    fun Result<List<Long>>.toLongResult(): Result<Long> = runCatching {
+    fun Result<List<Long>>.toSingleLongResult(): Result<Long> = runCatching {
         return map { rs ->
             require(rs.size == 1) { "Expected a single row, got ${rs.size}" }
             rs.first()

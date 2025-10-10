@@ -8,12 +8,12 @@ import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.postgres.IPostgresSQL
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.extensions.toJsonString
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.BooleanRowMapper
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.BooleanRowMapper.toBooleanResult
+import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.BooleanRowMapper.toSingleBooleanResult
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.LongRowMapper
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.LongRowMapper.toLongResult
+import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.LongRowMapper.toSingleLongResult
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.MessageRowMapper
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.UnitRowMapper
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.UnitRowMapper.toUnitResult
+import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.UnitRowMapper.toSingleUnitResult
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -33,25 +33,25 @@ class PgMQ(
     context(tx: Transaction)
     private suspend fun create(queue: String): Result<Unit> {
         // language=SQL
-        val sql = "SELECT pgmq.create(?)"
+        val sql = "SELECT pgmq.create(queue_name := ?)"
         val statement = Statement.create(sql).bind(0, queue)
-        return tx.fetchAll(statement, UnitRowMapper).toUnitResult()
+        return tx.fetchAll(statement, UnitRowMapper).toSingleUnitResult()
     }
 
     context(tx: Transaction)
     private suspend fun enableNotifyInsert(queue: String): Result<Unit> {
         // language=SQL
-        val sql = "SELECT pgmq.enable_notify_insert(?)"
+        val sql = "SELECT pgmq.enable_notify_insert(queue_name := ?)"
         val statement = Statement.create(sql).bind(0, queue)
-        return tx.fetchAll(statement, UnitRowMapper).toUnitResult()
+        return tx.fetchAll(statement, UnitRowMapper).toSingleUnitResult()
     }
 
     suspend fun drop(queue: Queue): Result<Boolean> = drop(queue.name)
     private suspend fun drop(queue: String): Result<Boolean> {
         // language=SQL
-        val sql = "SELECT pgmq.drop_queue(?)"
+        val sql = "SELECT pgmq.drop_queue(queue_name := ?)"
         val statement = Statement.create(sql).bind(0, queue)
-        return pg.fetchAll(statement, BooleanRowMapper).toBooleanResult()
+        return pg.fetchAll(statement, BooleanRowMapper).toSingleBooleanResult()
     }
 
     suspend fun send(
@@ -90,14 +90,67 @@ class PgMQ(
             .bind(1, message)
             .bind(2, headers.toJsonString())
             .bind(3, delay.inWholeSeconds)
-        return db.fetchAll(statement, LongRowMapper).toLongResult() // returns the message-id.
+        return db.fetchAll(statement, LongRowMapper).toSingleLongResult() // returns the message-id.
     }
 
+    suspend fun pop(queue: String, quantity: Int = 1): Result<List<Message>> = with(pg) { pop(queue, quantity) }
+
+    context(db: QueryExecutor)
     suspend fun pop(queue: String, quantity: Int = 1): Result<List<Message>> {
         // language=SQL
-        val sql = "SELECT pgmq.pop(queue_name := ?, quantity := ?)"
+        val sql = "SELECT * FROM pgmq.pop(queue_name := ?, qty := ?)"
         val statement = Statement.create(sql).bind(0, queue).bind(1, quantity)
-        return pg.fetchAll(statement, MessageRowMapper)
+        return db.fetchAll(statement, MessageRowMapper)
+    }
+
+    suspend fun read(queue: String, quantity: Int = 1, vt: Duration = 30.seconds): Result<List<Message>> =
+        with(pg) { read(queue, quantity, vt) }
+
+    context(db: QueryExecutor)
+    suspend fun read(queue: String, quantity: Int = 1, vt: Duration = 30.seconds): Result<List<Message>> {
+        // language=SQL
+        val sql = "SELECT * FROM pgmq.read(queue_name := ?, qty := ?, vt := ?)"
+        val statement = Statement.create(sql)
+            .bind(0, queue)
+            .bind(1, quantity)
+            .bind(2, vt.inWholeSeconds)
+        return db.fetchAll(statement, MessageRowMapper)
+    }
+
+    suspend fun archive(queue: String, id: Long): Result<List<Long>> = with(pg) { archive(queue, listOf(id)) }
+    suspend fun archive(queue: String, ids: List<Long>): Result<List<Long>> = with(pg) { archive(queue, ids) }
+
+    context(db: QueryExecutor)
+    suspend fun archive(queue: String, id: Long): Result<List<Long>> = archive(queue, listOf(id))
+
+    context(db: QueryExecutor)
+    suspend fun archive(queue: String, ids: List<Long>): Result<List<Long>> {
+        // language=SQL
+        val sql = "SELECT pgmq.archive(queue_name := ?, msg_ids := ?)"
+        val statement = Statement.create(sql).bind(0, queue).bind(1, ids)
+        return db.fetchAll(statement, LongRowMapper).mapCatching {
+            val archived = it.all { id -> id in ids }
+            require(archived) { "Some of the given ids could not be archived." }
+            it
+        }
+    }
+
+    suspend fun delete(queue: String, id: Long): Result<List<Long>> = with(pg) { delete(queue, listOf(id)) }
+    suspend fun delete(queue: String, ids: List<Long>): Result<List<Long>> = with(pg) { delete(queue, ids) }
+
+    context(db: QueryExecutor)
+    suspend fun delete(queue: String, id: Long): Result<List<Long>> = delete(queue, listOf(id))
+
+    context(db: QueryExecutor)
+    suspend fun delete(queue: String, ids: List<Long>): Result<List<Long>> {
+        // language=SQL
+        val sql = "SELECT pgmq.delete(queue_name := ?, msg_ids := ?)"
+        val statement = Statement.create(sql).bind(0, queue).bind(1, ids)
+        return db.fetchAll(statement, LongRowMapper).mapCatching {
+            val deleted = it.all { id -> id in ids }
+            require(deleted) { "Some of the given ids could not be deleted." }
+            it
+        }
     }
 
     data class Queue(

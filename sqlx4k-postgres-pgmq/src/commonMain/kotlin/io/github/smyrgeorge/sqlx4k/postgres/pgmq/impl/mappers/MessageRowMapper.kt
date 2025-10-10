@@ -19,7 +19,7 @@ internal object MessageRowMapper : RowMapper<Message> {
             enqueuedAt = row.get(2).asInstant(),
             vt = row.get(3).asInstant(),
             message = row.get(4).asString(),
-            headers = row.get(5).asString().toStringMap(),
+            headers = row.get(5).asStringOrNull()?.toStringMap() ?: emptyMap(),
         )
     }
 }
