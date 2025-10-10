@@ -13,6 +13,7 @@ include("sqlx4k")
 include("sqlx4k-codegen")
 include("sqlx4k-mysql")
 include("sqlx4k-postgres")
+include("sqlx4k-postgres-pgmq")
 include("sqlx4k-sqlite")
 
 include("dokka")

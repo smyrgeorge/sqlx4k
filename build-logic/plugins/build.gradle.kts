@@ -4,6 +4,10 @@ plugins {
 
 gradlePlugin {
     plugins {
+        create("multiplatform") {
+            id = "io.github.smyrgeorge.sqlx4k.multiplatform"
+            implementationClass = "io.github.smyrgeorge.sqlx4k.multiplatform.MultiplatformConventions"
+        }
         create("multiplatform.lib") {
             id = "io.github.smyrgeorge.sqlx4k.multiplatform.lib"
             implementationClass = "io.github.smyrgeorge.sqlx4k.multiplatform.MultiplatformLibConventions"

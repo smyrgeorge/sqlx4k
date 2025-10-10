@@ -9,6 +9,16 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_USER=postgres
       - POSTGRES_DB=test
+  postgres-pgmq:
+    image: ghcr.io/pgmq/pg18-pgmq
+    platform: linux/arm64
+    restart: unless-stopped
+    ports:
+      - "25432:5432"
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=test
   mysql:
     image: mysql
     platform: linux/arm64
