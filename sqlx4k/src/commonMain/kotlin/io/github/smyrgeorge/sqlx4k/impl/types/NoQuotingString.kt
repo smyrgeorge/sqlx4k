@@ -1,5 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.impl.types
 
+import kotlin.jvm.JvmInline
+
 /**
  * A wrapper class for representing a string value without applying quotes.
  *
@@ -9,6 +11,7 @@ package io.github.smyrgeorge.sqlx4k.impl.types
  *
  * @property value The raw string value represented by this class.
  */
-class NoQuotingString(val value: String) {
+@JvmInline
+value class NoQuotingString(val value: String) {
     override fun toString(): String = value
 }

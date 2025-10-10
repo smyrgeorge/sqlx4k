@@ -12,7 +12,7 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
-                implementation(project(":sqlx4k-postgres"))
+                implementation(project(":sqlx4k-postgres-pgmq"))
             }
             kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
         }

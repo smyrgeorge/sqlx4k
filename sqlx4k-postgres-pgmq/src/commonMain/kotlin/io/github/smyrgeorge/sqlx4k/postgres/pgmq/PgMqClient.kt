@@ -5,6 +5,7 @@ package io.github.smyrgeorge.sqlx4k.postgres.pgmq
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
 import io.github.smyrgeorge.sqlx4k.postgres.IPostgresSQL
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.extensions.toJsonString
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.BooleanRowMapper
@@ -15,12 +16,10 @@ import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.MessageRowMapper
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.UnitRowMapper
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.UnitRowMapper.toSingleUnitResult
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-class PgMQ(
-    private val pg: IPostgresSQL,
-    val options: Options = Options()
+class PgMqClient(
+    private val pg: IPostgresSQL
 ) {
     suspend fun create(queue: Queue): Result<Unit> {
         return pg.transaction {
@@ -126,8 +125,8 @@ class PgMQ(
     context(db: QueryExecutor)
     suspend fun archive(queue: String, ids: List<Long>): Result<List<Long>> {
         // language=SQL
-        val sql = "SELECT pgmq.archive(queue_name := ?, msg_ids := ?)"
-        val statement = Statement.create(sql).bind(0, queue).bind(1, ids)
+        val sql = "SELECT pgmq.archive(queue_name := ?, msg_ids := ARRAY[?])"
+        val statement = Statement.create(sql).bind(0, queue).bind(1, ids.toNoWrappingTuple())
         return db.fetchAll(statement, LongRowMapper).mapCatching {
             val archived = it.all { id -> id in ids }
             require(archived) { "Some of the given ids could not be archived." }
@@ -144,8 +143,8 @@ class PgMQ(
     context(db: QueryExecutor)
     suspend fun delete(queue: String, ids: List<Long>): Result<List<Long>> {
         // language=SQL
-        val sql = "SELECT pgmq.delete(queue_name := ?, msg_ids := ?)"
-        val statement = Statement.create(sql).bind(0, queue).bind(1, ids)
+        val sql = "SELECT pgmq.delete(queue_name := ?, msg_ids := ARRAY[?])"
+        val statement = Statement.create(sql).bind(0, queue).bind(1, ids.toNoWrappingTuple())
         return db.fetchAll(statement, LongRowMapper).mapCatching {
             val deleted = it.all { id -> id in ids }
             require(deleted) { "Some of the given ids could not be deleted." }
@@ -156,17 +155,7 @@ class PgMQ(
     data class Queue(
         val name: String,
         val enableNotifyInsert: Boolean = false,
-        val queueMinPullDelay: Duration? = null,
-        val queueMaxPullDelay: Duration? = null,
     )
 
-    data class Options(
-        val queueMinPullDelay: Duration = defaultQueueMinPullDelay,
-        val queueMaxPullDelay: Duration = defaultQueueMaxPullDelay,
-    )
-
-    companion object {
-        val defaultQueueMinPullDelay: Duration = 50.milliseconds
-        val defaultQueueMaxPullDelay: Duration = 1000.milliseconds
-    }
+    private fun List<*>.toNoWrappingTuple(): NoWrappingTuple = NoWrappingTuple(this)
 }

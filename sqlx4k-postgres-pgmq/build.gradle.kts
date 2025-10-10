@@ -15,7 +15,7 @@ kotlin {
         }
         val commonMain by getting {
             dependencies {
-                implementation(project(":sqlx4k-postgres"))
+                api(project(":sqlx4k-postgres"))
                 implementation(libs.kotlinx.serialisation.json)
             }
         }

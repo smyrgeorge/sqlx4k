@@ -5,6 +5,7 @@ package io.github.smyrgeorge.sqlx4k.impl.extensions
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.types.NoQuotingString
+import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
@@ -54,6 +55,8 @@ fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
         is Boolean, is Number -> toString()
         is Instant -> "'${toTimestampString()}'"
         is LocalDate, is LocalTime, is LocalDateTime -> "'${this}'"
+        is Uuid -> "'${this}'"
+        is Iterable<*> -> encodeTuple(encoders)
         is BooleanArray -> asIterable().encodeTuple(encoders)
         is ShortArray -> asIterable().encodeTuple(encoders)
         is IntArray -> asIterable().encodeTuple(encoders)
@@ -61,8 +64,7 @@ fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
         is FloatArray -> asIterable().encodeTuple(encoders)
         is DoubleArray -> asIterable().encodeTuple(encoders)
         is Array<*> -> asIterable().encodeTuple(encoders)
-        is Iterable<*> -> encodeTuple(encoders)
-        is Uuid -> "'${this}'"
+        is NoWrappingTuple -> value.encodeTuple(encoders, false)
 
         else -> {
             val error = SQLError(
@@ -80,8 +82,10 @@ fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
  * Helper to encode a collection/array of values as a SQL tuple like (a, b, c).
  * Uses encodeValue for each element; nulls become null without quotes.
  */
-private fun Iterable<*>.encodeTuple(encoders: ValueEncoderRegistry): String =
-    joinToString(", ", "(", ")") { it.encodeValue(encoders) }
+private fun Iterable<*>.encodeTuple(encoders: ValueEncoderRegistry, wrapInParenthesis: Boolean = true): String =
+    if (wrapInParenthesis) joinToString(", ", "(", ")") { it.encodeValue(encoders) }
+    else joinToString(", ") { it.encodeValue(encoders) }
+
 
 /**
  * Converts the `Instant` to a string representation of a timestamp with microsecond precision.
