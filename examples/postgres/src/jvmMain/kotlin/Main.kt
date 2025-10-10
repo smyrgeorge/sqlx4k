@@ -10,14 +10,13 @@ fun main() = runBlocking {
         .build()
 
     val db = postgreSQL(
-        url = "postgresql://localhost:25432/test",
+        url = "postgresql://localhost:15432/test",
         username = "postgres",
         password = "postgres",
         options = options
     )
 
     // Run the examples.
-    Examples.runPgmq(db)
     Examples.runAll(db, Sqlx4kRepositoryImpl)
 
     // Close the connection.

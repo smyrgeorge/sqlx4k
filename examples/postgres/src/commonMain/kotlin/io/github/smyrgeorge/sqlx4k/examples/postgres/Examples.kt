@@ -7,6 +7,7 @@ import io.github.smyrgeorge.sqlx4k.impl.coroutines.TransactionContext
 import io.github.smyrgeorge.sqlx4k.postgres.IPostgresSQL
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.PgMqClient
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.PgMqConsumer
+import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.PgMqDbAdapterImpl
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.seconds
 
@@ -20,6 +21,8 @@ object Examples {
      */
     suspend fun runAll(db: IPostgresSQL, repo: Sqlx4kRepository) {
         delay(2000)
+        pgmq(db)
+        delay(1000)
         migrate(db)
         delay(1000)
         exampleBasics(db)
@@ -41,10 +44,11 @@ object Examples {
         exampleListenNotify(db)
     }
 
-    suspend fun runPgmq(db: IPostgresSQL) {
+    suspend fun pgmq(db: IPostgresSQL) {
         println("\n=== PgMq ===")
         val queue = PgMqClient.Queue(name = "test_queue")
-        val pgmq = PgMqClient(db).apply { create(queue) }
+        val adapter = PgMqDbAdapterImpl(db)
+        val pgmq = PgMqClient(adapter).apply { create(queue).getOrThrow() }
         val consumer = PgMqConsumer(
             pgmq = pgmq,
             options = PgMqConsumer.Options(queue = queue.name),
@@ -54,16 +58,16 @@ object Examples {
             onFaiToAck = { println("Error (onFaiToAck): $it") },
             onFaiToNack = { println("Error (onFaiToNack): $it") },
         )
-        println("Consumer $consumer started.")
+        println("$consumer started.")
         delay(30.seconds)
         consumer.stop()
-        println("Consumer stopped.")
+        println("$consumer stopped.")
     }
 
     /**
      * Executes database migrations by applying SQL scripts located in the specified directory.
      *
-     * This function initiates the migration process by utilizing the `migrate` method of the
+     * This function initiates the migration process by using the `migrate` method of the
      * provided database instance. It processes SQL scripts found in the specified directory
      * and is used to apply schema or data alterations to the database.
      *
@@ -275,7 +279,7 @@ object Examples {
     }
 
     /**
-     * Demonstrates the usage of a transactional context for handling database operations
+     * Demonstrates the usage of a transactional context for handling database operations,
      * including nested functions that participate in the same transaction. Executes
      * transaction-related business logic using different transactional scenarios.
      *
@@ -290,7 +294,7 @@ object Examples {
         }
 
         suspend fun doMoreBusinessLogic(): Unit = TransactionContext.withCurrent {
-            // Continue in same tx
+            // Continue in the same tx
             fetchAll("select id, test from sqlx4k where id = 66;", Sqlx4kRowMapper).getOrThrow().also {
                 println("doMoreBusinessLogic read => $it")
             }
@@ -305,7 +309,7 @@ object Examples {
 
         println("\n=== TransactionContext (coroutines) ===")
         TransactionContext.new(db) {
-            // Seed a record and demonstrate nested helpers participating in same tx
+            // Seed a record and demonstrate nested helpers participating in the same tx
             execute("insert into sqlx4k (id, test) values (66, 'tc');").getOrThrow()
             println("Inserted id=66 in TransactionContext")
             doBusinessLogic()

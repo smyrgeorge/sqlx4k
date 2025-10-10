@@ -20,8 +20,8 @@ class PgMqConsumer(
     private val onFaiToAck: suspend (Throwable) -> Unit = {},
     private val onFaiToNack: suspend (Throwable) -> Unit = {},
 ) {
-    private var delay: Duration = Duration.ZERO
     private var job: Job? = null
+    private var delay: Duration = Duration.ZERO
 
     init {
         if (options.autoStart) start()
@@ -44,7 +44,10 @@ class PgMqConsumer(
 
                         res.onFailure { f ->
                             onFailToProcess(f)
-                            pgmq.nack(options.queue, msg.msgId).onFailure { onFaiToNack(it) }
+                            val vt = (options.messageRetryDelayStep * msg.readCt)
+                                .coerceAtMost(options.messageMaxRetryDelay)
+                            println(vt)
+                            pgmq.nack(options.queue, msg.msgId, vt).onFailure { onFaiToNack(it) }
                         }
                         res.onSuccess {
                             pgmq.ack(options.queue, msg.msgId).onFailure { onFaiToAck(it) }
@@ -74,7 +77,9 @@ class PgMqConsumer(
         val vt: Duration = 10.seconds,
         val autoStart: Boolean = true,
         val queueMinPullDelay: Duration = 50.milliseconds,
-        val queueMaxPullDelay: Duration = 5.seconds,
+        val queueMaxPullDelay: Duration = 2.seconds,
+        val messageRetryDelayStep: Duration = 500.milliseconds,
+        val messageMaxRetryDelay: Duration = 60.seconds,
     ) {
         val vtBias = vt * 2
 
@@ -86,8 +91,13 @@ class PgMqConsumer(
             require(queueMinPullDelay.isPositive()) { "QueueMinPullDelay must be greater than 0" }
             require(queueMaxPullDelay.isPositive()) { "QueueMaxPullDelay must be greater than 0" }
             require(queueMinPullDelay < queueMaxPullDelay) { "QueueMinPullDelay must be less than QueueMaxPullDelay" }
+            require(messageRetryDelayStep.isPositive()) { "MessageRetryDelayStep must be greater than 0" }
+            require(messageMaxRetryDelay.isPositive()) { "MessageMaxRetryDelay must be greater than 0" }
+            require(messageRetryDelayStep < messageMaxRetryDelay) { "MessageRetryDelayStep must be less than MessageMaxRetryDelay" }
         }
     }
+
+    override fun toString(): String = "PgMqConsumer(queue='${options.queue}')"
 
     companion object {
         private object PgChannelScope : CoroutineScope {

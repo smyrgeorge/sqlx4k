@@ -6,7 +6,6 @@ import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
-import io.github.smyrgeorge.sqlx4k.postgres.IPostgresSQL
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.extensions.toJsonString
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.BooleanRowMapper
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.BooleanRowMapper.toSingleBooleanResult
@@ -15,13 +14,37 @@ import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.LongRowMapper.toSi
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.MessageRowMapper
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.UnitRowMapper
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.UnitRowMapper.toSingleUnitResult
+import kotlinx.coroutines.runBlocking
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 class PgMqClient(
-    private val pg: IPostgresSQL
+    private val pg: PgMqDbAdapter,
+    private val options: Options = Options()
 ) {
-    suspend fun create(queue: Queue): Result<Unit> {
+    init {
+        // Ensure the pgmq schema is created.
+        runBlocking { install() }
+    }
+
+    private suspend fun install() {
+        if (!options.verifyInstallation) return
+        // language=SQL
+        val sql = "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'pgmq'"
+        val res = pg.fetchAll(Statement.create(sql), UnitRowMapper).toSingleUnitResult()
+        res.takeIf { it.isFailure }?.let {
+            if (!options.autoInstall) throw IllegalStateException("Could not verify the 'pgmq' installation.")
+            // language=SQL
+            val sql = "CREATE EXTENSION IF NOT EXISTS pgmq"
+            pg.execute(sql).takeIf { it.isFailure }?.let {
+                throw IllegalStateException("Could not create the 'pgmq' extension (${it.exceptionOrNull()}).")
+            }
+        }
+        pg.fetchAll(Statement.create(sql), UnitRowMapper).toSingleUnitResult()
+            .onFailure { throw IllegalStateException("Could not verify the 'pgmq' installation.") }
+    }
+
+    suspend fun create(queue: Queue): Result<Unit> = runCatching {
         return pg.transaction {
             create(queue.name).getOrThrow()
             if (queue.enableNotifyInsert) enableNotifyInsert(queue.name).getOrThrow()
@@ -166,10 +189,15 @@ class PgMqClient(
     suspend fun ack(queue: String, ids: List<Long>): Result<List<Long>> = delete(queue, ids)
     suspend fun nack(queue: String, id: Long, vt: Duration = Duration.ZERO): Result<Long> = setVt(queue, id, vt)
 
+    private fun List<*>.toNoWrappingTuple(): NoWrappingTuple = NoWrappingTuple(this)
+
     data class Queue(
         val name: String,
         val enableNotifyInsert: Boolean = false,
     )
 
-    private fun List<*>.toNoWrappingTuple(): NoWrappingTuple = NoWrappingTuple(this)
+    data class Options(
+        val autoInstall: Boolean = true,
+        val verifyInstallation: Boolean = true,
+    )
 }
