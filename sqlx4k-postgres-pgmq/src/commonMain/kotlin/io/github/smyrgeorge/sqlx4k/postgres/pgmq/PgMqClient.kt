@@ -23,41 +23,42 @@ class PgMqClient(
     private val options: Options = Options()
 ) {
     init {
-        // Ensure the pgmq schema is created.
+        // Ensure the pgmq extensions is installed.
         runBlocking { install() }
     }
 
     private suspend fun install() {
+        suspend fun installed(): Boolean {
+            // language=SQL
+            val sql = "SELECT pgmq._extension_exists('pgmq')"
+            return pg.fetchAll(Statement.create(sql), BooleanRowMapper).toSingleBooleanResult().getOrThrow()
+        }
+
         if (!options.verifyInstallation) return
-        // language=SQL
-        val sql = "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'pgmq'"
-        val res = pg.fetchAll(Statement.create(sql), UnitRowMapper).toSingleUnitResult()
-        res.takeIf { it.isFailure }?.let {
-            if (!options.autoInstall) throw IllegalStateException("Could not verify the 'pgmq' installation.")
+        if (!installed()) {
+            if (!options.autoInstall) error("Could not verify the 'pgmq' installation.")
             // language=SQL
             val sql = "CREATE EXTENSION IF NOT EXISTS pgmq"
-            pg.execute(sql).takeIf { it.isFailure }?.let {
-                throw IllegalStateException("Could not create the 'pgmq' extension (${it.exceptionOrNull()}).")
-            }
+            pg.execute(sql).getOrElse { error("Could not create the 'pgmq' extension (${it.message}).") }
         }
-        pg.fetchAll(Statement.create(sql), UnitRowMapper).toSingleUnitResult()
-            .onFailure { throw IllegalStateException("Could not verify the 'pgmq' installation.") }
+        // Recheck.
+        if (!installed()) error("Could not verify the 'pgmq' installation.")
     }
 
     suspend fun create(queue: Queue): Result<Unit> = runCatching {
+        context(tx: Transaction)
+        suspend fun create(queue: String): Result<Unit> {
+            // language=SQL
+            val sql = "SELECT pgmq.create(queue_name := ?)"
+            val statement = Statement.create(sql).bind(0, queue)
+            return tx.fetchAll(statement, UnitRowMapper).toSingleUnitResult()
+        }
+
         return pg.transaction {
             create(queue.name).getOrThrow()
             if (queue.enableNotifyInsert) enableNotifyInsert(queue.name).getOrThrow()
             Result.success(Unit)
         }
-    }
-
-    context(tx: Transaction)
-    private suspend fun create(queue: String): Result<Unit> {
-        // language=SQL
-        val sql = "SELECT pgmq.create(queue_name := ?)"
-        val statement = Statement.create(sql).bind(0, queue)
-        return tx.fetchAll(statement, UnitRowMapper).toSingleUnitResult()
     }
 
     context(tx: Transaction)
