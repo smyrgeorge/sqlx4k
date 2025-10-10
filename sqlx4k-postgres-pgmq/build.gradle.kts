@@ -1,6 +1,6 @@
 plugins {
     id("io.github.smyrgeorge.sqlx4k.multiplatform")
-//    id("io.github.smyrgeorge.sqlx4k.publish")
+    id("io.github.smyrgeorge.sqlx4k.publish")
     id("io.github.smyrgeorge.sqlx4k.dokka")
 }
 
@@ -15,7 +15,8 @@ kotlin {
         }
         val commonMain by getting {
             dependencies {
-                api(project(":sqlx4k-postgres"))
+                implementation(project(":sqlx4k-postgres"))
+                implementation(libs.kotlinx.serialisation.json)
             }
         }
         val commonTest by getting {

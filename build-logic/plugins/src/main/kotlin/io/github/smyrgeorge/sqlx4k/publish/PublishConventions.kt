@@ -14,16 +14,17 @@ class PublishConventions : Plugin<Project> {
         "sqlx4k-codegen" to "A high-performance Kotlin Native database driver for PostgreSQL, MySQL, and SQLite.",
         "sqlx4k-mysql" to "A high-performance Kotlin Native database driver for MySQL.",
         "sqlx4k-postgres" to "A high-performance Kotlin Native database driver for PostgreSQL.",
+        "sqlx4k-postgres-pgmq" to "A pgmq client using PostgreSQL as a message queue.",
         "sqlx4k-sqlite" to "A high-performance Kotlin Native database driver for SQLite.",
     )
 
     override fun apply(project: Project) {
         project.plugins.apply("com.vanniktech.maven.publish")
         project.extensions.configure<MavenPublishBaseExtension> {
-            // sources publishing is always enabled by the Kotlin Multiplatform plugin
+            // Source publishing is always enabled by the Kotlin Multiplatform plugin.
             configure(
                 KotlinMultiplatform(
-                    // whether to publish a sources jar
+                    // Whether to publish a 'sources' jar.
                     sourcesJar = true,
                 )
             )
