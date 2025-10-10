@@ -6,9 +6,7 @@ import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
-import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.checksum
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.listMigrationFiles
-import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.readEntireFileUtf8
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.splitSqlStatements
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -40,6 +38,21 @@ object Migrator {
     private val tableRegex = "_?[A-Za-z0-9_]+".toRegex()
     private val schemaRegex = "_?[A-Za-z0-9_]+".toRegex()
 
+    /**
+     * Migrates a database by applying appropriate migration files located at the specified path.
+     * It updates the database schema and updates the migration information within the specified table.
+     *
+     * @param db The `Driver` instance responsible for executing SQL queries and managing migrations.
+     * @param path The directory path where the migration files are located. Must not be blank.
+     * @param table The name of the table used to track migration progress.
+     * @param schema The schema within which the table resides. Can be null.
+     * @param createSchema A flag indicating if the schema should be created if it does not exist.
+     * @param dialect The `Dialect` type specifying the SQL dialect to use for migrations.
+     * @param afterStatementExecution A suspendable callback function executed after each statement execution. It receives the executed `Statement` and `Duration` of execution as
+     *  arguments.
+     * @param afterFileMigration A suspendable callback function executed after migrating each file. It receives the `Migration` details and `Duration` of migration as arguments.
+     * @return A `Result` containing a `Results` instance indicating whether the migration was successful or empty if no files were processed.
+     */
     suspend fun migrate(
         db: Driver,
         path: String,
@@ -51,10 +64,45 @@ object Migrator {
         afterFileMigration: suspend (Migration, Duration) -> Unit,
     ): Result<Results> = runCatching {
         require(path.isNotBlank()) { "Path cannot be blank." }
+        migrate(
+            db = db,
+            files = listMigrationFiles(path),
+            table = table,
+            schema = schema,
+            createSchema = createSchema,
+            dialect = dialect,
+            afterStatementExecution = afterStatementExecution,
+            afterFileMigration = afterFileMigration
+        ).getOrThrow()
+    }
+
+    /**
+     * Migrates a database by applying appropriate migration files located at the specified path.
+     * It updates the database schema and updates the migration information within the specified table.
+     *
+     * @param db The `Driver` instance responsible for executing SQL queries and managing migrations.
+     * @param files A list of `MigrationFile` instances representing the migration files to be applied.
+     * @param table The name of the table used to track migration progress.
+     * @param schema The schema within which the table resides. Can be null.
+     * @param createSchema A flag indicating if the schema should be created if it does not exist.
+     * @param dialect The `Dialect` type specifying the SQL dialect to use for migrations.
+     * @param afterStatementExecution A suspendable callback function executed after each statement execution. It receives the executed `Statement` and `Duration` of execution as
+     *  arguments.
+     * @param afterFileMigration A suspendable callback function executed after migrating each file. It receives the `Migration` details and `Duration` of migration as arguments.
+     * @return A `Result` containing a `Results` instance indicating whether the migration was successful or empty if no files were processed.
+     */
+    suspend fun migrate(
+        db: Driver,
+        files: List<MigrationFile>,
+        table: String,
+        schema: String?,
+        createSchema: Boolean,
+        dialect: Dialect,
+        afterStatementExecution: suspend (Statement, Duration) -> Unit,
+        afterFileMigration: suspend (Migration, Duration) -> Unit,
+    ): Result<Results> = runCatching {
         require(table.isNotBlank()) { "Table name cannot be blank." }
         require(tableRegex.matches(table)) { "Table name must match the regex: $tableRegex" }
-
-        val files: List<MigrationFile> = listMigrationFiles(path)
         if (files.isEmpty()) return@runCatching Results.Empty
 
         var totalCount = 0
@@ -103,21 +151,16 @@ object Migrator {
 
             // Apply migrations.
             sortedFiles.forEach { file ->
-                val name = file.name
-                val version = file.version
-                val content = readEntireFileUtf8(file.path)
-                val checksum = content.checksum()
-
-                applied[version]?.let { previous ->
+                applied[file.version]?.let { previous ->
                     // Check that the file has not been modified since it was applied.
-                    if (previous.checksum == checksum) {
+                    if (previous.checksum == file.checksum) {
                         validatedCount++
                         return@forEach
                     } else SQLError(SQLError.Code.Migrate, "Checksum mismatch for migration file ${file.name}").ex()
                 }
 
                 // Split the file content into individual statements.
-                val statements: List<Statement> = splitSqlStatements(content).map { Statement.create(it) }
+                val statements: List<Statement> = splitSqlStatements(file.content).map { Statement.create(it) }
                 if (statements.isEmpty()) SQLError(SQLError.Code.Migrate, "Migration file ${file.name} is empty.").ex()
 
                 // Execute all the statements (of a file) in a single transaction
@@ -134,10 +177,10 @@ object Migrator {
                     appliedCount++
 
                     val res = Migration(
-                        version = version,
-                        name = name,
+                        version = file.version,
+                        name = file.name,
                         installedOn = Clock.System.now(),
-                        checksum = checksum,
+                        checksum = file.checksum,
                         executionTime = duration.inWholeMilliseconds
                     )
                     // Insert the result in the table.

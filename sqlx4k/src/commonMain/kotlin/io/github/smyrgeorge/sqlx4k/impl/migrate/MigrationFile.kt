@@ -1,16 +1,20 @@
 package io.github.smyrgeorge.sqlx4k.impl.migrate
 
 /**
- * Represents a migration file used for database versioning.
+ * Represents a migration file typically used in database migrations. Each migration file
+ * contains a name, content, and checksum while parsing and extracting the version and description
+ * from the file name.
  *
- * @property name The name of the migration file, which should follow the pattern `<version>_<description>.sql`.
- * @property path The file system path of the migration file.
- * @property version The version number extracted from the filename.
- * @property description The description of the migration, extracted from the filename after the version number.
+ * @property name The name of the migration file. It must follow the format `<version>_<name>.sql`.
+ * @property content The SQL content of the migration file as a string.
+ * @property checksum A string representing the checksum of the file for validation purposes.
+ * @property version The version extracted from the filename, determined by the prefix in the file name.
+ * @property description The description extracted from the filename, determined by the suffix after the underscore.
  */
-internal data class MigrationFile(
+data class MigrationFile(
     val name: String,
-    val path: String,
+    val content: String,
+    val checksum: String
 ) {
     val version: Long
     val description: String
@@ -27,10 +31,10 @@ internal data class MigrationFile(
             val name = name.trim()
             val match = fileNamePattern.matchEntire(name)
                 ?: error("Migration filename must be <version>_<name>.sql, got $name")
-            val (versionStr, cleanName) = match.destructured
+            val (versionStr, description) = match.destructured
             val version = versionStr.toLongOrNull()
                 ?: error("Invalid version prefix in migration filename: $name")
-            return version to cleanName
+            return version to description
         }
     }
 }
