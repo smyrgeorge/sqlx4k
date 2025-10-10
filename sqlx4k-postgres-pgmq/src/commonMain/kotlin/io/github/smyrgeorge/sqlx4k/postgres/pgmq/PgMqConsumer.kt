@@ -16,8 +16,9 @@ class PgMqConsumer(
     private val options: Options,
     private val onMessage: suspend (Message) -> Unit,
     private val onFaiToRead: suspend (Throwable) -> Unit = {},
-    private val onFaiToDelete: suspend (Throwable) -> Unit = {},
     private val onFailToProcess: suspend (Throwable) -> Unit = {},
+    private val onFaiToAck: suspend (Throwable) -> Unit = {},
+    private val onFaiToNack: suspend (Throwable) -> Unit = {},
 ) {
     private var delay: Duration = Duration.ZERO
     private var job: Job? = null
@@ -41,8 +42,13 @@ class PgMqConsumer(
                             withTimeout(options.vt) { onMessage(msg) }
                         }
 
-                        res.onFailure { onFailToProcess(it) }
-                        res.onSuccess { pgmq.delete(options.queue, msg.msgId).onFailure { onFaiToDelete(it) } }
+                        res.onFailure { f ->
+                            onFailToProcess(f)
+                            pgmq.nack(options.queue, msg.msgId).onFailure { onFaiToNack(it) }
+                        }
+                        res.onSuccess {
+                            pgmq.ack(options.queue, msg.msgId).onFailure { onFaiToAck(it) }
+                        }
                     }
 
                     // reset delay since queue is active

@@ -116,7 +116,9 @@ class PgMqClient(
         return db.fetchAll(statement, MessageRowMapper)
     }
 
-    suspend fun archive(queue: String, id: Long): Result<List<Long>> = with(pg) { archive(queue, listOf(id)) }
+    suspend fun archive(queue: String, id: Long): Result<Long> =
+        with(pg) { archive(queue, listOf(id)).map { it.first() } }
+
     suspend fun archive(queue: String, ids: List<Long>): Result<List<Long>> = with(pg) { archive(queue, ids) }
 
     context(db: QueryExecutor)
@@ -134,7 +136,9 @@ class PgMqClient(
         }
     }
 
-    suspend fun delete(queue: String, id: Long): Result<List<Long>> = with(pg) { delete(queue, listOf(id)) }
+    suspend fun delete(queue: String, id: Long): Result<Long> =
+        with(pg) { delete(queue, listOf(id)).map { it.first() } }
+
     suspend fun delete(queue: String, ids: List<Long>): Result<List<Long>> = with(pg) { delete(queue, ids) }
 
     context(db: QueryExecutor)
@@ -151,6 +155,20 @@ class PgMqClient(
             it
         }
     }
+
+    suspend fun setVt(queue: String, id: Long, vt: Duration): Result<Long> = with(pg) { setVt(queue, id, vt) }
+
+    context(db: QueryExecutor)
+    suspend fun setVt(queue: String, id: Long, vt: Duration): Result<Long> {
+        // language=SQL
+        val sql = "select msg_id from pgmq.set_vt(queue_name := ?, msg_id := ?, vt := ?)"
+        val statement = Statement.create(sql).bind(0, queue).bind(1, id).bind(2, vt.inWholeSeconds)
+        return db.fetchAll(statement, LongRowMapper).toSingleLongResult()
+    }
+
+    suspend fun ack(queue: String, id: Long): Result<Long> = delete(queue, id)
+    suspend fun ack(queue: String, ids: List<Long>): Result<List<Long>> = delete(queue, ids)
+    suspend fun nack(queue: String, id: Long, vt: Duration = Duration.ZERO): Result<Long> = setVt(queue, id, vt)
 
     data class Queue(
         val name: String,
