@@ -116,13 +116,11 @@ class PgMqClient(
         return db.fetchAll(statement, MessageRowMapper)
     }
 
-    suspend fun archive(queue: String, id: Long): Result<Long> =
-        with(pg) { archive(queue, listOf(id)).map { it.first() } }
-
+    suspend fun archive(queue: String, id: Long): Result<Long> = with(pg) { archive(queue, id) }
     suspend fun archive(queue: String, ids: List<Long>): Result<List<Long>> = with(pg) { archive(queue, ids) }
 
     context(db: QueryExecutor)
-    suspend fun archive(queue: String, id: Long): Result<List<Long>> = archive(queue, listOf(id))
+    suspend fun archive(queue: String, id: Long): Result<Long> = archive(queue, listOf(id)).map { it.first() }
 
     context(db: QueryExecutor)
     suspend fun archive(queue: String, ids: List<Long>): Result<List<Long>> {
@@ -136,13 +134,11 @@ class PgMqClient(
         }
     }
 
-    suspend fun delete(queue: String, id: Long): Result<Long> =
-        with(pg) { delete(queue, listOf(id)).map { it.first() } }
-
+    suspend fun delete(queue: String, id: Long): Result<Long> = with(pg) { delete(queue, id) }
     suspend fun delete(queue: String, ids: List<Long>): Result<List<Long>> = with(pg) { delete(queue, ids) }
 
     context(db: QueryExecutor)
-    suspend fun delete(queue: String, id: Long): Result<List<Long>> = delete(queue, listOf(id))
+    suspend fun delete(queue: String, id: Long): Result<Long> = delete(queue, listOf(id)).map { it.first() }
 
     context(db: QueryExecutor)
     suspend fun delete(queue: String, ids: List<Long>): Result<List<Long>> {
