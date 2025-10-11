@@ -12,6 +12,7 @@ import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.BooleanRowMapper.t
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.LongRowMapper
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.LongRowMapper.toSingleLongResult
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.MessageRowMapper
+import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.QueueRecordRowMapper
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.UnitRowMapper
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.UnitRowMapper.toSingleUnitResult
 import kotlinx.coroutines.runBlocking
@@ -63,10 +64,23 @@ class PgMqClient(
         }
 
         return pg.transaction {
+            val existing = listQueues().getOrThrow().find { it.name == queue.name }
+            existing?.let {
+                require(it.unlogged == queue.unlogged) { "Queue '${queue.name}' already exists with a different unlogged flag." }
+                require(!it.partitioned) { "Queue '${queue.name}' already exists with a partitioned flag (partitioning is not yet supported by this client)." }
+                return@transaction Result.success(Unit)
+            }
+
             create(queue.name, queue.unlogged).getOrThrow()
             if (queue.enableNotifyInsert) enableNotifyInsert(queue.name).getOrThrow()
             Result.success(Unit)
         }
+    }
+
+    suspend fun listQueues(): Result<List<QueueRecord>> {
+        // language=SQL
+        val sql = "SELECT * FROM pgmq.list_queues()"
+        return pg.fetchAll(Statement.create(sql), QueueRecordRowMapper)
     }
 
     suspend fun drop(queue: Queue): Result<Boolean> = drop(queue.name)
