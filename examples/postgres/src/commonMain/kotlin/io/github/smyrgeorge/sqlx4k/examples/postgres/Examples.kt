@@ -58,7 +58,17 @@ object Examples {
             onFaiToAck = { println("Error (onFaiToAck): $it") },
             onFaiToNack = { println("Error (onFaiToNack): $it") },
         )
+
         println("$consumer started.")
+
+        repeat(10) {
+            // language=json
+            val msg = """{"foo": $it}"""
+            pgmq.send(queue.name, msg).getOrThrow()
+            println("Published message $it")
+            delay(1000)
+        }
+
         delay(30.seconds)
         consumer.stop()
         println("$consumer stopped.")

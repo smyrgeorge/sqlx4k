@@ -24,7 +24,7 @@ class PgMqClient(
 ) {
     init {
         // Ensure the pgmq extensions is installed.
-        runBlocking { install() }
+        if (options.verifyInstallation) runBlocking { install() }
     }
 
     private suspend fun install() {
@@ -34,7 +34,6 @@ class PgMqClient(
             return pg.fetchAll(Statement.create(sql), BooleanRowMapper).toSingleBooleanResult().getOrThrow()
         }
 
-        if (!options.verifyInstallation) return
         if (!installed()) {
             if (!options.autoInstall) error("Could not verify the 'pgmq' installation.")
             // language=SQL
@@ -47,26 +46,27 @@ class PgMqClient(
 
     suspend fun create(queue: Queue): Result<Unit> = runCatching {
         context(tx: Transaction)
-        suspend fun create(queue: String): Result<Unit> {
+        suspend fun create(queue: String, unlogged: Boolean): Result<Unit> {
             // language=SQL
-            val sql = "SELECT pgmq.create(queue_name := ?)"
+            val sql = if (unlogged) "SELECT pgmq.create_unlogged(queue_name := ?)"
+            else "SELECT pgmq.create(queue_name := ?)"
+            val statement = Statement.create(sql).bind(0, queue)
+            return tx.fetchAll(statement, UnitRowMapper).toSingleUnitResult()
+        }
+
+        context(tx: Transaction)
+        suspend fun enableNotifyInsert(queue: String): Result<Unit> {
+            // language=SQL
+            val sql = "SELECT pgmq.enable_notify_insert(queue_name := ?)"
             val statement = Statement.create(sql).bind(0, queue)
             return tx.fetchAll(statement, UnitRowMapper).toSingleUnitResult()
         }
 
         return pg.transaction {
-            create(queue.name).getOrThrow()
+            create(queue.name, queue.unlogged).getOrThrow()
             if (queue.enableNotifyInsert) enableNotifyInsert(queue.name).getOrThrow()
             Result.success(Unit)
         }
-    }
-
-    context(tx: Transaction)
-    private suspend fun enableNotifyInsert(queue: String): Result<Unit> {
-        // language=SQL
-        val sql = "SELECT pgmq.enable_notify_insert(queue_name := ?)"
-        val statement = Statement.create(sql).bind(0, queue)
-        return tx.fetchAll(statement, UnitRowMapper).toSingleUnitResult()
     }
 
     suspend fun drop(queue: Queue): Result<Boolean> = drop(queue.name)
@@ -77,17 +77,25 @@ class PgMqClient(
         return pg.fetchAll(statement, BooleanRowMapper).toSingleBooleanResult()
     }
 
+    suspend fun purge(queue: Queue): Result<Long> = purge(queue.name)
+    private suspend fun purge(queue: String): Result<Long> {
+        // language=SQL
+        val sql = "SELECT pgmq.purge_queue(queue_name := ?)"
+        val statement = Statement.create(sql).bind(0, queue)
+        return pg.fetchAll(statement, LongRowMapper).toSingleLongResult() // returns the number of messages purged.
+    }
+
     suspend fun send(
         queue: String,
         message: Map<String, String?>,
-        headers: Map<String, String>,
+        headers: Map<String, String> = emptyMap(),
         delay: Duration = 0.seconds
     ): Result<Long> = send(queue, message.toJsonString(), headers, delay)
 
     suspend fun send(
         queue: String,
         message: String,
-        headers: Map<String, String>,
+        headers: Map<String, String> = emptyMap(),
         delay: Duration = 0.seconds
     ): Result<Long> = with(pg) { send(queue, message, headers, delay) }
 
@@ -95,7 +103,7 @@ class PgMqClient(
     suspend fun send(
         queue: String,
         message: Map<String, String?>,
-        headers: Map<String, String>,
+        headers: Map<String, String> = emptyMap(),
         delay: Duration = 0.seconds
     ): Result<Long> = send(queue, message.toJsonString(), headers, delay)
 
@@ -103,7 +111,7 @@ class PgMqClient(
     suspend fun send(
         queue: String,
         message: String,
-        headers: Map<String, String>,
+        headers: Map<String, String> = emptyMap(),
         delay: Duration = 0.seconds
     ): Result<Long> {
         // language=SQL
@@ -140,17 +148,22 @@ class PgMqClient(
         return db.fetchAll(statement, MessageRowMapper)
     }
 
-    suspend fun archive(queue: String, id: Long): Result<Long> = with(pg) { archive(queue, id) }
+    suspend fun archive(queue: String, id: Long): Result<Boolean> = with(pg) { archive(queue, id) }
     suspend fun archive(queue: String, ids: List<Long>): Result<List<Long>> = with(pg) { archive(queue, ids) }
 
     context(db: QueryExecutor)
-    suspend fun archive(queue: String, id: Long): Result<Long> = archive(queue, listOf(id)).map { it.first() }
+    suspend fun archive(queue: String, id: Long): Result<Boolean> {
+        // language=SQL
+        val sql = "SELECT pgmq.archive(queue_name := ?, msg_id := ?)"
+        val statement = Statement.create(sql).bind(0, queue).bind(1, id)
+        return db.fetchAll(statement, BooleanRowMapper).toSingleBooleanResult()
+    }
 
     context(db: QueryExecutor)
     suspend fun archive(queue: String, ids: List<Long>): Result<List<Long>> {
         // language=SQL
         val sql = "SELECT pgmq.archive(queue_name := ?, msg_ids := ARRAY[?])"
-        val statement = Statement.create(sql).bind(0, queue).bind(1, ids.toNoWrappingTuple())
+        val statement = Statement.create(sql).bind(0, queue).bind(1, NoWrappingTuple(ids))
         return db.fetchAll(statement, LongRowMapper).mapCatching {
             val archived = it.all { id -> id in ids }
             require(archived) { "Some of the given ids could not be archived." }
@@ -158,17 +171,22 @@ class PgMqClient(
         }
     }
 
-    suspend fun delete(queue: String, id: Long): Result<Long> = with(pg) { delete(queue, id) }
+    suspend fun delete(queue: String, id: Long): Result<Boolean> = with(pg) { delete(queue, id) }
     suspend fun delete(queue: String, ids: List<Long>): Result<List<Long>> = with(pg) { delete(queue, ids) }
 
     context(db: QueryExecutor)
-    suspend fun delete(queue: String, id: Long): Result<Long> = delete(queue, listOf(id)).map { it.first() }
+    suspend fun delete(queue: String, id: Long): Result<Boolean> {
+        // language=SQL
+        val sql = "SELECT pgmq.delete(queue_name := ?, msg_id := ?)"
+        val statement = Statement.create(sql).bind(0, queue).bind(1, id)
+        return db.fetchAll(statement, BooleanRowMapper).toSingleBooleanResult()
+    }
 
     context(db: QueryExecutor)
     suspend fun delete(queue: String, ids: List<Long>): Result<List<Long>> {
         // language=SQL
         val sql = "SELECT pgmq.delete(queue_name := ?, msg_ids := ARRAY[?])"
-        val statement = Statement.create(sql).bind(0, queue).bind(1, ids.toNoWrappingTuple())
+        val statement = Statement.create(sql).bind(0, queue).bind(1, NoWrappingTuple(ids))
         return db.fetchAll(statement, LongRowMapper).mapCatching {
             val deleted = it.all { id -> id in ids }
             require(deleted) { "Some of the given ids could not be deleted." }
@@ -186,14 +204,13 @@ class PgMqClient(
         return db.fetchAll(statement, LongRowMapper).toSingleLongResult()
     }
 
-    suspend fun ack(queue: String, id: Long): Result<Long> = delete(queue, id)
+    suspend fun ack(queue: String, id: Long): Result<Boolean> = delete(queue, id)
     suspend fun ack(queue: String, ids: List<Long>): Result<List<Long>> = delete(queue, ids)
     suspend fun nack(queue: String, id: Long, vt: Duration = Duration.ZERO): Result<Long> = setVt(queue, id, vt)
 
-    private fun List<*>.toNoWrappingTuple(): NoWrappingTuple = NoWrappingTuple(this)
-
     data class Queue(
         val name: String,
+        val unlogged: Boolean = false,
         val enableNotifyInsert: Boolean = false,
     )
 
