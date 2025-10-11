@@ -7,13 +7,9 @@ import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.extensions.toJsonString
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.BooleanRowMapper
+import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.*
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.BooleanRowMapper.toSingleBooleanResult
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.LongRowMapper
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.LongRowMapper.toSingleLongResult
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.MessageRowMapper
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.QueueRecordRowMapper
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.UnitRowMapper
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.UnitRowMapper.toSingleUnitResult
 import kotlinx.coroutines.runBlocking
 import kotlin.time.Duration
@@ -66,8 +62,8 @@ class PgMqClient(
         return pg.transaction {
             val existing = listQueues().getOrThrow().find { it.name == queue.name }
             existing?.let {
-                require(it.unlogged == queue.unlogged) { "Queue '${queue.name}' already exists with a different unlogged flag." }
-                require(!it.partitioned) { "Queue '${queue.name}' already exists with a partitioned flag (partitioning is not yet supported by this client)." }
+                check(it.unlogged == queue.unlogged) { "Queue '${queue.name}' already exists with a different unlogged flag." }
+                check(!it.partitioned) { "Queue '${queue.name}' already exists with a partitioned flag (partitioning is not yet supported by this client)." }
                 return@transaction Result.success(Unit)
             }
 
@@ -80,7 +76,7 @@ class PgMqClient(
     suspend fun listQueues(): Result<List<QueueRecord>> {
         // language=SQL
         val sql = "SELECT * FROM pgmq.list_queues()"
-        return pg.fetchAll(Statement.create(sql), QueueRecordRowMapper)
+        return pg.fetchAll(sql, QueueRecordRowMapper)
     }
 
     suspend fun drop(queue: Queue): Result<Boolean> = drop(queue.name)
@@ -180,7 +176,7 @@ class PgMqClient(
         val statement = Statement.create(sql).bind(0, queue).bind(1, NoWrappingTuple(ids))
         return db.fetchAll(statement, LongRowMapper).mapCatching {
             val archived = it.all { id -> id in ids }
-            require(archived) { "Some of the given ids could not be archived." }
+            check(archived) { "Some of the given ids could not be archived." }
             it
         }
     }
@@ -203,7 +199,7 @@ class PgMqClient(
         val statement = Statement.create(sql).bind(0, queue).bind(1, NoWrappingTuple(ids))
         return db.fetchAll(statement, LongRowMapper).mapCatching {
             val deleted = it.all { id -> id in ids }
-            require(deleted) { "Some of the given ids could not be deleted." }
+            check(deleted) { "Some of the given ids could not be deleted." }
             it
         }
     }
@@ -213,9 +209,26 @@ class PgMqClient(
     context(db: QueryExecutor)
     suspend fun setVt(queue: String, id: Long, vt: Duration): Result<Long> {
         // language=SQL
-        val sql = "select msg_id from pgmq.set_vt(queue_name := ?, msg_id := ?, vt := ?)"
+        val sql = "SELECT msg_id FROM pgmq.set_vt(queue_name := ?, msg_id := ?, vt := ?)"
         val statement = Statement.create(sql).bind(0, queue).bind(1, id).bind(2, vt.inWholeSeconds)
         return db.fetchAll(statement, LongRowMapper).toSingleLongResult()
+    }
+
+    suspend fun metrics(queue: String): Result<Metrics> {
+        // language=SQL
+        val sql = "SELECT * FROM pgmq.metrics(queue_name := ?)"
+        val statement = Statement.create(sql).bind(0, queue)
+        return pg.fetchAll(statement, MetricsRowMapper).mapCatching {
+            check(it.isNotEmpty()) { "No metrics found for queue '$queue'." }
+            check(it.size == 1) { "Multiple metrics found for queue '$queue'." }
+            it.first()
+        }
+    }
+
+    suspend fun metrics(): Result<List<Metrics>> {
+        // language=SQL
+        val sql = "SELECT * FROM pgmq.metrics()"
+        return pg.fetchAll(sql, MetricsRowMapper)
     }
 
     suspend fun ack(queue: String, id: Long): Result<Boolean> = delete(queue, id)

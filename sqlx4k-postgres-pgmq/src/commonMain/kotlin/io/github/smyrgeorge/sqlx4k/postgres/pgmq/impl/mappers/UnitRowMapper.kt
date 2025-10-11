@@ -10,7 +10,7 @@ internal object UnitRowMapper : RowMapper<Unit> {
 
     fun Result<List<Unit>>.toSingleUnitResult(): Result<Unit> = runCatching {
         return map { rs ->
-            require(rs.size == 1) { "Expected a single row, got ${rs.size}" }
+            check(rs.size == 1) { "Expected a single row, got ${rs.size}" }
             rs.first()
         }
     }

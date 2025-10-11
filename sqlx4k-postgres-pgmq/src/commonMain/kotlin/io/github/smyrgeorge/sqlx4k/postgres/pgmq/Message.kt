@@ -10,6 +10,6 @@ data class Message(
     val readCt: Int,
     val enqueuedAt: Instant,
     val vt: Instant,
-    val message: String,
-    val headers: Map<String, String>
+    val message: String, // Should be a valid JSON.
+    val headers: Map<String, String> // Will be converted to JSON.
 )

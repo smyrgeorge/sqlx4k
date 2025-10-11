@@ -12,10 +12,10 @@ import kotlin.time.ExperimentalTime
 internal object QueueRecordRowMapper : RowMapper<QueueRecord> {
     override fun map(row: ResultSet.Row): QueueRecord {
         return QueueRecord(
-            name = row.get(0).asString(),
-            partitioned = row.get(1).asBoolean(),
-            unlogged = row.get(2).asBoolean(),
-            createdAt = row.get(3).asInstant(),
+            name = row.get("queue_name").asString(),
+            partitioned = row.get("is_partitioned").asBoolean(),
+            unlogged = row.get("is_unlogged").asBoolean(),
+            createdAt = row.get("created_at").asInstant(),
         )
     }
 }

@@ -12,7 +12,7 @@ internal object BooleanRowMapper : RowMapper<Boolean> {
 
     fun Result<List<Boolean>>.toSingleBooleanResult(): Result<Boolean> = runCatching {
         return map { rs ->
-            require(rs.size == 1) { "Expected a single row, got ${rs.size}" }
+            check(rs.size == 1) { "Expected a single row, got ${rs.size}" }
             rs.first()
         }
     }

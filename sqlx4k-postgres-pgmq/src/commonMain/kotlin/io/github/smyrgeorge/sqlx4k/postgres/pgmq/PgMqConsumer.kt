@@ -1,10 +1,6 @@
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.*
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.Duration
@@ -69,6 +65,8 @@ class PgMqConsumer(
         job?.cancel()
         job = null
     }
+
+    suspend fun metrics(): Result<Metrics> = pgmq.metrics(options.queue)
 
     data class Options(
         val queue: String,
