@@ -134,6 +134,45 @@ class PgMqClient(
         return db.fetchAll(statement, LongRowMapper).toSingleLongResult() // returns the message-id.
     }
 
+    suspend fun send(
+        queue: String,
+        messages: List<Map<String, String?>>,
+        headers: Map<String, String> = emptyMap(),
+        delay: Duration = 0.seconds
+    ): Result<List<Long>> = send(queue, messages.map { it.toJsonString() }, headers, delay)
+
+    suspend fun send(
+        queue: String,
+        messages: List<String>,
+        headers: Map<String, String> = emptyMap(),
+        delay: Duration = 0.seconds
+    ): Result<List<Long>> = with(pg) { send(queue, messages, headers, delay) }
+
+    context(db: QueryExecutor)
+    suspend fun send(
+        queue: String,
+        messages: List<Map<String, String?>>,
+        headers: Map<String, String> = emptyMap(),
+        delay: Duration = 0.seconds
+    ): Result<List<Long>> = send(queue, messages.map { it.toJsonString() }, headers, delay)
+
+    context(db: QueryExecutor)
+    suspend fun send(
+        queue: String,
+        messages: List<String>,
+        headers: Map<String, String> = emptyMap(),
+        delay: Duration = 0.seconds
+    ): Result<List<Long>> {
+        // language=SQL
+        val sql = "SELECT pgmq.send_batch(queue_name := ?, msgs := ARRAY[?]::jsonb, headers := ?, delay := ?)"
+        val statement = Statement.create(sql)
+            .bind(0, queue)
+            .bind(1, NoWrappingTuple(messages))
+            .bind(2, headers.toJsonString())
+            .bind(3, delay.inWholeSeconds)
+        return db.fetchAll(statement, LongRowMapper) // returns the message-ids.
+    }
+
     suspend fun pop(queue: String, quantity: Int = 1): Result<List<Message>> = with(pg) { pop(queue, quantity) }
 
     context(db: QueryExecutor)

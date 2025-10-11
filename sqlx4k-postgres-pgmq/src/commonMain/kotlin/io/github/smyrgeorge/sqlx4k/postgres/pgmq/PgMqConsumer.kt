@@ -93,8 +93,8 @@ class PgMqConsumer(
         val messageRetryDelayStep: Duration = 500.milliseconds,
         val messageMaxRetryDelay: Duration = 60.seconds,
     ) {
-        val vtBias = vt * 2
-        val listenChannel = "pgmq.q_${queue}.INSERT"
+        val vtBias: Duration = vt * 2
+        val listenChannel: String = "pgmq.q_${queue}.INSERT"
 
         init {
             require(queue.isNotEmpty()) { "Queue name must not be empty" }
