@@ -40,7 +40,7 @@ interface IPostgresSQL : Driver {
      *
      * A valid PostgreSQL channel name:
      * - Must start with a letter or an underscore.
-     * - May be followed by letters, digits, or underscores.
+     * - May be followed by letters, digits, underscores or periods.
      * - Has a maximum length of 60 characters.
      *
      * @param channel The name of the PostgreSQL channel to be validated.
@@ -56,8 +56,8 @@ interface IPostgresSQL : Driver {
         val first = channel.first()
         require(first.isLetter() || first == '_') { "Channel must start with a letter or underscore." }
         // Remaining characters must be letters, digits, or underscores
-        require(channel.drop(1).all { it.isLetterOrDigit() || it == '_' }) {
-            "Channel may contain only letters, digits, or underscores."
+        require(channel.drop(1).all { it.isLetterOrDigit() || it == '_' || it == '.' }) {
+            "Channel may contain only letters, digits, underscores or periods."
         }
     }
 }

@@ -16,15 +16,26 @@ class PgMqConsumer(
     private val onFaiToAck: suspend (Throwable) -> Unit = {},
     private val onFaiToNack: suspend (Throwable) -> Unit = {},
 ) {
-    private var job: Job? = null
-    private var delay: Duration = Duration.ZERO
+    private var delay = Duration.ZERO
+    private var delayJob: Job? = null
+    private var consumeJob: Job? = null
 
     init {
+        if (options.enableNotifyInsert) startNotifyInsert()
         if (options.autoStart) start()
     }
 
+    fun startNotifyInsert() {
+        PgChannelScope.launch {
+            pgmq.pg.listen(options.listenChannel) {
+                delay = Duration.ZERO
+                delayJob?.cancel()
+            }
+        }
+    }
+
     fun start() {
-        job = PgChannelScope.launch {
+        consumeJob = PgChannelScope.launch {
             while (true) {
                 val messages = pgmq.read(options.queue, options.prefetch, options.vtBias).getOrElse {
                     onFaiToRead(it)
@@ -56,14 +67,17 @@ class PgMqConsumer(
                     if (delay == Duration.ZERO) delay = options.queueMinPullDelay
                     delay = (delay * 2).coerceAtMost(options.queueMaxPullDelay)
                 }
-                delay(delay)
+
+                delayJob = launch { runCatching { delay(delay) } }
+                delayJob?.join()
             }
         }
     }
 
     fun stop() {
-        job?.cancel()
-        job = null
+        delayJob?.cancel()
+        consumeJob?.cancel()
+        consumeJob = null
     }
 
     suspend fun metrics(): Result<Metrics> = pgmq.metrics(options.queue)
@@ -73,12 +87,14 @@ class PgMqConsumer(
         val prefetch: Int = 250,
         val vt: Duration = 10.seconds,
         val autoStart: Boolean = true,
+        val enableNotifyInsert: Boolean = false,
         val queueMinPullDelay: Duration = 50.milliseconds,
         val queueMaxPullDelay: Duration = 2.seconds,
         val messageRetryDelayStep: Duration = 500.milliseconds,
         val messageMaxRetryDelay: Duration = 60.seconds,
     ) {
         val vtBias = vt * 2
+        val listenChannel = "pgmq.q_${queue}.INSERT"
 
         init {
             require(queue.isNotEmpty()) { "Queue name must not be empty" }

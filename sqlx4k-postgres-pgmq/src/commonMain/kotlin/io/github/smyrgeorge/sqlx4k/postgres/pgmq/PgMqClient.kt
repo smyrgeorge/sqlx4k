@@ -16,7 +16,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 class PgMqClient(
-    private val pg: PgMqDbAdapter,
+    val pg: PgMqDbAdapter,
     private val options: Options = Options()
 ) {
     init {
@@ -239,7 +239,12 @@ class PgMqClient(
         val name: String,
         val unlogged: Boolean = false,
         val enableNotifyInsert: Boolean = false,
-    )
+    ) {
+        init {
+            require(name.isNotEmpty()) { "Queue name must not be empty" }
+            require(name.isNotBlank()) { "Queue name must not be blank" }
+        }
+    }
 
     data class Options(
         val autoInstall: Boolean = true,
