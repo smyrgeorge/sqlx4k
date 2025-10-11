@@ -44,9 +44,8 @@ class PgMqConsumer(
 
                         res.onFailure { f ->
                             onFailToProcess(f)
-                            val vt = (options.messageRetryDelayStep * msg.readCt)
-                                .coerceAtMost(options.messageMaxRetryDelay)
-                            println(vt)
+                            val step = options.messageRetryDelayStep * msg.readCt
+                            val vt = step.coerceAtMost(options.messageMaxRetryDelay)
                             pgmq.nack(options.queue, msg.msgId, vt).onFailure { onFaiToNack(it) }
                         }
                         res.onSuccess {
