@@ -1,6 +1,8 @@
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq
 
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.consumeEach
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.Duration
@@ -16,26 +18,56 @@ class PgMqConsumer(
     private val onFaiToAck: suspend (Throwable) -> Unit = {},
     private val onFaiToNack: suspend (Throwable) -> Unit = {},
 ) {
-    private var delay = Duration.ZERO
-    private var delayJob: Job? = null
+    private var notifyJob: Job? = null
+    private var fetchJob: Job? = null
+    private var fetchDelay = Duration.ZERO
+    private var fetchDelayJob: Job? = null
     private var consumeJob: Job? = null
+    private lateinit var consumeChannel: Channel<Message>
 
     init {
-        if (options.enableNotifyInsert) startNotifyInsert()
         if (options.autoStart) start()
     }
 
-    fun startNotifyInsert() {
-        PgChannelScope.launch {
+    fun start() {
+        if (notifyJob == null && options.enableNotifyInsert) startNotify()
+        if (consumeJob == null) startConsume()
+        if (fetchJob == null) startFetch()
+    }
+
+    private fun startNotify() {
+        notifyJob = PgChannelScope.launch {
             pgmq.pg.listen(options.listenChannel) {
-                delay = Duration.ZERO
-                delayJob?.cancel()
+                fetchDelay = Duration.ZERO
+                fetchDelayJob?.cancel()
             }
         }
     }
 
-    fun start() {
+    private fun startConsume() {
+        consumeChannel = Channel(capacity = options.prefetch)
         consumeJob = PgChannelScope.launch {
+            consumeChannel.consumeEach { msg ->
+                val res = runCatching {
+                    // Process message in a timeout.
+                    withTimeout(options.vt) { onMessage(msg) }
+                }
+
+                res.onFailure { f ->
+                    runCatching { onFailToProcess(f) }
+                    val step = options.messageRetryDelayStep * msg.readCt
+                    val vt = step.coerceAtMost(options.messageMaxRetryDelay)
+                    pgmq.nack(options.queue, msg.msgId, vt).onFailure { runCatching { onFaiToNack(it) } }
+                }
+                res.onSuccess {
+                    pgmq.ack(options.queue, msg.msgId).onFailure { runCatching { onFaiToAck(it) } }
+                }
+            }
+        }
+    }
+
+    private fun startFetch() {
+        fetchJob = PgChannelScope.launch {
             while (true) {
                 val messages = pgmq.read(options.queue, options.prefetch, options.vtBias).getOrElse {
                     onFaiToRead(it)
@@ -43,41 +75,34 @@ class PgMqConsumer(
                 }
                 if (messages.isNotEmpty()) {
                     // Process messages immediately.
-                    messages.forEach { msg ->
-                        val res = runCatching {
-                            // Process message in a timeout.
-                            withTimeout(options.vt) { onMessage(msg) }
-                        }
-
-                        res.onFailure { f ->
-                            onFailToProcess(f)
-                            val step = options.messageRetryDelayStep * msg.readCt
-                            val vt = step.coerceAtMost(options.messageMaxRetryDelay)
-                            pgmq.nack(options.queue, msg.msgId, vt).onFailure { onFaiToNack(it) }
-                        }
-                        res.onSuccess {
-                            pgmq.ack(options.queue, msg.msgId).onFailure { onFaiToAck(it) }
-                        }
-                    }
-
+                    messages.forEach { consumeChannel.send(it) }
                     // reset delay since queue is active
-                    delay = Duration.ZERO
+                    fetchDelay = Duration.ZERO
                 } else {
                     // no messages — back off
-                    if (delay == Duration.ZERO) delay = options.queueMinPullDelay
-                    delay = (delay * 2).coerceAtMost(options.queueMaxPullDelay)
+                    if (fetchDelay == Duration.ZERO) fetchDelay = options.queueMinPullDelay
+                    fetchDelay = (fetchDelay * 2).coerceAtMost(options.queueMaxPullDelay)
                 }
 
-                delayJob = launch { runCatching { delay(delay) } }
-                delayJob?.join()
+                fetchDelayJob = launch { runCatching { delay(fetchDelay) } }
+                fetchDelayJob?.join()
             }
         }
     }
 
     fun stop() {
-        delayJob?.cancel()
-        consumeJob?.cancel()
-        consumeJob = null
+        PgChannelScope.launch {
+            consumeChannel.cancel()
+            delay(500.milliseconds)
+            consumeJob?.cancel()
+            consumeJob = null
+            fetchDelayJob?.cancel()
+            fetchDelayJob = null
+            fetchDelay = Duration.ZERO
+            delay(500.milliseconds)
+            fetchJob?.cancel()
+            fetchJob = null
+        }
     }
 
     suspend fun metrics(): Result<Metrics> = pgmq.metrics(options.queue)

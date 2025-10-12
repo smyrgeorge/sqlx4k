@@ -47,7 +47,7 @@ object Examples {
 
     suspend fun pgmq(db: IPostgresSQL) {
         println("\n=== PgMq ===")
-        val queue = PgMqClient.Queue(name = "test_queue")
+        val queue = PgMqClient.Queue(name = "test_queue", enableNotifyInsert = true)
         val adapter = PgMqDbAdapterImpl(db)
         val pgmq = PgMqClient(adapter).apply {
             drop(queue).getOrThrow() // Drop the queue if it already exists
@@ -56,7 +56,7 @@ object Examples {
 
         val consumer = PgMqConsumer(
             pgmq = pgmq,
-            options = PgMqConsumer.Options(queue = queue.name),
+            options = PgMqConsumer.Options(queue = queue.name, enableNotifyInsert = true),
             onMessage = { println("Message received: $it") },
             onFaiToRead = { println("Error (onFaiToRead): $it") },
             onFailToProcess = { println("Error (onFailToProcess): $it") },

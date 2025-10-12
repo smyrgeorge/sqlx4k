@@ -97,25 +97,10 @@ class PgMqClient(
 
     suspend fun send(
         queue: String,
-        message: Map<String, String?>,
-        headers: Map<String, String> = emptyMap(),
-        delay: Duration = 0.seconds
-    ): Result<Long> = send(queue, message.toJsonString(), headers, delay)
-
-    suspend fun send(
-        queue: String,
         message: String,
         headers: Map<String, String> = emptyMap(),
         delay: Duration = 0.seconds
     ): Result<Long> = with(pg) { send(queue, message, headers, delay) }
-
-    context(db: QueryExecutor)
-    suspend fun send(
-        queue: String,
-        message: Map<String, String?>,
-        headers: Map<String, String> = emptyMap(),
-        delay: Duration = 0.seconds
-    ): Result<Long> = send(queue, message.toJsonString(), headers, delay)
 
     context(db: QueryExecutor)
     suspend fun send(
@@ -136,25 +121,10 @@ class PgMqClient(
 
     suspend fun send(
         queue: String,
-        messages: List<Map<String, String?>>,
-        headers: Map<String, String> = emptyMap(),
-        delay: Duration = 0.seconds
-    ): Result<List<Long>> = send(queue, messages.map { it.toJsonString() }, headers, delay)
-
-    suspend fun send(
-        queue: String,
         messages: List<String>,
         headers: Map<String, String> = emptyMap(),
         delay: Duration = 0.seconds
     ): Result<List<Long>> = with(pg) { send(queue, messages, headers, delay) }
-
-    context(db: QueryExecutor)
-    suspend fun send(
-        queue: String,
-        messages: List<Map<String, String?>>,
-        headers: Map<String, String> = emptyMap(),
-        delay: Duration = 0.seconds
-    ): Result<List<Long>> = send(queue, messages.map { it.toJsonString() }, headers, delay)
 
     context(db: QueryExecutor)
     suspend fun send(
