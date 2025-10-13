@@ -9,6 +9,24 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * PgMqConsumer is responsible for consuming messages from a PostgreSQL-based
+ * message queue (PgMq). It provides configurable options for queue management
+ * and handles message processing, acknowledging, and retrying logic.
+ *
+ * @constructor
+ * Creates an instance of PgMqConsumer with the provided PgMq client, configuration options,
+ * and callbacks for message processing and error handling.
+ *
+ * @property pgmq An instance of the PgMqClient used for accessing the message queue.
+ * @property options Configuration options for the consumer behavior, such as queue name,
+ * prefetch size, visibility timeout, and retry delays.
+ * @property onMessage A suspendable callback invoked to process each message received from the queue.
+ * @property onFaiToRead A suspendable callback invoked when a failure occurs while reading messages from the queue.
+ * @property onFailToProcess A suspendable callback invoked when a failure occurs while processing a message.
+ * @property onFaiToAck A suspendable callback invoked when a failure occurs while acknowledging (ack) a message.
+ * @property onFaiToNack A suspendable callback invoked when a failure occurs while negative acknowledging (nack) a message.
+ */
 class PgMqConsumer(
     private val pgmq: PgMqClient,
     private val options: Options,
@@ -29,6 +47,17 @@ class PgMqConsumer(
         if (options.autoStart) start()
     }
 
+    /**
+     * Starts the message queue consumer by initializing and launching processes for notification,
+     * consumption, and fetching, if they are not already running.
+     *
+     * - The notification process is responsible for handling insertion notifications.
+     * - The consumption process manages message processing from the queue.
+     * - The fetching process retrieves messages from the queue for processing.
+     *
+     * This method ensures that all required jobs (notify, consume, fetch) are properly started
+     * to maintain the functionality of the consumer.
+     */
     fun start() {
         if (notifyJob == null && options.enableNotifyInsert) startNotify()
         if (consumeJob == null) startConsume()
@@ -90,6 +119,17 @@ class PgMqConsumer(
         }
     }
 
+    /**
+     * Stops the message queue consumer by gracefully canceling ongoing processes for consumption and fetching.
+     *
+     * This method cancels the following in sequence:
+     * - The channel consumption process (`consumeChannel`) to stop receiving messages.
+     * - The message consumption job (`consumeJob`) responsible for processing messages.
+     * - The fetching delay job (`fetchDelayJob`) that controls delays between fetch operations and resets the fetch delay to zero.
+     * - The fetching job (`fetchJob`) responsible for retrieving messages from the queue.
+     *
+     * Delays are applied during the stopping process to ensure proper shutdown and cleanup of resources.
+     */
     fun stop() {
         PgChannelScope.launch {
             consumeChannel.cancel()
@@ -105,8 +145,43 @@ class PgMqConsumer(
         }
     }
 
+    /**
+     * Retrieves metrics for the current queue managed by the consumer.
+     *
+     * @return A [Result] containing a [Metrics] object with detailed metrics of the queue.
+     *         The result may contain an error if metrics retrieval fails or is inconsistent.
+     */
     suspend fun metrics(): Result<Metrics> = pgmq.metrics(options.queue)
 
+    /**
+     * Configuration options for a message queue consumer.
+     *
+     * @property queue The name of the queue. Must be non-empty and non-blank.
+     * @property prefetch The maximum number of messages to prefetch at a time. Must be greater than 0. Defaults to 250.
+     * @property vt The visibility timeout duration for a message. Specifies the period after which a message becomes
+     *             visible for processing again if it has not been acknowledged. Must be at least 1 second. Defaults to 10 seconds.
+     * @property autoStart Indicates if the consumer should automatically start processing messages. Defaults to true.
+     * @property enableNotifyInsert Determines whether insertion notifications are enabled for the queue. Defaults to false.
+     * @property queueMinPullDelay The minimum delay between consecutive pull operations from the queue. Must be positive
+     *                             and less than `queueMaxPullDelay`. Defaults to 50 milliseconds.
+     * @property queueMaxPullDelay The maximum delay between consecutive pull operations from the queue. Must be positive
+     *                             and greater than `queueMinPullDelay`. Defaults to 2 seconds.
+     * @property messageRetryDelayStep The incremental delay applied before retrying a message. Must be positive and less
+     *                                 than `messageMaxRetryDelay`. Defaults to 500 milliseconds.
+     * @property messageMaxRetryDelay The maximum retry delay for a message. Must be positive. Defaults to 60 seconds.
+     * @property vtBias A derived value calculated as `vt * 2`. Represents an adjusted visibility timeout bias.
+     * @property listenChannel The channel used for listening to insertion notifications. Derived from the queue name
+     *                         and formatted as "pgmq.q_<queue>.INSERT".
+     *
+     * @throws IllegalArgumentException Thrown if any of the validation conditions for the properties are violated:
+     *                                  - `queue` must not be empty or blank.
+     *                                  - `prefetch` must be greater than 0.
+     *                                  - `vt` duration must be at least 1 second.
+     *                                  - `queueMinPullDelay` and `queueMaxPullDelay` must be positive, and
+     *                                    `queueMinPullDelay` must be less than `queueMaxPullDelay`.
+     *                                  - `messageRetryDelayStep` and `messageMaxRetryDelay` must be positive, and
+     *                                    `messageRetryDelayStep` must be less than `messageMaxRetryDelay`.
+     */
     data class Options(
         val queue: String,
         val prefetch: Int = 250,
