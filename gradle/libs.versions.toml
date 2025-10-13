@@ -35,7 +35,7 @@ jsqlparser = "5.3"
 # https://github.com/apache/calcite
 calcite = "1.40.0"
 # https://github.com/smyrgeorge/log4k
-log4k = "1.1.1"
+log4k = "1.1.2"
 
 [libraries]
 gradle-kotlin-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
