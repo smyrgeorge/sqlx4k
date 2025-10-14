@@ -247,7 +247,7 @@ class PgMqClient(
         delay: Duration = 0.seconds
     ): Result<List<Long>> {
         // language=SQL
-        val sql = "SELECT pgmq.send_batch(queue_name := ?, msgs := ARRAY[?]::jsonb, headers := ?, delay := ?)"
+        val sql = "SELECT pgmq.send_batch(queue_name := ?, msgs := ARRAY[?]::jsonb[], headers := ?, delay := ?)"
         val statement = Statement.create(sql)
             .bind(0, queue)
             .bind(1, NoWrappingTuple(messages))
