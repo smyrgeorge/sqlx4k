@@ -47,7 +47,9 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
     - [SQL schema validation (compile-time)](#sql-schema-validation-compile-time)
 - [Database migrations](#database-migrations)
 - [PostgreSQL LISTEN/NOTIFY](#listennotify-only-for-postgresql)
-- [SQLDelight integration](#sqldelight)
+- [Extensions](#extensions)
+    - [PostgreSQL Message Queue (PGMQ)](#postgresql-message-queue-pgmq)
+    - [SQLDelight](#sqldelight)
 - [Supported targets](#supported-targets)
 
 ### Next Steps (contributions are welcome)
@@ -303,8 +305,8 @@ plugins {
 
 // Then you need to configure the processor (it will generate the necessary code files).
 ksp {
-    // Optional: pick SQL dialect for CRUD generation from @Table classes.
-    // Currently only "mysql" is special-cased; everything else falls back to a generic ANSI-like dialect.
+    // Optional: pick the SQL dialect for CRUD generation from @Table classes.
+    // Currently, only "mysql" is special-cased; everything else falls back to a generic ANSI-like dialect.
     // This setting affects the shape of INSERT/UPDATE/DELETE that TableProcessor emits.
     // It does NOT affect @Query validation (see notes below).
     // arg("dialect", "mysql")
@@ -362,7 +364,7 @@ val res: Sqlx4k = Sqlx4kRepositoryImpl.insert(db, record).getOrThrow()
 val res: List<Sqlx4k> = Sqlx4kRepositoryImpl.selectAll(db).getOrThrow()
 ```
 
-For more details take a look at the [examples](./examples).
+For more details, take a look at the [examples](./examples).
 
 #### Context-Parameters
 
@@ -523,9 +525,59 @@ db.listen("chan0") { notification: Postgres.Notification ->
 }
 ```
 
+## Extensions
+
+`sqlx4k` provides several extensions to enhance functionality:
+
+### PostgreSQL Message Queue (PGMQ)
+
+A Kotlin Multiplatform client for building reliable, asynchronous message queues using PostgreSQL and
+the [PGMQ](https://github.com/tembo-io/pgmq) extension.
+
+**Features:**
+
+- Full PGMQ operations support (create, drop, list queues)
+- Send and receive messages with headers and delays
+- Message acknowledgment (ack/nack) with visibility timeout
+- Batch operations for high throughput
+- High-level consumer API with automatic retry and exponential backoff
+- PostgreSQL LISTEN/NOTIFY integration for real-time notifications
+- Queue metrics and monitoring
+
+**Installation:**
+
+```kotlin
+implementation("io.github.smyrgeorge:sqlx4k-postgres-pgmq:x.y.z")
+```
+
+**Quick Example:**
+
+```kotlin
+// Create PGMQ client
+val pgmq = PgMqClient(
+    pg = PgMqDbAdapterImpl(db),
+    options = PgMqClient.Options(autoInstall = true)
+)
+
+// Create a queue and send messages
+pgmq.create(PgMqClient.Queue(name = "my_queue")).getOrThrow()
+pgmq.send("my_queue", """{"order": 123}""").getOrThrow()
+
+// High-level consumer with automatic retry
+val consumer = PgMqConsumer(
+    pgmq = pgmq,
+    options = PgMqConsumer.Options(queue = "my_queue"),
+    onMessage = { message -> processMessage(message) }
+)
+```
+
+For complete documentation, see [sqlx4k-postgres-pgmq/README.md](./sqlx4k-postgres-pgmq/README.md)
+
 ### SQLDelight
 
-Check here: https://github.com/smyrgeorge/sqlx4k-sqldelight
+SQLDelight integration for type-safe SQL queries with sqlx4k.
+
+**Repository:** https://github.com/smyrgeorge/sqlx4k-sqldelight
 
 ## Supported Targets
 
