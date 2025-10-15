@@ -20,7 +20,7 @@ export CXX_x86_64_unknown_linux_gnu=x86_64-unknown-linux-gnu-g++
 export CC_x86_64_w64_mingw32=x86_64-w64-mingw32-gcc
 export CXX_x86_64_w64_mingw32=x86_64-w64-mingw32-g++
 
-./gradlew clean build -Ptargets=all
+./gradlew build -Ptargets=all
 
 ./gradlew :dokka:dokkaGenerate
 rm -rf ./docs/*

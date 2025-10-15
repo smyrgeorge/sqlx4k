@@ -41,7 +41,7 @@
             </a>        <button class="navigation-controls--btn navigation-controls--btn_toc ui-kit_mobile-only" id="toc-toggle" type="button">Toggle table of contents
         </button>
         <div class="navigation-controls--break ui-kit_mobile-only"></div>
-        <div class="library-version" id="library-version">1.2.0
+        <div class="library-version" id="library-version">1.3.0
         </div>
         <div class="navigation-controls">
         <div class="filter-section filter-section_loading" id="filter-section">
@@ -94,7 +94,7 @@
   <div class="breadcrumbs"><a href="../../index.html">sqlx4k-codegen</a><span class="delimiter">/</span><a href="../index.html">io.github.smyrgeorge.sqlx4k.processor</a><span class="delimiter">/</span><span class="current">SqlValidator</span></div>
   <div class="cover ">
     <h1 class="cover"><span>Sql</span><wbr><span><span>Validator</span></span></h1>
-    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-codegen/jvmMain"><div class="symbol monospace"><span class="token keyword">object </span><a href="index.html">SqlValidator</a><span class="clearfix"><span class="floating-right">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k-codegen/src/jvmMain/kotlin/io/github/smyrgeorge/sqlx4k/processor/SqlValidator.kt#L33">source</a>)</span></span></div></div></div>
+    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-codegen/jvmMain"><div class="symbol monospace"><span class="token keyword">object </span><a href="index.html">SqlValidator</a><span class="clearfix"><span class="floating-right">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k-codegen/src/jvmMain/kotlin/io/github/smyrgeorge/sqlx4k/processor/SqlValidator.kt#L35">source</a>)</span></span></div><p class="paragraph">A utility object that provides functionality for SQL validation and schema handling. This includes methods for checking SQL query syntax, validating against schemas, managing schemas from definition files, and ensuring data type consistency during validation.</p></div></div>
   </div>
   <div class="tabbedcontent">
     <div class="tabs-section" tabs-section="tabs-section"><button class="section-tab" data-active="" data-togglable="CONSTRUCTOR,TYPE,PROPERTY,FUNCTION">Members</button></div>
@@ -160,7 +160,7 @@
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-codegen/jvmMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="load-schema.html"><span class="token function">loadSchema</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">path<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-codegen/jvmMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="load-schema.html"><span class="token function">loadSchema</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">path<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span></div><div class="brief "><p class="paragraph">Loads SQL schema definitions from the specified directory, processes each <code class="lang-kotlin">.sql</code> file encountered, and constructs a representation of the database schema consisting of tables and their columns.</p></div></div></div>
                 </div>
               </div>
             </div>
@@ -175,7 +175,7 @@
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-codegen/jvmMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="validate-query-schema.html"><span class="token function">validateQuerySchema</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">fn<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">sql<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-codegen/jvmMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="validate-query-schema.html"><span class="token function">validateQuerySchema</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">fn<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">sql<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span></div><div class="brief "><p class="paragraph">Validates the provided SQL query schema against Calcite's SQL parser and validator. Optionally applies custom literal type checks if the <code class="lang-kotlin">VALIDATE_LITERAL_TYPES</code> flag is enabled.</p></div></div></div>
                 </div>
               </div>
             </div>
@@ -190,7 +190,7 @@
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-codegen/jvmMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="validate-query-syntax.html"><span class="token function">validateQuerySyntax</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">fn<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">sql<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-codegen/jvmMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="validate-query-syntax.html"><span class="token function">validateQuerySyntax</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">fn<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">sql<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span></div><div class="brief "><p class="paragraph">Validates the syntax of an SQL query by attempting to parse it. If the SQL syntax is invalid, an error is thrown with a message indicating the issue.</p></div></div></div>
                 </div>
               </div>
             </div>

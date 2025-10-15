@@ -22,7 +22,7 @@ kotlin {
 ksp {
     arg("dialect", "mysql")
     arg("output-package", "io.github.smyrgeorge.sqlx4k.examples.mysql")
-    arg("validate-sql-schema", "true")
+    arg("validate-sql-schema", "false")
     arg("schema-migrations-path", "./db/migrations")
 }
 
