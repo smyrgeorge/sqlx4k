@@ -15,8 +15,7 @@
 ![](https://img.shields.io/static/v1?label=&message=iOS&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=Android&color=blue)
 
-The Kotlin SQL Toolkit. A multiplatform, async SQL library with compile-time query checks. Supports PostgreSQL, MySQL,
-and SQLite.
+A multiplatform, async SQL Toolkit with compile-time query checks for Kotlin. Supports PostgreSQL, MySQL, and SQLite.
 
 ---
 
