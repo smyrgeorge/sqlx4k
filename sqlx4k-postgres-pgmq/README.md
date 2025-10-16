@@ -13,6 +13,7 @@ message queues using PostgreSQL.
 - Queue metrics and monitoring
 - High-level consumer API with automatic retry logic
 - PostgreSQL LISTEN/NOTIFY support for real-time queue notifications
+- R2DBC support for reactive database access (JVM only)
 - Kotlin Multiplatform support (JVM, Native)
 
 ## Installation
@@ -25,7 +26,7 @@ This module depends on `sqlx4k-postgres`, so you'll have access to all PostgreSQ
 
 ## Quick Start
 
-### 1. Set up the Client
+### Set up the Client
 
 ```kotlin
 // Create a PostgreSQL connection
@@ -43,9 +44,20 @@ val pgmq = PgMqClient(
         verifyInstallation = true    // Verify pgmq is installed on startup
     )
 )
+
+// Or use the R2DBC adapter directly (JVM only)
+val connectionFactory = PostgresqlConnectionFactory(/* config */)
+val pool = ConnectionPool(/* config */)
+val pgmqR2dbc = PgMqClient(
+    pg = PgMqDbAdapterR2dbc(connectionFactory, pool),
+    options = PgMqClient.Options(
+        autoInstall = true,
+        verifyInstallation = true
+    )
+)
 ```
 
-### 2. Create and Manage Queues
+### Create and Manage Queues
 
 ```kotlin
 // Create a queue
@@ -64,7 +76,7 @@ queues.forEach { println("Queue: ${it.name}, Created: ${it.createdAt}") }
 pgmq.drop(queue).getOrThrow()
 ```
 
-### 3. Send Messages
+### Send Messages
 
 ```kotlin
 // Send a single message
@@ -89,7 +101,7 @@ val messageIds = pgmq.send(
 ).getOrThrow()
 ```
 
-### 4. Read and Process Messages
+### Read and Process Messages
 
 ```kotlin
 // Pop messages (read and remove)
@@ -123,7 +135,7 @@ readMessages.forEach { msg ->
 }
 ```
 
-### 5. High-Level Consumer
+### Consumer
 
 The consumer provides automatic message fetching, processing, and retry logic:
 
@@ -172,7 +184,7 @@ val metrics = consumer.metrics().getOrThrow()
 println("Queue length: ${metrics.queueLength}, Visible: ${metrics.queueVisibleLength}")
 ```
 
-### 6. Advanced Operations
+### Advanced Operations
 
 ```kotlin
 // Archive messages (move to archive table)
@@ -243,7 +255,7 @@ db.transaction {
 ## Requirements
 
 - PostgreSQL 12+
-- PGMQ extension installed (automatically installed if `autoInstall = true`)
+- PGMQ extension installed
 
 ## Related Links
 

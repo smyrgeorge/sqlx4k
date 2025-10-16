@@ -25,5 +25,11 @@ kotlin {
                 implementation(libs.assertk)
             }
         }
+        val jvmMain by getting {
+            dependencies {
+                implementation(libs.r2dbc.postgresql)
+                implementation(libs.r2dbc.pool)
+            }
+        }
     }
 }
