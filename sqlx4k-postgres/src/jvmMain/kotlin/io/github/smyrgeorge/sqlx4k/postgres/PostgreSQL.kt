@@ -3,11 +3,13 @@ package io.github.smyrgeorge.sqlx4k.postgres
 import io.github.smyrgeorge.sqlx4k.*
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
+import io.github.smyrgeorge.sqlx4k.impl.types.NoQuotingString
 import io.r2dbc.pool.ConnectionPoolConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
 import io.r2dbc.spi.Row
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.asFlow
@@ -23,6 +25,7 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.jvm.optionals.getOrElse
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.toJavaDuration
 import io.r2dbc.pool.ConnectionPool as R2dbcConnectionPool
 import io.r2dbc.spi.Connection as R2dbcConnection
@@ -181,26 +184,30 @@ class PostgreSQL(
         require(channels.isNotEmpty()) { "Channels cannot be empty." }
         channels.forEach { validateChannelName(it) }
 
-        val sql = buildString {
-            for (chan in channels) {
-                append("LISTEN \"")
-                append(chan)
-                append("\";")
-            }
+        val sql = channels.joinToString(separator = "\n") {
+            Statement.create("LISTEN ?;").bind(0, NoQuotingString(it)).render()
         }
 
         PgChannelScope.launch {
+            var retryCount = 0
+            val baseDelay = 100.milliseconds
+
+            // Automatically reconnect if the connection closes.
             while (true) {
-                val con = connectionFactory.create().awaitSingle()
-                @Suppress("SqlSourceToSinkFlow")
-                con.createStatement(sql)
-                    .execute()
-                    .flatMap { it.rowsUpdated }
-                    .thenMany(con.notifications)
-                    .asFlow()
-                    .collect { f(it.toNotification()) }
-                con.close().awaitFirstOrNull()
-                // Automatically reconnect if the connection closes.
+                try {
+                    val con = connectionFactory.create().awaitSingle()
+                    @Suppress("SqlSourceToSinkFlow")
+                    con.createStatement(sql)
+                        .execute()
+                        .flatMap { it.rowsUpdated }
+                        .thenMany(con.notifications)
+                        .asFlow()
+                        .collect { f(it.toNotification()) }
+                    con.close().awaitFirstOrNull()
+                } catch (_: Exception) {
+                    retryCount++
+                    delay(baseDelay * retryCount)
+                }
             }
         }
     }
