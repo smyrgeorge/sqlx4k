@@ -15,7 +15,19 @@
 ![](https://img.shields.io/static/v1?label=&message=iOS&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=Android&color=blue)
 
-A high-performance, non-blocking database driver for PostgreSQL, MySQL, and SQLite, written for Kotlin Multiplatform.
+The Kotlin SQL Toolkit. A multiplatform, async SQL library with compile-time query checks. Supports PostgreSQL, MySQL,
+and SQLite.
+
+---
+
+**sqlx4k** is not an ORM. Instead, it provides a comprehensive toolkit of primitives and utilities to communicate
+directly with your database. The focus is on giving you control while catching errors early through compile-time query
+validation—preventing runtime surprises before they happen
+(see [SQL syntax validation (compile-time)](#sql-syntax-validation-compile-time)
+and [SQL schema validation (compile-time)](#sql-schema-validation-compile-time) for more details).
+
+The library is designed to be extensible, with a growing ecosystem of tools and extensions like PGMQ (PostgreSQL Message
+Queue), SQLDelight integration, and more.
 
 📖 [Documentation](https://smyrgeorge.github.io/sqlx4k/)
 
