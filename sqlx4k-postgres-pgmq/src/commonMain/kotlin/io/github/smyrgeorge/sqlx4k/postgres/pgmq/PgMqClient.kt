@@ -7,14 +7,9 @@ import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.extensions.toJsonString
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.BooleanRowMapper
+import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.*
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.BooleanRowMapper.toSingleBooleanResult
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.LongRowMapper
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.LongRowMapper.toSingleLongResult
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.MessageRowMapper
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.MetricsRowMapper
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.QueueRecordRowMapper
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.UnitRowMapper
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.UnitRowMapper.toSingleUnitResult
 import kotlinx.coroutines.runBlocking
 import kotlin.time.Duration
@@ -502,6 +497,94 @@ class PgMqClient(
      * @return A [Result] containing the new visibility timeout, wrapped in a success or failure state.
      */
     suspend fun nack(queue: String, id: Long, vt: Duration = Duration.ZERO): Result<Long> = setVt(queue, id, vt)
+
+    /**
+     * Creates a topic binding between a pattern and a queue.
+     *
+     * Topic bindings use AMQP-style wildcard patterns to route messages:
+     * - `*` (star) matches exactly ONE segment between dots
+     * - `#` (hash) matches ZERO or MORE segments
+     *
+     * The pattern is automatically validated before insertion, and the operation
+     * is idempotent (safe to call multiple times with the same arguments).
+     *
+     * @param pattern The AMQP-style wildcard pattern for routing key matching.
+     *                Examples: "logs.*", "logs.#", "*.error", "#.critical"
+     * @param queueName The name of the queue that will receive matching messages.
+     * @return A [Result] containing [Unit] on success, or an error if validation fails.
+     */
+    suspend fun bindTopic(pattern: String, queueName: String): Result<Unit> {
+        // language=SQL
+        val sql = "SELECT pgmq.bind_topic(pattern := ?, queue_name := ?)"
+        val statement = Statement.create(sql).bind(0, pattern).bind(1, queueName)
+        return pg.fetchAll(statement, UnitRowMapper).toSingleUnitResult()
+    }
+
+    /**
+     * Removes a topic binding between a pattern and a queue.
+     *
+     * This operation is idempotent (safe to call multiple times with the same arguments).
+     *
+     * @param pattern The pattern to unbind from the queue.
+     * @param queueName The name of the queue to unbind from the pattern.
+     * @return A [Result] containing `true` if a binding was removed, `false` if no matching binding was found.
+     */
+    suspend fun unbindTopic(pattern: String, queueName: String): Result<Boolean> {
+        // language=SQL
+        val sql = "SELECT pgmq.unbind_topic(pattern := ?, queue_name := ?)"
+        val statement = Statement.create(sql).bind(0, pattern).bind(1, queueName)
+        return pg.fetchAll(statement, BooleanRowMapper).toSingleBooleanResult()
+    }
+
+    /**
+     * Sends a message to all queues that match the routing key pattern.
+     *
+     * Uses AMQP-style topic routing with wildcards:
+     * - The routing_key is matched against all patterns in the topic_bindings table
+     * - Messages are sent to ALL matching queues
+     * - The operation is atomic: either all matching queues receive the message or none do
+     *
+     * @param routingKey The routing key for the message (e.g., "logs.error", "app.user.created").
+     *                   Must not contain wildcards (* or #).
+     * @param message The content of the message to be sent.
+     * @param headers Optional metadata to include with the message. Defaults to an empty map.
+     * @param delay The duration to delay the message delivery. Defaults to 0 seconds.
+     * @return A [Result] containing the number of queues that received the message.
+     */
+    suspend fun sendTopic(
+        routingKey: String,
+        message: String,
+        headers: Map<String, String> = emptyMap(),
+        delay: Duration = 0.seconds
+    ): Result<Long> = with(pg) { sendTopic(routingKey, message, headers, delay) }
+
+    /**
+     * Sends a message to all queues that match the routing key pattern.
+     *
+     * This is the context version that can be used within a transaction or query executor.
+     *
+     * @param routingKey The routing key for the message.
+     * @param message The content of the message to be sent.
+     * @param headers Optional metadata to include with the message.
+     * @param delay The duration to delay the message delivery.
+     * @return A [Result] containing the number of queues that received the message.
+     */
+    context(db: QueryExecutor)
+    suspend fun sendTopic(
+        routingKey: String,
+        message: String,
+        headers: Map<String, String> = emptyMap(),
+        delay: Duration = 0.seconds
+    ): Result<Long> {
+        // language=SQL
+        val sql = "SELECT pgmq.send_topic(routing_key := ?, msg := ?, headers := ?, delay := ?)"
+        val statement = Statement.create(sql)
+            .bind(0, routingKey)
+            .bind(1, message)
+            .bind(2, headers.toJsonString())
+            .bind(3, delay.inWholeSeconds)
+        return db.fetchAll(statement, LongRowMapper).toSingleLongResult()
+    }
 
     /**
      * Represents a queue configuration with specific attributes.
