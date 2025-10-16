@@ -435,6 +435,48 @@ COMMENT ON FUNCTION pgmq.send_topic(text, jsonb, jsonb, integer) IS
     'Transaction is atomic - either all matching queues receive the message or none do. '
     'Usage: SELECT pgmq.send_topic(''logs.error'', ''{"message": "error occurred"}''::jsonb, NULL, 0);';
 
+-- ============================================================================
+-- Send Topic Overload Functions
+-- ============================================================================
+-- Convenience overloads with fewer parameters
+-- ============================================================================
+
+-- Overload: send_topic(routing_key, msg)
+DROP FUNCTION IF EXISTS pgmq.send_topic(text, jsonb);
+CREATE OR REPLACE FUNCTION pgmq.send_topic(routing_key text, msg jsonb)
+    RETURNS integer
+    LANGUAGE plpgsql
+    VOLATILE
+    AS $$
+BEGIN
+    -- Delegate to the main send_topic function with default values
+    RETURN pgmq.send_topic(routing_key, msg, NULL, 0);
+END;
+$$;
+
+COMMENT ON FUNCTION pgmq.send_topic(text, jsonb) IS
+    'Convenience overload for send_topic with default headers (NULL) and delay (0). '
+    'Sends a message to all queues that match the routing key pattern. '
+    'Usage: SELECT pgmq.send_topic(''logs.error'', ''{"message": "error"}''::jsonb);';
+
+-- Overload: send_topic(routing_key, msg, delay)
+DROP FUNCTION IF EXISTS pgmq.send_topic(text, jsonb, integer);
+CREATE OR REPLACE FUNCTION pgmq.send_topic(routing_key text, msg jsonb, delay integer)
+    RETURNS integer
+    LANGUAGE plpgsql
+    VOLATILE
+    AS $$
+BEGIN
+    -- Delegate to the main send_topic function with default headers
+    RETURN pgmq.send_topic(routing_key, msg, NULL, delay);
+END;
+$$;
+
+COMMENT ON FUNCTION pgmq.send_topic(text, jsonb, integer) IS
+    'Convenience overload for send_topic with default headers (NULL). '
+    'Sends a message to all queues that match the routing key pattern with a specified delay. '
+    'Usage: SELECT pgmq.send_topic(''logs.error'', ''{"message": "error"}''::jsonb, 60);';
+
 
 -- ========================================================================
 -- Usage Examples
