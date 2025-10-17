@@ -513,11 +513,41 @@ class PgMqClient(
      * @param queueName The name of the queue that will receive matching messages.
      * @return A [Result] containing [Unit] on success, or an error if validation fails.
      */
+    suspend fun bindTopic(pattern: String, queueName: String): Result<Unit> = with(pg) { bindTopic(pattern, queueName) }
+
+    /**
+     * Creates a topic binding between a pattern and a queue.
+     *
+     * This is the context version that can be used within a transaction or query executor.
+     *
+     * @param pattern The AMQP-style wildcard pattern for routing key matching.
+     * @param queueName The name of the queue that will receive matching messages.
+     * @return A [Result] containing [Unit] on success, or an error if validation fails.
+     */
+    context(db: QueryExecutor)
     suspend fun bindTopic(pattern: String, queueName: String): Result<Unit> {
         // language=SQL
         val sql = "SELECT pgmq.bind_topic(pattern := ?, queue_name := ?)"
         val statement = Statement.create(sql).bind(0, pattern).bind(1, queueName)
-        return pg.fetchAll(statement, UnitRowMapper).toSingleUnitResult()
+        return db.fetchAll(statement, UnitRowMapper).toSingleUnitResult()
+    }
+
+    /**
+     * Creates topic bindings for multiple patterns to a single queue.
+     *
+     * This operation is performed atomically within a transaction. Either all bindings
+     * are created successfully, or none are.
+     *
+     * @param patterns A list of AMQP-style wildcard patterns for routing key matching.
+     *                 Examples: listOf("logs.*", "logs.#", "*.error", "#.critical")
+     * @param queueName The name of the queue that will receive matching messages.
+     * @return A [Result] containing [Unit] on success, or an error if any binding fails.
+     */
+    suspend fun bindTopic(patterns: List<String>, queueName: String): Result<Unit> {
+        return pg.transaction {
+            patterns.forEach { pattern -> bindTopic(pattern, queueName).getOrThrow() }
+            Result.success(Unit)
+        }
     }
 
     /**
