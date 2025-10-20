@@ -12,7 +12,7 @@ kotlinx-serialisation = "1.9.0"
 # https://github.com/vanniktech/gradle-maven-publish-plugin
 publish = "0.34.0"
 # https://github.com/Kotlin/dokka
-dokka = "2.0.0"
+dokka = "2.1.0"
 # https://github.com/willowtreeapps/assertk
 assertk = "0.28.1"
 # https://github.com/google/ksp/releases
