@@ -1,6 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.postgres
 
 import io.github.smyrgeorge.sqlx4k.*
+import io.github.smyrgeorge.sqlx4k.impl.extensions.encodeValue
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.github.smyrgeorge.sqlx4k.impl.types.NoQuotingString
@@ -152,7 +153,7 @@ class PostgreSQLImpl(
         channels.forEach { validateChannelName(it) }
 
         val sql = channels.joinToString(separator = "\n") {
-            Statement.create("LISTEN ?;").bind(0, NoQuotingString(it)).render()
+            "LISTEN \"${NoQuotingString(it).encodeValue(encoders)}\";"
         }
 
         PgChannelScope.launch {

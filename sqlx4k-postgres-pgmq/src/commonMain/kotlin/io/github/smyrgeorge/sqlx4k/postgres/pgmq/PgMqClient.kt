@@ -13,6 +13,7 @@ import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.LongRowMapper.toSi
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.UnitRowMapper.toSingleUnitResult
 import kotlinx.coroutines.runBlocking
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -81,10 +82,16 @@ class PgMqClient(
         }
 
         context(tx: Transaction)
-        suspend fun enableNotifyInsert(queue: String): Result<Unit> {
-            // language=SQL
-            val sql = "SELECT pgmq.enable_notify_insert(queue_name := ?)"
-            val statement = Statement.create(sql).bind(0, queue)
+        suspend fun enableNotifyInsert(queue: String, throttleNotifyInterval: Duration): Result<Unit> {
+            val statement = if (throttleNotifyInterval == Duration.ZERO) {
+                // language=SQL
+                val sql = "SELECT pgmq.enable_notify_insert(queue_name := ?)"
+                Statement.create(sql).bind(0, queue)
+            } else {
+                // language=SQL
+                val sql = "SELECT pgmq.enable_notify_insert(queue_name := ?, throttle_interval_ms := ?)"
+                Statement.create(sql).bind(0, queue).bind(1, throttleNotifyInterval.inWholeMilliseconds)
+            }
             return tx.fetchAll(statement, UnitRowMapper).toSingleUnitResult()
         }
 
@@ -97,7 +104,7 @@ class PgMqClient(
             }
 
             create(queue.name, queue.unlogged).getOrThrow()
-            if (queue.enableNotifyInsert) enableNotifyInsert(queue.name).getOrThrow()
+            if (queue.enableNotifyInsert) enableNotifyInsert(queue.name, queue.throttleNotifyInterval).getOrThrow()
             Result.success(Unit)
         }
     }
@@ -622,16 +629,21 @@ class PgMqClient(
      * @property name The name of the queue. It must be a non-empty and non-blank string.
      * @property unlogged A flag indicating whether the queue operates in an unlogged mode. Defaults to `false`.
      * @property enableNotifyInsert A flag specifying if notifications should be enabled for insert operations. Defaults to `false`.
+     * @property throttleNotifyInterval The interval between consecutive insertion notification throttling checks. Must be positive
+     *                                   and less than 1 second. Defaults to 100 milliseconds.
      * @throws IllegalArgumentException if the `name` is empty or blank.
      */
     data class Queue(
         val name: String,
         val unlogged: Boolean = false,
         val enableNotifyInsert: Boolean = false,
+        val throttleNotifyInterval: Duration = 250.milliseconds,
     ) {
         init {
             require(name.isNotEmpty()) { "Queue name must not be empty" }
             require(name.isNotBlank()) { "Queue name must not be blank" }
+            require(throttleNotifyInterval >= Duration.ZERO) { "ThrottleNotifyInterval must not be negative" }
+            require(throttleNotifyInterval.inWholeMilliseconds <= 1000) { "ThrottleNotifyInterval must not be greater than 1 second" }
         }
     }
 

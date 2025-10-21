@@ -71,7 +71,7 @@ object Examples {
             val msg = """{"foo": $it}"""
             pgmq.send(queue.name, msg).getOrThrow()
             println("Published message $it")
-            delay(1000)
+            delay(100)
         }
 
         val metrics: Metrics = consumer.metrics().getOrThrow()
