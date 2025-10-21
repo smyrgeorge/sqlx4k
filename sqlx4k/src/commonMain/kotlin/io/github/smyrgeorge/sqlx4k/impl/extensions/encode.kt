@@ -4,6 +4,8 @@ package io.github.smyrgeorge.sqlx4k.impl.extensions
 
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
+
+import io.github.smyrgeorge.sqlx4k.impl.types.DoubleQuotingString
 import io.github.smyrgeorge.sqlx4k.impl.types.NoQuotingString
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
 import kotlinx.datetime.LocalDate
@@ -41,6 +43,8 @@ fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
             // https://stackoverflow.com/questions/603572/escape-single-quote-character-for-use-in-an-sqlite-query
             "'${replace("'", "''")}'"
         }
+
+        is DoubleQuotingString -> "\"${NoQuotingString(value).encodeValue(encoders)}\""
 
         is NoQuotingString -> {
             // Fast path: if no single quote present, avoid replace allocation

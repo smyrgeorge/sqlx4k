@@ -1,10 +1,9 @@
 package io.github.smyrgeorge.sqlx4k.postgres
 
 import io.github.smyrgeorge.sqlx4k.*
-import io.github.smyrgeorge.sqlx4k.impl.extensions.encodeValue
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
-import io.github.smyrgeorge.sqlx4k.impl.types.NoQuotingString
+import io.github.smyrgeorge.sqlx4k.impl.types.DoubleQuotingString
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
 import io.r2dbc.spi.Row
 import kotlinx.coroutines.CoroutineScope
@@ -24,6 +23,7 @@ import kotlin.jvm.optionals.getOrElse
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import io.r2dbc.pool.ConnectionPool as R2dbcConnectionPool
+import io.r2dbc.postgresql.api.Notification as R2dbcNotification
 import io.r2dbc.spi.Connection as R2dbcConnection
 
 class PostgreSQLImpl(
@@ -143,7 +143,7 @@ class PostgreSQLImpl(
      * @throws IllegalArgumentException If the `channels` list is empty or any channel name is blank.
      */
     override suspend fun listen(channels: List<String>, f: suspend (Notification) -> Unit) {
-        fun io.r2dbc.postgresql.api.Notification.toNotification(): Notification {
+        fun R2dbcNotification.toNotification(): Notification {
             require(name.isNotBlank()) { "Channel cannot be blank." }
             val value = ResultSet.Row.Column(0, name, "TEXT", parameter)
             return Notification(name, value)
@@ -153,7 +153,7 @@ class PostgreSQLImpl(
         channels.forEach { validateChannelName(it) }
 
         val sql = channels.joinToString(separator = "\n") {
-            "LISTEN \"${NoQuotingString(it).encodeValue(encoders)}\";"
+            Statement.create("LISTEN ?;").bind(0, DoubleQuotingString(it)).render(encoders)
         }
 
         PgChannelScope.launch {

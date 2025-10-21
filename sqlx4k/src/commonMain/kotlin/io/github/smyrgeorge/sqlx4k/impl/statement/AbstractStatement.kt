@@ -104,12 +104,10 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * @return A string representing the rendered SQL statement with all parameters substituted by their bound values.
      */
     override fun render(encoders: ValueEncoderRegistry): String {
-        // Fast path: no placeholders at all
         if (extractedPositionalParameters == 0 && extractedNamedParameters.isEmpty()) return sql
-        var sql = sql
-        if (extractedPositionalParameters > 0) sql = sql.renderPositionalParameters(encoders)
-        if (extractedNamedParameters.isNotEmpty()) sql = sql.renderNamedParameters(encoders)
-        return sql
+        if (extractedNamedParameters.isEmpty()) return sql.renderPositionalParameters(encoders)
+        if (extractedPositionalParameters == 0) return sql.renderNamedParameters(encoders)
+        return sql.renderPositionalParameters(encoders).renderNamedParameters(encoders)
     }
 
     /**
@@ -128,13 +126,13 @@ abstract class AbstractStatement(private val sql: String) : Statement {
                     message = "Not enough positional parameter values provided."
                 ).ex()
             }
-            if (nextIndex !in positionalParametersValues) {
+            val value = positionalParametersValues.getOrElseNullable(nextIndex) {
                 SQLError(
                     code = SQLError.Code.PositionalParameterValueNotSupplied,
                     message = "Value for positional parameter index '$nextIndex' was not supplied."
                 ).ex()
             }
-            sb.append(positionalParametersValues[nextIndex].encodeValue(encoders))
+            sb.append(value.encodeValue(encoders))
             @Suppress("AssignedValueIsNeverRead")
             nextIndex += 1
             i + 1
@@ -147,14 +145,6 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      */
     private fun String.renderNamedParameters(encoders: ValueEncoderRegistry): String {
         if (extractedNamedParameters.isEmpty()) return this
-        for (name in extractedNamedParameters) {
-            if (name !in namedParametersValues) {
-                SQLError(
-                    code = SQLError.Code.NamedParameterValueNotSupplied,
-                    message = "Value for named parameter '$name' was not supplied."
-                ).ex()
-            }
-        }
 
         return renderWithScanner { i, c, sb ->
             if (c != ':') return@renderWithScanner null
@@ -169,7 +159,13 @@ abstract class AbstractStatement(private val sql: String) : Statement {
                 while (j < length && isIdentPart(this[j])) j++
                 val name = substring(i + 1, j)
                 if (name in extractedNamedParameters) {
-                    sb.append(namedParametersValues[name].encodeValue(encoders))
+                    val value = namedParametersValues.getOrElseNullable(name) {
+                        SQLError(
+                            code = SQLError.Code.NamedParameterValueNotSupplied,
+                            message = "Value for named parameter '$name' was not supplied."
+                        ).ex()
+                    }
+                    sb.append(value.encodeValue(encoders))
                     return@renderWithScanner j
                 }
             }
@@ -184,7 +180,8 @@ abstract class AbstractStatement(private val sql: String) : Statement {
         writeOutput: Boolean,
         crossinline onNormalChar: String.(i: Int, c: Char, sb: StringBuilder) -> Int?
     ): String {
-        val sb = if (writeOutput) StringBuilder(length) else StringBuilder(0)
+        // Pre-size with 60% more space the buffer to reduce reallocation when parameters are replaced.
+        val sb = if (writeOutput) StringBuilder((length * 1.6).toInt()) else StringBuilder(0)
         var i = 0
         var inSQ = false
         var inDQ = false
@@ -376,21 +373,29 @@ abstract class AbstractStatement(private val sql: String) : Statement {
 
     /**
      * Determines if the given character can represent the start of an identifier.
+     * Uses a constant-time lookup table for ASCII characters.
      *
      * @param ch The character to check.
-     * @return True if the character is an uppercase or lowercase English letter, false otherwise.
+     * @return True if the character is an uppercase or lowercase English letter or underscore, false otherwise.
      */
-    private fun isIdentStart(ch: Char) = ch == '_' || ch in 'a'..'z' || ch in 'A'..'Z'
+    private fun isIdentStart(ch: Char): Boolean {
+        val code = ch.code
+        return code < 128 && IDENT_START[code]
+    }
 
     /**
      * Determines if the given character can be part of an identifier.
+     * Uses a constant-time lookup table for ASCII characters.
      *
      * This includes characters that can start an identifier, the underscore character ('_'), and digits.
      *
      * @param ch The character to check.
      * @return True if the character can be part of an identifier, false otherwise.
      */
-    private fun isIdentPart(ch: Char) = isIdentStart(ch) || ch.isDigit()
+    private fun isIdentPart(ch: Char): Boolean {
+        val code = ch.code
+        return code < 128 && IDENT_PART[code]
+    }
 
     /**
      * Extracts all named parameters from the SQL statement.
@@ -402,9 +407,8 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * @return A set containing unique named parameter names found in the SQL statement.
      */
     private fun extractNamedParameters(): Set<String> {
-        val s = sql
         val names = linkedSetOf<String>()
-        s.scanWithExtractor { i, c ->
+        sql.scanWithExtractor { i, c ->
             if (c != ':') return@scanWithExtractor null
             // Skip PostgreSQL type casts '::'
             if (i + 1 < length && this[i + 1] == ':') return@scanWithExtractor i + 2
@@ -430,13 +434,49 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      */
     private fun extractPositionalParameters(): Int {
         var count = 0
-        val s = sql
-        s.scanWithExtractor { i, c ->
+        sql.scanWithExtractor { i, c ->
             if (c == '?') {
                 count++; return@scanWithExtractor i + 1
             }
             null
         }
         return count
+    }
+
+    companion object {
+        /**
+         * Lookup table for identifier start characters (constant-time check).
+         * Covers ASCII range: a-z, A-Z, _
+         */
+        private val IDENT_START = BooleanArray(128) { ch ->
+            ch == '_'.code || ch in 'a'.code..'z'.code || ch in 'A'.code..'Z'.code
+        }
+
+        /**
+         * Lookup table for identifier part characters (constant-time check).
+         * Covers ASCII range: a-z, A-Z, 0-9, _
+         */
+        private val IDENT_PART = BooleanArray(128) { ch ->
+            ch == '_'.code || ch in 'a'.code..'z'.code || ch in 'A'.code..'Z'.code || ch in '0'.code..'9'.code
+        }
+
+        /**
+         * Retrieves the value corresponding to the specified key from the map. If the key is not found
+         * and does not exist in the map, the provided default value is returned. If the key exists with
+         * a `null` value, `null` is returned.
+         *
+         * @param key The key whose associated value is to be returned.
+         * @param defaultValue A lambda function that provides the default value to return if the key is not found.
+         * @return The value associated with the specified key, or the result of the `defaultValue` function if the key is not found and does not exist in the map.
+         */
+        private inline fun <K, V> Map<K, V>.getOrElseNullable(key: K, defaultValue: () -> V): V {
+            val value = get(key)
+            if (value == null && !containsKey(key)) {
+                return defaultValue()
+            } else {
+                @Suppress("UNCHECKED_CAST")
+                return value as V
+            }
+        }
     }
 }
