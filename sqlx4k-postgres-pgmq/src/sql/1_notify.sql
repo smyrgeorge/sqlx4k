@@ -61,16 +61,6 @@ COMMENT ON COLUMN pgmq.notify_insert_throttle.last_notified_at IS
         'NULL if no notification has ever been sent for this queue. '
         'Updated atomically by notify_queue_listeners() to prevent race conditions.';
 
--- Allow pgmq.notify_insert_throttle to be dumped by `pg_dump` when pgmq is installed as an extension
-DO
-$$
-    BEGIN
-        IF EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'pgmq') THEN
-            PERFORM pg_catalog.pg_extension_config_dump('pgmq.notify_insert_throttle', '');
-        END IF;
-    END
-$$;
-
 -- ============================================================================
 -- Notify Queue Listeners Trigger Function
 -- ============================================================================
