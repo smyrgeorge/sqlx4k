@@ -44,7 +44,11 @@ fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
             "'${replace("'", "''")}'"
         }
 
-        is DoubleQuotingString -> "\"${NoQuotingString(value).encodeValue(encoders)}\""
+        is DoubleQuotingString -> {
+            // Escape double quotes by doubling them (SQL standard for quoted identifiers)
+            // https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
+            "\"${value.replace("\"", "\"\"")}\""
+        }
 
         is NoQuotingString -> {
             // Fast path: if no single quote present, avoid replace allocation
