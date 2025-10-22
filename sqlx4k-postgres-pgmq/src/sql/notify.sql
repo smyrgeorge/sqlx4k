@@ -286,3 +286,79 @@ COMMENT ON FUNCTION pgmq.disable_notify_insert(text) IS
         'Idempotent - safe to call multiple times (uses DROP TRIGGER IF EXISTS). '
         'After calling this, no NOTIFY events will be sent until enable_notify_insert() is called again. '
         'Usage: SELECT pgmq.disable_notify_insert(''my_queue'');';
+
+-- ============================================================================
+-- Drop Queue Function
+-- ============================================================================
+-- Redeclared because we also want to delete from the notify_insert_throttle table.
+-- ============================================================================
+
+CREATE FUNCTION pgmq.drop_queue(queue_name TEXT)
+    RETURNS BOOLEAN AS
+$$
+DECLARE
+    qtable      TEXT := pgmq.format_table_name(queue_name, 'q');
+    qtable_seq  TEXT := qtable || '_msg_id_seq';
+    fq_qtable   TEXT := 'pgmq.' || qtable;
+    atable      TEXT := pgmq.format_table_name(queue_name, 'a');
+    fq_atable   TEXT := 'pgmq.' || atable;
+    partitioned BOOLEAN;
+BEGIN
+    PERFORM pgmq.acquire_queue_lock(queue_name);
+    EXECUTE FORMAT(
+            $QUERY$
+            SELECT is_partitioned FROM pgmq.meta WHERE queue_name = %L
+            $QUERY$,
+            queue_name
+            ) INTO partitioned;
+
+    -- check if the queue exists
+    IF NOT EXISTS (SELECT 1
+                   FROM information_schema.tables
+                   WHERE table_name = qtable
+                     and table_schema = 'pgmq') THEN
+        RAISE NOTICE 'pgmq queue `%` does not exist', queue_name;
+        RETURN FALSE;
+    END IF;
+
+    EXECUTE FORMAT(
+            $QUERY$
+            DROP TABLE IF EXISTS pgmq.%I
+            $QUERY$,
+            qtable
+            );
+
+    EXECUTE FORMAT(
+            $QUERY$
+            DROP TABLE IF EXISTS pgmq.%I
+            $QUERY$,
+            atable
+            );
+
+    IF EXISTS (SELECT 1
+               FROM information_schema.tables
+               WHERE table_name = 'meta'
+                 and table_schema = 'pgmq') THEN
+        EXECUTE FORMAT(
+                $QUERY$
+                DELETE FROM pgmq.meta WHERE queue_name = %L
+                $QUERY$,
+                queue_name
+                );
+    END IF;
+
+    IF partitioned THEN
+        EXECUTE FORMAT(
+                $QUERY$
+                DELETE FROM %I.part_config where parent_table in (%L, %L)
+                $QUERY$,
+                pgmq._get_pg_partman_schema(), fq_qtable, fq_atable
+                );
+    END IF;
+
+    -- Clean up notification configuration if exists
+    DELETE FROM pgmq.notify_insert_throttle WHERE notify_insert_throttle.queue_name = drop_queue.queue_name;
+
+    RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql;
