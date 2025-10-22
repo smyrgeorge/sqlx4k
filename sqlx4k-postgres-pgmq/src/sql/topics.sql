@@ -38,7 +38,6 @@ COMMENT ON COLUMN pgmq.topic_bindings.compiled_regex IS
 
 -- Create covering index for better performance when scanning patterns
 -- Includes queue_name to allow index-only scans (no table access needed)
-DROP INDEX IF EXISTS pgmq.idx_topic_bindings_pattern;
 DROP INDEX IF EXISTS pgmq.idx_topic_bindings_covering;
 CREATE INDEX idx_topic_bindings_covering ON pgmq.topic_bindings (pattern) INCLUDE (queue_name);
 
