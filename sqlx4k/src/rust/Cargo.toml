@@ -18,4 +18,4 @@ sqlx = { version = "0.8.6", features = [] }
 
 [build-dependencies]
 # https://crates.io/crates/cbindgen
-cbindgen = "0.29.0"
+cbindgen = "0.29.2"
