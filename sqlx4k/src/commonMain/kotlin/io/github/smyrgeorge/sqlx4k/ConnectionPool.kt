@@ -74,7 +74,6 @@ interface ConnectionPool {
             require(idleTimeout == null || maxLifetime == null || idleTimeout <= maxLifetime) { "idleTimeout must be less than or equal to maxLifetime" }
         }
 
-        @Suppress("unused")
         class Builder {
             private var minConnections: Int? = null
             private var maxConnections: Int = 10
