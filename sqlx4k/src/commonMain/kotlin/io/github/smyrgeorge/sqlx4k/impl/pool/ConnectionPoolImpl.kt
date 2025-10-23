@@ -10,8 +10,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
-import kotlin.concurrent.Volatile
-import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.concurrent.atomics.*
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
@@ -48,37 +47,9 @@ class ConnectionPoolImpl(
      */
     private val semaphore = Semaphore(options.maxConnections)
 
-    /**
-     * Mutex for thread-safe access to pool state.
-     */
-    private val mutex: Mutex = Mutex()
-
-    /**
-     * Total number of connections currently managed by the pool (both idle and acquired).
-     */
-    @Volatile
-    private var totalConnections: Int = 0
-
-    /**
-     * Count of idle connections. Updated atomically when connections are added/removed from idle pool.
-     */
-    @Volatile
-    private var idleCount = 0
-
-    /**
-     * Flag indicating whether the pool has been closed.
-     */
-    private var closed: Boolean = false
-
-    /**
-     * Time source for tracking connection lifecycle.
-     */
-    private val timeSource = TimeSource.Monotonic
-
-    /**
-     * Coroutine scope for managing background jobs.
-     */
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val idleCount = AtomicInt(0)
+    private val totalConnections = AtomicInt(0)
+    private var closed = AtomicBoolean(false)
 
     /**
      * Background job for cleaning up expired connections.
@@ -87,10 +58,41 @@ class ConnectionPoolImpl(
 
     init {
         // Start background cleanup job
-        cleanupJob = scope.launch { cleanupLoop() }
+        cleanupJob = POOL_SCOPE.launch { cleanupLoop() }
 
         // Warmup minimum connections if specified
-        options.minConnections?.let { min -> if (min > 0) scope.launch { warmup(min) } }
+        options.minConnections?.let { min -> if (min > 0) POOL_SCOPE.launch { warmup(min) } }
+    }
+
+    /**
+     * Atomically sends a connection to the idle pool and increments the idle counter.
+     * This ensures that the channel operation and counter update happen together,
+     * preventing desynchronization between the two.
+     *
+     * @param connection The pooled connection to add to the idle pool
+     * @return true if the connection was successfully added, false otherwise
+     */
+    private suspend fun sendToIdle(connection: PooledConnection): Boolean {
+        return try {
+            idleConnections.send(connection)
+            idleCount.incrementAndFetch()
+            true
+        } catch (_: Exception) {
+            // Send failed (channel closed or other error), don't increment counter
+            false
+        }
+    }
+
+    /**
+     * Atomically receives a connection from the idle pool and decrements the idle counter.
+     * This ensures that the channel operation and counter update happen together.
+     *
+     * @return The pooled connection if available, null otherwise
+     */
+    private fun tryReceiveFromIdle(): PooledConnection? {
+        return idleConnections.tryReceive().getOrNull()?.also {
+            idleCount.decrementAndFetch()
+        }
     }
 
     /**
@@ -98,14 +100,14 @@ class ConnectionPoolImpl(
      *
      * @return the number of connections currently in the pool (both idle and acquired)
      */
-    override fun poolSize(): Int = totalConnections
+    override fun poolSize(): Int = totalConnections.load()
 
     /**
      * Retrieves the current number of idle connections in the connection pool.
      *
      * @return the count of currently idle connections
      */
-    override fun poolIdleSize(): Int = idleCount
+    override fun poolIdleSize(): Int = idleCount.load()
 
     /**
      * Acquires a connection from the connection pool.
@@ -119,35 +121,37 @@ class ConnectionPoolImpl(
      * @throws SQLError.Code.PoolClosed if the pool is closed
      * @throws SQLError.Code.PoolTimedOut if acquisition times out
      */
-    override suspend fun acquire(): Result<Connection> = runCatching {
-        // Check if pool is closed
-        mutex.withLock { if (closed) SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").ex() }
+    override suspend fun acquire(): Result<Connection> {
+        return runCatching {
+            // Check if pool is closed
+            if (closed.load()) SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").ex()
 
-        // Apply acquisition timeout if configured
-        if (options.acquireTimeout != null) {
-            withTimeout(options.acquireTimeout) { acquireConnection() }
-        } else {
-            acquireConnection()
-        }
-    }.recoverCatching { error ->
-        when (error) {
-            is TimeoutCancellationException -> {
-                SQLError(
-                    SQLError.Code.PoolTimedOut,
-                    "Timed out waiting for connection after ${options.acquireTimeout}"
-                ).ex()
+            // Apply acquisition timeout if configured
+            if (options.acquireTimeout != null) {
+                withTimeout(options.acquireTimeout) { acquireConnection() }
+            } else {
+                acquireConnection()
             }
+        }.recoverCatching { error ->
+            when (error) {
+                is TimeoutCancellationException -> {
+                    SQLError(
+                        SQLError.Code.PoolTimedOut,
+                        "Timed out waiting for connection after ${options.acquireTimeout}"
+                    ).ex()
+                }
 
-            is CancellationException -> throw error
-            else -> throw error
+                is CancellationException -> throw error
+                else -> throw error
+            }
         }
     }
 
     private suspend fun acquireConnection(): Connection {
         suspend fun handleValidPooled(pooled: PooledConnection): Connection {
-            pooled.lastUsedAt = timeSource.markNow()
-            val isClosed = mutex.withLock { closed }
-            if (isClosed) {
+            pooled.prepareForReuse()
+            pooled.lastUsedAt = TIME_SOURCE.markNow()
+            if (closed.load()) {
                 pooled.close()
                 SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").ex()
             }
@@ -157,8 +161,7 @@ class ConnectionPoolImpl(
         while (true) {
             // 1) Try to reuse an idle connection (drain expired ones)
             while (true) {
-                val pooled = idleConnections.tryReceive().getOrNull() ?: break
-                mutex.withLock { idleCount-- }
+                val pooled = tryReceiveFromIdle() ?: break
                 if (pooled.isExpired()) {
                     // Expired: close and continue draining
                     pooled.close()
@@ -170,14 +173,13 @@ class ConnectionPoolImpl(
             // 2) If we can create a new one without blocking, do it
             if (semaphore.tryAcquire()) {
                 try {
-                    val now = timeSource.markNow()
+                    val now = TIME_SOURCE.markNow()
                     val newConnection = connectionFactory()
                     val pooled = PooledConnection(newConnection, now, now, this)
-                    mutex.withLock { totalConnections++ }
+                    totalConnections.incrementAndFetch()
 
                     // If pool got closed while we were creating this connection, do not hand it out
-                    val isClosed = mutex.withLock { closed }
-                    if (isClosed) {
+                    if (closed.load()) {
                         pooled.close()
                         SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").ex()
                     }
@@ -190,14 +192,20 @@ class ConnectionPoolImpl(
             }
 
             // 3) We are at max capacity. Wait for an idle connection to be returned.
-            mutex.withLock { if (closed) SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").ex() }
+            if (closed.load()) SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").ex()
+
+            // Block until a connection becomes available
             val received = idleConnections.receiveCatching()
             if (received.isClosed) {
                 // Channel closed (pool is closing/closed) — abort acquire
                 SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").ex()
             }
-            val pooled = received.getOrNull() ?: continue
-            mutex.withLock { idleCount-- }
+
+            // Atomically decrement counter when we receive a connection
+            val pooled = received.getOrNull()?.also {
+                idleCount.decrementAndFetch()
+            } ?: continue
+
             if (pooled.isExpired()) {
                 // Expired: close and loop to try again
                 pooled.close()
@@ -222,10 +230,8 @@ class ConnectionPoolImpl(
      * @return A `Result` indicating success or error during the closure process.
      */
     override suspend fun close(): Result<Unit> = runCatching {
-        mutex.withLock {
-            if (closed) return@runCatching
-            closed = true
-        }
+        if (closed.load()) return@runCatching
+        closed.store(true)
 
         // Cancel cleanup job
         cleanupJob.cancel()
@@ -237,14 +243,14 @@ class ConnectionPoolImpl(
         while (true) {
             val pooled = idleConnections.tryReceive().getOrNull() ?: break
             // Adjust idle counter for each drained connection
-            mutex.withLock { idleCount-- }
+            idleCount.decrementAndFetch()
             pooled.close()
         }
         // Ensure idleCount cannot go negative due to races; clamp to 0
-        mutex.withLock { if (idleCount < 0) idleCount = 0 }
+        idleCount.update { if (it < 0) 0 else it }
 
         // Cancel scope
-        scope.cancel()
+        POOL_SCOPE.cancel()
     }
 
     private suspend fun cleanupLoop() {
@@ -252,11 +258,9 @@ class ConnectionPoolImpl(
             val temp = mutableListOf<PooledConnection>()
             val minConnections = options.minConnections ?: 0
 
-            // Poll all idle connections
+            // Poll all idle connections using atomic wrapper
             while (true) {
-                val pooled = idleConnections.tryReceive().getOrNull() ?: break
-                // Track removal from idle queue for accurate idleCount
-                mutex.withLock { idleCount-- }
+                val pooled = tryReceiveFromIdle() ?: break
                 temp.add(pooled)
             }
 
@@ -267,21 +271,18 @@ class ConnectionPoolImpl(
                     val wasClosed = pooled.closeIfAboveMinimum(minConnections)
                     if (!wasClosed) {
                         // Couldn't close because we're at or below minimum, keep the connection
-                        idleConnections.send(pooled)
-                        mutex.withLock { idleCount++ }
+                        sendToIdle(pooled)
                     }
                 } else {
                     // Connection still valid, keep it
-                    idleConnections.send(pooled)
-                    mutex.withLock { idleCount++ }
+                    sendToIdle(pooled)
                 }
             }
         }
 
-        val cleanupInterval = 5.seconds
         while (true) {
             try {
-                delay(cleanupInterval)
+                delay(CLEANUP_INTERVAL)
                 cleanupExpiredConnections()
             } catch (_: CancellationException) {
                 // Job was cancelled, exit loop
@@ -295,18 +296,40 @@ class ConnectionPoolImpl(
 
     private suspend fun warmup(minConnections: Int) {
         repeat(minConnections) {
+            var semaphoreAcquired = false
+            var connectionCreated = false
+            var pooledConnection: PooledConnection? = null
+
             try {
                 semaphore.acquire()
-                val now = timeSource.markNow()
+                semaphoreAcquired = true
+
+                val now = TIME_SOURCE.markNow()
                 val connection = connectionFactory()
                 val pooled = PooledConnection(connection, now, now, this)
-                mutex.withLock {
-                    totalConnections++
-                    idleCount++
+                pooledConnection = pooled
+                connectionCreated = true
+
+                totalConnections.incrementAndFetch()
+
+                // Use atomic send operation - if it fails, rollback
+                if (!sendToIdle(pooled)) {
+                    // Send failed (pool closing), close the connection
+                    pooled.close()
                 }
-                idleConnections.send(pooled)
             } catch (_: Exception) {
-                semaphore.release()
+                // Clean up based on what succeeded
+                if (connectionCreated && pooledConnection != null) {
+                    // Connection was created but something failed, close it
+                    try {
+                        pooledConnection.close()
+                    } catch (_: Exception) {
+                        // Ignore errors during cleanup
+                    }
+                } else if (semaphoreAcquired) {
+                    // Only semaphore was acquired, release it
+                    semaphore.release()
+                }
                 // Log error but continue warming up
                 // In production, you'd use proper logging
             }
@@ -319,26 +342,36 @@ class ConnectionPoolImpl(
         var lastUsedAt: TimeMark,
         private val pool: ConnectionPoolImpl
     ) : Connection by connection {
-        private var mtx = Mutex()
+        private var mutex = Mutex()
         private var released = false
         override var status: Connection.Status = connection.status
 
+        /**
+         * Prepares the connection for reuse after being acquired from the idle pool.
+         * Resets the released flag and status to allow the connection to be released again.
+         */
+        suspend fun prepareForReuse() {
+            mutex.withLock {
+                released = false
+                status = Connection.Status.Acquired
+            }
+        }
+
         override suspend fun release(): Result<Unit> = runCatching {
-            mtx.withLock {
+            mutex.withLock {
                 if (released) return@runCatching
                 released = true
                 status = Connection.Status.Released
             }
 
             // Read closed flag under lock, but perform actions outside to avoid deadlocks
-            val isClosed = pool.mutex.withLock { pool.closed }
-            if (isClosed) {
+            if (pool.closed.load()) {
                 // Pool is closed, close the connection outside of the mutex
                 close()
                 return@runCatching
             }
 
-            lastUsedAt = pool.timeSource.markNow()
+            lastUsedAt = TIME_SOURCE.markNow()
 
             // Check if connection is expired
             if (isExpired()) {
@@ -347,29 +380,15 @@ class ConnectionPoolImpl(
                 val wasClosed = closeIfAboveMinimum(minConnections)
                 if (!wasClosed) {
                     // At or below minimum, keep the expired connection (cleanup will replace later)
-                    // Try to enqueue back to idle; if channel is closed, close the connection instead
-                    val enqueued = try {
-                        pool.idleConnections.trySend(this).isSuccess
-                    } catch (_: Throwable) {
-                        false
-                    }
-                    if (enqueued) {
-                        pool.mutex.withLock { pool.idleCount++ }
-                    } else {
+                    // Enqueue back to idle using suspending send to properly wake waiters
+                    if (!pool.sendToIdle(this)) {
                         // Pool closing/closed; ensure the connection is closed
                         close()
                     }
                 }
             } else {
-                // Connection is still valid, return to idle pool
-                val enqueued = try {
-                    pool.idleConnections.trySend(this).isSuccess
-                } catch (_: Throwable) {
-                    false
-                }
-                if (enqueued) {
-                    pool.mutex.withLock { pool.idleCount++ }
-                } else {
+                // Connection is still valid, return to idle pool using suspending send
+                if (!pool.sendToIdle(this)) {
                     // Pool closing/closed; ensure the connection is closed
                     close()
                 }
@@ -388,20 +407,22 @@ class ConnectionPoolImpl(
             } catch (_: Exception) {
                 // Ignore errors on close
             } finally {
-                pool.mutex.withLock { pool.totalConnections-- }
+                pool.totalConnections.decrementAndFetch()
                 pool.semaphore.release()
             }
         }
 
         suspend fun closeIfAboveMinimum(minConnections: Int): Boolean {
             // Atomically check and decide whether to close
-            val shouldClose = pool.mutex.withLock {
-                if (pool.totalConnections > minConnections) {
+            var shouldClose = false
+            pool.totalConnections.update {
+                if (it > minConnections) {
                     // We're above minimum, mark for closing by decrementing now
-                    pool.totalConnections--
-                    true
+                    shouldClose = true
+                    it - 1
                 } else {
-                    false
+                    shouldClose = false
+                    it
                 }
             }
 
@@ -418,5 +439,11 @@ class ConnectionPoolImpl(
 
             return shouldClose
         }
+    }
+
+    companion object {
+        private val CLEANUP_INTERVAL = 5.seconds
+        private val TIME_SOURCE = TimeSource.Monotonic
+        private val POOL_SCOPE = CoroutineScope(Dispatchers.Default + SupervisorJob())
     }
 }

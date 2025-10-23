@@ -64,6 +64,16 @@ interface ConnectionPool {
         // Set the maximum lifetime of individual connections.
         val maxLifetime: Duration? = null,
     ) {
+        init {
+            require(minConnections == null || minConnections > 0) { "minConnections must be greater than 0" }
+            require(maxConnections > 0) { "maxConnections must be greater than 0" }
+            require(idleTimeout == null || idleTimeout.isPositive()) { "idleTimeout must be greater than 0" }
+            require(maxLifetime == null || maxLifetime.isPositive()) { "maxLifetime must be greater than 0" }
+            require(acquireTimeout == null || acquireTimeout.isPositive()) { "acquireTimeout must be greater than 0" }
+            require(minConnections == null || maxConnections >= minConnections) { "maxConnections must be greater than or equal to minConnections" }
+            require(idleTimeout == null || maxLifetime == null || idleTimeout <= maxLifetime) { "idleTimeout must be less than or equal to maxLifetime" }
+        }
+
         @Suppress("unused")
         class Builder {
             private var minConnections: Int? = null
