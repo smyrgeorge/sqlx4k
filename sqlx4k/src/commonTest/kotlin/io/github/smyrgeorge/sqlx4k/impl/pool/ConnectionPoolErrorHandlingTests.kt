@@ -41,7 +41,7 @@ class ConnectionPoolErrorHandlingTests {
             FakeConnection(nextId++)
         }
 
-        val pool = ConnectionPoolImpl(ConnectionPool.Options(null, 2), factory)
+        val pool = ConnectionPoolImpl(ConnectionPool.Options(null, 2), connectionFactory = factory)
 
         // First acquire should fail
         assertFailsWith<IllegalStateException> { pool.acquire().getOrThrow() }
@@ -82,7 +82,7 @@ class ConnectionPoolErrorHandlingTests {
         }
 
         val options = ConnectionPool.Options(minConnections = 3, maxConnections = 5)
-        val pool = ConnectionPoolImpl(options, factory)
+        val pool = ConnectionPoolImpl(options, connectionFactory = factory)
 
         // Give warmup time to run (some will fail)
         delay(500)
@@ -129,7 +129,7 @@ class ConnectionPoolErrorHandlingTests {
         }
 
         val options = ConnectionPool.Options(minConnections = 3, maxConnections = 5)
-        val pool = ConnectionPoolImpl(options, factory)
+        val pool = ConnectionPoolImpl(options, connectionFactory = factory)
 
         // Give warmup time
         delay(500)

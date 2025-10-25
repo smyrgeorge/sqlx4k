@@ -5,15 +5,51 @@ package io.github.smyrgeorge.sqlx4k.impl.pool
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.impl.logging.Logger
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Semaphore
 import kotlin.concurrent.atomics.*
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * Represents a factory function for creating a new database connection.
+ *
+ * This typealias is used to define a suspendable function that, when invoked, provides an instance
+ * of a `Connection`. It encapsulates the logic for initializing a new connection, typically managed
+ * by a connection pool or other connection management infrastructure.
+ *
+ * Common use cases include lazy initialization of connections or management of connection lifecycle
+ * within a pooling mechanism, such as `ConnectionPoolImpl`.
+ *
+ * @see Connection
+ * @see ConnectionPoolImpl
+ */
+typealias ConnectionFactory = suspend () -> Connection
+
+/**
+ * Represents an implementation of a connection pool that manages a pool of connections and provides
+ * methods to acquire and release connections efficiently while maintaining a minimum and maximum
+ * number of connections based on the specified configurations.
+ *
+ * This implementation supports features such as:
+ * - Setting a maximum and optionally a minimum number of connections.
+ * - Automatic warmup to pre-establish connections up to the minimum count.
+ * - Connection expiration detection and cleanup.
+ * - Timeout handling during connection acquisition.
+ * - Graceful shutdown to clean up resources when the pool is closed.
+ *
+ * @constructor Initializes the connection pool with the provided options, logger, and connection
+ * factory.
+ *
+ * @param options Configuration options for the connection pool such as max and min connections.
+ * @param log Optional logger to record connection pool activities and errors.
+ * @param connectionFactory Factory function to create new connections on demand.
+ */
 class ConnectionPoolImpl(
     val options: ConnectionPool.Options,
-    private val connectionFactory: suspend () -> Connection,
+    private val log: Logger? = null,
+    private val connectionFactory: ConnectionFactory,
 ) : ConnectionPool {
     internal var closed = AtomicBoolean(false)
     internal val idleCount = AtomicInt(0)
@@ -29,9 +65,30 @@ class ConnectionPoolImpl(
         options.minConnections?.let { min -> if (min > 0) scope.launch { warmup(min) } }
     }
 
+    /**
+     * Retrieves the current size of the connection pool, indicating the total number of connections managed by the pool.
+     *
+     * @return The total count of connections in the pool, including both idle and in-use connections.
+     */
     override fun poolSize(): Int = totalConnections.load()
+
+    /**
+     * Retrieves the current number of idle connections in the connection pool.
+     *
+     * @return The count of idle connections available in the pool.
+     */
     override fun poolIdleSize(): Int = idleCount.load()
 
+    /**
+     * Acquires a connection from the connection pool.
+     *
+     * This method attempts to retrieve a connection from the pool while respecting the specified
+     * acquisition timeout. If the pool is closed or the acquisition times out, an appropriate
+     * error is returned.
+     *
+     * @return A [Result] containing the acquired [Connection] if successful, or an error if
+     * the acquisition fails or the pool is closed.
+     */
     override suspend fun acquire(): Result<Connection> {
         return runCatching {
             if (closed.load()) SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").ex()
@@ -63,7 +120,7 @@ class ConnectionPoolImpl(
                 val pooled = tryReceiveFromIdle() ?: break
                 if (pooled.isExpired()) {
                     // Expired: close and continue draining
-                    pooled.closeUnderlying()
+                    pooled.closeInternal()
                     // Yield to other coroutines to prevent CPU spinning
                     yield()
                 } else {
@@ -103,7 +160,7 @@ class ConnectionPoolImpl(
 
             if (pooled.isExpired()) {
                 // Expired: close and loop to try again
-                pooled.closeUnderlying()
+                pooled.closeInternal()
             } else {
                 return pooled.acquire()
             }
@@ -111,6 +168,16 @@ class ConnectionPoolImpl(
         // Unreachable
     }
 
+    /**
+     * Closes the connection pool and releases all associated resources.
+     *
+     * This method ensures that all idle connections are properly closed,
+     * cleans up associated tasks, and updates internal states to reflect
+     * that the pool is no longer active. If the pool is already closed,
+     * subsequent calls to this method will have no effect.
+     *
+     * @return A [Result] indicating the success or failure of the close operation.
+     */
     override suspend fun close(): Result<Unit> = runCatching {
         if (!closed.compareAndSet(expectedValue = false, newValue = true)) {
             return@runCatching
@@ -121,7 +188,7 @@ class ConnectionPoolImpl(
         while (true) {
             val pooled = idleConnections.tryReceive().getOrNull() ?: break
             idleCount.decrementAndFetch()
-            pooled.closeUnderlying()
+            pooled.closeInternal()
         }
         // Ensure idleCount cannot go negative due to races; clamp to 0
         idleCount.update { if (it < 0) 0 else it }
@@ -168,16 +235,16 @@ class ConnectionPoolImpl(
 
                 if (!sendToIdle(pooled)) {
                     // Send failed (pool closing), close the connection
-                    pooled.closeUnderlying()
+                    pooled.closeInternal()
                     // No point continuing warmup if pool is closing
                     return
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 // Clean up based on what succeeded
                 if (pooled != null) {
                     // Connection was created but something failed, close it
                     try {
-                        pooled.closeUnderlying()
+                        pooled.closeInternal()
                     } catch (_: Exception) {
                         // Ignore errors during cleanup
                     }
@@ -185,7 +252,8 @@ class ConnectionPoolImpl(
                     // Only semaphore was acquired, release it
                     semaphore.release()
                 }
-                // TODO: Log error but continue warming up
+
+                log?.error("Failed to warm up connection: ${e.message}", e)
             }
         }
     }
@@ -208,26 +276,26 @@ class ConnectionPoolImpl(
             try {
                 if (pooled.isExpired()) {
                     // Try to close if above minimum (atomically checked)
-                    val wasClosed = pooled.closeUnderlyingIfAboveMinimum(minConnections)
+                    val wasClosed = pooled.closeInternalIfAboveMinimum(minConnections)
                     if (!wasClosed) {
                         // At or below minimum - keep the expired connection
                         // It will be used until a new connection can replace it
                         if (!sendToIdle(pooled)) {
                             // Pool is closing, cleanup the connection
-                            pooled.closeUnderlying()
+                            pooled.closeInternal()
                         }
                     }
                 } else {
                     // Connection still valid, return it
                     if (!sendToIdle(pooled)) {
                         // Pool is closing, cleanup the connection
-                        pooled.closeUnderlying()
+                        pooled.closeInternal()
                     }
                 }
             } catch (_: Exception) {
                 // If anything fails, try to close the connection to prevent leaks
                 try {
-                    pooled.closeUnderlying()
+                    pooled.closeInternal()
                 } catch (_: Exception) {
                     // Ignore errors during emergency cleanup
                 }
@@ -247,8 +315,8 @@ class ConnectionPoolImpl(
                 cleanup()
             } catch (_: CancellationException) {
                 break
-            } catch (_: Exception) {
-                // TODO: Log error but continue cleanup loop
+            } catch (e: Exception) {
+                log?.error("Failed to cleanup connections: ${e.message}", e)
             }
         }
     }

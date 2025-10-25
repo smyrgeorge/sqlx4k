@@ -66,9 +66,9 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 ### Next Steps (contributions are welcome)
 
 - Create and publish sqlx4k-gradle-plugin.
-- Pure Kotlin implementation for `ConnectionPool`.
+- Pure Kotlin implementation for `ConnectionPool` ✅
 - Validate queries at compile time (avoid runtime errors)
-    - Syntax checking is already supported (using the `@Query` annotation). ✅
+    - Syntax checking is already supported (using the `@Query` annotation) ✅
     - Validate queries by accessing the DB schema ✅
     - Validate query literal types (type check query parameters)
 - Add support for SQLite JVM target.
@@ -193,7 +193,7 @@ try {
     val rs = conn.fetchAll("select * from users;").getOrThrow()
     // ...
 } finally {
-    conn.release().getOrThrow() // Return to pool
+    conn.close().getOrThrow() // Return to pool
 }
 ```
 

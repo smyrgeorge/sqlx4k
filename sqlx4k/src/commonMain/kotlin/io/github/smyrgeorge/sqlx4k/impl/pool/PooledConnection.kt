@@ -24,10 +24,16 @@ class PooledConnection(
 
     fun isReleased(): Boolean = released
 
+    fun isExpired(): Boolean {
+        pool.options.maxLifetime?.let { maxLifetime -> if (createdAt.elapsedNow() >= maxLifetime) return true }
+        pool.options.idleTimeout?.let { idleTimeout -> if (lastUsedAt.elapsedNow() >= idleTimeout) return true }
+        return false
+    }
+
     suspend fun acquire(): Connection {
         mutex.withLock {
             if (pool.closed.load()) {
-                closeUnderlying()
+                closeInternal()
                 SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").ex()
             }
 
@@ -45,65 +51,54 @@ class PooledConnection(
         }
 
         if (pool.closed.load()) {
-            closeUnderlying()
+            closeInternal()
             return@runCatching
         }
 
         if (isExpired()) {
             val minConnections = pool.options.minConnections ?: 0
-            val wasClosed = closeUnderlyingIfAboveMinimum(minConnections)
+            val wasClosed = closeInternalIfAboveMinimum(minConnections)
             if (!wasClosed) {
                 // At or below minimum, keep the expired connection (cleanup will replace later)
                 // Enqueue back to idle using suspending send to properly wake waiters
                 if (!pool.sendToIdle(this)) {
-                    closeUnderlying()
+                    closeInternal()
                 }
             }
         } else {
             if (!pool.sendToIdle(this)) {
-                closeUnderlying()
+                closeInternal()
             }
         }
     }
 
-    fun isExpired(): Boolean {
-        pool.options.maxLifetime?.let { maxLifetime -> if (createdAt.elapsedNow() >= maxLifetime) return true }
-        pool.options.idleTimeout?.let { idleTimeout -> if (lastUsedAt.elapsedNow() >= idleTimeout) return true }
-        return false
+    internal suspend fun closeInternal() {
+        pool.totalConnections.decrementAndFetch()
+        doClose()
     }
 
-    suspend fun closeUnderlying() {
+    internal suspend fun closeInternalIfAboveMinimum(minConnections: Int): Boolean {
+        var shouldClose = false
+        pool.totalConnections.update { count ->
+            if (count > minConnections) {
+                shouldClose = true
+                count - 1
+            } else {
+                count
+            }
+        }
+
+        if (shouldClose) doClose()
+        return shouldClose
+    }
+
+    private suspend fun doClose() {
         try {
             connection.close().getOrThrow()
         } catch (_: Exception) {
         } finally {
-            pool.totalConnections.decrementAndFetch()
             pool.semaphore.release()
         }
-    }
-
-    suspend fun closeUnderlyingIfAboveMinimum(minConnections: Int): Boolean {
-        var shouldClose = false
-        pool.totalConnections.update {
-            if (it > minConnections) {
-                shouldClose = true
-                it - 1
-            } else {
-                shouldClose = false
-                it
-            }
-        }
-
-        if (shouldClose) {
-            try {
-                connection.close().getOrThrow()
-            } catch (_: Exception) {
-            } finally {
-                pool.semaphore.release()
-            }
-        }
-
-        return shouldClose
     }
 
     companion object {
