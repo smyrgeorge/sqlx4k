@@ -16,8 +16,8 @@ import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
 class ConnectionPoolImpl(
+    private val options: ConnectionPool.Options,
     private val connectionFactory: suspend () -> Connection,
-    private val options: ConnectionPool.Options
 ) : ConnectionPool {
     private var closed = AtomicBoolean(false)
     private val idleCount = AtomicInt(0)

@@ -26,12 +26,9 @@ class ConnectionPoolExpirationTests {
         onCreate: (FakeConnection) -> Unit = {}
     ): ConnectionPoolImpl {
         val options = ConnectionPool.Options(min, max, acquireTimeout, idleTimeout, maxLifetime)
-        return ConnectionPoolImpl(
-            connectionFactory = {
-                FakeConnection(nextId++).also(onCreate)
-            },
-            options = options
-        )
+        return ConnectionPoolImpl(options) {
+            FakeConnection(nextId++).also(onCreate)
+        }
     }
 
     @Test

@@ -16,7 +16,6 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class ConnectionPoolLimitsTests {
-
     // Simple incremental id to distinguish FakeConnection instances
     private var nextId = 1L
 
@@ -29,12 +28,9 @@ class ConnectionPoolLimitsTests {
         onCreate: (FakeConnection) -> Unit = {}
     ): ConnectionPoolImpl {
         val options = ConnectionPool.Options(min, max, acquireTimeout, idleTimeout, maxLifetime)
-        return ConnectionPoolImpl(
-            connectionFactory = {
-                FakeConnection(nextId++).also(onCreate)
-            },
-            options = options
-        )
+        return ConnectionPoolImpl(options) {
+            FakeConnection(nextId++).also(onCreate)
+        }
     }
 
     @Test

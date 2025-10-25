@@ -17,7 +17,6 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class ConnectionPoolLifecycleTests {
-
     // Simple incremental id to distinguish FakeConnection instances
     private var nextId = 1L
 

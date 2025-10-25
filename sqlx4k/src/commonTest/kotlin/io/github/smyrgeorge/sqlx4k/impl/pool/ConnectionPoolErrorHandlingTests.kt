@@ -15,7 +15,6 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 class ConnectionPoolErrorHandlingTests {
-
     // Simple incremental id to distinguish FakeConnection instances
     private var nextId = 1L
 
@@ -28,12 +27,9 @@ class ConnectionPoolErrorHandlingTests {
         onCreate: (FakeConnection) -> Unit = {}
     ): ConnectionPoolImpl {
         val options = ConnectionPool.Options(min, max, acquireTimeout, idleTimeout, maxLifetime)
-        return ConnectionPoolImpl(
-            connectionFactory = {
-                FakeConnection(nextId++).also(onCreate)
-            },
-            options = options
-        )
+        return ConnectionPoolImpl(options) {
+            FakeConnection(nextId++).also(onCreate)
+        }
     }
 
     @Test
@@ -45,7 +41,7 @@ class ConnectionPoolErrorHandlingTests {
             FakeConnection(nextId++)
         }
 
-        val pool = ConnectionPoolImpl(factory, ConnectionPool.Options(null, 2, null, null, null))
+        val pool = ConnectionPoolImpl(ConnectionPool.Options(null, 2), factory)
 
         // First acquire should fail
         assertFailsWith<IllegalStateException> { pool.acquire().getOrThrow() }
@@ -86,7 +82,7 @@ class ConnectionPoolErrorHandlingTests {
         }
 
         val options = ConnectionPool.Options(minConnections = 3, maxConnections = 5)
-        val pool = ConnectionPoolImpl(factory, options)
+        val pool = ConnectionPoolImpl(options, factory)
 
         // Give warmup time to run (some will fail)
         delay(500)
@@ -133,7 +129,7 @@ class ConnectionPoolErrorHandlingTests {
         }
 
         val options = ConnectionPool.Options(minConnections = 3, maxConnections = 5)
-        val pool = ConnectionPoolImpl(factory, options)
+        val pool = ConnectionPoolImpl(options, factory)
 
         // Give warmup time
         delay(500)
