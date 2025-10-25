@@ -176,6 +176,8 @@ class SQLite(
                 }
             }
         }
+
+        override fun encoders(): Statement.ValueEncoderRegistry = encoders
     }
 
     /**

@@ -38,6 +38,15 @@ interface Connection : QueryExecutor, QueryExecutor.Transactional {
     suspend fun close(): Result<Unit>
 
     /**
+     * Retrieves the `ValueEncoderRegistry` associated with the current connection.
+     * The `ValueEncoderRegistry` provides access to registered value encoders, which
+     * are responsible for converting types into formats suitable for use in SQL statements.
+     *
+     * @return A `ValueEncoderRegistry` instance that manages the encoders for this connection.
+     */
+    fun encoders(): Statement.ValueEncoderRegistry = Statement.ValueEncoderRegistry.EMPTY
+
+    /**
      * Represents the operational state of a connection.
      *
      * The `Status` enum provides the possible states in which a database connection
