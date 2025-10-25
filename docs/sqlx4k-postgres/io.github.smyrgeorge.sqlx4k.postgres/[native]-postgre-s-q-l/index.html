@@ -1,22 +1,22 @@
 <!doctype html>
-<html class="no-js">
+<html class="no-js" lang="en">
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" charset="UTF-8">
     <title>[native]PostgreSQL</title>
-<link href="../../../images/logo-icon.svg" rel="icon" type="image/svg">    <script>var pathToRoot = "../../../";</script>
-    <script>document.documentElement.classList.replace("no-js","js");</script>
+<link href="../../../images/logo-icon.svg" rel="icon" type="image/svg"><script>var pathToRoot = "../../../";</script>
+    <script>document.documentElement.classList.replace("no-js", "js");</script>
     <script>const storage = localStorage.getItem("dokka-dark-mode")
-    if (storage == null) {
+      if (storage == null) {
         const osDarkSchemePreferred = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
         if (osDarkSchemePreferred === true) {
-            document.getElementsByTagName("html")[0].classList.add("theme-dark")
+          document.getElementsByTagName("html")[0].classList.add("theme-dark")
         }
-    } else {
+      } else {
         const savedDarkMode = JSON.parse(storage)
-        if(savedDarkMode === true) {
-            document.getElementsByTagName("html")[0].classList.add("theme-dark")
+        if (savedDarkMode === true) {
+          document.getElementsByTagName("html")[0].classList.add("theme-dark")
         }
-    }
+      }
     </script>
 <script type="text/javascript" src="https://unpkg.com/kotlin-playground@1/dist/playground.min.js" async></script>
 <script type="text/javascript" src="../../../scripts/sourceset_dependencies.js" async></script>
@@ -24,33 +24,31 @@
 <link href="../../../styles/main.css" rel="Stylesheet">
 <link href="../../../styles/prism.css" rel="Stylesheet">
 <link href="../../../styles/logo-styles.css" rel="Stylesheet">
-<link href="../../../styles/font-jb-sans-auto.css" rel="Stylesheet">
 <link href="../../../ui-kit/ui-kit.min.css" rel="Stylesheet">
-<script type="text/javascript" src="../../../scripts/clipboard.js" async></script>
+<script type="text/javascript" src="../../../scripts/safe-local-storage_blocking.js"></script>
 <script type="text/javascript" src="../../../scripts/navigation-loader.js" async></script>
 <script type="text/javascript" src="../../../scripts/platform-content-handler.js" async></script>
 <script type="text/javascript" src="../../../scripts/main.js" defer></script>
 <script type="text/javascript" src="../../../scripts/prism.js" async></script>
-<script type="text/javascript" src="../../../ui-kit/ui-kit.min.js" defer></script>
-<script type="text/javascript" src="../../../scripts/symbol-parameters-wrapper_deferred.js" defer></script></head>
+<script type="text/javascript" src="../../../ui-kit/ui-kit.min.js" defer></script></head>
 <body>
-    <div class="root">
-    <nav class="navigation theme-dark" id="navigation-wrapper">
-<a class="library-name--link" href="../../../index.html">
+<div class="root">
+    <header class="navigation theme-dark" id="navigation-wrapper" role="banner">
+<a class="library-name--link" href="../../../index.html" tabindex="1">
                     sqlx4k
             </a>        <button class="navigation-controls--btn navigation-controls--btn_toc ui-kit_mobile-only" id="toc-toggle" type="button">Toggle table of contents
         </button>
         <div class="navigation-controls--break ui-kit_mobile-only"></div>
-        <div class="library-version" id="library-version">1.3.0
+        <div class="library-version" id="library-version">1.4.0
         </div>
         <div class="navigation-controls">
-        <div class="filter-section filter-section_loading" id="filter-section">
-                <button class="platform-tag platform-selector native-like" data-active="" data-filter=":sqlx4k-postgres/nativeMain">native</button>
+        <ul class="filter-section filter-section_loading" id="filter-section" aria-label="Target filter">
+                <button class="platform-tag platform-selector native-like" data-active="" aria-pressed="true" data-filter=":sqlx4k-postgres/nativeMain">native</button>
             <div class="dropdown filter-section--dropdown" data-role="dropdown" id="filter-section-dropdown">
                 <button class="button button_dropdown filter-section--dropdown-toggle" role="combobox" data-role="dropdown-toggle" aria-controls="platform-tags-listbox" aria-haspopup="listbox" aria-expanded="false" aria-label="Toggle source sets"></button>
-                <ul role="listbox" id="platform-tags-listbox" class="dropdown--list" data-role="dropdown-listbox">
-                    <div class="dropdown--header"><span>Platform filter</span>
-                        <button class="button" data-role="dropdown-toggle" aria-label="Close platform filter">
+                <ul role="listbox" id="platform-tags-listbox" class="dropdown--list" data-role="dropdown-listbox" aria-label="Target filter">
+                    <div class="dropdown--header"><span>Target filter</span>
+                        <button class="button" data-role="dropdown-toggle" aria-label="Close target filter">
                             <i class="ui-kit-icon ui-kit-icon_cross"></i>
                         </button>
                     </div>
@@ -64,58 +62,60 @@
                 </ul>
                 <div class="dropdown--overlay"></div>
             </div>
-        </div>
+        </ul>
             <button class="navigation-controls--btn navigation-controls--btn_theme" id="theme-toggle-button" type="button">Switch theme
             </button>
             <div class="navigation-controls--btn navigation-controls--btn_search" id="searchBar" role="button">Search in
                 API
             </div>
         </div>
-    </nav>
-        <div id="container">
-            <div class="sidebar" id="leftColumn">
-                <div class="dropdown theme-dark_mobile" data-role="dropdown" id="toc-dropdown">
-                    <ul role="listbox" id="toc-listbox" class="dropdown--list dropdown--list_toc-list" data-role="dropdown-listbox">
-                        <div class="dropdown--header">
+    </header>
+    <div id="container">
+        <nav id="leftColumn" class="sidebar" data-item-type="SECTION" data-item-config="{&quot;defaultSize&quot;: 280, &quot;minSize&quot;: 200, &quot;maxSize&quot;: 400}">
+            <a class="toc--skip-link" href="#main">Skip to content</a>
+            <div class="dropdown theme-dark_mobile" data-role="dropdown" id="toc-dropdown">
+                <ul role="listbox" id="toc-listbox" class="dropdown--list dropdown--list_toc-list" data-role="dropdown-listbox" aria-label="Table of contents">
+                    <div class="dropdown--header">
                             <span>
                                     sqlx4k
                             </span>
-                            <button class="button" data-role="dropdown-toggle" aria-label="Close table of contents">
-                                <i class="ui-kit-icon ui-kit-icon_cross"></i>
-                            </button>
-                        </div>
-                        <div class="sidebar--inner" id="sideMenu"></div>
-                    </ul>
-                    <div class="dropdown--overlay"></div>
-                </div>
+                        <button class="button" data-role="dropdown-toggle" aria-label="Close table of contents">
+                            <i class="ui-kit-icon ui-kit-icon_cross"></i>
+                        </button>
+                    </div>
+                    <div class="sidebar--inner" id="sideMenu"></div>
+                </ul>
+                <div class="dropdown--overlay"></div>
             </div>
-            <div id="main">
+        </nav>
+        <div id="resizer" class="resizer" data-item-type="BAR"></div>
+        <div id="main" data-item-type="SECTION" role="main">
 <div class="main-content" data-page-type="classlike" id="content" pageids="sqlx4k-postgres::io.github.smyrgeorge.sqlx4k.postgres/PostgreSQL///PointingToDeclaration//1767028338">
   <div class="breadcrumbs"><a href="../../index.html">sqlx4k-postgres</a><span class="delimiter">/</span><a href="../index.html">io.github.smyrgeorge.sqlx4k.postgres</a><span class="delimiter">/</span><span class="current">[native]PostgreSQL</span></div>
   <div class="cover ">
     <h1 class="cover"><span>Postgre</span><wbr><span><span>SQL</span></span></h1>
     <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
       <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain" data-active="" data-toggle=":sqlx4k-postgres/nativeMain">native</button></div>
-<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="index.html">PostgreSQL</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">url<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">username<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">password<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">options<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-connection-pool/-options/index.html">ConnectionPool.Options</a><span class="token operator"> = </span>ConnectionPool.Options()</span></span><span class="token punctuation">)</span> : <a href="../-i-postgres-s-q-l/index.html">IPostgresSQL</a><span class="clearfix"><span class="floating-right">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k-postgres/src/nativeMain/kotlin/io/github/smyrgeorge/sqlx4k/postgres/PostgreSQL.kt#L45">source</a>)</span></span></div><p class="paragraph">PostgreSQL class provides mechanisms to interact with a PostgreSQL database. It implements <code class="lang-kotlin">Driver</code>, <code class="lang-kotlin">Driver.Pool</code>, and <code class="lang-kotlin">Driver.Transactional</code> interfaces, offering functionalities such as connection pooling, executing queries, fetching data, and handling transactions.</p><p class="paragraph">The URL scheme designator can be either <code class="lang-kotlin">postgresql://</code> or <code class="lang-kotlin">postgres://</code>. Each of the URL parts is optional.</p><p class="paragraph">postgresql:// postgresql://localhost postgresql://localhost:5433 postgresql://localhost/mydb</p><h4 class="">Parameters</h4><div class="table"><div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><u><span><span>url</span></span></u></div></span></div><div><div class="title"><p class="paragraph">The URL of the PostgreSQL database to connect to.</p></div></div></div></div><div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><u><span><span>username</span></span></u></div></span></div><div><div class="title"><p class="paragraph">The username used for authentication.</p></div></div></div></div><div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><u><span><span>password</span></span></u></div></span></div><div><div class="title"><p class="paragraph">The password used for authentication.</p></div></div></div></div><div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><u><span><span>options</span></span></u></div></span></div><div><div class="title"><p class="paragraph">Optional pool configuration, defaulting to <code class="lang-kotlin">Driver.Pool.Options</code>.</p></div></div></div></div></div></div>    </div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="index.html">PostgreSQL</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">url<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">username<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">password<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">options<span class="token operator">: </span>ERROR CLASS: Symbol not found for ConnectionPool.Options<span class="token operator"> = </span>ConnectionPool.Options()</span></span><span class="token punctuation">)</span> : <a href="../-i-postgres-s-q-l/index.html">IPostgresSQL</a><span class="source-link-wrapper"><span class="source-link" data-element-type="source-link">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k-postgres/src/nativeMain/kotlin/io/github/smyrgeorge/sqlx4k/postgres/PostgreSQL.kt#L45">source</a>)</span></span></div><p class="paragraph">PostgreSQL class provides mechanisms to interact with a PostgreSQL database. It implements <code class="lang-kotlin">Driver</code>, <code class="lang-kotlin">Driver.Pool</code>, and <code class="lang-kotlin">Driver.Transactional</code> interfaces, offering functionalities such as connection pooling, executing queries, fetching data, and handling transactions.</p><p class="paragraph">The URL scheme designator can be either <code class="lang-kotlin">postgresql://</code> or <code class="lang-kotlin">postgres://</code>. Each of the URL parts is optional.</p><p class="paragraph">postgresql:// postgresql://localhost postgresql://localhost:5433 postgresql://localhost/mydb</p><h4 class="tableheader">Parameters</h4><div class="table"><div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><u><span><span>url</span></span></u></div></span></div><div><div class="title"><p class="paragraph">The URL of the PostgreSQL database to connect to.</p></div></div></div></div><div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><u><span><span>username</span></span></u></div></span></div><div><div class="title"><p class="paragraph">The username used for authentication.</p></div></div></div></div><div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><u><span><span>password</span></span></u></div></span></div><div><div class="title"><p class="paragraph">The password used for authentication.</p></div></div></div></div><div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><u><span><span>options</span></span></u></div></span></div><div><div class="title"><p class="paragraph">Optional pool configuration, defaulting to <code class="lang-kotlin">Driver.Pool.Options</code>.</p></div></div></div></div></div></div>    </div>
   </div>
   <div class="tabbedcontent">
     <div class="tabs-section" tabs-section="tabs-section"><button class="section-tab" data-active="" data-togglable="CONSTRUCTOR,TYPE,PROPERTY,FUNCTION">Members</button></div>
     <div class="tabs-section-body">
       <div data-togglable="CONSTRUCTOR">
-        <h2 class="">Constructors</h2>
-        <div class="table"><a data-name="-343330237%2FConstructors%2F1767028338" anchor-label="PostgreSQL" id="-343330237%2FConstructors%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
-          <div class="table-row" data-togglable="CONSTRUCTOR" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
+        <h2 class="tableheader">Constructors</h2>
+        <div class="table"><a data-name="283906125%2FConstructors%2F1767028338" anchor-label="PostgreSQL" id="283906125%2FConstructors%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
+          <div class="table-row table-row_content" data-togglable="CONSTRUCTOR" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="-postgre-s-q-l.html"><span>Postgre</span><wbr><span><span>SQL</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-343330237%2FConstructors%2F1767028338"></span>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="283906125%2FConstructors%2F1767028338"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
                   <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
                     <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain" data-active="" data-toggle=":sqlx4k-postgres/nativeMain">native</button></div>
-<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">constructor</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">url<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">username<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">password<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">options<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-connection-pool/-options/index.html">ConnectionPool.Options</a><span class="token operator"> = </span>ConnectionPool.Options()</span></span><span class="token punctuation">)</span></div></div>                  </div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">constructor</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">url<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">username<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">password<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">options<span class="token operator">: </span>ERROR CLASS: Symbol not found for ConnectionPool.Options<span class="token operator"> = </span>ConnectionPool.Options()</span></span><span class="token punctuation">)</span></div></div>                  </div>
                 </div>
               </div>
             </div>
@@ -123,9 +123,9 @@
         </div>
       </div>
       <div data-togglable="TYPE">
-        <h2 class="">Types</h2>
+        <h2 class="tableheader">Types</h2>
         <div class="table"><a data-name="1989802446%2FClasslikes%2F1767028338" anchor-label="Cn" id="1989802446%2FClasslikes%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="-cn/index.html"><span><span>Cn</span></span></a></div>
@@ -136,13 +136,13 @@
                 <div class="title">
                   <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
                     <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain" data-active="" data-toggle=":sqlx4k-postgres/nativeMain">native</button></div>
-<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="-cn/index.html">Cn</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">rt<span class="token operator">: </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&lt;</span><span class="token keyword">out </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&gt;</span><span class="token punctuation">, </span></span><span class="parameter ">cn<span class="token operator">: </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&lt;</span><span class="token keyword">out </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&gt;</span></span></span><span class="token punctuation">)</span> : <a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-connection/index.html">Connection</a></div><div class="brief "><p class="paragraph">Represents a database connection implementation that provides capabilities to execute SQL queries, handle transactions, and manage connection state.</p></div></div>                  </div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="-cn/index.html">Cn</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">rt<span class="token operator">: </span>ERROR CLASS: Symbol not found for CPointer&lt;out ERROR CLASS: Symbol not found for CPointed&gt;<span class="token punctuation">, </span></span><span class="parameter ">cn<span class="token operator">: </span>ERROR CLASS: Symbol not found for CPointer&lt;out ERROR CLASS: Symbol not found for CPointed&gt;</span></span><span class="token punctuation">)</span> : <span data-unresolved-link="/<ERROR CLASS> ERROR CLASS: Symbol not found for Connection///PointingToDeclaration/">&lt;ERROR CLASS&gt; ERROR CLASS: Symbol not found for Connection</span></div><div class="brief "><p class="paragraph">Represents a database connection implementation that provides capabilities to execute SQL queries, handle transactions, and manage connection state.</p></div></div>                  </div>
                 </div>
               </div>
             </div>
           </div>
 <a data-name="1011194365%2FClasslikes%2F1767028338" anchor-label="Companion" id="1011194365%2FClasslikes%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="-companion/index.html"><span><span>Companion</span></span></a></div>
@@ -159,7 +159,7 @@
             </div>
           </div>
 <a data-name="1467569621%2FClasslikes%2F1767028338" anchor-label="Tx" id="1467569621%2FClasslikes%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="-tx/index.html"><span><span>Tx</span></span></a></div>
@@ -170,7 +170,7 @@
                 <div class="title">
                   <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
                     <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain" data-active="" data-toggle=":sqlx4k-postgres/nativeMain">native</button></div>
-<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="-tx/index.html">Tx</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">rt<span class="token operator">: </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&lt;</span><span class="token keyword">out </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&gt;</span><span class="token punctuation">, </span></span><span class="parameter ">tx<span class="token operator">: </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&lt;</span><span class="token keyword">out </span><span data-unresolved-link="/<Error class: unknown class>///PointingToDeclaration/">&lt;Error class: unknown class&gt;</span><span class="token operator">&gt;</span></span></span><span class="token punctuation">)</span> : <a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-transaction/index.html">Transaction</a></div><div class="brief "><p class="paragraph">Represents a database transaction, providing methods to perform commit, rollback, and query execution operations within the transaction's context.</p></div></div>                  </div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="-tx/index.html">Tx</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">rt<span class="token operator">: </span>ERROR CLASS: Symbol not found for CPointer&lt;out ERROR CLASS: Symbol not found for CPointed&gt;<span class="token punctuation">, </span></span><span class="parameter ">tx<span class="token operator">: </span>ERROR CLASS: Symbol not found for CPointer&lt;out ERROR CLASS: Symbol not found for CPointed&gt;</span></span><span class="token punctuation">)</span> : <span data-unresolved-link="/<ERROR CLASS> ERROR CLASS: Symbol not found for Transaction///PointingToDeclaration/">&lt;ERROR CLASS&gt; ERROR CLASS: Symbol not found for Transaction</span></div><div class="brief "><p class="paragraph">Represents a database transaction, providing methods to perform commit, rollback, and query execution operations within the transaction's context.</p></div></div>                  </div>
                 </div>
               </div>
             </div>
@@ -178,9 +178,9 @@
         </div>
       </div>
       <div data-togglable="FUNCTION">
-        <h2 class="">Functions</h2>
+        <h2 class="tableheader">Functions</h2>
         <div class="table"><a data-name="-1507078432%2FFunctions%2F1767028338" anchor-label="acquire" id="-1507078432%2FFunctions%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="acquire.html"><span><span>acquire</span></span></a></div>
@@ -191,13 +191,13 @@
                 <div class="title">
                   <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
                     <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain" data-active="" data-toggle=":sqlx4k-postgres/nativeMain">native</button></div>
-<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><a href="acquire.html"><span class="token function">acquire</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-connection/index.html">Connection</a><span class="token operator">&gt;</span></div></div>                  </div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><a href="acquire.html"><span class="token function">acquire</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span>ERROR CLASS: Symbol not found for Result&lt;ERROR CLASS: Symbol not found for Connection&gt;</div></div>                  </div>
                 </div>
               </div>
             </div>
           </div>
 <a data-name="1558615213%2FFunctions%2F1767028338" anchor-label="begin" id="1558615213%2FFunctions%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="begin.html"><span><span>begin</span></span></a></div>
@@ -208,13 +208,13 @@
                 <div class="title">
                   <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
                     <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain" data-active="" data-toggle=":sqlx4k-postgres/nativeMain">native</button></div>
-<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><a href="begin.html"><span class="token function">begin</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-transaction/index.html">Transaction</a><span class="token operator">&gt;</span></div></div>                  </div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><a href="begin.html"><span class="token function">begin</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span>ERROR CLASS: Symbol not found for Result&lt;ERROR CLASS: Symbol not found for Transaction&gt;</div></div>                  </div>
                 </div>
               </div>
             </div>
           </div>
 <a data-name="835810878%2FFunctions%2F1767028338" anchor-label="close" id="835810878%2FFunctions%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="close.html"><span><span>close</span></span></a></div>
@@ -225,47 +225,47 @@
                 <div class="title">
                   <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
                     <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain" data-active="" data-toggle=":sqlx4k-postgres/nativeMain">native</button></div>
-<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><a href="close.html"><span class="token function">close</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-unit/index.html">Unit</a><span class="token operator">&gt;</span></div></div>                  </div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><a href="close.html"><span class="token function">close</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span>ERROR CLASS: Symbol not found for Result&lt;kotlin/Unit&gt;</div></div>                  </div>
                 </div>
               </div>
             </div>
           </div>
-<a data-name="1413139849%2FFunctions%2F1767028338" anchor-label="execute" id="1413139849%2FFunctions%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
+<a data-name="910032147%2FFunctions%2F1767028338" anchor-label="execute" id="910032147%2FFunctions%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="execute.html"><span><span>execute</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1413139849%2FFunctions%2F1767028338"></span>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="910032147%2FFunctions%2F1767028338"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
                   <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
                     <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain" data-active="" data-toggle=":sqlx4k-postgres/nativeMain">native</button></div>
-<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><a href="execute.html"><span class="token function">execute</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">statement<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-statement/index.html">Statement</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span></div><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><a href="execute.html"><span class="token function">execute</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">sql<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span></div></div>                  </div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><a href="execute.html"><span class="token function">execute</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">statement<span class="token operator">: </span>ERROR CLASS: Symbol not found for Statement</span></span><span class="token punctuation">)</span><span class="token operator">: </span>ERROR CLASS: Symbol not found for Result&lt;kotlin/Long&gt;</div><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><a href="execute.html"><span class="token function">execute</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">sql<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span>ERROR CLASS: Symbol not found for Result&lt;kotlin/Long&gt;</div></div>                  </div>
                 </div>
               </div>
             </div>
           </div>
-<a data-name="832212710%2FFunctions%2F1767028338" anchor-label="fetchAll" id="832212710%2FFunctions%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
+<a data-name="-876054119%2FFunctions%2F1767028338" anchor-label="fetchAll" id="-876054119%2FFunctions%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
-                  <div><a href="-tx/index.html#2117727803%2FFunctions%2F1767028338"><span>fetch</span><wbr><span><span>All</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="832212710%2FFunctions%2F1767028338"></span>
+                  <div><a href="fetch-all.html"><span>fetch</span><wbr><span><span>All</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-876054119%2FFunctions%2F1767028338"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
                   <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
                     <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain" data-active="" data-toggle=":sqlx4k-postgres/nativeMain">native</button></div>
-<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><span class="token operator">&lt;</span><a href="-tx/index.html#2117727803%2FFunctions%2F1767028338">T</a><span class="token operator">&gt; </span><a href="-tx/index.html#2117727803%2FFunctions%2F1767028338"><span class="token function">fetchAll</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">sql<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">rowMapper<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-row-mapper/index.html">RowMapper</a><span class="token operator">&lt;</span><a href="-tx/index.html#2117727803%2FFunctions%2F1767028338">T</a><span class="token operator">&gt;</span></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="-tx/index.html#2117727803%2FFunctions%2F1767028338">T</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><a href="fetch-all.html"><span class="token function">fetchAll</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">statement<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-statement/index.html">Statement</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-result-set/index.html">ResultSet</a><span class="token operator">&gt;</span></div><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><a href="fetch-all.html"><span class="token function">fetchAll</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">sql<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-result-set/index.html">ResultSet</a><span class="token operator">&gt;</span></div><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><span class="token operator">&lt;</span><a href="fetch-all.html">T</a><span class="token operator">&gt; </span><a href="fetch-all.html"><span class="token function">fetchAll</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">statement<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-statement/index.html">Statement</a><span class="token punctuation">, </span></span><span class="parameter ">rowMapper<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-row-mapper/index.html">RowMapper</a><span class="token operator">&lt;</span><a href="fetch-all.html">T</a><span class="token operator">&gt;</span></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="fetch-all.html">T</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div></div>                  </div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><a href="fetch-all.html"><span class="token function">fetchAll</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">statement<span class="token operator">: </span>ERROR CLASS: Symbol not found for Statement</span></span><span class="token punctuation">)</span><span class="token operator">: </span>ERROR CLASS: Symbol not found for Result&lt;ERROR CLASS: Symbol not found for ResultSet&gt;</div><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><a href="fetch-all.html"><span class="token function">fetchAll</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">sql<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span>ERROR CLASS: Symbol not found for Result&lt;ERROR CLASS: Symbol not found for ResultSet&gt;</div><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><span class="token operator">&lt;</span><a href="fetch-all.html">T</a><span class="token operator">&gt; </span><a href="fetch-all.html"><span class="token function">fetchAll</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">statement<span class="token operator">: </span>ERROR CLASS: Symbol not found for Statement<span class="token punctuation">, </span></span><span class="parameter ">rowMapper<span class="token operator">: </span>ERROR CLASS: Symbol not found for RowMapper&lt;T&gt;</span></span><span class="token punctuation">)</span><span class="token operator">: </span>ERROR CLASS: Symbol not found for Result&lt;kotlin/collections/List&lt;T&gt;&gt;</div></div>                  </div>
                 </div>
               </div>
             </div>
           </div>
 <a data-name="459449260%2FFunctions%2F1767028338" anchor-label="listen" id="459449260%2FFunctions%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="listen.html"><span><span>listen</span></span></a></div>
@@ -281,25 +281,25 @@
               </div>
             </div>
           </div>
-<a data-name="1034524298%2FFunctions%2F1767028338" anchor-label="migrate" id="1034524298%2FFunctions%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
+<a data-name="258400549%2FFunctions%2F1767028338" anchor-label="migrate" id="258400549%2FFunctions%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="migrate.html"><span><span>migrate</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1034524298%2FFunctions%2F1767028338"></span>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="258400549%2FFunctions%2F1767028338"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
                   <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
                     <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain" data-active="" data-toggle=":sqlx4k-postgres/nativeMain">native</button></div>
-<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><a href="migrate.html"><span class="token function">migrate</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">path<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">table<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">schema<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator">?</span><span class="token punctuation">, </span></span><span class="parameter ">createSchema<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token punctuation">, </span></span><span class="parameter ">afterStatementExecution<span class="token operator">: </span><span class="token keyword">suspend </span><span class="token punctuation">(</span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-statement/index.html">Statement</a><span class="token punctuation">, </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.time/-duration/index.html">Duration</a><span class="token punctuation">)</span><span class="token operator"> -&gt; </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-unit/index.html">Unit</a><span class="token punctuation">, </span></span><span class="parameter ">afterFileMigration<span class="token operator">: </span><span class="token keyword">suspend </span><span class="token punctuation">(</span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k.impl.migrate/-migration/index.html">Migration</a><span class="token punctuation">, </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.time/-duration/index.html">Duration</a><span class="token punctuation">)</span><span class="token operator"> -&gt; </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-unit/index.html">Unit</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k.impl.migrate/-migrator/-results/index.html">Migrator.Results</a><span class="token operator">&gt;</span></div></div>                  </div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend override </span><span class="token keyword">fun </span><a href="migrate.html"><span class="token function">migrate</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">path<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">table<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">schema<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator">?</span><span class="token punctuation">, </span></span><span class="parameter ">createSchema<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token punctuation">, </span></span><span class="parameter ">afterStatementExecution<span class="token operator">: </span><span class="token keyword">suspend </span><span class="token punctuation">(</span>ERROR CLASS: Symbol not found for Statement<span class="token punctuation">, </span>ERROR CLASS: Symbol not found for Duration<span class="token punctuation">)</span><span class="token operator"> -&gt; </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-unit/index.html">Unit</a><span class="token punctuation">, </span></span><span class="parameter ">afterFileMigration<span class="token operator">: </span><span class="token keyword">suspend </span><span class="token punctuation">(</span>ERROR CLASS: Symbol not found for Migration<span class="token punctuation">, </span>ERROR CLASS: Symbol not found for Duration<span class="token punctuation">)</span><span class="token operator"> -&gt; </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-unit/index.html">Unit</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span>ERROR CLASS: Symbol not found for Result&lt;ERROR CLASS: Symbol not found for Migrator.Results&gt;</div></div>                  </div>
                 </div>
               </div>
             </div>
           </div>
 <a data-name="1072760782%2FFunctions%2F1767028338" anchor-label="notify" id="1072760782%2FFunctions%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="notify.html"><span><span>notify</span></span></a></div>
@@ -316,7 +316,7 @@
             </div>
           </div>
 <a data-name="-754864365%2FFunctions%2F1767028338" anchor-label="poolIdleSize" id="-754864365%2FFunctions%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="pool-idle-size.html"><span>pool</span><wbr><span>Idle</span><wbr><span><span>Size</span></span></a></div>
@@ -333,7 +333,7 @@
             </div>
           </div>
 <a data-name="-1539732473%2FFunctions%2F1767028338" anchor-label="poolSize" id="-1539732473%2FFunctions%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="pool-size.html"><span>pool</span><wbr><span><span>Size</span></span></a></div>
@@ -349,25 +349,8 @@
               </div>
             </div>
           </div>
-<a data-name="-1142451006%2FFunctions%2F1767028338" anchor-label="transaction" id="-1142451006%2FFunctions%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
-            <div class="main-subrow keyValue ">
-              <div class=""><span class="inline-flex">
-                  <div><a href="-cn/index.html#-1142451006%2FFunctions%2F1767028338"><span><span>transaction</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1142451006%2FFunctions%2F1767028338"></span>
-                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
-                  </span></span></div>
-              <div>
-                <div class="title">
-                  <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
-                    <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain" data-active="" data-toggle=":sqlx4k-postgres/nativeMain">native</button></div>
-<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres/nativeMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><span class="token operator">&lt;</span><a href="-cn/index.html#-1142451006%2FFunctions%2F1767028338">T</a><span class="token operator">&gt; </span><a href="-cn/index.html#-1142451006%2FFunctions%2F1767028338"><span class="token function">transaction</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">f<span class="token operator">: </span><span class="token keyword">suspend </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-transaction/index.html">Transaction</a><span class="token punctuation">.</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator"> -&gt; </span><a href="-cn/index.html#-1142451006%2FFunctions%2F1767028338">T</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="-cn/index.html#-1142451006%2FFunctions%2F1767028338">T</a></div></div>                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
 <a data-name="1971034686%2FFunctions%2F1767028338" anchor-label="validateChannelName" id="1971034686%2FFunctions%2F1767028338" data-filterable-set=":sqlx4k-postgres/nativeMain"></a>
-          <div class="table-row" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres/nativeMain" data-filterable-set=":sqlx4k-postgres/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
                   <div><a href="../-i-postgres-s-q-l/validate-channel-name.html"><span>validate</span><wbr><span>Channel</span><wbr><span><span>Name</span></span></a></div>
@@ -389,17 +372,21 @@
   </div>
 </div>
     <div class="footer">
-        <a href="#content" id="go-to-top-link" class="footer--button footer--button_go-to-top"></a>
-        <span>© 2025 Copyright</span>
-        <span class="pull-right">
-            <span>Generated by </span>
-            <a class="footer--link footer--link_external" href="https://github.com/Kotlin/dokka">
-                <span>dokka</span>
-            </a>
-        </span>
-    </div>
+        <div class="footer--container">
+            <a href="#content" id="go-to-top-link" class="footer--button footer--button_go-to-top"></a>
+            <div class="footer--content">
+                <div>
+                    <span>Generated by </span>
+                    <a class="footer--link footer--link_external" href="https://github.com/Kotlin/dokka">
+                        Dokka
+                    </a>
+                    <div>© 2025 Copyright</div>
+                </div>
             </div>
         </div>
     </div>
+        </div>
+    </div>
+</div>
 </body>
 </html>
