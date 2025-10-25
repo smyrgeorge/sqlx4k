@@ -25,6 +25,7 @@ import kotlin.time.Duration.Companion.milliseconds
 import io.r2dbc.pool.ConnectionPool as R2dbcConnectionPool
 import io.r2dbc.postgresql.api.Notification as R2dbcNotification
 import io.r2dbc.spi.Connection as R2dbcConnection
+import io.r2dbc.spi.Result as R2dbcResultSet
 
 class PostgreSQLImpl(
     private val connectionFactory: PostgresqlConnectionFactory,
@@ -365,7 +366,7 @@ class PostgreSQLImpl(
                 get() = EmptyCoroutineContext
         }
 
-        private suspend fun io.r2dbc.spi.Result.toResultSet(): ResultSet {
+        private suspend fun R2dbcResultSet.toResultSet(): ResultSet {
             fun Row.toRow(): ResultSet.Row {
                 val columns = metadata.columnMetadatas.mapIndexed { i, c ->
                     ResultSet.Row.Column(

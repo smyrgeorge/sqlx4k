@@ -2,8 +2,7 @@
 
 package io.github.smyrgeorge.sqlx4k.impl.pool
 
-import io.github.smyrgeorge.sqlx4k.Connection
-import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
@@ -15,12 +14,14 @@ import kotlin.time.TimeSource
 class PooledConnection(
     private val connection: Connection,
     private val pool: ConnectionPoolImpl
-) : Connection by connection {
+) : Connection {
     private val mutex = Mutex()
     private var acquired = true
     private val released get() = !acquired
     private val createdAt: TimeMark = TIME_SOURCE.markNow()
     private var lastUsedAt: TimeMark = createdAt
+
+    override var status: Connection.Status = Connection.Status.Open
 
     fun isReleased(): Boolean = released
 
@@ -39,15 +40,18 @@ class PooledConnection(
 
             acquired = true
             lastUsedAt = TIME_SOURCE.markNow()
+            status = Connection.Status.Open
         }
         return this
     }
 
     override suspend fun close(): Result<Unit> = runCatching {
         mutex.withLock {
+            assertIsOpen()
             if (released) return@runCatching
             acquired = false
             lastUsedAt = TIME_SOURCE.markNow()
+            status = Connection.Status.Closed
         }
 
         if (pool.closed.load()) {
@@ -98,6 +102,36 @@ class PooledConnection(
         } catch (_: Exception) {
         } finally {
             pool.semaphore.release()
+        }
+    }
+
+    override suspend fun execute(sql: String): Result<Long> = runCatching {
+        mutex.withLock {
+            assertIsOpen()
+            return connection.execute(sql)
+        }
+    }
+
+    override suspend fun execute(statement: Statement): Result<Long> =
+        execute(statement.render(connection.encoders()))
+
+    override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
+        return mutex.withLock {
+            assertIsOpen()
+            connection.fetchAll(sql)
+        }
+    }
+
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+        fetchAll(statement.render(connection.encoders()))
+
+    override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
+        fetchAll(statement.render(connection.encoders()), rowMapper)
+
+    override suspend fun begin(): Result<Transaction> = runCatching {
+        mutex.withLock {
+            assertIsOpen()
+            return connection.begin()
         }
     }
 

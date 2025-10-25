@@ -13,21 +13,6 @@ import kotlin.concurrent.atomics.*
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Represents a factory function for creating a new database connection.
- *
- * This typealias is used to define a suspendable function that, when invoked, provides an instance
- * of a `Connection`. It encapsulates the logic for initializing a new connection, typically managed
- * by a connection pool or other connection management infrastructure.
- *
- * Common use cases include lazy initialization of connections or management of connection lifecycle
- * within a pooling mechanism, such as `ConnectionPoolImpl`.
- *
- * @see Connection
- * @see ConnectionPoolImpl
- */
-typealias ConnectionFactory = suspend () -> Connection
-
-/**
  * Represents an implementation of a connection pool that manages a pool of connections and provides
  * methods to acquire and release connections efficiently while maintaining a minimum and maximum
  * number of connections based on the specified configurations.

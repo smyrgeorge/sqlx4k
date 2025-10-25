@@ -22,6 +22,10 @@ kotlin {
                 implementation(libs.kotlinx.io.core)
             }
         }
-        // No jvmMain dependencies for SQLite; JVM is not supported yet.
+        val jvmMain by getting {
+            dependencies {
+                implementation(libs.sqlite.jdbc)
+            }
+        }
     }
 }
