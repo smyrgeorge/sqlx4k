@@ -73,33 +73,31 @@ class ConnectionPoolErrorHandlingTests {
         pool.close().getOrThrow()
     }
 
-//    @Test
-//    fun `Warmup failure does not corrupt pool state`() = runBlocking {
-//        var attempts = 0
-//        val factory: suspend () -> Connection = {
-//            attempts++
-//            if (attempts <= 2) {
-//                delay(10)
-//                error("Warmup connection $attempts failed")
-//            }
-//            FakeConnection(nextId++)
-//        }
-//
-//        val pool = ConnectionPoolImpl(
-//            factory,
-//            ConnectionPool.Options(minConnections = 3, maxConnections = 5, null, null, null)
-//        )
-//
-//        // Give warmup time to run (some will fail)
-//        delay(200)
-//
-//        // Pool should still be functional despite warmup failures
-//        val conn = pool.acquire().getOrThrow()
-//        assertThat(pool.poolSize()).isGreaterThan(0)
-//
-//        conn.release().getOrThrow()
-//        pool.close().getOrThrow()
-//    }
+    @Test
+    fun `Warmup failure does not corrupt pool state`() = runBlocking {
+        var attempts = 0
+        val factory: suspend () -> Connection = {
+            attempts++
+            if (attempts <= 2) {
+                delay(10)
+                error("Warmup connection $attempts failed")
+            }
+            FakeConnection(nextId++)
+        }
+
+        val options = ConnectionPool.Options(minConnections = 3, maxConnections = 5)
+        val pool = ConnectionPoolImpl(factory, options)
+
+        // Give warmup time to run (some will fail)
+        delay(500)
+
+        // Pool should still be functional despite warmup failures
+        val conn = pool.acquire().getOrThrow()
+        assertThat(pool.poolSize()).isGreaterThan(0)
+
+        conn.release().getOrThrow()
+        pool.close().getOrThrow()
+    }
 
     @Test
     fun `Acquire after timeout releases semaphore permit`() = runBlocking {
@@ -123,29 +121,27 @@ class ConnectionPoolErrorHandlingTests {
         pool.close().getOrThrow()
     }
 
-//    @Test
-//    fun `Connection factory exception during warmup does not prevent pool operation`() = runBlocking {
-//        var created = 0
-//        val factory: suspend () -> Connection = {
-//            created++
-//            if (created <= 1) {
-//                error("First connection failed")
-//            }
-//            FakeConnection(nextId++)
-//        }
-//
-//        val pool = ConnectionPoolImpl(
-//            factory,
-//            ConnectionPool.Options(minConnections = 3, maxConnections = 5, null, null, null)
-//        )
-//
-//        // Give warmup time
-//        delay(200)
-//
-//        // Pool should still be usable
-//        val conn = pool.acquire().getOrThrow()
-//        conn.release().getOrThrow()
-//
-//        pool.close().getOrThrow()
-//    }
+    @Test
+    fun `Connection factory exception during warmup does not prevent pool operation`() = runBlocking {
+        var created = 0
+        val factory: suspend () -> Connection = {
+            created++
+            if (created <= 1) {
+                error("First connection failed")
+            }
+            FakeConnection(nextId++)
+        }
+
+        val options = ConnectionPool.Options(minConnections = 3, maxConnections = 5)
+        val pool = ConnectionPoolImpl(factory, options)
+
+        // Give warmup time
+        delay(500)
+
+        // Pool should still be usable
+        val conn = pool.acquire().getOrThrow()
+        conn.release().getOrThrow()
+
+        pool.close().getOrThrow()
+    }
 }

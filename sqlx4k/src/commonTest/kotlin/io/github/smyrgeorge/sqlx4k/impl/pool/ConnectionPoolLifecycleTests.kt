@@ -38,44 +38,38 @@ class ConnectionPoolLifecycleTests {
         )
     }
 
-//    @Test
-//    fun `Warmup min connections populates idle pool`() = runBlocking {
-//        val min = 2
-//        var created = 0
-//        val pool = newPool(min = min, max = 4) { created++ }
-//
-//        // Warmup runs in background; give it a brief moment
-//        repeat(10) {
-//            if (pool.poolIdleSize() >= min && pool.poolSize() >= min) return@repeat
-//            delay(20)
-//        }
-//
-//        assertThat(pool.poolSize()).isGreaterThan(0) // at least some created
-//        assertThat(pool.poolIdleSize()).isEqualTo(min)
-//        assertThat(created.toLong()).isEqualTo(min.toLong())
-//
-//        pool.close().getOrThrow()
-//    }
+    @Test
+    fun `Warmup min connections populates idle pool`() = runBlocking {
+        val min = 2
+        var created = 0
+        val pool = newPool(min = min, max = 4) { created++ }
 
-//    @Test
-//    fun `Closing pool closes idle and blocks new acquires`() = runBlocking {
-//        var closedCount = 0
-//        val pool = newPool(min = 2, max = 2) { it.onClose = { closedCount++ } }
-//
-//        // Give warmup a chance
-//        repeat(10) {
-//            if (pool.poolIdleSize() >= 2) return@repeat
-//            delay(20)
-//        }
-//
-//        pool.close().getOrThrow()
-//
-//        // All idle connections should be closed by now
-//        assertThat(closedCount.toLong()).isEqualTo(2L)
-//
-//        val e = assertFailsWith<SQLError> { pool.acquire().getOrThrow() }
-//        assertThat(e.code).isEqualTo(SQLError.Code.PoolClosed)
-//    }
+        // Warmup runs in background; give it a brief moment
+        delay(500)
+
+        assertThat(pool.poolSize()).isGreaterThan(0) // at least some created
+        assertThat(pool.poolIdleSize()).isEqualTo(min)
+        assertThat(created.toLong()).isEqualTo(min.toLong())
+
+        pool.close().getOrThrow()
+    }
+
+    @Test
+    fun `Closing pool closes idle and blocks new acquires`() = runBlocking {
+        var closedCount = 0
+        val pool = newPool(min = 2, max = 2) { it.onClose = { closedCount++ } }
+
+        // Give warmup a chance
+        delay(500)
+
+        pool.close().getOrThrow()
+
+        // All idle connections should be closed by now
+        assertThat(closedCount.toLong()).isEqualTo(2L)
+
+        val e = assertFailsWith<SQLError> { pool.acquire().getOrThrow() }
+        assertThat(e.code).isEqualTo(SQLError.Code.PoolClosed)
+    }
 
     @Test
     fun `Releasing after pool close closes underlying connection`() = runBlocking {
@@ -162,27 +156,24 @@ class ConnectionPoolLifecycleTests {
         assertThat(e.code).isEqualTo(SQLError.Code.PoolClosed)
     }
 
-//    @Test
-//    fun `Min connections maintained after cleanup removes expired ones`() = runBlocking {
-//        val pool = newPool(min = 2, max = 4, idleTimeout = 100.milliseconds)
-//
-//        // Wait for warmup
-//        repeat(10) {
-//            if (pool.poolIdleSize() >= 2) return@repeat
-//            delay(20)
-//        }
-//
-//        val initialSize = pool.poolSize()
-//        assertThat(initialSize).isGreaterThan(0)
-//
-//        // Wait for cleanup cycle
-//        delay(6000)
-//
-//        // Pool should maintain at least min connections
-//        assertThat(pool.poolSize()).isGreaterThan(0)
-//
-//        pool.close().getOrThrow()
-//    }
+    @Test
+    fun `Min connections maintained after cleanup removes expired ones`() = runBlocking {
+        val pool = newPool(min = 2, max = 4, idleTimeout = 100.milliseconds)
+
+        // Wait for warmup
+        delay(500)
+
+        val initialSize = pool.poolSize()
+        assertThat(initialSize).isGreaterThan(0)
+
+        // Wait for cleanup cycle
+        delay(3000)
+
+        // Pool should maintain at least min connections
+        assertThat(pool.poolSize()).isGreaterThan(0)
+
+        pool.close().getOrThrow()
+    }
 
     @Test
     fun `Pool maintains min connections even with cleanup running`() = runBlocking {

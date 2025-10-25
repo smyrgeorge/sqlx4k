@@ -70,19 +70,6 @@ class ConnectionPoolLimitsTests {
         pool.close().getOrThrow()
     }
 
-//    @Test
-//    fun `Warmup respects max connections limit`() = runBlocking {
-//        val pool = newPool(min = 5, max = 3)
-//
-//        // Give warmup time to attempt creating connections
-//        delay(200)
-//
-//        // Should not exceed max despite min being higher
-//        assertThat(pool.poolSize()).isEqualTo(3)
-//
-//        pool.close().getOrThrow()
-//    }
-
     @Test
     fun `Acquire timeout with very short wait time fails quickly`() = runBlocking {
         val pool = newPool(max = 1, acquireTimeout = 50.milliseconds)
