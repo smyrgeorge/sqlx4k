@@ -83,15 +83,9 @@ class PgMqClient(
 
         context(tx: Transaction)
         suspend fun enableNotifyInsert(queue: String, throttleNotifyInterval: Duration): Result<Unit> {
-            val statement = if (throttleNotifyInterval == Duration.ZERO) {
-                // language=SQL
-                val sql = "SELECT pgmq.enable_notify_insert(queue_name := ?)"
-                Statement.create(sql).bind(0, queue)
-            } else {
-                // language=SQL
-                val sql = "SELECT pgmq.enable_notify_insert(queue_name := ?, throttle_interval_ms := ?)"
-                Statement.create(sql).bind(0, queue).bind(1, throttleNotifyInterval.inWholeMilliseconds)
-            }
+            // language=SQL
+            val sql = "SELECT pgmq.enable_notify_insert(queue_name := ?, throttle_interval_ms := ?)"
+            val statement = Statement.create(sql).bind(0, queue).bind(1, throttleNotifyInterval.inWholeMilliseconds)
             return tx.fetchAll(statement, UnitRowMapper).toSingleUnitResult()
         }
 
