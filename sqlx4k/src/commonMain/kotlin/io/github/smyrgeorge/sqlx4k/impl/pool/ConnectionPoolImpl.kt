@@ -63,7 +63,7 @@ class ConnectionPoolImpl(
                 val pooled = tryReceiveFromIdle() ?: break
                 if (pooled.isExpired()) {
                     // Expired: close and continue draining
-                    pooled.close()
+                    pooled.closeUnderlying()
                     // Yield to other coroutines to prevent CPU spinning
                     yield()
                 } else {
@@ -103,7 +103,7 @@ class ConnectionPoolImpl(
 
             if (pooled.isExpired()) {
                 // Expired: close and loop to try again
-                pooled.close()
+                pooled.closeUnderlying()
             } else {
                 return pooled.acquire()
             }
@@ -121,7 +121,7 @@ class ConnectionPoolImpl(
         while (true) {
             val pooled = idleConnections.tryReceive().getOrNull() ?: break
             idleCount.decrementAndFetch()
-            pooled.close()
+            pooled.closeUnderlying()
         }
         // Ensure idleCount cannot go negative due to races; clamp to 0
         idleCount.update { if (it < 0) 0 else it }
@@ -168,7 +168,7 @@ class ConnectionPoolImpl(
 
                 if (!sendToIdle(pooled)) {
                     // Send failed (pool closing), close the connection
-                    pooled.close()
+                    pooled.closeUnderlying()
                     // No point continuing warmup if pool is closing
                     return
                 }
@@ -177,7 +177,7 @@ class ConnectionPoolImpl(
                 if (pooled != null) {
                     // Connection was created but something failed, close it
                     try {
-                        pooled.close()
+                        pooled.closeUnderlying()
                     } catch (_: Exception) {
                         // Ignore errors during cleanup
                     }
@@ -208,26 +208,26 @@ class ConnectionPoolImpl(
             try {
                 if (pooled.isExpired()) {
                     // Try to close if above minimum (atomically checked)
-                    val wasClosed = pooled.closeIfAboveMinimum(minConnections)
+                    val wasClosed = pooled.closeUnderlyingIfAboveMinimum(minConnections)
                     if (!wasClosed) {
                         // At or below minimum - keep the expired connection
                         // It will be used until a new connection can replace it
                         if (!sendToIdle(pooled)) {
                             // Pool is closing, cleanup the connection
-                            pooled.close()
+                            pooled.closeUnderlying()
                         }
                     }
                 } else {
                     // Connection still valid, return it
                     if (!sendToIdle(pooled)) {
                         // Pool is closing, cleanup the connection
-                        pooled.close()
+                        pooled.closeUnderlying()
                     }
                 }
             } catch (_: Exception) {
                 // If anything fails, try to close the connection to prevent leaks
                 try {
-                    pooled.close()
+                    pooled.closeUnderlying()
                 } catch (_: Exception) {
                     // Ignore errors during emergency cleanup
                 }

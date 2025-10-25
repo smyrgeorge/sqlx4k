@@ -201,7 +201,7 @@ object Examples {
             val rows = cn.fetchAll("select * from sqlx4k;", Sqlx4kRowMapper).getOrThrow()
             println("Rows via connection: $rows")
         } finally {
-            cn.release().getOrThrow()
+            cn.close().getOrThrow()
             delay(1000) // Ensure that the connection has been released.
             println("Released connection. Pool size: ${db.poolSize()} (idle: ${db.poolIdleSize()})")
         }

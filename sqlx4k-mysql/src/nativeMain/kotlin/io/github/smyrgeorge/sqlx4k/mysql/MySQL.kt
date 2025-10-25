@@ -119,20 +119,20 @@ class MySQL(
         private val cn: CPointer<out CPointed>
     ) : Connection {
         private val mutex = Mutex()
-        private var _status: Connection.Status = Connection.Status.Acquired
+        private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
 
-        override suspend fun release(): Result<Unit> = runCatching {
+        override suspend fun close(): Result<Unit> = runCatching {
             mutex.withLock {
-                assertIsAcquired()
-                _status = Connection.Status.Released
+                assertIsOpen()
+                _status = Connection.Status.Closed
                 sqlx { c -> sqlx4k_cn_release(rt, cn, c, DriverNativeUtils.fn) }.throwIfError()
             }
         }
 
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
-                assertIsAcquired()
+                assertIsOpen()
                 sqlx { c -> sqlx4k_cn_query(rt, cn, sql, c, DriverNativeUtils.fn) }.use {
                     it.throwIfError()
                     it.rows_affected.toLong()
@@ -145,7 +145,7 @@ class MySQL(
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
-                assertIsAcquired()
+                assertIsOpen()
                 sqlx { c -> sqlx4k_cn_fetch_all(rt, cn, sql, c, DriverNativeUtils.fn) }
                     .use { it.toResultSet() }
                     .toResult()
@@ -160,7 +160,7 @@ class MySQL(
 
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
-                assertIsAcquired()
+                assertIsOpen()
                 sqlx { c -> sqlx4k_cn_tx_begin(rt, cn, c, DriverNativeUtils.fn) }.use {
                     it.throwIfError()
                     Tx(rt, it.tx!!)

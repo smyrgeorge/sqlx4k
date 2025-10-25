@@ -227,20 +227,20 @@ class PostgreSQLImpl(
         private val connection: R2dbcConnection
     ) : Connection {
         private val mutex = Mutex()
-        private var _status: Connection.Status = Connection.Status.Acquired
+        private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
 
-        override suspend fun release(): Result<Unit> = runCatching {
+        override suspend fun close(): Result<Unit> = runCatching {
             mutex.withLock {
-                assertIsAcquired()
-                _status = Connection.Status.Released
+                assertIsOpen()
+                _status = Connection.Status.Closed
                 connection.close().awaitFirstOrNull()
             }
         }
 
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
-                assertIsAcquired()
+                assertIsOpen()
                 @Suppress("SqlSourceToSinkFlow")
                 connection.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
             }
@@ -251,7 +251,7 @@ class PostgreSQLImpl(
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
-                assertIsAcquired()
+                assertIsOpen()
                 @Suppress("SqlSourceToSinkFlow")
                 connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
             }
@@ -265,7 +265,7 @@ class PostgreSQLImpl(
 
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
-                assertIsAcquired()
+                assertIsOpen()
                 try {
                     connection.beginTransaction().awaitFirstOrNull()
                 } catch (e: Exception) {

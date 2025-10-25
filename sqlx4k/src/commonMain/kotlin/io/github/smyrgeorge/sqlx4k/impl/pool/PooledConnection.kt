@@ -27,7 +27,7 @@ class PooledConnection(
     suspend fun acquire(): Connection {
         mutex.withLock {
             if (pool.closed.load()) {
-                close()
+                closeUnderlying()
                 SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").ex()
             }
 
@@ -37,7 +37,7 @@ class PooledConnection(
         return this
     }
 
-    override suspend fun release(): Result<Unit> = runCatching {
+    override suspend fun close(): Result<Unit> = runCatching {
         mutex.withLock {
             if (released) return@runCatching
             acquired = false
@@ -45,23 +45,23 @@ class PooledConnection(
         }
 
         if (pool.closed.load()) {
-            close()
+            closeUnderlying()
             return@runCatching
         }
 
         if (isExpired()) {
             val minConnections = pool.options.minConnections ?: 0
-            val wasClosed = closeIfAboveMinimum(minConnections)
+            val wasClosed = closeUnderlyingIfAboveMinimum(minConnections)
             if (!wasClosed) {
                 // At or below minimum, keep the expired connection (cleanup will replace later)
                 // Enqueue back to idle using suspending send to properly wake waiters
                 if (!pool.sendToIdle(this)) {
-                    close()
+                    closeUnderlying()
                 }
             }
         } else {
             if (!pool.sendToIdle(this)) {
-                close()
+                closeUnderlying()
             }
         }
     }
@@ -72,9 +72,9 @@ class PooledConnection(
         return false
     }
 
-    suspend fun close() {
+    suspend fun closeUnderlying() {
         try {
-            connection.release().getOrThrow()
+            connection.close().getOrThrow()
         } catch (_: Exception) {
         } finally {
             pool.totalConnections.decrementAndFetch()
@@ -82,7 +82,7 @@ class PooledConnection(
         }
     }
 
-    suspend fun closeIfAboveMinimum(minConnections: Int): Boolean {
+    suspend fun closeUnderlyingIfAboveMinimum(minConnections: Int): Boolean {
         var shouldClose = false
         pool.totalConnections.update {
             if (it > minConnections) {
@@ -96,7 +96,7 @@ class PooledConnection(
 
         if (shouldClose) {
             try {
-                connection.release().getOrThrow()
+                connection.close().getOrThrow()
             } catch (_: Exception) {
             } finally {
                 pool.semaphore.release()

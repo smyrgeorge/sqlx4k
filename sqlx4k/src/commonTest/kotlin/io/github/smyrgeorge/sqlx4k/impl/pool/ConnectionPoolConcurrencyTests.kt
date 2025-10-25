@@ -44,7 +44,7 @@ class ConnectionPoolConcurrencyTests {
                     val conn = pool.acquire().getOrThrow()
                     // Simulate some work
                     delay(1)
-                    conn.release().getOrThrow()
+                    conn.close().getOrThrow()
                 }
             }
         }
@@ -68,7 +68,7 @@ class ConnectionPoolConcurrencyTests {
             async {
                 val conn = pool.acquire().getOrThrow()
                 delay((index % 5).toLong()) // Varying delays
-                conn.release().getOrThrow()
+                conn.close().getOrThrow()
             }
         }
 
@@ -104,14 +104,14 @@ class ConnectionPoolConcurrencyTests {
         job.cancel()
 
         // Release one connection
-        c1.release().getOrThrow()
+        c1.close().getOrThrow()
 
         // Pool should still work correctly
         val c3 = pool.acquire().getOrThrow()
         assertThat(pool.poolSize()).isEqualTo(2)
 
-        c2.release().getOrThrow()
-        c3.release().getOrThrow()
+        c2.close().getOrThrow()
+        c3.close().getOrThrow()
         pool.close().getOrThrow()
     }
 
@@ -132,7 +132,7 @@ class ConnectionPoolConcurrencyTests {
                 repeat(10) {
                     val conn = pool.acquire().getOrThrow()
                     delay(5)
-                    conn.release().getOrThrow()
+                    conn.close().getOrThrow()
                     delay(15) // Some connections will become idle
                 }
             }
@@ -153,7 +153,7 @@ class ConnectionPoolConcurrencyTests {
 
         repeat(iterations) {
             val conn = pool.acquire().getOrThrow()
-            conn.release().getOrThrow()
+            conn.close().getOrThrow()
         }
 
         // All connections should be idle
@@ -175,7 +175,7 @@ class ConnectionPoolConcurrencyTests {
             async {
                 val conn = pool.acquire().getOrThrow()
                 delay((10..80L).random())
-                conn.release().getOrThrow()
+                conn.close().getOrThrow()
             }
         }
 

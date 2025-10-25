@@ -36,9 +36,9 @@ class ConnectionPoolBasicTests {
         val c1 = pool.acquire().getOrThrow() as PooledConnection
         assertThat(pool.poolSize()).isEqualTo(1)
         assertThat(pool.poolIdleSize()).isEqualTo(0)
-        assertThat(c1.status).isEqualTo(Connection.Status.Acquired)
+        assertThat(c1.status).isEqualTo(Connection.Status.Open)
 
-        c1.release().getOrThrow()
+        c1.close().getOrThrow()
         assertThat(pool.poolSize()).isEqualTo(1)
         assertThat(pool.poolIdleSize()).isEqualTo(1)
         assertThat(c1.isReleased()).isTrue()
@@ -52,11 +52,11 @@ class ConnectionPoolBasicTests {
 
         val c1 = pool.acquire().getOrThrow()
         val id1 = (c1.execute("id").getOrThrow())
-        c1.release().getOrThrow()
+        c1.close().getOrThrow()
 
         val c2 = pool.acquire().getOrThrow()
         val id2 = (c2.execute("id").getOrThrow())
-        c2.release().getOrThrow()
+        c2.close().getOrThrow()
 
         assertThat(id2).isEqualTo(id1)
 
@@ -68,9 +68,9 @@ class ConnectionPoolBasicTests {
         val pool = newPool(max = 1)
 
         val c = pool.acquire().getOrThrow() as PooledConnection
-        assertThat(c.status).isEqualTo(Connection.Status.Acquired)
+        assertThat(c.status).isEqualTo(Connection.Status.Open)
 
-        c.release().getOrThrow()
+        c.close().getOrThrow()
         assertThat(c.isReleased()).isTrue()
 
         pool.close().getOrThrow()
@@ -87,7 +87,7 @@ class ConnectionPoolBasicTests {
         tx.commit().getOrThrow()
         assertThat(tx.status).isEqualTo(Transaction.Status.Closed)
 
-        c.release().getOrThrow()
+        c.close().getOrThrow()
         pool.close().getOrThrow()
     }
 }

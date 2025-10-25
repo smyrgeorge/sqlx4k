@@ -37,7 +37,7 @@ class SQLError(
         Pool,
 
         // Connection
-        ConnectionIsReleased,
+        ConnectionIsOpen,
 
         // Transaction
         TransactionIsClosed,

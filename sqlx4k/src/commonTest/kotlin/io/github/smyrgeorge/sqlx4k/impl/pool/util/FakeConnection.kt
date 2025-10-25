@@ -3,20 +3,20 @@ package io.github.smyrgeorge.sqlx4k.impl.pool.util
 import io.github.smyrgeorge.sqlx4k.*
 
 class FakeConnection(val id: Long) : Connection {
-    override var status: Connection.Status = Connection.Status.Acquired
+    override var status: Connection.Status = Connection.Status.Open
     var onClose: (() -> Unit)? = null
     private var closed = false
     private var releases = 0
     private var begins = 0
     private var executes = 0L
 
-    override suspend fun release(): Result<Unit> {
+    override suspend fun close(): Result<Unit> {
         // Treat pool close or direct close identically for tests
         if (!closed) {
             closed = true
             onClose?.invoke()
         }
-        status = Connection.Status.Released
+        status = Connection.Status.Closed
         releases++
         return Result.success(Unit)
     }

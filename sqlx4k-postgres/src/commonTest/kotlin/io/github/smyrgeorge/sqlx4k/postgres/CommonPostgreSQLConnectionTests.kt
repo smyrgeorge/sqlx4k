@@ -29,12 +29,12 @@ class CommonPostgreSQLConnectionTests(
         // Perform operation while acquired
         assertThat(cn.execute("insert into $table(v) values (1);")).isSuccess()
         // release
-        assertThat(cn.release()).isSuccess()
+        assertThat(cn.close()).isSuccess()
         // further ops should fail
         val res = cn.execute("insert into $table(v) values (2);")
         assertThat(res).isFailure()
         val ex = res.exceptionOrNull() as SQLError
-        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsReleased)
+        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsOpen)
 
         assertThat(countRows(table)).isEqualTo(1L)
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }
@@ -42,11 +42,11 @@ class CommonPostgreSQLConnectionTests(
 
     fun `double release should fail with ConnectionIsReleased`() = runBlocking {
         val cn: Connection = db.acquire().getOrThrow()
-        assertThat(cn.release()).isSuccess()
-        val res = cn.release()
+        assertThat(cn.close()).isSuccess()
+        val res = cn.close()
         assertThat(res).isFailure()
         val ex = res.exceptionOrNull() as SQLError
-        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsReleased)
+        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsOpen)
     }
 
     fun `connection begin-commit and rollback should work`() = runBlocking {
@@ -59,7 +59,7 @@ class CommonPostgreSQLConnectionTests(
         val tx1 = cn1.begin().getOrThrow()
         assertThat(tx1.execute("insert into $table(v) values (1);")).isSuccess()
         tx1.commit().getOrThrow()
-        cn1.release().getOrThrow()
+        cn1.close().getOrThrow()
         assertThat(countRows(table)).isEqualTo(1L)
 
         // rollback path
@@ -67,7 +67,7 @@ class CommonPostgreSQLConnectionTests(
         val tx2 = cn2.begin().getOrThrow()
         assertThat(tx2.execute("insert into $table(v) values (2);")).isSuccess()
         tx2.rollback().getOrThrow()
-        cn2.release().getOrThrow()
+        cn2.close().getOrThrow()
         assertThat(countRows(table)).isEqualTo(1L)
 
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }
@@ -82,15 +82,15 @@ class CommonPostgreSQLConnectionTests(
         assertThat(cn.execute("insert into $table(v) values (10);")).isSuccess()
         val rs = cn.fetchAll("select count(*) from $table;").getOrThrow()
         assertThat(rs.first().get(0).asLong()).isEqualTo(1L)
-        cn.release().getOrThrow()
+        cn.close().getOrThrow()
 
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }
     }
 
     fun `status should be Acquired then Released`() = runBlocking {
         val cn: Connection = db.acquire().getOrThrow()
-        assertThat(cn.status).isEqualTo(Connection.Status.Acquired)
-        cn.release().getOrThrow()
-        assertThat(cn.status).isEqualTo(Connection.Status.Released)
+        assertThat(cn.status).isEqualTo(Connection.Status.Open)
+        cn.close().getOrThrow()
+        assertThat(cn.status).isEqualTo(Connection.Status.Closed)
     }
 }

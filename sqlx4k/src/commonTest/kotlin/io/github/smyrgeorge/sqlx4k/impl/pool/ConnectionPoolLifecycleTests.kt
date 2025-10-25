@@ -82,7 +82,7 @@ class ConnectionPoolLifecycleTests {
         pool.close().getOrThrow()
 
         // Releasing afterwards should close underlying connection
-        c.release().getOrThrow()
+        c.close().getOrThrow()
         assertThat(closedCount.toLong()).isEqualTo(1L)
     }
 
@@ -115,7 +115,7 @@ class ConnectionPoolLifecycleTests {
         val results = waiters.awaitAll()
         assertThat(results.all { it == "closed" }).isEqualTo(true)
 
-        c1.release().getOrThrow()
+        c1.close().getOrThrow()
     }
 
     @Test
@@ -131,8 +131,8 @@ class ConnectionPoolLifecycleTests {
         // Create some connections beyond minimum
         val c1 = pool.acquire().getOrThrow()
         val c2 = pool.acquire().getOrThrow()
-        c1.release().getOrThrow()
-        c2.release().getOrThrow()
+        c1.close().getOrThrow()
+        c2.close().getOrThrow()
 
         val sizeAfterUse = pool.poolSize()
         assertThat(sizeAfterUse).isGreaterThan(0)
@@ -189,8 +189,8 @@ class ConnectionPoolLifecycleTests {
         // Use some connections
         val c1 = pool.acquire().getOrThrow()
         val c2 = pool.acquire().getOrThrow()
-        c1.release().getOrThrow()
-        c2.release().getOrThrow()
+        c1.close().getOrThrow()
+        c2.close().getOrThrow()
 
         // Wait for cleanup cycles
         delay(6500)
@@ -218,7 +218,7 @@ class ConnectionPoolLifecycleTests {
         val releaseJobs = connections.map { conn ->
             async {
                 delay((0..100L).random())
-                conn.release()
+                conn.close()
             }
         }
 

@@ -50,7 +50,7 @@ class ConnectionPoolErrorHandlingTests {
         val c = pool.acquire().getOrThrow()
         assertThat(pool.poolSize()).isEqualTo(1)
 
-        c.release().getOrThrow()
+        c.close().getOrThrow()
         pool.close().getOrThrow()
     }
 
@@ -59,9 +59,9 @@ class ConnectionPoolErrorHandlingTests {
         val pool = newPool(max = 1)
 
         val c = pool.acquire().getOrThrow()
-        c.release().getOrThrow()
-        c.release().getOrThrow()  // Second release should be safe
-        c.release().getOrThrow()  // Third release should be safe
+        c.close().getOrThrow()
+        c.close().getOrThrow()  // Second release should be safe
+        c.close().getOrThrow()  // Third release should be safe
 
         assertThat(pool.poolIdleSize()).isEqualTo(1)
         assertThat(pool.poolSize()).isEqualTo(1)
@@ -91,7 +91,7 @@ class ConnectionPoolErrorHandlingTests {
         val conn = pool.acquire().getOrThrow()
         assertThat(pool.poolSize()).isGreaterThan(0)
 
-        conn.release().getOrThrow()
+        conn.close().getOrThrow()
         pool.close().getOrThrow()
     }
 
@@ -107,13 +107,13 @@ class ConnectionPoolErrorHandlingTests {
         }
 
         // Release the connection
-        c1.release().getOrThrow()
+        c1.close().getOrThrow()
 
         // Should be able to acquire again
         val c2 = pool.acquire().getOrThrow()
         assertThat(pool.poolSize()).isEqualTo(1)
 
-        c2.release().getOrThrow()
+        c2.close().getOrThrow()
         pool.close().getOrThrow()
     }
 
@@ -136,7 +136,7 @@ class ConnectionPoolErrorHandlingTests {
 
         // Pool should still be usable
         val conn = pool.acquire().getOrThrow()
-        conn.release().getOrThrow()
+        conn.close().getOrThrow()
 
         pool.close().getOrThrow()
     }

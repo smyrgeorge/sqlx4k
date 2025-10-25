@@ -48,7 +48,7 @@ class ConnectionPoolLimitsTests {
         }
         assertThat(e.code).isEqualTo(SQLError.Code.PoolTimedOut)
 
-        c1.release().getOrThrow()
+        c1.close().getOrThrow()
         pool.close().getOrThrow()
     }
 
@@ -63,7 +63,7 @@ class ConnectionPoolLimitsTests {
         assertThat(pool.poolSize()).isEqualTo(2)
         assertThat(pool.poolIdleSize()).isEqualTo(0)
 
-        conns.forEach { it.release().getOrThrow() }
+        conns.forEach { it.close().getOrThrow() }
         assertThat(pool.poolIdleSize()).isEqualTo(2)
 
         pool.close().getOrThrow()
@@ -80,7 +80,7 @@ class ConnectionPoolLimitsTests {
         }
         assertThat(e.code).isEqualTo(SQLError.Code.PoolTimedOut)
 
-        c1.release().getOrThrow()
+        c1.close().getOrThrow()
         pool.close().getOrThrow()
     }
 
@@ -104,7 +104,7 @@ class ConnectionPoolLimitsTests {
         // Release connections one by one
         held.forEach { conn ->
             delay(50)
-            conn.release().getOrThrow()
+            conn.close().getOrThrow()
         }
 
         // All waiters should eventually succeed (some will get released connections, others will create new ones)
@@ -112,7 +112,7 @@ class ConnectionPoolLimitsTests {
         assertThat(acquired.size).isEqualTo(10)
 
         // Clean up
-        acquired.forEach { it.release().getOrThrow() }
+        acquired.forEach { it.close().getOrThrow() }
         pool.close().getOrThrow()
     }
 
@@ -141,7 +141,7 @@ class ConnectionPoolLimitsTests {
         assertThat(pool.poolSize()).isEqualTo(4)
         assertThat(pool.poolIdleSize()).isEqualTo(0)
 
-        conns.forEach { it.release().getOrThrow() }
+        conns.forEach { it.close().getOrThrow() }
         pool.close().getOrThrow()
     }
 
@@ -158,13 +158,13 @@ class ConnectionPoolLimitsTests {
         delay(100) // Give time for acquire to block
 
         // Release first connection
-        c1.release().getOrThrow()
+        c1.close().getOrThrow()
 
         // Second acquire should now succeed
         val c2 = deferred.await()
         assertThat(c2).isNotNull()
 
-        c2.release().getOrThrow()
+        c2.close().getOrThrow()
         pool.close().getOrThrow()
     }
 
@@ -200,12 +200,12 @@ class ConnectionPoolLimitsTests {
         assertThat(failures.size).isEqualTo(10)
 
         // Pool should still work after timeouts
-        c1.release().getOrThrow()
+        c1.close().getOrThrow()
 
         val c2 = pool.acquire().getOrThrow()
         assertThat(c2).isNotNull()
 
-        c2.release().getOrThrow()
+        c2.close().getOrThrow()
         pool.close().getOrThrow()
     }
 
@@ -221,7 +221,7 @@ class ConnectionPoolLimitsTests {
                 repeat(10) {
                     val conn = pool.acquire().getOrThrow()
                     delay(5) // Simulate some work
-                    conn.release().getOrThrow()
+                    conn.close().getOrThrow()
                 }
             }
         }
@@ -242,7 +242,7 @@ class ConnectionPoolLimitsTests {
         assertThat(pool.poolSize()).isEqualTo(5)
         assertThat(pool.poolIdleSize()).isEqualTo(0)
 
-        conns.forEach { it.release().getOrThrow() }
+        conns.forEach { it.close().getOrThrow() }
 
         delay(50) // Allow releases to complete
 
@@ -288,7 +288,7 @@ class ConnectionPoolLimitsTests {
                 assertThat((e as SQLError).code).isEqualTo(SQLError.Code.PoolClosed)
             } else {
                 // If it succeeded, connection should handle release gracefully
-                result.getOrThrow().release()
+                result.getOrThrow().close()
             }
         }
     }
@@ -306,7 +306,7 @@ class ConnectionPoolLimitsTests {
                     accessOrder.add(index)
                 }
                 delay(50)
-                conn.release().getOrThrow()
+                conn.close().getOrThrow()
             }
         }
 
@@ -342,7 +342,7 @@ class ConnectionPoolLimitsTests {
         // Pool size should match successful acquisitions that are still held
         assertThat(pool.poolSize()).isEqualTo(successful.size)
 
-        successful.forEach { it.getOrThrow().release().getOrThrow() }
+        successful.forEach { it.getOrThrow().close().getOrThrow() }
         pool.close().getOrThrow()
     }
 
@@ -355,7 +355,7 @@ class ConnectionPoolLimitsTests {
         assertThat(pool.poolSize()).isEqualTo(3)
         assertThat(pool.poolIdleSize()).isEqualTo(0)
 
-        conns.forEach { it.release().getOrThrow() }
+        conns.forEach { it.close().getOrThrow() }
         pool.close().getOrThrow()
     }
 
@@ -365,7 +365,7 @@ class ConnectionPoolLimitsTests {
 
         repeat(20) {
             val conn = pool.acquire().getOrThrow()
-            conn.release().getOrThrow()
+            conn.close().getOrThrow()
         }
 
         assertThat(pool.poolSize()).isEqualTo(1)

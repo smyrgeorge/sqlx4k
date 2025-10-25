@@ -1,58 +1,55 @@
 package io.github.smyrgeorge.sqlx4k
 
 /**
- * Represents a database connection that supports executing queries and transactional operations.
+ * Represents a database connection capable of executing queries and managing transactions.
  *
- * The `Connection` interface extends the `QueryExecutor` and `QueryExecutor.Transactional` interfaces,
- * providing functionality for executing queries and managing transactions. Additionally, it manages
- * the lifecycle state of the connection through its `status` property and provides methods for
- * validating and releasing the connection.
+ * The `Connection` interface defines operations for interacting with a database
+ * connection, managing its lifecycle, and ensuring that it operates in a valid state.
+ * This includes functionality for executing queries, transactional operations, and
+ * managing the connection's open/closed state.
  */
 interface Connection : QueryExecutor, QueryExecutor.Transactional {
     val status: Status
 
     /**
-     * Validates whether the connection is in an acquired state or throws an error.
+     * Ensures that the connection is currently in an open state.
      *
-     * This method ensures that the connection is not in the released state. If the connection
-     * has already been released, an [SQLError] with the error code [SQLError.Code.ConnectionIsReleased]
-     * is thrown to signal that the operation cannot proceed with a released connection.
+     * This method checks the `status` of the connection and verifies if it is set to `Status.Open`.
+     * If the connection is not open, it throws an `SQLError` with the code `ConnectionIsOpen`,
+     * indicating that the connection has been closed and is no longer available for use.
      *
-     * @throws SQLError If the connection has already been released.
+     * @throws SQLError If the connection is not in the open state.
      */
-    fun assertIsAcquired() {
-        if (status != Status.Acquired) {
-            SQLError(SQLError.Code.ConnectionIsReleased, "Connection has already been released.").ex()
+    fun assertIsOpen() {
+        if (status != Status.Open) {
+            SQLError(SQLError.Code.ConnectionIsOpen, "Connection has already been closed.").ex()
         }
     }
 
     /**
-     * Releases the current connection, making it available for reuse or closing it if appropriate.
+     * Closes the connection and releases any associated resources.
      *
-     * This method transitions the connection into a released state, marking it as no longer in use.
-     * Releasing a connection ensures proper resource management and avoids potential resource leaks.
-     * The operation may fail if the connection is already in a released state or if there is an issue
-     * during the release process.
+     * This method transitions the connection's status to `Closed` and ensures that
+     * no further operations can be performed on it. If the connection is already
+     * closed, invoking this method will result in an appropriate error.
      *
-     * @return A [Result] indicating the success or failure of the release operation.
-     *         On success, the result contains [Unit]. On failure, it contains an error describing
-     *         the issue encountered while releasing the connection.
+     * @return A [Result] indicating the success or failure of the close operation.
      */
-    suspend fun release(): Result<Unit>
+    suspend fun close(): Result<Unit>
 
     /**
-     * Represents the status of a database connection.
+     * Represents the operational state of a connection.
      *
-     * The `Status` enum indicates the current lifecycle state of a database connection.
+     * The `Status` enum provides the possible states in which a database connection
+     * can reside. It is used to indicate whether a connection is currently open
+     * and available for use, or if it has been closed and is no longer usable.
      *
-     * - `Acquired`: The connection is currently in use or reserved.
-     * - `Released`: The connection has been released and is no longer in use.
-     *
-     * This enum is typically used to track and enforce proper connection management within
-     * the system, preventing operations on released connections.
+     * This enum is typically utilized in connection management logic to enforce
+     * safe and logical state transitions, such as ensuring that operations are not
+     * performed on a closed connection.
      */
     enum class Status {
-        Acquired,
-        Released,
+        Open,
+        Closed,
     }
 }
