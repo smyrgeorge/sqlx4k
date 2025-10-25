@@ -31,7 +31,7 @@ import kotlin.time.Duration
 import kotlin.time.toJavaDuration
 import io.r2dbc.pool.ConnectionPool as R2dbcConnectionPool
 import io.r2dbc.spi.Connection as R2dbcConnection
-
+import io.r2dbc.spi.Result as R2dbcResultSet
 
 /**
  * The `MySQL` class provides a driver implementation for interacting with a MySQL database.
@@ -357,7 +357,7 @@ class MySQL(
             }.build()
         }
 
-        private suspend fun io.r2dbc.spi.Result.toResultSet(): ResultSet {
+        private suspend fun R2dbcResultSet.toResultSet(): ResultSet {
             fun Row.toRow(): ResultSet.Row {
                 val columns = metadata.columnMetadatas.mapIndexed { i, c ->
                     ResultSet.Row.Column(
