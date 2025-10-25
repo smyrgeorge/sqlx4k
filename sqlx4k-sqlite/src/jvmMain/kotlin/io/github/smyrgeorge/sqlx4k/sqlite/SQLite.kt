@@ -306,16 +306,36 @@ class SQLite(
             return ResultSet(rows, null, meta)
         }
 
-        private fun createConnectionPool(url: String, options: ConnectionPool.Options): ConnectionPoolImpl {
+        private fun createConnectionPool(
+            url: String,
+            options: ConnectionPool.Options
+        ): ConnectionPoolImpl {
             // Ensure the URL has the proper JDBC prefix
             val jdbcUrl = "jdbc:sqlite:${url.removePrefix("jdbc:").removePrefix("sqlite:").removePrefix("//")}"
+
+            // Validate in-memory database configuration
+            // In-memory SQLite databases are isolated per connection, so pool size must be 1
+            val isInMemory = jdbcUrl.contains(":memory:", ignoreCase = true)
+            if (isInMemory && options.maxConnections > 1) {
+                throw IllegalArgumentException(
+                    "SQLite in-memory databases cannot be used with connection pools larger than 1. " +
+                            "Each connection creates a separate in-memory database instance. " +
+                            "Please set ConnectionPool.Options(minConnections = 1, maxConnections = 1) for in-memory databases."
+                )
+            }
 
             // Connection factory that creates JDBC connections
             val connectionFactory: suspend () -> Connection = {
                 withContext(Dispatchers.IO) {
-                    val jdbcConnection = DriverManager.getConnection(jdbcUrl)
-                    jdbcConnection.autoCommit = true
-                    Cn(jdbcConnection)
+                    val connection = DriverManager.getConnection(jdbcUrl)
+                    connection.autoCommit = true
+                    Cn(connection).apply {
+                        // Enable WAL mode for file-based databases to improve concurrency
+                        // In-memory databases don't support WAL mode
+                        if (!isInMemory) {
+                            execute("PRAGMA journal_mode=WAL").getOrThrow()
+                        }
+                    }
                 }
             }
 
