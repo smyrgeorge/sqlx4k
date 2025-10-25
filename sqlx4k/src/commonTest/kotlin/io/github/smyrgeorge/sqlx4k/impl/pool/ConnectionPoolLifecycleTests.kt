@@ -63,6 +63,8 @@ class ConnectionPoolLifecycleTests {
 
         pool.close().getOrThrow()
 
+        delay(500)
+
         // All idle connections should be closed by now
         assertThat(closedCount.toLong()).isEqualTo(2L)
 

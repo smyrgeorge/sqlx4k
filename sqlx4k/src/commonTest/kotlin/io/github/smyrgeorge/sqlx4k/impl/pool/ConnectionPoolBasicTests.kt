@@ -2,6 +2,7 @@ package io.github.smyrgeorge.sqlx4k.impl.pool
 
 import assertk.assertThat
 import assertk.assertions.isEqualTo
+import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Transaction
@@ -32,7 +33,7 @@ class ConnectionPoolBasicTests {
     fun `Acquire and release updates sizes and status`() = runBlocking {
         val pool = newPool(max = 1)
 
-        val c1 = pool.acquire().getOrThrow()
+        val c1 = pool.acquire().getOrThrow() as PooledConnection
         assertThat(pool.poolSize()).isEqualTo(1)
         assertThat(pool.poolIdleSize()).isEqualTo(0)
         assertThat(c1.status).isEqualTo(Connection.Status.Acquired)
@@ -40,7 +41,7 @@ class ConnectionPoolBasicTests {
         c1.release().getOrThrow()
         assertThat(pool.poolSize()).isEqualTo(1)
         assertThat(pool.poolIdleSize()).isEqualTo(1)
-        assertThat(c1.status).isEqualTo(Connection.Status.Released)
+        assertThat(c1.isReleased()).isTrue()
 
         pool.close().getOrThrow()
     }
@@ -66,11 +67,11 @@ class ConnectionPoolBasicTests {
     fun `Connection status updates on release`() = runBlocking {
         val pool = newPool(max = 1)
 
-        val c = pool.acquire().getOrThrow()
+        val c = pool.acquire().getOrThrow() as PooledConnection
         assertThat(c.status).isEqualTo(Connection.Status.Acquired)
 
         c.release().getOrThrow()
-        assertThat(c.status).isEqualTo(Connection.Status.Released)
+        assertThat(c.isReleased()).isTrue()
 
         pool.close().getOrThrow()
     }
