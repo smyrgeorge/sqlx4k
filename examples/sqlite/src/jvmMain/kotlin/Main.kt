@@ -10,7 +10,7 @@ fun main() = runBlocking {
         .build()
 
     val db = sqlite(
-        url = "sqlite::memory:",
+        url = "test.db",
         options = options
     )
 

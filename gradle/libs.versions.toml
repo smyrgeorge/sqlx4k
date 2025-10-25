@@ -36,6 +36,8 @@ jsqlparser = "5.3"
 calcite = "1.40.0"
 # https://github.com/smyrgeorge/log4k
 log4k = "1.1.2"
+# https://github.com/xerial/sqlite-jdbc
+sqlite-jdbc = "3.50.3.0"
 
 [libraries]
 gradle-kotlin-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
@@ -55,6 +57,7 @@ r2dbc-postgresql = { module = "org.postgresql:r2dbc-postgresql", version.ref = "
 jsqlparser = { module = "com.github.jsqlparser:jsqlparser", version.ref = "jsqlparser" }
 calcite-core = { module = "org.apache.calcite:calcite-core", version.ref = "calcite" }
 log4k-slf4j = { module = "io.github.smyrgeorge:log4k-slf4j", version.ref = "log4k" }
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
