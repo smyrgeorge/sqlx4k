@@ -282,11 +282,12 @@ class SQLite(
             fun toRow(): ResultSet.Row {
                 val metaData = this.metaData
                 val columns = (1..metaData.columnCount).map { i ->
+                    val type = metaData.getColumnTypeName(i)
                     ResultSet.Row.Column(
                         ordinal = i - 1,
                         name = metaData.getColumnName(i),
                         type = metaData.getColumnTypeName(i),
-                        value = getString(i)
+                        value = if (type == "BLOB") getString(i).toByteArray().toHexString() else getString(i)
                     )
                 }
                 return ResultSet.Row(columns)
