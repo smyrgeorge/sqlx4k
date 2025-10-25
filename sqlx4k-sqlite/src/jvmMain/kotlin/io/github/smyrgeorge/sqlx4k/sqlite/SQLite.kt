@@ -64,6 +64,8 @@ class SQLite(
         val connection = pool.acquire().getOrThrow()
         try {
             connection.execute(sql).getOrThrow()
+        } catch (e: Exception) {
+            SQLError(SQLError.Code.Database, e.message).ex()
         } finally {
             connection.close()
         }
@@ -76,6 +78,8 @@ class SQLite(
         val connection = pool.acquire().getOrThrow()
         try {
             connection.fetchAll(sql).getOrThrow()
+        } catch (e: Exception) {
+            SQLError(SQLError.Code.Database, e.message).ex()
         } finally {
             connection.close()
         }
@@ -93,7 +97,7 @@ class SQLite(
             connection.begin().getOrThrow()
         } catch (e: Exception) {
             connection.close()
-            throw e
+            SQLError(SQLError.Code.Database, e.message).ex()
         }
     }
 
@@ -297,11 +301,7 @@ class SQLite(
 
         private fun createConnectionPool(url: String, options: ConnectionPool.Options): ConnectionPoolImpl {
             // Ensure the URL has the proper JDBC prefix
-            val jdbcUrl = if (url.startsWith("jdbc:sqlite:")) {
-                url
-            } else {
-                "jdbc:sqlite:$url"
-            }
+            val jdbcUrl = "jdbc:sqlite:${url.removePrefix("jdbc:").removePrefix("sqlite:").removePrefix("//")}"
 
             // Connection factory that creates JDBC connections
             val connectionFactory: suspend () -> Connection = {
@@ -312,11 +312,7 @@ class SQLite(
                 }
             }
 
-            return ConnectionPoolImpl(
-                options = options,
-                log = null,
-                connectionFactory = connectionFactory
-            )
+            return ConnectionPoolImpl(options, null, connectionFactory)
         }
     }
 }
