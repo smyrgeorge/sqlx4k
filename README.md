@@ -65,17 +65,16 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 
 ### Next Steps (contributions are welcome)
 
-- Create and publish sqlx4k-gradle-plugin.
+- Create and publish sqlx4k-gradle-plugin
 - Pure Kotlin implementation for `ConnectionPool` ✅
 - Validate queries at compile time (avoid runtime errors)
     - Syntax checking is already supported (using the `@Query` annotation) ✅
     - Validate queries by accessing the DB schema ✅
     - Validate query literal types (type check query parameters)
-- Add support for SQLite JVM target.
+- Add support for SQLite JVM target ✅
 - WASM support (?).
-- Pure Kotlin implementation for PostgreSQL.
-- Pure Kotlin implementation for MySQL.
-- Pure Kotlin implementation for SQLite.
+- Pure Kotlin implementation for PostgreSQL
+- Pure Kotlin implementation for MySQL
 
 ### Supported Databases
 
@@ -592,7 +591,7 @@ SQLDelight integration for type-safe SQL queries with sqlx4k.
 
 ## Supported Targets
 
-- jvm (only PostgreSQL and MySQL are supported at the moment)
+- jvm
 - iosArm64
 - iosSimulatorArm64
 - androidNativeX64
@@ -734,6 +733,8 @@ sqlx4k stands on the shoulders of excellent open-source projects:
             - https://github.com/pgjdbc/r2dbc-postgresql
         - MySQL: r2dbc-mysql
             - https://github.com/asyncer-io/r2dbc-mysql
+        - SQLite: rsqlite-jdbc
+            - https://github.com/xerial/sqlite-jdbc
 
 - Build-time tooling
     - JSqlParser — used by the code generator to parse @Query SQL at build time for syntax validation.

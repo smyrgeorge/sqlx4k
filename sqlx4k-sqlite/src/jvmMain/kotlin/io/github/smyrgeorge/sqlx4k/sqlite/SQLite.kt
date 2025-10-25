@@ -4,6 +4,8 @@ import io.github.smyrgeorge.sqlx4k.*
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.github.smyrgeorge.sqlx4k.impl.pool.ConnectionPoolImpl
+import io.github.smyrgeorge.sqlx4k.impl.pool.PooledConnection
+import io.github.smyrgeorge.sqlx4k.impl.pool.PooledTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -92,11 +94,11 @@ class SQLite(
         fetchAll(statement.render(encoders), rowMapper)
 
     override suspend fun begin(): Result<Transaction> = runCatching {
-        val connection = pool.acquire().getOrThrow()
+        val connection = pool.acquire().getOrThrow() as PooledConnection
         try {
             val tx = connection.begin().getOrThrow()
             // Wrap the transaction to ensure the pooled connection is released
-            TxWrapper(tx, connection)
+            PooledTransaction(tx, connection)
         } catch (e: Exception) {
             connection.close()
             SQLError(SQLError.Code.Database, e.message).ex()
@@ -180,36 +182,6 @@ class SQLite(
         }
 
         override fun encoders(): Statement.ValueEncoderRegistry = encoders
-    }
-
-    /**
-     * Wraps a transaction to ensure the pooled connection is properly released back to the pool
-     * after the transaction commits or rolls back.
-     *
-     * @param delegate The underlying transaction to delegate operations to.
-     * @param pooledConnection The pooled connection to release after transaction completion.
-     */
-    class TxWrapper(
-        private val delegate: Transaction,
-        private val pooledConnection: Connection
-    ) : Transaction by delegate {
-        override val status: Transaction.Status get() = delegate.status
-
-        override suspend fun commit(): Result<Unit> = runCatching {
-            try {
-                delegate.commit().getOrThrow()
-            } finally {
-                pooledConnection.close()
-            }
-        }
-
-        override suspend fun rollback(): Result<Unit> = runCatching {
-            try {
-                delegate.rollback().getOrThrow()
-            } finally {
-                pooledConnection.close()
-            }
-        }
     }
 
     /**
