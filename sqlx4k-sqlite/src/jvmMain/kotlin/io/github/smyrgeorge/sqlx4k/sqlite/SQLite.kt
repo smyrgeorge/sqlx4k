@@ -94,7 +94,9 @@ class SQLite(
     override suspend fun begin(): Result<Transaction> = runCatching {
         val connection = pool.acquire().getOrThrow()
         try {
-            connection.begin().getOrThrow()
+            val tx = connection.begin().getOrThrow()
+            // Wrap the transaction to ensure the pooled connection is released
+            TxWrapper(tx, connection)
         } catch (e: Exception) {
             connection.close()
             SQLError(SQLError.Code.Database, e.message).ex()
@@ -178,6 +180,36 @@ class SQLite(
         }
 
         override fun encoders(): Statement.ValueEncoderRegistry = encoders
+    }
+
+    /**
+     * Wraps a transaction to ensure the pooled connection is properly released back to the pool
+     * after the transaction commits or rolls back.
+     *
+     * @param delegate The underlying transaction to delegate operations to.
+     * @param pooledConnection The pooled connection to release after transaction completion.
+     */
+    class TxWrapper(
+        private val delegate: Transaction,
+        private val pooledConnection: Connection
+    ) : Transaction by delegate {
+        override val status: Transaction.Status get() = delegate.status
+
+        override suspend fun commit(): Result<Unit> = runCatching {
+            try {
+                delegate.commit().getOrThrow()
+            } finally {
+                pooledConnection.close()
+            }
+        }
+
+        override suspend fun rollback(): Result<Unit> = runCatching {
+            try {
+                delegate.rollback().getOrThrow()
+            } finally {
+                pooledConnection.close()
+            }
+        }
     }
 
     /**
