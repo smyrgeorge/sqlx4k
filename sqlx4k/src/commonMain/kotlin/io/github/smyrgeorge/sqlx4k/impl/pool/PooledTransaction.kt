@@ -20,8 +20,6 @@ class PooledTransaction(
     private val transaction: Transaction,
     private val connection: PooledConnection
 ) : Transaction by transaction {
-    override val status: Transaction.Status get() = transaction.status
-
     override suspend fun commit(): Result<Unit> = runCatching {
         try {
             transaction.commit().getOrThrow()
