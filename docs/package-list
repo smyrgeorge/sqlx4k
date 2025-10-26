@@ -153,5 +153,9 @@ io.github.smyrgeorge.sqlx4k.mysql
 module:sqlx4k-postgres
 io.github.smyrgeorge.sqlx4k.postgres
 io.github.smyrgeorge.sqlx4k.postgres.extensions
+module:sqlx4k-postgres-pgmq
+io.github.smyrgeorge.sqlx4k.postgres.pgmq
+io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl
+io.github.smyrgeorge.sqlx4k.postgres.pgmq.r2dbc
 module:sqlx4k-sqlite
 io.github.smyrgeorge.sqlx4k.sqlite
