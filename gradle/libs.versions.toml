@@ -33,7 +33,7 @@ r2dbc-postgresql = "1.1.0.RELEASE"
 jsqlparser = "5.3"
 # https://mvnrepository.com/artifact/org.apache.calcite/calcite-core/1.40.0
 # https://github.com/apache/calcite
-calcite = "1.40.0"
+calcite = "1.41.0"
 # https://github.com/smyrgeorge/log4k
 log4k = "1.1.2"
 # https://github.com/xerial/sqlite-jdbc
