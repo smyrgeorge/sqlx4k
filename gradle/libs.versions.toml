@@ -27,7 +27,7 @@ r2dbc-pool = "1.0.2.RELEASE"
 # https://mvnrepository.com/artifact/io.asyncer/r2dbc-mysql
 r2dbc-mysql = "1.4.1"
 # https://github.com/pgjdbc/r2dbc-postgresql
-r2dbc-postgresql = "1.1.0.RELEASE"
+r2dbc-postgresql = "1.1.1.RELEASE"
 # https://central.sonatype.com/artifact/com.github.jsqlparser/jsqlparser
 # https://github.com/JSQLParser/JSqlParser
 jsqlparser = "5.3"
