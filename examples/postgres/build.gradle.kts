@@ -8,9 +8,8 @@ plugins {
 }
 
 kotlin {
-    @Suppress("unused")
     sourceSets {
-        val commonMain by getting {
+        commonMain {
             dependencies {
                 implementation(project(":sqlx4k-postgres-pgmq"))
             }

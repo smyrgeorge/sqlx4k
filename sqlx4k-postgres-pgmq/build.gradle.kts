@@ -5,7 +5,6 @@ plugins {
 }
 
 kotlin {
-    @Suppress("unused")
     sourceSets {
         all {
             languageSettings.enableLanguageFeature("ContextParameters")
@@ -13,19 +12,19 @@ kotlin {
         configureEach {
             languageSettings.progressiveMode = true
         }
-        val commonMain by getting {
+        commonMain {
             dependencies {
                 api(project(":sqlx4k-postgres"))
                 implementation(libs.kotlinx.serialisation.json)
             }
         }
-        val commonTest by getting {
+        commonTest {
             dependencies {
                 implementation(libs.kotlin.test)
                 implementation(libs.assertk)
             }
         }
-        val jvmMain by getting {
+        jvmMain {
             dependencies {
                 implementation(libs.r2dbc.postgresql)
                 implementation(libs.r2dbc.pool)

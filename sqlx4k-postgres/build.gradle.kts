@@ -5,24 +5,23 @@ plugins {
 }
 
 kotlin {
-    @Suppress("unused")
     sourceSets {
         configureEach {
             languageSettings.progressiveMode = true
         }
-        val commonMain by getting {
+        commonMain {
             dependencies {
                 api(project(":sqlx4k"))
             }
         }
-        val commonTest by getting {
+        commonTest {
             dependencies {
                 implementation(libs.kotlin.test)
                 implementation(libs.assertk)
                 implementation(libs.kotlinx.io.core)
             }
         }
-        val jvmMain by getting {
+        jvmMain {
             dependencies {
                 implementation(libs.r2dbc.postgresql)
                 implementation(libs.r2dbc.pool)
