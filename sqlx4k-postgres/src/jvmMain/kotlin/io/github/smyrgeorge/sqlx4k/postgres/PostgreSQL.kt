@@ -1,6 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.postgres
 
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
+import io.github.smyrgeorge.sqlx4k.Statement
 import io.r2dbc.pool.ConnectionPoolConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
@@ -29,15 +30,18 @@ import io.r2dbc.pool.ConnectionPool as R2dbcConnectionPool
  * @param username The username used for authentication.
  * @param password The password used for authentication.
  * @param options Optional pool configuration, defaulting to `Driver.Pool.Options`.
+ * @param encoders Optional registry of value encoders to use for encoding query parameters.
  */
 class PostgreSQL(
     url: String,
     username: String,
     password: String,
     options: ConnectionPool.Options = ConnectionPool.Options(),
+    override val encoders: Statement.ValueEncoderRegistry = Statement.ValueEncoderRegistry()
 ) : IPostgresSQL by PostgreSQLImpl(
+    connectionPool(options, connectionFactory(url, username, password)),
     connectionFactory(url, username, password),
-    connectionPool(options, connectionFactory(url, username, password))
+    encoders
 ) {
     companion object {
         private fun connectionFactory(url: String, username: String, password: String): PostgresqlConnectionFactory {

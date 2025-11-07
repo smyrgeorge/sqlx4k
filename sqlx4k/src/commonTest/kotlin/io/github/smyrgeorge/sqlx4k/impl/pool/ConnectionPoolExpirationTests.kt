@@ -5,6 +5,7 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isGreaterThan
 import assertk.assertions.isNotEqualTo
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
+import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.impl.pool.util.FakeConnection
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -26,7 +27,7 @@ class ConnectionPoolExpirationTests {
         onCreate: (FakeConnection) -> Unit = {}
     ): ConnectionPoolImpl {
         val options = ConnectionPool.Options(min, max, acquireTimeout, idleTimeout, maxLifetime)
-        return ConnectionPoolImpl(options) {
+        return ConnectionPoolImpl(options, Statement.ValueEncoderRegistry.EMPTY) {
             FakeConnection(nextId++).also(onCreate)
         }
     }

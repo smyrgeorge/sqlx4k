@@ -25,7 +25,7 @@ class PgMqDbAdapterR2dbc(
     pool: ConnectionPool
 ) : PgMqDbAdapter {
     override val encoders: Statement.ValueEncoderRegistry = Statement.ValueEncoderRegistry.EMPTY
-    private val adapter = PostgreSQLImpl(connectionFactory, pool)
+    private val adapter = PostgreSQLImpl(pool, connectionFactory, encoders)
     override suspend fun listen(channel: String, f: suspend (Notification) -> Unit) = adapter.listen(channel, f)
     override suspend fun begin(): Result<Transaction> = adapter.begin()
     override suspend fun execute(sql: String): Result<Long> = adapter.execute(sql)

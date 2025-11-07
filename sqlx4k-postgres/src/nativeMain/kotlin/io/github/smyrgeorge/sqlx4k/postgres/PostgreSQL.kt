@@ -40,6 +40,7 @@ import kotlin.time.Duration
  * @param username The username used for authentication.
  * @param password The password used for authentication.
  * @param options Optional pool configuration, defaulting to `Driver.Pool.Options`.
+ * @param encoders Optional registry of value encoders to use for encoding query parameters.
  */
 @OptIn(ExperimentalForeignApi::class)
 class PostgreSQL(
@@ -47,10 +48,8 @@ class PostgreSQL(
     username: String,
     password: String,
     options: ConnectionPool.Options = ConnectionPool.Options(),
+    override val encoders: Statement.ValueEncoderRegistry = Statement.ValueEncoderRegistry()
 ) : IPostgresSQL {
-    override val encoders: Statement.ValueEncoderRegistry
-        get() = Companion.encoders
-
     private val rt: CPointer<out CPointed> = sqlx4k_of(
         url = url,
         username = username,
@@ -90,7 +89,7 @@ class PostgreSQL(
     override suspend fun acquire(): Result<Connection> = runCatching {
         sqlx { c -> sqlx4k_cn_acquire(rt, c, DriverNativeUtils.fn) }.use {
             it.throwIfError()
-            Cn(rt, it.cn!!)
+            Cn(rt, it.cn!!, encoders)
         }
     }
 
@@ -106,7 +105,7 @@ class PostgreSQL(
     override suspend fun begin(): Result<Transaction> = runCatching {
         sqlx { c -> sqlx4k_tx_begin(rt, c, DriverNativeUtils.fn) }.use {
             it.throwIfError()
-            Tx(rt, it.tx!!)
+            Tx(rt, it.tx!!, encoders)
         }
     }
 
@@ -183,24 +182,11 @@ class PostgreSQL(
         execute(notify).getOrThrow()
     }
 
-    /**
-     * Represents a database connection implementation that provides capabilities to execute SQL
-     * queries, handle transactions, and manage connection state.
-     *
-     * This class interacts with a native PostgreSQL driver using low-level pointer-based operations,
-     * providing asynchronous capabilities through the use of coroutines and suspending functions.
-     *
-     * @constructor Creates a new instance of the `Cn` class.
-     * @param rt A pointer to the runtime environment for the database driver.
-     * @param cn A pointer to the database connection.
-     */
     class Cn(
         private val rt: CPointer<out CPointed>,
-        private val cn: CPointer<out CPointed>
-    ) : Connection {
+        private val cn: CPointer<out CPointed>,
         override val encoders: Statement.ValueEncoderRegistry
-            get() = Companion.encoders
-
+    ) : Connection {
         private val mutex = Mutex()
         private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
@@ -237,29 +223,17 @@ class PostgreSQL(
                 assertIsOpen()
                 sqlx { c -> sqlx4k_cn_tx_begin(rt, cn, c, DriverNativeUtils.fn) }.use {
                     it.throwIfError()
-                    Tx(rt, it.tx!!)
+                    Tx(rt, it.tx!!, encoders)
                 }
             }
         }
     }
 
-    /**
-     * Represents a database transaction, providing methods to perform commit, rollback,
-     * and query execution operations within the transaction's context.
-     *
-     * This class models the behavior of a transactional session, ensuring thread-safe execution
-     * of operations using a locking mechanism and maintaining the transaction's state.
-     *
-     * @constructor Creates a new instance of [Tx] bound to the specified transaction pointer.
-     * @property tx A pointer to the transaction in the underlying C library.
-     */
     class Tx(
         private val rt: CPointer<out CPointed>,
-        private var tx: CPointer<out CPointed>
-    ) : Transaction {
+        private var tx: CPointer<out CPointed>,
         override val encoders: Statement.ValueEncoderRegistry
-            get() = Companion.encoders
-
+    ) : Transaction {
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open
         override val status: Transaction.Status get() = _status
@@ -303,16 +277,6 @@ class PostgreSQL(
     }
 
     companion object {
-        /**
-         * The `ValueEncoderRegistry` instance used for encoding values supplied to SQL statements in the `PostgreSQL` class.
-         * This registry maps data types to their corresponding encoders, which convert values into a format suitable for
-         * inclusion in SQL queries.
-         *
-         * This registry is used in methods like `execute`, `fetchAll`, and other database operation methods to ensure
-         * that parameters bound to SQL statements are correctly encoded before being executed.
-         */
-        val encoders = Statement.ValueEncoderRegistry()
-
         // Will eventually overflow, but it doesn't matter, is the desired behavior.
         @OptIn(ExperimentalAtomicApi::class)
         private fun listenerId(): Int = listenerId.incrementAndFetch()

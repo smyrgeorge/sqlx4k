@@ -5,6 +5,7 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isGreaterThan
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.impl.pool.util.FakeConnection
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -33,7 +34,8 @@ class ConnectionPoolLifecycleTests {
             connectionFactory = {
                 FakeConnection(nextId++).also(onCreate)
             },
-            options = options
+            options = options,
+            encoders = Statement.ValueEncoderRegistry.EMPTY
         )
     }
 

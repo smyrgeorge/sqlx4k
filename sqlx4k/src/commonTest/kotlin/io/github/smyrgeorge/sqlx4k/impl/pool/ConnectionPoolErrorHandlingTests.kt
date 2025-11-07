@@ -6,6 +6,7 @@ import assertk.assertions.isGreaterThan
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.impl.pool.util.FakeConnection
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -28,7 +29,7 @@ class ConnectionPoolErrorHandlingTests {
         onCreate: (FakeConnection) -> Unit = {}
     ): ConnectionPoolImpl {
         val options = ConnectionPool.Options(min, max, acquireTimeout, idleTimeout, maxLifetime)
-        return ConnectionPoolImpl(options) {
+        return ConnectionPoolImpl(options, Statement.ValueEncoderRegistry.EMPTY) {
             FakeConnection(nextId++).also(onCreate)
         }
     }
@@ -42,7 +43,11 @@ class ConnectionPoolErrorHandlingTests {
             FakeConnection(nextId++)
         }
 
-        val pool = ConnectionPoolImpl(ConnectionPool.Options(null, 2), connectionFactory = factory)
+        val pool = ConnectionPoolImpl(
+            ConnectionPool.Options(null, 2),
+            connectionFactory = factory,
+            encoders = Statement.ValueEncoderRegistry.EMPTY
+        )
 
         // First acquire should fail
         assertFailsWith<IllegalStateException> { pool.acquire().getOrThrow() }
@@ -82,7 +87,11 @@ class ConnectionPoolErrorHandlingTests {
         }
 
         val options = ConnectionPool.Options(minConnections = 3, maxConnections = 5)
-        val pool = ConnectionPoolImpl(options, connectionFactory = factory)
+        val pool = ConnectionPoolImpl(
+            options = options,
+            connectionFactory = factory,
+            encoders = Statement.ValueEncoderRegistry.EMPTY
+        )
 
         // Give warmup time to run (some will fail)
         delay(500)
@@ -129,7 +138,11 @@ class ConnectionPoolErrorHandlingTests {
         }
 
         val options = ConnectionPool.Options(minConnections = 3, maxConnections = 5)
-        val pool = ConnectionPoolImpl(options, connectionFactory = factory)
+        val pool = ConnectionPoolImpl(
+            options = options,
+            connectionFactory = factory,
+            encoders = Statement.ValueEncoderRegistry.EMPTY
+        )
 
         // Give warmup time
         delay(500)

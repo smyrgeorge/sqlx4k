@@ -47,16 +47,15 @@ import io.r2dbc.spi.Result as R2dbcResultSet
  * @param username The username for authenticating with the database.
  * @param password The password for authenticating with the database.
  * @param options The optional configuration for the connection pool, such as min/max connections and timeout settings.
+ * @param encoders Optional registry of value encoders to use for encoding query parameters.
  */
 class MySQL(
     url: String,
     username: String,
     password: String,
     options: ConnectionPool.Options = ConnectionPool.Options(),
+    override val encoders: Statement.ValueEncoderRegistry = Statement.ValueEncoderRegistry()
 ) : IMySQL {
-    override val encoders: Statement.ValueEncoderRegistry
-        get() = Companion.encoders
-
     private val connectionFactory: MySqlConnectionFactory = connectionFactory(url, username, password)
     private val poolConfiguration: ConnectionPoolConfiguration = connectionOptions(options, connectionFactory)
     private val pool: R2dbcConnectionPool = R2dbcConnectionPool(poolConfiguration).apply {
@@ -93,7 +92,7 @@ class MySQL(
     override fun poolIdleSize(): Int = pool.metrics.getOrElse { error("No metrics available.") }.idleSize()
 
     override suspend fun acquire(): Result<Connection> = runCatching {
-        Cn(pool.acquire())
+        Cn(pool.acquire(), encoders)
     }
 
     override suspend fun execute(sql: String) = runCatching {
@@ -132,7 +131,7 @@ class MySQL(
                 close().awaitFirstOrNull()
                 SQLError(SQLError.Code.Database, e.message).ex()
             }
-            Tx(this, true)
+            Tx(this, true, encoders)
         }
     }
 
@@ -148,24 +147,10 @@ class MySQL(
         }
     }
 
-    /**
-     * A concrete implementation of the `Connection` interface that manages a single database connection
-     * while ensuring thread-safety and proper lifecycle handling.
-     *
-     * This class wraps an `R2dbcConnection` and provides methods for executing queries, managing transactions,
-     * and fetching results. It uses a mutex to synchronize operations and ensures the connection is in the
-     * correct state before performing any operations. It tracks the connection's status internally and supports
-     * releasing resources appropriately.
-     *
-     * @constructor Creates an instance of `Cn` with the specified `R2dbcConnection`.
-     * @property connection The underlying `R2dbcConnection` used for executing database queries and transactions.
-     */
     class Cn(
-        private val connection: R2dbcConnection
-    ) : Connection {
+        private val connection: R2dbcConnection,
         override val encoders: Statement.ValueEncoderRegistry
-            get() = Companion.encoders
-
+    ) : Connection {
         private val mutex = Mutex()
         private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
@@ -202,29 +187,16 @@ class MySQL(
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message).ex()
                 }
-                Tx(connection, false)
+                Tx(connection, false, encoders)
             }
         }
     }
 
-    /**
-     * Represents a transaction implementation that provides functionality for managing
-     * and executing operations within a transactional context.
-     *
-     * @property connection The underlying R2DBC connection used to execute the transaction.
-     * @property closeConnectionAfterTx Indicates whether the connection should be closed after the transaction is completed.
-     *
-     * This class uses a [Mutex] to ensure thread-safety for the transaction's operations.
-     * It includes methods for committing, rolling back, and executing queries within
-     * the scope of the transaction.
-     */
     class Tx(
         private var connection: R2dbcConnection,
-        private val closeConnectionAfterTx: Boolean
-    ) : Transaction {
+        private val closeConnectionAfterTx: Boolean,
         override val encoders: Statement.ValueEncoderRegistry
-            get() = Companion.encoders
-
+    ) : Transaction {
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open
         override val status: Transaction.Status get() = _status
@@ -275,16 +247,6 @@ class MySQL(
     }
 
     companion object {
-        /**
-         * The `ValueEncoderRegistry` instance used for encoding values supplied to SQL statements in the `PostgreSQL` class.
-         * This registry maps data types to their corresponding encoders, which convert values into a format suitable for
-         * inclusion in SQL queries.
-         *
-         * This registry is used in methods like `execute`, `fetchAll`, and other database operation methods to ensure
-         * that parameters bound to SQL statements are correctly encoded before being executed.
-         */
-        val encoders = Statement.ValueEncoderRegistry()
-
         private fun connectionFactory(url: String, username: String, password: String): MySqlConnectionFactory {
             val url = URI(url)
             return MySqlConnectionFactory.from(

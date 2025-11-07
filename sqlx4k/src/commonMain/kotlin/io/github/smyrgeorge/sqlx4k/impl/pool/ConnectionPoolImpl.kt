@@ -35,7 +35,7 @@ import kotlin.time.Duration.Companion.seconds
  */
 class ConnectionPoolImpl(
     val options: ConnectionPool.Options,
-    val encoders: Statement.ValueEncoderRegistry = Statement.ValueEncoderRegistry.EMPTY,
+    val encoders: Statement.ValueEncoderRegistry,
     private val log: Logger? = null,
     private val connectionFactory: ConnectionFactory,
 ) : ConnectionPool {
