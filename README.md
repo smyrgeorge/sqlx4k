@@ -15,8 +15,8 @@
 ![](https://img.shields.io/static/v1?label=&message=iOS&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=Android&color=blue)
 
-A coroutine-first SQL toolkit with compile-time query validations for Kotlin Multiplatform. PostgreSQL, MySQL, and SQLite
-supported.
+A coroutine-first SQL toolkit with compile-time query validations for Kotlin Multiplatform. PostgreSQL, MySQL, and
+SQLite supported.
 
 ---
 
@@ -50,6 +50,7 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 - [Async I/O](#async-io)
 - [Connection pool and settings](#connection-pool)
 - [Acquiring and using connections](#acquiring-and-using-connections)
+- [Running queries](#running-queries)
 - [Prepared statements (named and positional parameters)](#prepared-statements)
 - [Row mappers](#rowmappers)
 - [Transactions and coroutine TransactionContext](#transactions) · [TransactionContext (coroutines)](#transactioncontext-coroutines)
@@ -196,6 +197,36 @@ try {
 } finally {
     conn.close().getOrThrow() // Return to pool
 }
+```
+
+### Running Queries
+
+All database interactions go through
+the [QueryExecutor](sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/QueryExecutor.kt) interface, which provides
+a consistent, coroutine-based API for executing SQL statements. This interface is implemented by:
+
+- **Database drivers** (`PostgreSQL`, `MySQL`, `SQLite`) - for direct query execution using pooled connections
+- **Connection** - for manual connection management
+- **Transaction** - for transactional query execution
+
+The `QueryExecutor` interface provides two primary methods for running queries:
+
+#### execute() - For SQL statements that modify data
+
+Returns the number of affected rows (INSERT, UPDATE, DELETE, DDL statements):
+
+```kotlin
+// With raw SQL string
+val affected: Long = db.execute("insert into users(id, name) values (1, 'Alice');").getOrThrow()
+```
+
+#### fetchAll() - For queries that return data
+
+Returns a `ResultSet` containing all rows (SELECT queries):
+
+```kotlin
+// With raw SQL string
+val result: ResultSet = db.fetchAll("select * from users;").getOrThrow()
 ```
 
 ### Prepared Statements
