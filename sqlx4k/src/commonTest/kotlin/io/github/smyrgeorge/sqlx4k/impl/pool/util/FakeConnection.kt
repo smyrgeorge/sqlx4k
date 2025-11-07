@@ -1,6 +1,9 @@
 package io.github.smyrgeorge.sqlx4k.impl.pool.util
 
-import io.github.smyrgeorge.sqlx4k.*
+import io.github.smyrgeorge.sqlx4k.Connection
+import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.Transaction
 
 class FakeConnection(val id: Long) : Connection {
     override var status: Connection.Status = Connection.Status.Open
@@ -26,17 +29,12 @@ class FakeConnection(val id: Long) : Connection {
         return Result.success(FakeTransaction())
     }
 
+    override val encoders: Statement.ValueEncoderRegistry = Statement.ValueEncoderRegistry.EMPTY
+
     override suspend fun execute(sql: String): Result<Long> {
         return if (sql == "id") Result.success(id) else Result.success(++executes)
     }
 
-    override suspend fun execute(statement: Statement): Result<Long> = Result.success(++executes)
     override suspend fun fetchAll(sql: String): Result<ResultSet> =
         Result.success(ResultSet(emptyList(), null, ResultSet.Metadata(emptyList())))
-
-    override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
-        Result.success(ResultSet(emptyList(), null, ResultSet.Metadata(emptyList())))
-
-    override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-        Result.success(emptyList())
 }

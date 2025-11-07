@@ -31,6 +31,9 @@ class PostgreSQLImpl(
     private val connectionFactory: PostgresqlConnectionFactory,
     private val pool: R2dbcConnectionPool
 ) : IPostgresSQL {
+    override val encoders: Statement.ValueEncoderRegistry
+        get() = Companion.encoders
+
     override suspend fun migrate(
         path: String,
         table: String,
@@ -78,9 +81,6 @@ class PostgreSQLImpl(
         }
     }
 
-    override suspend fun execute(statement: Statement): Result<Long> =
-        execute(statement.render(encoders))
-
     override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
         @Suppress("SqlSourceToSinkFlow")
         with(pool.acquire()) {
@@ -94,12 +94,6 @@ class PostgreSQLImpl(
             res
         }
     }
-
-    override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
-        fetchAll(statement.render(encoders))
-
-    override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-        fetchAll(statement.render(encoders), rowMapper)
 
     override suspend fun begin(): Result<Transaction> = runCatching {
         with(pool.acquire()) {
@@ -227,6 +221,9 @@ class PostgreSQLImpl(
     class Cn(
         private val connection: R2dbcConnection
     ) : Connection {
+        override val encoders: Statement.ValueEncoderRegistry
+            get() = Companion.encoders
+
         private val mutex = Mutex()
         private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
@@ -247,9 +244,6 @@ class PostgreSQLImpl(
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> =
-            execute(statement.render(encoders))
-
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
@@ -257,12 +251,6 @@ class PostgreSQLImpl(
                 connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
             }
         }
-
-        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
-            fetchAll(statement.render(encoders))
-
-        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-            fetchAll(statement.render(encoders), rowMapper)
 
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
@@ -292,6 +280,9 @@ class PostgreSQLImpl(
         private var connection: R2dbcConnection,
         private val closeConnectionAfterTx: Boolean
     ) : Transaction {
+        override val encoders: Statement.ValueEncoderRegistry
+            get() = Companion.encoders
+
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open
         override val status: Transaction.Status get() = _status
@@ -332,9 +323,6 @@ class PostgreSQLImpl(
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> =
-            execute(statement.render(encoders))
-
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
@@ -342,12 +330,6 @@ class PostgreSQLImpl(
                 connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
             }
         }
-
-        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
-            fetchAll(statement.render(encoders))
-
-        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-            fetchAll(statement.render(encoders), rowMapper)
     }
 
     companion object {

@@ -1,6 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq.r2dbc
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.postgres.Notification
 import io.github.smyrgeorge.sqlx4k.postgres.PostgreSQLImpl
@@ -23,6 +24,7 @@ class PgMqDbAdapterR2dbc(
     private val connectionFactory: PostgresqlConnectionFactory,
     pool: ConnectionPool
 ) : PgMqDbAdapter {
+    override val encoders: Statement.ValueEncoderRegistry = Statement.ValueEncoderRegistry.EMPTY
     private val adapter = PostgreSQLImpl(connectionFactory, pool)
     override suspend fun listen(channel: String, f: suspend (Notification) -> Unit) = adapter.listen(channel, f)
     override suspend fun begin(): Result<Transaction> = adapter.begin()

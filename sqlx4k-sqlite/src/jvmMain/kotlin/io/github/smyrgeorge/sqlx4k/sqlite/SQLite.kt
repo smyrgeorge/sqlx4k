@@ -35,7 +35,10 @@ class SQLite(
     url: String,
     options: ConnectionPool.Options = ConnectionPool.Options(),
 ) : ISQLite {
-    private val pool: ConnectionPoolImpl = createConnectionPool(url, options)
+    override val encoders: Statement.ValueEncoderRegistry
+        get() = Companion.encoders
+
+    private val pool: ConnectionPoolImpl = createConnectionPool(url, options, encoders)
 
     override suspend fun migrate(
         path: String,
@@ -73,9 +76,6 @@ class SQLite(
         }
     }
 
-    override suspend fun execute(statement: Statement): Result<Long> =
-        execute(statement.render(encoders))
-
     override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
         val connection = pool.acquire().getOrThrow()
         try {
@@ -86,12 +86,6 @@ class SQLite(
             connection.close()
         }
     }
-
-    override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
-        fetchAll(statement.render(encoders))
-
-    override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-        fetchAll(statement.render(encoders), rowMapper)
 
     override suspend fun begin(): Result<Transaction> = runCatching {
         val connection = pool.acquire().getOrThrow() as PooledConnection
@@ -120,6 +114,9 @@ class SQLite(
     class Cn(
         private val connection: JdbcConnection
     ) : Connection {
+        override val encoders: Statement.ValueEncoderRegistry
+            get() = Companion.encoders
+
         private val mutex = Mutex()
         private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
@@ -146,9 +143,6 @@ class SQLite(
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> =
-            execute(statement.render(encoders))
-
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
@@ -160,12 +154,6 @@ class SQLite(
                 }.toResult()
             }
         }
-
-        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
-            fetchAll(statement.render(encoders))
-
-        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-            fetchAll(statement.render(encoders), rowMapper)
 
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
@@ -199,6 +187,9 @@ class SQLite(
         private var connection: JdbcConnection,
         private val closeConnectionAfterTx: Boolean
     ) : Transaction {
+        override val encoders: Statement.ValueEncoderRegistry
+            get() = Companion.encoders
+
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open
         override val status: Transaction.Status get() = _status
@@ -249,9 +240,6 @@ class SQLite(
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> =
-            execute(statement.render(encoders))
-
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
@@ -263,12 +251,6 @@ class SQLite(
                 }.toResult()
             }
         }
-
-        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
-            fetchAll(statement.render(encoders))
-
-        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-            fetchAll(statement.render(encoders), rowMapper)
     }
 
     companion object {
@@ -308,7 +290,8 @@ class SQLite(
 
         private fun createConnectionPool(
             url: String,
-            options: ConnectionPool.Options
+            options: ConnectionPool.Options,
+            encoders: Statement.ValueEncoderRegistry
         ): ConnectionPoolImpl {
             // Ensure the URL has the proper JDBC prefix
             val jdbcUrl = "jdbc:sqlite:${url.removePrefix("jdbc:").removePrefix("sqlite:").removePrefix("//")}"
@@ -339,7 +322,7 @@ class SQLite(
                 }
             }
 
-            return ConnectionPoolImpl(options, null, connectionFactory)
+            return ConnectionPoolImpl(options, encoders, null, connectionFactory)
         }
     }
 }

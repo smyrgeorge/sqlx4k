@@ -32,6 +32,9 @@ class SQLite(
     url: String,
     options: ConnectionPool.Options = ConnectionPool.Options(),
 ) : ISQLite {
+    override val encoders: Statement.ValueEncoderRegistry
+        get() = Companion.encoders
+
     private val rt: CPointer<out CPointed> = sqlx4k_of(
         url = url,
         username = null,
@@ -79,19 +82,10 @@ class SQLite(
         sqlx { c -> sqlx4k_query(rt, sql, c, DriverNativeUtils.fn) }.rowsAffectedOrError()
     }
 
-    override suspend fun execute(statement: Statement): Result<Long> =
-        execute(statement.render(encoders))
-
     override suspend fun fetchAll(sql: String): Result<ResultSet> {
         val res = sqlx { c -> sqlx4k_fetch_all(rt, sql, c, DriverNativeUtils.fn) }
         return res.use { it.toResultSet() }.toResult()
     }
-
-    override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
-        fetchAll(statement.render(encoders))
-
-    override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-        fetchAll(statement.render(encoders), rowMapper)
 
     override suspend fun begin(): Result<Transaction> = runCatching {
         sqlx { c -> sqlx4k_tx_begin(rt, c, DriverNativeUtils.fn) }.use {
@@ -116,6 +110,9 @@ class SQLite(
         private val rt: CPointer<out CPointed>,
         private val cn: CPointer<out CPointed>
     ) : Connection {
+        override val encoders: Statement.ValueEncoderRegistry
+            get() = Companion.encoders
+
         private val mutex = Mutex()
         private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
@@ -138,9 +135,6 @@ class SQLite(
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> =
-            execute(statement.render(encoders))
-
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
@@ -149,12 +143,6 @@ class SQLite(
                     .toResult()
             }
         }
-
-        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
-            fetchAll(statement.render(encoders))
-
-        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-            fetchAll(statement.render(encoders), rowMapper)
 
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
@@ -186,6 +174,9 @@ class SQLite(
         private val rt: CPointer<out CPointed>,
         private var tx: CPointer<out CPointed>
     ) : Transaction {
+        override val encoders: Statement.ValueEncoderRegistry
+            get() = Companion.encoders
+
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open
         override val status: Transaction.Status get() = _status
@@ -217,9 +208,6 @@ class SQLite(
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> =
-            execute(statement.render(encoders))
-
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
@@ -229,12 +217,6 @@ class SQLite(
                 }.toResult()
             }
         }
-
-        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
-            fetchAll(statement.render(encoders))
-
-        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-            fetchAll(statement.render(encoders), rowMapper)
     }
 
     companion object {

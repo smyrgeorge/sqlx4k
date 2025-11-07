@@ -15,6 +15,7 @@ class PooledConnection(
     private val connection: Connection,
     private val pool: ConnectionPoolImpl
 ) : Connection {
+    override val encoders: Statement.ValueEncoderRegistry = pool.encoders
     private val mutex = Mutex()
     private var acquired = true
     private val released get() = !acquired
@@ -112,21 +113,12 @@ class PooledConnection(
         }
     }
 
-    override suspend fun execute(statement: Statement): Result<Long> =
-        execute(statement.render(connection.encoders()))
-
     override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
         return mutex.withLock {
             assertIsOpen()
             connection.fetchAll(sql)
         }
     }
-
-    override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
-        fetchAll(statement.render(connection.encoders()))
-
-    override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-        fetchAll(statement.render(connection.encoders()), rowMapper)
 
     override suspend fun begin(): Result<Transaction> = runCatching {
         mutex.withLock {

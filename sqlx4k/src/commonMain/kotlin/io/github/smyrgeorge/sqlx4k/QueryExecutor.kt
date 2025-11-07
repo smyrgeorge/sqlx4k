@@ -13,6 +13,16 @@ import kotlin.time.Duration
  */
 interface QueryExecutor {
     /**
+     * The `ValueEncoderRegistry` instance used for encoding values supplied to SQL statements in the `PostgreSQL` class.
+     * This registry maps data types to their corresponding encoders, which convert values into a format suitable for
+     * inclusion in SQL queries.
+     *
+     * This registry is used in methods like `execute`, `fetchAll`, and other database operation methods to ensure
+     * that parameters bound to SQL statements are correctly encoded before being executed.
+     */
+    val encoders: Statement.ValueEncoderRegistry
+
+    /**
      * Executes the given SQL statement asynchronously.
      *
      * @param sql the SQL statement to be executed.
@@ -26,7 +36,8 @@ interface QueryExecutor {
      * @param statement the SQL statement to be executed.
      * @return a result containing the number of affected rows.
      */
-    suspend fun execute(statement: Statement): Result<Long>
+    suspend fun execute(statement: Statement): Result<Long> =
+        execute(statement.render(encoders))
 
     /**
      * Fetches all results of the given SQL query asynchronously.
@@ -42,7 +53,8 @@ interface QueryExecutor {
      * @param statement The SQL statement to be executed.
      * @return A result containing the retrieved result set.
      */
-    suspend fun fetchAll(statement: Statement): Result<ResultSet>
+    suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+        fetchAll(statement.render(encoders))
 
     /**
      * Fetches all results of the given SQL query and maps each row using the provided RowMapper.
@@ -64,7 +76,8 @@ interface QueryExecutor {
      * @param rowMapper The RowMapper to use for converting rows in the result set to instances of type T.
      * @return A Result containing a list of instances of type T mapped from the query result set.
      */
-    suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>>
+    suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
+        fetchAll(statement.render(encoders), rowMapper)
 
     /**
      * Represents a transactional interface providing methods for handling transactions.
