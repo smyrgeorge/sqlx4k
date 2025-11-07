@@ -42,4 +42,9 @@ class NativePostgreSQLConnectionTests {
     fun `status should be Acquired then Released`() {
         runner.`status should be Acquired then Released`()
     }
+
+    @Test
+    fun `setTransactionIsolationLevel should work for all isolation levels`() {
+        runner.`setTransactionIsolationLevel should work for all isolation levels`()
+    }
 }

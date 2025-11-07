@@ -101,6 +101,7 @@ class SQLite(
         private val mutex = Mutex()
         private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
+        override val transactionIsolationLevel: Transaction.IsolationLevel? = null
 
         override suspend fun close(): Result<Unit> = runCatching {
             mutex.withLock {
@@ -108,6 +109,11 @@ class SQLite(
                 _status = Connection.Status.Closed
                 sqlx { c -> sqlx4k_cn_release(rt, cn, c, DriverNativeUtils.fn) }.throwIfError()
             }
+        }
+
+        override suspend fun setTransactionIsolationLevel(level: Transaction.IsolationLevel): Result<Unit> {
+            // SQLite does not support setting the transaction isolation level.
+            return Result.success(Unit)
         }
 
         override suspend fun execute(sql: String): Result<Long> = runCatching {

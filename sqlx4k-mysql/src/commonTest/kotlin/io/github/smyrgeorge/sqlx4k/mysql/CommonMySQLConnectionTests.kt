@@ -6,6 +6,7 @@ import assertk.assertions.isFailure
 import assertk.assertions.isSuccess
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 import kotlinx.coroutines.runBlocking
 import kotlin.random.Random
@@ -92,5 +93,23 @@ class CommonMySQLConnectionTests(
         assertThat(cn.status).isEqualTo(Connection.Status.Open)
         cn.close().getOrThrow()
         assertThat(cn.status).isEqualTo(Connection.Status.Closed)
+    }
+
+    fun `setTransactionIsolationLevel should work for all isolation levels`() = runBlocking {
+        val cn: Connection = db.acquire().getOrThrow()
+
+        // Test ReadCommitted
+        assertThat(cn.setTransactionIsolationLevel(IsolationLevel.ReadCommitted)).isSuccess()
+
+        // Test RepeatableRead
+        assertThat(cn.setTransactionIsolationLevel(IsolationLevel.RepeatableRead)).isSuccess()
+
+        // Test Serializable
+        assertThat(cn.setTransactionIsolationLevel(IsolationLevel.Serializable)).isSuccess()
+
+        // Test ReadUncommitted
+        assertThat(cn.setTransactionIsolationLevel(IsolationLevel.ReadUncommitted)).isSuccess()
+
+        cn.close().getOrThrow()
     }
 }

@@ -7,6 +7,7 @@ import io.github.smyrgeorge.sqlx4k.Transaction
 
 class FakeConnection(val id: Long) : Connection {
     override var status: Connection.Status = Connection.Status.Open
+    override var transactionIsolationLevel: Transaction.IsolationLevel? = null
     var onClose: (() -> Unit)? = null
     private var closed = false
     private var releases = 0

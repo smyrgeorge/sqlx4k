@@ -1,6 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.postgres
 
 import io.github.smyrgeorge.sqlx4k.Driver
+import io.github.smyrgeorge.sqlx4k.Transaction
 
 interface IPostgresSQL : Driver {
 
@@ -59,5 +60,16 @@ interface IPostgresSQL : Driver {
         require(channel.drop(1).all { it.isLetterOrDigit() || it == '_' || it == '.' }) {
             "Channel may contain only letters, digits, underscores or periods."
         }
+    }
+
+    companion object {
+        /**
+         * The default transaction isolation level used for PostgreSQL transactions.
+         *
+         * This constant is set to [Transaction.IsolationLevel.ReadCommitted], which ensures that
+         * a transaction can only read data that has been committed by other transactions.
+         * ReadCommitted prevents dirty reads, providing a balance between consistency and performance.
+         */
+        val DEFAULT_TRANSACTION_ISOLATION_LEVEL: Transaction.IsolationLevel = Transaction.IsolationLevel.ReadCommitted
     }
 }

@@ -23,6 +23,7 @@ class PooledConnection(
     private var lastUsedAt: TimeMark = createdAt
 
     override var status: Connection.Status = Connection.Status.Open
+    override val transactionIsolationLevel: Transaction.IsolationLevel? get() = connection.transactionIsolationLevel
 
     fun isReleased(): Boolean = released
 

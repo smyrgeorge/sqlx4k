@@ -190,6 +190,8 @@ class PostgreSQL(
         private val mutex = Mutex()
         private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
+        private var _transactionIsolationLevel: Transaction.IsolationLevel? = null
+        override val transactionIsolationLevel: Transaction.IsolationLevel? get() = _transactionIsolationLevel
 
         override suspend fun close(): Result<Unit> = runCatching {
             mutex.withLock {
@@ -197,6 +199,14 @@ class PostgreSQL(
                 _status = Connection.Status.Closed
                 sqlx { c -> sqlx4k_cn_release(rt, cn, c, DriverNativeUtils.fn) }.throwIfError()
             }
+            transactionIsolationLevel?.let {
+                val default = IPostgresSQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL
+                setTransactionIsolationLevel(default)
+            }
+        }
+
+        override suspend fun setTransactionIsolationLevel(level: Transaction.IsolationLevel): Result<Unit> {
+            return super.setTransactionIsolationLevel(level).also { _transactionIsolationLevel = level }
         }
 
         override suspend fun execute(sql: String): Result<Long> = runCatching {
