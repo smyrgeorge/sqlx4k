@@ -60,26 +60,19 @@ interface Transaction : QueryExecutor {
     }
 
     /**
-     * Defines the isolation levels for database transactions.
+     * Enum class defining the isolation levels for database transactions.
      *
-     * The `Isolation` enum specifies the various isolation levels that can be
-     * used to control the degree of visibility between concurrent transactions.
-     * These levels determine how operations in one transaction are isolated
-     * from operations in other transactions. Choosing an appropriate isolation
-     * level can help balance the trade-off between performance and data consistency.
+     * The isolation level determines how transaction integrity is maintained and
+     * how concurrent transactions interact with each other. Each level provides
+     * different guarantees regarding visibility of changes made by other transactions,
+     * and controls phenomena like dirty reads, non-repeatable reads, and phantom reads.
      *
-     * - `ReadUncommitted`: Allows a transaction to read data modified by other
-     *   transactions that have not been committed yet. This level may result
-     *   in dirty reads.
-     * - `ReadCommitted`: Ensures that a transaction can only read data that has
-     *   been committed by other transactions. This prevents dirty reads.
-     * - `RepeatableRead`: Guarantees that if a transaction reads a row, the data
-     *   in that row will remain consistent for the duration of the transaction.
-     *   This prevents non-repeatable reads.
-     * - `Serializable`: Provides the highest level of isolation by ensuring that
-     *   transactions execute in a manner as if they were serialized sequentially.
-     *   This prevents dirty reads, non-repeatable reads, and phantom reads, but
-     *   may result in reduced concurrency.
+     * Isolation levels:
+     * - `ReadUncommitted`: Allows transactions to read data modified by other transactions that have not yet been committed.
+     * - `ReadCommitted`: Ensures that only committed data is read, preventing dirty reads.
+     * - `RepeatableRead`: Ensures that data read multiple times during a transaction remains consistent, preventing non-repeatable reads.
+     * - `Serializable`: Provides the highest level of isolation by ensuring transactions are executed in a completely isolated manner,
+     *   effectively serializing them.
      */
     enum class IsolationLevel(val value: String) {
         ReadUncommitted("READ UNCOMMITTED"),

@@ -35,7 +35,7 @@ class CommonSQLiteConnectionTests(
         val res = cn.execute("insert into $table(v) values (2);")
         assertThat(res).isFailure()
         val ex = res.exceptionOrNull() as SQLError
-        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsOpen)
+        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsClosed)
 
         assertThat(countRows(table)).isEqualTo(1L)
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }
@@ -47,7 +47,7 @@ class CommonSQLiteConnectionTests(
         val res = cn.close()
         assertThat(res).isFailure()
         val ex = res.exceptionOrNull() as SQLError
-        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsOpen)
+        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsClosed)
     }
 
     fun `connection begin-commit and rollback should work`() = runBlocking {

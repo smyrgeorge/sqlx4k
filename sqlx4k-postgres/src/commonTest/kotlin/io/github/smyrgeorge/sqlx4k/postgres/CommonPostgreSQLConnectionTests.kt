@@ -35,7 +35,7 @@ class CommonPostgreSQLConnectionTests(
         val res = cn.execute("insert into $table(v) values (2);")
         assertThat(res).isFailure()
         val ex = res.exceptionOrNull() as SQLError
-        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsOpen)
+        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsClosed)
 
         assertThat(countRows(table)).isEqualTo(1L)
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }
@@ -47,7 +47,7 @@ class CommonPostgreSQLConnectionTests(
         val res = cn.close()
         assertThat(res).isFailure()
         val ex = res.exceptionOrNull() as SQLError
-        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsOpen)
+        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsClosed)
     }
 
     fun `connection begin-commit and rollback should work`() = runBlocking {
@@ -111,5 +111,79 @@ class CommonPostgreSQLConnectionTests(
         assertThat(cn.setTransactionIsolationLevel(IsolationLevel.ReadUncommitted)).isSuccess()
 
         cn.close().getOrThrow()
+    }
+
+    fun `setTransactionIsolationLevel should update the transactionIsolationLevel property`() = runBlocking {
+        val cn: Connection = db.acquire().getOrThrow()
+
+        // Initially should be null
+        assertThat(cn.transactionIsolationLevel).isEqualTo(null)
+
+        // Set isolation level and verify property is updated
+        cn.setTransactionIsolationLevel(IsolationLevel.ReadCommitted).getOrThrow()
+        assertThat(cn.transactionIsolationLevel).isEqualTo(IsolationLevel.ReadCommitted)
+
+        // Change to a different level
+        cn.setTransactionIsolationLevel(IsolationLevel.Serializable).getOrThrow()
+        assertThat(cn.transactionIsolationLevel).isEqualTo(IsolationLevel.Serializable)
+
+        cn.close().getOrThrow()
+    }
+
+    fun `setTransactionIsolationLevel should verify actual database isolation level`() = runBlocking {
+        val cn: Connection = db.acquire().getOrThrow()
+
+        // Set ReadCommitted and verify
+        cn.setTransactionIsolationLevel(IsolationLevel.ReadCommitted).getOrThrow()
+        assertThat(getCurrentIsolationLevel(cn)).isEqualTo("read committed")
+
+        // Set Serializable and verify
+        cn.setTransactionIsolationLevel(IsolationLevel.Serializable).getOrThrow()
+        assertThat(getCurrentIsolationLevel(cn)).isEqualTo("serializable")
+
+        // Set ReadUncommitted and verify
+        cn.setTransactionIsolationLevel(IsolationLevel.ReadUncommitted).getOrThrow()
+        assertThat(getCurrentIsolationLevel(cn)).isEqualTo("read uncommitted")
+
+        // Set RepeatableRead and verify
+        cn.setTransactionIsolationLevel(IsolationLevel.RepeatableRead).getOrThrow()
+        assertThat(getCurrentIsolationLevel(cn)).isEqualTo("repeatable read")
+
+        cn.close().getOrThrow()
+    }
+
+    fun `setTransactionIsolationLevel should fail after connection is closed`() = runBlocking {
+        val cn: Connection = db.acquire().getOrThrow()
+        cn.close().getOrThrow()
+
+        val result = cn.setTransactionIsolationLevel(IsolationLevel.ReadCommitted)
+        assertThat(result).isFailure()
+        val ex = result.exceptionOrNull() as SQLError
+        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsClosed)
+    }
+
+    fun `connection isolation level should be reset to default after connection is closed`(db: IPostgresSQL) = runBlocking {
+        val cn: Connection = db.acquire().getOrThrow()
+        assertThat(cn.transactionIsolationLevel).isEqualTo(null)
+
+        cn.setTransactionIsolationLevel(IsolationLevel.Serializable).getOrThrow()
+        assertThat(cn.transactionIsolationLevel).isEqualTo(IsolationLevel.Serializable)
+
+        cn.close().getOrThrow()
+        assertThat(cn.transactionIsolationLevel).isEqualTo(IPostgresSQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL)
+
+        val cn2: Connection = db.acquire().getOrThrow()
+        assertThat(cn2.transactionIsolationLevel).isEqualTo(null)
+        assertThat(getCurrentIsolationLevel(cn2)).isEqualTo("read committed")
+        cn2.close().getOrThrow()
+    }
+
+    // Helper function to get current isolation level from database
+    private suspend fun getCurrentIsolationLevel(cn: Connection): String {
+        return cn.fetchAll("SHOW transaction_isolation;")
+            .getOrThrow()
+            .first()
+            .get(0)
+            .asStringOrNull() ?: ""
     }
 }

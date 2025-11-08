@@ -47,4 +47,30 @@ class NativePostgreSQLConnectionTests {
     fun `setTransactionIsolationLevel should work for all isolation levels`() {
         runner.`setTransactionIsolationLevel should work for all isolation levels`()
     }
+
+    @Test
+    fun `setTransactionIsolationLevel should update the transactionIsolationLevel property`() {
+        runner.`setTransactionIsolationLevel should update the transactionIsolationLevel property`()
+    }
+
+    @Test
+    fun `setTransactionIsolationLevel should verify actual database isolation level`() {
+        runner.`setTransactionIsolationLevel should verify actual database isolation level`()
+    }
+
+    @Test
+    fun `setTransactionIsolationLevel should fail after connection is closed`() {
+        runner.`setTransactionIsolationLevel should fail after connection is closed`()
+    }
+
+    @Test
+    fun `connection isolation level should be reset to default after connection is closed`() {
+        val db = postgreSQL(
+            url = "postgresql://localhost:15432/test",
+            username = "postgres",
+            password = "postgres",
+            options = ConnectionPool.Options.builder().maxConnections(1).build()
+        )
+        runner.`connection isolation level should be reset to default after connection is closed`(db)
+    }
 }

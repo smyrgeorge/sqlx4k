@@ -5,6 +5,7 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isFailure
 import assertk.assertions.isSuccess
 import io.github.smyrgeorge.sqlx4k.Connection
+import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
@@ -35,7 +36,7 @@ class CommonMySQLConnectionTests(
         val res = cn.execute("insert into $table(v) values (2);")
         assertThat(res).isFailure()
         val ex = res.exceptionOrNull() as SQLError
-        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsOpen)
+        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsClosed)
 
         assertThat(countRows(table)).isEqualTo(1L)
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }
@@ -47,7 +48,7 @@ class CommonMySQLConnectionTests(
         val res = cn.close()
         assertThat(res).isFailure()
         val ex = res.exceptionOrNull() as SQLError
-        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsOpen)
+        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsClosed)
     }
 
     fun `connection begin-commit and rollback should work`() = runBlocking {
@@ -111,5 +112,81 @@ class CommonMySQLConnectionTests(
         assertThat(cn.setTransactionIsolationLevel(IsolationLevel.ReadUncommitted)).isSuccess()
 
         cn.close().getOrThrow()
+    }
+
+    fun `setTransactionIsolationLevel should update the transactionIsolationLevel property`() = runBlocking {
+        val cn: Connection = db.acquire().getOrThrow()
+
+        // Initially should be null
+        assertThat(cn.transactionIsolationLevel).isEqualTo(null)
+
+        // Set isolation level and verify property is updated
+        cn.setTransactionIsolationLevel(IsolationLevel.ReadCommitted).getOrThrow()
+        assertThat(cn.transactionIsolationLevel).isEqualTo(IsolationLevel.ReadCommitted)
+
+        // Change to a different level
+        cn.setTransactionIsolationLevel(IsolationLevel.Serializable).getOrThrow()
+        assertThat(cn.transactionIsolationLevel).isEqualTo(IsolationLevel.Serializable)
+
+        cn.close().getOrThrow()
+    }
+
+    fun `setTransactionIsolationLevel should verify actual database isolation level`() = runBlocking {
+        val cn: Connection = db.acquire().getOrThrow()
+
+        // Set ReadCommitted and verify
+        cn.setTransactionIsolationLevel(IsolationLevel.ReadCommitted).getOrThrow()
+        assertThat(getCurrentIsolationLevel(cn)).isEqualTo("READ-COMMITTED")
+
+        // Set Serializable and verify
+        cn.setTransactionIsolationLevel(IsolationLevel.Serializable).getOrThrow()
+        assertThat(getCurrentIsolationLevel(cn)).isEqualTo("SERIALIZABLE")
+
+        // Set ReadUncommitted and verify
+        cn.setTransactionIsolationLevel(IsolationLevel.ReadUncommitted).getOrThrow()
+        assertThat(getCurrentIsolationLevel(cn)).isEqualTo("READ-UNCOMMITTED")
+
+        // Set RepeatableRead and verify
+        cn.setTransactionIsolationLevel(IsolationLevel.RepeatableRead).getOrThrow()
+        assertThat(getCurrentIsolationLevel(cn)).isEqualTo("REPEATABLE-READ")
+
+        cn.close().getOrThrow()
+    }
+
+    fun `setTransactionIsolationLevel should fail after connection is closed`() = runBlocking {
+        val cn: Connection = db.acquire().getOrThrow()
+        cn.close().getOrThrow()
+
+        val result = cn.setTransactionIsolationLevel(IsolationLevel.ReadCommitted)
+        assertThat(result).isFailure()
+        val ex = result.exceptionOrNull() as SQLError
+        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsClosed)
+    }
+
+    fun `connection isolation level should be reset to default after connection is closed`(db: IMySQL) = runBlocking {
+        val cn: Connection = db.acquire().getOrThrow()
+        assertThat(cn.transactionIsolationLevel).isEqualTo(null)
+
+        cn.setTransactionIsolationLevel(IsolationLevel.ReadCommitted).getOrThrow()
+        assertThat(cn.transactionIsolationLevel).isEqualTo(IsolationLevel.ReadCommitted)
+
+        cn.close().getOrThrow()
+        assertThat(cn.transactionIsolationLevel).isEqualTo(IMySQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL)
+
+        val cn2: Connection = db.acquire().getOrThrow()
+        assertThat(cn2.transactionIsolationLevel).isEqualTo(null)
+        assertThat(getCurrentIsolationLevel(cn2)).isEqualTo("REPEATABLE-READ")
+        cn2.close().getOrThrow()
+    }
+
+    // Helper function to get current isolation level from database
+    private suspend fun getCurrentIsolationLevel(db: QueryExecutor): String {
+        // Try modern MySQL 8.0+ syntax first, fallback to older syntax
+        return db.fetchAll("SELECT @@session.transaction_isolation AS isolation_level;")
+            .recoverCatching { db.fetchAll("SELECT @@session.tx_isolation AS isolation_level;").getOrThrow() }
+            .getOrThrow()
+            .first()
+            .get(0)
+            .asStringOrNull() ?: ""
     }
 }

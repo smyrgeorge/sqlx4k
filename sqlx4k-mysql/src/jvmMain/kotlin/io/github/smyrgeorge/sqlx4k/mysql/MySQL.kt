@@ -12,7 +12,6 @@ import io.github.smyrgeorge.sqlx4k.*
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
-import io.github.smyrgeorge.sqlx4k.impl.types.NoQuotingString
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufAllocator
 import io.r2dbc.pool.ConnectionPoolConfiguration
@@ -175,9 +174,8 @@ class MySQL(
 
         private suspend fun setTransactionIsolationLevel(level: IsolationLevel, lock: Boolean): Result<Unit> {
             // language=SQL
-            val sql = "SET SESSION TRANSACTION ISOLATION LEVEL ?"
-            val statement = Statement.create(sql).bind(0, NoQuotingString(level.value))
-            return execute(statement.render(), lock).map { }.also { _transactionIsolationLevel = level }
+            val sql = "SET SESSION TRANSACTION ISOLATION LEVEL ${level.value}"
+            return execute(sql, lock).map { }.also { _transactionIsolationLevel = level }
         }
 
         override suspend fun setTransactionIsolationLevel(level: IsolationLevel): Result<Unit> =
