@@ -172,7 +172,7 @@ val db = SQLite(
 )
 ```
 
-#### Acquiring and using connections
+### Acquiring and using connections
 
 The driver provides two complementary ways to run queries:
 
@@ -197,6 +197,17 @@ try {
 } finally {
     conn.close().getOrThrow() // Return to pool
 }
+```
+
+#### Setting Transaction Isolation Level
+
+You can set the transaction isolation level on a connection to control the degree of visibility between concurrent
+transactions.
+
+```kotlin
+val conn: Connection = db.acquire().getOrThrow()
+// Set the isolation level before starting operations
+conn.setTransactionIsolationLevel(Transaction.IsolationLevel.Serializable).getOrThrow()
 ```
 
 ### Running Queries
