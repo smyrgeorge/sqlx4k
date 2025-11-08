@@ -1,6 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.postgres
 
 import io.github.smyrgeorge.sqlx4k.*
+import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.github.smyrgeorge.sqlx4k.impl.types.DoubleQuotingString
@@ -212,35 +213,49 @@ class PostgreSQLImpl(
         private val mutex = Mutex()
         private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
-        private var _transactionIsolationLevel: Transaction.IsolationLevel? = null
-        override val transactionIsolationLevel: Transaction.IsolationLevel? get() = _transactionIsolationLevel
+        private var _transactionIsolationLevel: IsolationLevel? = null
+        override val transactionIsolationLevel: IsolationLevel? get() = _transactionIsolationLevel
 
         override suspend fun close(): Result<Unit> = runCatching {
             mutex.withLock {
                 assertIsOpen()
                 _status = Connection.Status.Closed
+
+                transactionIsolationLevel?.let {
+                    val default = IPostgresSQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL
+                    setTransactionIsolationLevel(default, false)
+                }
+
                 connection.close().awaitFirstOrNull()
-            }
-            transactionIsolationLevel?.let {
-                val default = IPostgresSQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL
-                setTransactionIsolationLevel(default)
             }
         }
 
-        override suspend fun setTransactionIsolationLevel(level: Transaction.IsolationLevel): Result<Unit> {
+        private suspend fun setTransactionIsolationLevel(level: IsolationLevel, lock: Boolean): Result<Unit> {
             // language=SQL
             val sql = "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL ?"
             val statement = Statement.create(sql).bind(0, NoQuotingString(level.value))
-            return execute(statement).map { }.also { _transactionIsolationLevel = level }
+            return execute(statement.render(), lock).map { }.also { _transactionIsolationLevel = level }
         }
 
-        override suspend fun execute(sql: String): Result<Long> = runCatching {
-            mutex.withLock {
-                assertIsOpen()
-                @Suppress("SqlSourceToSinkFlow")
+        override suspend fun setTransactionIsolationLevel(level: IsolationLevel): Result<Unit> =
+            setTransactionIsolationLevel(level, true)
+
+        private suspend fun execute(sql: String, lock: Boolean): Result<Long> {
+            suspend fun doExecute(sql: String): Result<Long> = runCatching {
                 connection.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
             }
+
+            suspend fun doExecuteWithLock(sql: String): Result<Long> = runCatching {
+                mutex.withLock {
+                    assertIsOpen()
+                    return doExecute(sql)
+                }
+            }
+
+            return if (lock) doExecuteWithLock(sql) else doExecute(sql)
         }
+
+        override suspend fun execute(sql: String): Result<Long> = execute(sql, true)
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {

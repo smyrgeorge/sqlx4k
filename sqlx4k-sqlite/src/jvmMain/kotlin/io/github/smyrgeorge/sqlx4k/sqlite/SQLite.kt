@@ -1,6 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.sqlite
 
 import io.github.smyrgeorge.sqlx4k.*
+import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.github.smyrgeorge.sqlx4k.impl.pool.ConnectionPoolImpl
@@ -105,7 +106,7 @@ class SQLite(
         private val mutex = Mutex()
         private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
-        override val transactionIsolationLevel: Transaction.IsolationLevel? = null
+        override val transactionIsolationLevel: IsolationLevel? = null
 
         override suspend fun close(): Result<Unit> = runCatching {
             mutex.withLock {
@@ -117,7 +118,7 @@ class SQLite(
             }
         }
 
-        override suspend fun setTransactionIsolationLevel(level: Transaction.IsolationLevel): Result<Unit> {
+        override suspend fun setTransactionIsolationLevel(level: IsolationLevel): Result<Unit> {
             // SQLite does not support setting the transaction isolation level.
             return Result.success(Unit)
         }
