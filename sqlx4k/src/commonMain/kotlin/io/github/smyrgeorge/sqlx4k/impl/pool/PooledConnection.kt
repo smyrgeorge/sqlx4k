@@ -128,6 +128,9 @@ class PooledConnection(
         }
     }
 
+    override suspend fun setTransactionIsolationLevel(level: Transaction.IsolationLevel): Result<Unit> =
+        connection.setTransactionIsolationLevel(level)
+
     companion object {
         private val TIME_SOURCE = TimeSource.Monotonic
     }

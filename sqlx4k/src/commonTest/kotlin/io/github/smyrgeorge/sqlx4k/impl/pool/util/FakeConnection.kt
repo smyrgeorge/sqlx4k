@@ -38,4 +38,9 @@ class FakeConnection(val id: Long) : Connection {
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> =
         Result.success(ResultSet(emptyList(), null, ResultSet.Metadata(emptyList())))
+
+    override suspend fun setTransactionIsolationLevel(level: Transaction.IsolationLevel): Result<Unit> {
+        transactionIsolationLevel = level
+        return Result.success(Unit)
+    }
 }

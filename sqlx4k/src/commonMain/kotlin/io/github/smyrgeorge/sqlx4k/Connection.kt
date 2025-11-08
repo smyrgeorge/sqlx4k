@@ -1,7 +1,5 @@
 package io.github.smyrgeorge.sqlx4k
 
-import io.github.smyrgeorge.sqlx4k.impl.types.NoQuotingString
-
 /**
  * Represents a database connection capable of executing queries and managing transactions.
  *
@@ -54,12 +52,7 @@ interface Connection : QueryExecutor, QueryExecutor.Transactional {
      * @return A [Result] containing [Unit] if the isolation level was successfully set,
      *         or an error if the operation failed.
      */
-    suspend fun setTransactionIsolationLevel(level: Transaction.IsolationLevel): Result<Unit> {
-        // language=SQL
-        val sql = "SET TRANSACTION ISOLATION LEVEL ?"
-        val statement = Statement.create(sql).bind(0, NoQuotingString(level.value))
-        return execute(statement).map { }
-    }
+    suspend fun setTransactionIsolationLevel(level: Transaction.IsolationLevel): Result<Unit>
 
     /**
      * Represents the operational state of a connection.

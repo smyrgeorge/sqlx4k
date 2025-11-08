@@ -4,6 +4,7 @@ import io.github.smyrgeorge.sqlx4k.*
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.github.smyrgeorge.sqlx4k.impl.types.DoubleQuotingString
+import io.github.smyrgeorge.sqlx4k.impl.types.NoQuotingString
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
 import io.r2dbc.spi.Row
 import kotlinx.coroutines.CoroutineScope
@@ -227,7 +228,10 @@ class PostgreSQLImpl(
         }
 
         override suspend fun setTransactionIsolationLevel(level: Transaction.IsolationLevel): Result<Unit> {
-            return super.setTransactionIsolationLevel(level).also { _transactionIsolationLevel = level }
+            // language=SQL
+            val sql = "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL ?"
+            val statement = Statement.create(sql).bind(0, NoQuotingString(level.value))
+            return execute(statement).map { }.also { _transactionIsolationLevel = level }
         }
 
         override suspend fun execute(sql: String): Result<Long> = runCatching {
