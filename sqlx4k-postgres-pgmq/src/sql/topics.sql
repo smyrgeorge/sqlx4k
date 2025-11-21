@@ -2,7 +2,10 @@ DROP TABLE IF EXISTS pgmq.topic_bindings;
 CREATE TABLE IF NOT EXISTS pgmq.topic_bindings
 (
     pattern        text NOT NULL, -- Wildcard pattern for routing key matching (* = one segment, # = zero or more segments)
-    queue_name     text NOT NULL, -- Name of the queue that receives messages when pattern matches
+    queue_name     text NOT NULL -- Name of the queue that receives messages when pattern matches
+        CONSTRAINT notify_bindings_meta_queue_name_fk
+            REFERENCES pgmq.meta (queue_name)
+            ON DELETE CASCADE,
     compiled_regex text GENERATED ALWAYS AS (
         -- Pre-compile the pattern to regex for faster matching
         -- This avoids runtime compilation on every send_topic call
