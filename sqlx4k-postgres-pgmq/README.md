@@ -110,7 +110,7 @@ example [here](../examples/postgres/src/commonMain/kotlin/io/github/smyrgeorge/s
 
 ## Links
 
-- PGMQ: https://github.com/tembo-io/pgmq
+- PGMQ: https://github.com/pgmq/pgmq
 - Docs: https://smyrgeorge.github.io/sqlx4k/
 - Repository: https://github.com/smyrgeorge/sqlx4k
 
