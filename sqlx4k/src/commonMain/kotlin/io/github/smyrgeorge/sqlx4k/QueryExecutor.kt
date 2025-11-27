@@ -113,14 +113,27 @@ interface QueryExecutor {
          */
         suspend fun <T> transaction(f: suspend Transaction.() -> T): T {
             val tx: Transaction = begin().getOrThrow()
-            return try {
-                val res = f(tx)
-                tx.commit()
-                res
+            val res = try {
+                f(tx)
             } catch (e: Throwable) {
-                tx.rollback()
+                tx.rollback().onFailure { rollbackError ->
+                    e.addSuppressed(
+                        SQLError(
+                            code = SQLError.Code.TransactionRollbackFailed,
+                            message = rollbackError.message,
+                            cause = rollbackError
+                        )
+                    )
+                }
                 throw e
             }
+
+            // Commit outside try-catch - if it fails, we don't roll back
+            tx.commit().getOrElse {
+                SQLError(SQLError.Code.TransactionCommitFailed, it.message, it).ex()
+            }
+
+            return res
         }
     }
 

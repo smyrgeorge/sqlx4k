@@ -9,7 +9,8 @@ package io.github.smyrgeorge.sqlx4k
 class SQLError(
     val code: Code,
     message: String? = null,
-) : RuntimeException("[$code] :: $message") {
+    cause: Throwable? = null
+) : RuntimeException("[$code] :: $message", cause) {
     /**
      * Throws the current instance of [SQLError].
      *
@@ -41,6 +42,8 @@ class SQLError(
 
         // Transaction
         TransactionIsClosed,
+        TransactionCommitFailed,
+        TransactionRollbackFailed,
 
         // Decode
         CannotDecode,
