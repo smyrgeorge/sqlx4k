@@ -46,7 +46,7 @@ class PgMqClient(
     private suspend fun install() {
         suspend fun installed(): Boolean {
             // language=SQL
-            val sql = "SELECT pgmq._extension_exists('pgmq')"
+            val sql = "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = 'pgmq')"
             return pg.fetchAll(Statement.create(sql), BooleanRowMapper).toSingleBooleanResult().getOrThrow()
         }
 
