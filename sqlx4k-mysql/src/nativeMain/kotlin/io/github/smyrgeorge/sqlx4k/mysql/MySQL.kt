@@ -77,7 +77,7 @@ class MySQL(
     override suspend fun acquire(): Result<Connection> = runCatching {
         sqlx { c -> sqlx4k_cn_acquire(rt, c, DriverNativeUtils.fn) }.use {
             it.throwIfError()
-            Cn(rt, it.cn!!, encoders)
+            SqlxConnection(rt, it.cn!!, encoders)
         }
     }
 
@@ -93,11 +93,11 @@ class MySQL(
     override suspend fun begin(): Result<Transaction> = runCatching {
         sqlx { c -> sqlx4k_tx_begin(rt, c, DriverNativeUtils.fn) }.use {
             it.throwIfError()
-            Tx(rt, it.tx!!, encoders)
+            SqlxTransaction(rt, it.tx!!, encoders)
         }
     }
 
-    class Cn(
+    class SqlxConnection(
         private val rt: CPointer<out CPointed>,
         private val cn: CPointer<out CPointed>,
         override val encoders: Statement.ValueEncoderRegistry
@@ -165,13 +165,13 @@ class MySQL(
                 assertIsOpen()
                 sqlx { c -> sqlx4k_cn_tx_begin(rt, cn, c, DriverNativeUtils.fn) }.use {
                     it.throwIfError()
-                    Tx(rt, it.tx!!, encoders)
+                    SqlxTransaction(rt, it.tx!!, encoders)
                 }
             }
         }
     }
 
-    class Tx(
+    class SqlxTransaction(
         private val rt: CPointer<out CPointed>,
         private var tx: CPointer<out CPointed>,
         override val encoders: Statement.ValueEncoderRegistry
