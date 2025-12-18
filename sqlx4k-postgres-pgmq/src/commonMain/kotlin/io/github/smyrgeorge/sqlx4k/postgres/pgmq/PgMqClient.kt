@@ -2,9 +2,13 @@
 
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq
 
+import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
+import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
+import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.listFilesWithContent
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.extensions.toJsonString
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.*
@@ -50,13 +54,40 @@ class PgMqClient(
             return pg.fetchAll(Statement.create(sql), BooleanRowMapper).toSingleBooleanResult().getOrThrow()
         }
 
-        if (!installed()) {
-            if (!options.autoInstall) error("Could not verify the 'pgmq' installation.")
+        suspend fun installExtension() {
             // language=SQL
             val sql = "CREATE EXTENSION IF NOT EXISTS pgmq"
             pg.execute(sql).getOrElse { error("Could not create the 'pgmq' extension (${it.message}).") }
         }
-        // Recheck.
+
+        suspend fun installFromFiles() {
+            val files: List<MigrationFile> = listFilesWithContent(options.intallFilesPath)
+                .filter { it.first != "pgmq.sql" }
+                .sortedBy { it.first }
+                .mapIndexed { i, p ->
+                    val name = "$i-${p.first}"
+                    val content = p.second
+                    name to content
+                }.map { MigrationFile(it.first, it.second) }
+
+            Migrator.migrate(
+                db = pg,
+                files = files,
+                table = "migrations",
+                schema = "pgmq",
+                createSchema = true,
+                dialect = Dialect.PostgreSQL,
+                afterStatementExecution = { _, _ -> },
+                afterFileMigration = { m, d -> println("[pgmq] Migrated file: $m, duration: ${d}ms") },
+            )
+        }
+
+        if (!installed()) {
+            if (!options.autoInstall) error("Could not verify the 'pgmq' installation.")
+            if (options.installFromFiles) installFromFiles() else installExtension()
+        }
+
+        // Recheck the installation.
         if (!installed()) error("Could not verify the 'pgmq' installation.")
     }
 
@@ -644,11 +675,18 @@ class PgMqClient(
     /**
      * A data class that represents configuration options for an installation process.
      *
+     * You can download the migration files from here:
+     * https://github.com/pgmq/pgmq/tree/main/pgmq-extension/sql
+     *
      * @property autoInstall Determines whether the installation process should proceed automatically.
      * @property verifyInstallation Indicates whether the installation should be verified post-process.
+     * @property installFromFiles Indicates whether the installation should be performed from SQL files.
+     * @property intallFilesPath Path to the directory containing SQL files for installation.
      */
     data class Options(
         val autoInstall: Boolean = true,
         val verifyInstallation: Boolean = true,
+        val installFromFiles: Boolean = false,
+        val intallFilesPath: String = "./pgmq",
     )
 }

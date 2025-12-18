@@ -2,8 +2,9 @@ package io.github.smyrgeorge.sqlx4k.mysql
 
 import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 
-interface IMySQL : Driver {
+interface IMySQL : Driver, Migrator.Db {
     companion object {
         /**
          * The default transaction isolation level used by the MySQL driver implementation.

@@ -14,8 +14,8 @@ package io.github.smyrgeorge.sqlx4k.impl.migrate
 data class MigrationFile(
     val name: String,
     val content: String,
-    val checksum: String
 ) {
+    val checksum: String
     val version: Long
     val description: String
 
@@ -23,6 +23,7 @@ data class MigrationFile(
         val (version, description) = parseFileName(name)
         this.version = version
         this.description = description
+        this.checksum = content.hashCode().toString()
     }
 
     companion object {

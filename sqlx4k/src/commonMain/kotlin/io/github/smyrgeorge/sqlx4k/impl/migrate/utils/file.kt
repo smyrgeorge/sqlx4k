@@ -23,8 +23,7 @@ private fun readEntireFileUtf8(path: String): String {
     }
 }
 
-private fun String.checksum(): String = hashCode().toString()
-internal fun listMigrationFiles(path: String): List<MigrationFile> {
+fun listFilesWithContent(path: String): List<Pair<String, String>> {
     val dir = Path(path)
     val meta = fs.metadataOrNull(dir) ?: error("Migrations path not found: $path")
     require(meta.isDirectory) { "Migrations path not a directory: $path" }
@@ -32,10 +31,9 @@ internal fun listMigrationFiles(path: String): List<MigrationFile> {
         .filter { p -> p.name.lowercase().endsWith(".sql") && (fs.metadataOrNull(p)!!.isRegularFile) }
         .map { p ->
             val content = readEntireFileUtf8(p.toString())
-            MigrationFile(
-                name = p.name,
-                content = content,
-                checksum = content.checksum()
-            )
+            p.name to content
         }
 }
+
+fun listMigrationFiles(path: String): List<MigrationFile> =
+    listFilesWithContent(path).map { MigrationFile(it.first, it.second) }

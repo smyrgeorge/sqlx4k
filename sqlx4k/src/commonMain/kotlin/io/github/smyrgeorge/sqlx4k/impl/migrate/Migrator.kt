@@ -3,7 +3,7 @@
 package io.github.smyrgeorge.sqlx4k.impl.migrate
 
 import io.github.smyrgeorge.sqlx4k.Dialect
-import io.github.smyrgeorge.sqlx4k.Driver
+import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.listMigrationFiles
@@ -54,7 +54,7 @@ object Migrator {
      * @return A `Result` containing a `Results` instance indicating whether the migration was successful or empty if no files were processed.
      */
     suspend fun migrate(
-        db: Driver,
+        db: Db,
         path: String,
         table: String,
         schema: String?,
@@ -92,7 +92,7 @@ object Migrator {
      * @return A `Result` containing a `Results` instance indicating whether the migration was successful or empty if no files were processed.
      */
     suspend fun migrate(
-        db: Driver,
+        db: Db,
         files: List<MigrationFile>,
         table: String,
         schema: String?,
@@ -194,4 +194,13 @@ object Migrator {
 
         return@runCatching Results(totalCount, appliedCount, validatedCount, executionTime)
     }
+
+    /**
+     * Represents a database interface that provides functionality for executing queries
+     * and managing transactional operations.
+     *
+     * This interface extends both `QueryExecutor` and `QueryExecutor.Transactional`,
+     * combining the ability to perform query execution with transactional control.
+     */
+    interface Db : QueryExecutor, QueryExecutor.Transactional
 }

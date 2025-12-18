@@ -1,6 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq
 
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
+import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.github.smyrgeorge.sqlx4k.postgres.Notification
 
 /**
@@ -11,6 +12,6 @@ import io.github.smyrgeorge.sqlx4k.postgres.Notification
  * executing statements and retrieving results, and the `QueryExecutor.Transactional` interface
  * for managing transactions.
  */
-interface PgMqDbAdapter : QueryExecutor, QueryExecutor.Transactional {
+interface PgMqDbAdapter : QueryExecutor, QueryExecutor.Transactional, Migrator.Db {
     suspend fun listen(channel: String, f: suspend (Notification) -> Unit)
 }
