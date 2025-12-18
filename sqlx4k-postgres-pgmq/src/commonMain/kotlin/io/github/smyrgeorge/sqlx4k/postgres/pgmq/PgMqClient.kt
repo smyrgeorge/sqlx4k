@@ -210,39 +210,6 @@ class PgMqClient(
     /**
      * Sends a message to the specified queue with optional headers and delay.
      *
-     * @param queue The name of the queue to which the message will be sent.
-     * @param message The message object to be sent to the queue.
-     * @param headers Optional metadata to include with the message, provided as a map of key-value pairs.
-     * @param delay The delay duration before the message is processed. Default is 0 seconds.
-     * @return A [Result] object containing the message ID as a [Long] if the operation is successful.
-     */
-    suspend fun send(
-        queue: String,
-        message: Any,
-        headers: Map<String, String> = emptyMap(),
-        delay: Duration = 0.seconds
-    ): Result<Long> = send(queue, options.json.serialize(message), headers, delay)
-
-    /**
-     * Sends a message to the specified queue with optional headers and delay.
-     *
-     * @param queue The name of the target queue to send the message to.
-     * @param message The message to be sent. It can be any serializable object.
-     * @param headers Optional headers to include with the message. Defaults to an empty map.
-     * @param delay Optional delay before the message is sent, specified as a Duration. Defaults to zero seconds.
-     * @return A Result containing the message ID as a Long if the operation is successful, or an error if it fails.
-     */
-    context(db: QueryExecutor)
-    suspend fun send(
-        queue: String,
-        message: Any,
-        headers: Map<String, String> = emptyMap(),
-        delay: Duration = 0.seconds
-    ): Result<Long> = send(queue, options.json.serialize(message), headers, delay)
-
-    /**
-     * Sends a message to the specified queue with optional headers and delay.
-     *
      * This method enqueues a message into the designated queue, optionally including metadata
      * (headers) and specifying a delay before the message becomes available for processing.
      * The method returns the unique ID of the message upon successful delivery.
@@ -289,30 +256,6 @@ class PgMqClient(
         headers: Map<String, String> = emptyMap(),
         delay: Duration = 0.seconds
     ): Result<List<Long>> = with(pg) { send(queue, messages, headers, delay) }
-
-    /**
-     * Sends a list of messages to the specified queue with optional headers and delay.
-     *
-     * @param queue The name of the target queue to which the messages will be sent.
-     * @param messages A list of objects representing the messages to be sent.
-     * @param headers A map of key-value pairs representing optional headers to include with the messages. Defaults to an empty map.
-     * @param delay The delay duration before sending the messages. Defaults to 0 seconds.
-     * @return A Result encapsulating a list of unique identifiers for the sent messages.
-     */
-    suspend fun send(
-        queue: String,
-        messages: List<Any>,
-        headers: Map<String, String> = emptyMap(),
-        delay: Duration = 0.seconds
-    ): Result<List<Long>> = send(queue, messages.map { options.json.serialize(it) }, headers, delay)
-
-    context(db: QueryExecutor)
-    suspend fun send(
-        queue: String,
-        messages: List<Any>,
-        headers: Map<String, String> = emptyMap(),
-        delay: Duration = 0.seconds
-    ): Result<List<Long>> = send(queue, messages.map { options.json.serialize(it) }, headers, delay)
 
     /**
      * Sends a batch of messages to the specified queue with optional headers and a delay.
@@ -678,39 +621,6 @@ class PgMqClient(
     ): Result<Long> = with(pg) { sendTopic(routingKey, message, headers, delay) }
 
     /**
-     * Sends a message to the specified topic using the provided routing key and additional configurations.
-     *
-     * @param routingKey The routing key used to route the message to the appropriate topic.
-     * @param message The message to be sent. The message is serialized before sending.
-     * @param headers Optional headers to include with the message in the form of key-value pairs. Defaults to an empty map.
-     * @param delay The delay duration before the message is sent. Defaults to no delay.
-     * @return A result containing the unique identifier of the sent message if successful.
-     */
-    suspend fun sendTopic(
-        routingKey: String,
-        message: Any,
-        headers: Map<String, String> = emptyMap(),
-        delay: Duration = 0.seconds
-    ): Result<Long> = sendTopic(routingKey, options.json.serialize(message), headers, delay)
-
-    /**
-     * Publishes a message to a topic using the provided routing key.
-     *
-     * @param routingKey The routing key used to route the message.
-     * @param message The message to be sent to the topic.
-     * @param headers Optional headers to include with the message. Defaults to an empty map.
-     * @param delay An optional delay before sending the message. Defaults to 0 seconds.
-     * @return A [Result] containing the message ID on successful publishing, or an error if the operation fails.
-     */
-    context(db: QueryExecutor)
-    suspend fun sendTopic(
-        routingKey: String,
-        message: Any,
-        headers: Map<String, String> = emptyMap(),
-        delay: Duration = 0.seconds
-    ): Result<Long> = sendTopic(routingKey, options.json.serialize(message), headers, delay)
-
-    /**
      * Sends a message to all queues that match the routing key pattern.
      *
      * This is the context version that can be used within a transaction or query executor.
@@ -772,13 +682,11 @@ class PgMqClient(
      * @property verifyInstallation Indicates whether the installation should be verified post-process.
      * @property installFromFiles Indicates whether the installation should be performed from SQL files.
      * @property intallFilesPath Path to the directory containing SQL files for installation.
-     * @property json Serializer for JSON payloads.
      */
     data class Options(
         val autoInstall: Boolean = true,
         val verifyInstallation: Boolean = true,
         val installFromFiles: Boolean = false,
         val intallFilesPath: String = "./pgmq",
-        val json: PgMqDbJsonSerializer = PgMqDbJsonSerializer.Default
     )
 }
