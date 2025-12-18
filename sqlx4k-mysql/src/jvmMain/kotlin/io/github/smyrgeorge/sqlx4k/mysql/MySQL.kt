@@ -30,9 +30,9 @@ import java.net.URI
 import kotlin.jvm.optionals.getOrElse
 import kotlin.time.Duration
 import kotlin.time.toJavaDuration
-import io.r2dbc.pool.ConnectionPool as R2dbcConnectionPool
-import io.r2dbc.spi.Connection as R2dbcConnection
-import io.r2dbc.spi.Result as R2dbcResultSet
+import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
+import io.r2dbc.spi.Connection as NativeR2dbcConnection
+import io.r2dbc.spi.Result as NativeR2dbcResultSet
 
 /**
  * The `MySQL` class provides a driver implementation for interacting with a MySQL database.
@@ -59,7 +59,7 @@ class MySQL(
 ) : IMySQL {
     private val connectionFactory: MySqlConnectionFactory = connectionFactory(url, username, password)
     private val poolConfiguration: ConnectionPoolConfiguration = connectionOptions(options, connectionFactory)
-    private val pool: R2dbcConnectionPool = R2dbcConnectionPool(poolConfiguration).apply {
+    private val pool: NativeR2dbcConnectionPool = NativeR2dbcConnectionPool(poolConfiguration).apply {
         runBlocking { launch { runCatching { warmup().awaitSingle() } } }
     }
 
@@ -93,7 +93,7 @@ class MySQL(
     override fun poolIdleSize(): Int = pool.metrics.getOrElse { error("No metrics available.") }.idleSize()
 
     override suspend fun acquire(): Result<Connection> = runCatching {
-        Cn(pool.acquire(), encoders)
+        R2dbcConnection(pool.acquire(), encoders)
     }
 
     override suspend fun execute(sql: String) = runCatching {
@@ -132,11 +132,11 @@ class MySQL(
                 close().awaitFirstOrNull()
                 SQLError(SQLError.Code.Database, e.message).ex()
             }
-            Tx(this, true, encoders)
+            R2dbcTransaction(this, true, encoders)
         }
     }
 
-    private suspend fun R2dbcConnectionPool.acquire(): R2dbcConnection {
+    private suspend fun NativeR2dbcConnectionPool.acquire(): NativeR2dbcConnection {
         return try {
             create().awaitSingle()
         } catch (e: Exception) {
@@ -148,8 +148,8 @@ class MySQL(
         }
     }
 
-    class Cn(
-        private val connection: R2dbcConnection,
+    class R2dbcConnection(
+        private val connection: NativeR2dbcConnection,
         override val encoders: Statement.ValueEncoderRegistry
     ) : Connection {
         private val mutex = Mutex()
@@ -214,13 +214,13 @@ class MySQL(
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message).ex()
                 }
-                Tx(connection, false, encoders)
+                R2dbcTransaction(connection, false, encoders)
             }
         }
     }
 
-    class Tx(
-        private var connection: R2dbcConnection,
+    class R2dbcTransaction(
+        private var connection: NativeR2dbcConnection,
         private val closeConnectionAfterTx: Boolean,
         override val encoders: Statement.ValueEncoderRegistry
     ) : Transaction {
@@ -288,7 +288,7 @@ class MySQL(
             )
         }
 
-        private class StringCodec() : Codec<Any?> {
+        private class StringCodec : Codec<Any?> {
             override fun canDecode(info: MySqlReadableMetadata, target: Class<*>?): Boolean = true
             override fun decode(
                 value: ByteBuf,
@@ -327,7 +327,7 @@ class MySQL(
             }.build()
         }
 
-        private suspend fun R2dbcResultSet.toResultSet(): ResultSet {
+        private suspend fun NativeR2dbcResultSet.toResultSet(): ResultSet {
             fun Row.toRow(): ResultSet.Row {
                 val columns = metadata.columnMetadatas.mapIndexed { i, c ->
                     ResultSet.Row.Column(

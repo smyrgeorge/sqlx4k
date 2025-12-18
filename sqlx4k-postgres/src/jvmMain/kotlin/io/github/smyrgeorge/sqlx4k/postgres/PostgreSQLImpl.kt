@@ -23,13 +23,13 @@ import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.jvm.optionals.getOrElse
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
-import io.r2dbc.pool.ConnectionPool as R2dbcConnectionPool
-import io.r2dbc.postgresql.api.Notification as R2dbcNotification
-import io.r2dbc.spi.Connection as R2dbcConnection
-import io.r2dbc.spi.Result as R2dbcResultSet
+import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
+import io.r2dbc.postgresql.api.Notification as NativeR2dbcNotification
+import io.r2dbc.spi.Connection as NativeR2dbcConnection
+import io.r2dbc.spi.Result as NativeR2dbcResultSet
 
 class PostgreSQLImpl(
-    private val pool: R2dbcConnectionPool,
+    private val pool: NativeR2dbcConnectionPool,
     private val connectionFactory: PostgresqlConnectionFactory,
     override val encoders: Statement.ValueEncoderRegistry = Statement.ValueEncoderRegistry()
 ) : IPostgresSQL {
@@ -63,7 +63,7 @@ class PostgreSQLImpl(
     override fun poolIdleSize(): Int = pool.metrics.getOrElse { error("No metrics available.") }.idleSize()
 
     override suspend fun acquire(): Result<Connection> = runCatching {
-        Cn(pool.acquire(), encoders)
+        R2dbcConnection(pool.acquire(), encoders)
     }
 
     override suspend fun execute(sql: String): Result<Long> = runCatching {
@@ -102,7 +102,7 @@ class PostgreSQLImpl(
                 close().awaitFirstOrNull()
                 SQLError(SQLError.Code.Database, e.message).ex()
             }
-            Tx(this, true, encoders)
+            R2dbcTransaction(this, true, encoders)
         }
     }
 
@@ -137,7 +137,7 @@ class PostgreSQLImpl(
      * @throws IllegalArgumentException If the `channels` list is empty or any channel name is blank.
      */
     override suspend fun listen(channels: List<String>, f: suspend (Notification) -> Unit) {
-        fun R2dbcNotification.toNotification(): Notification {
+        fun NativeR2dbcNotification.toNotification(): Notification {
             require(name.isNotBlank()) { "Channel cannot be blank." }
             val value = ResultSet.Row.Column(0, name, "TEXT", parameter)
             return Notification(name, value)
@@ -193,7 +193,7 @@ class PostgreSQLImpl(
         execute(notify).getOrThrow()
     }
 
-    private suspend fun R2dbcConnectionPool.acquire(): R2dbcConnection {
+    private suspend fun NativeR2dbcConnectionPool.acquire(): NativeR2dbcConnection {
         return try {
             create().awaitSingle()
         } catch (e: Exception) {
@@ -205,8 +205,8 @@ class PostgreSQLImpl(
         }
     }
 
-    class Cn(
-        private val connection: R2dbcConnection,
+    class R2dbcConnection(
+        private val connection: NativeR2dbcConnection,
         override val encoders: Statement.ValueEncoderRegistry
     ) : Connection {
         private val mutex = Mutex()
@@ -271,13 +271,13 @@ class PostgreSQLImpl(
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message).ex()
                 }
-                Tx(connection, false, encoders)
+                R2dbcTransaction(connection, false, encoders)
             }
         }
     }
 
-    class Tx(
-        private var connection: R2dbcConnection,
+    class R2dbcTransaction(
+        private var connection: NativeR2dbcConnection,
         private val closeConnectionAfterTx: Boolean,
         override val encoders: Statement.ValueEncoderRegistry
     ) : Transaction {
@@ -336,7 +336,7 @@ class PostgreSQLImpl(
                 get() = EmptyCoroutineContext
         }
 
-        private suspend fun R2dbcResultSet.toResultSet(): ResultSet {
+        private suspend fun NativeR2dbcResultSet.toResultSet(): ResultSet {
             fun Row.toRow(): ResultSet.Row {
                 val columns = metadata.columnMetadatas.mapIndexed { i, c ->
                     ResultSet.Row.Column(

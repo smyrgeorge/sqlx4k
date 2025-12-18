@@ -13,8 +13,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.sql.DriverManager
 import kotlin.time.Duration
-import java.sql.Connection as JdbcConnection
-import java.sql.ResultSet as JdbcResultSet
+import java.sql.Connection as NativeJdbcConnection
+import java.sql.ResultSet as NativeJdbcResultSet
 
 /**
  * SQLite class provides mechanisms to interact with a SQLite database on the JVM platform.
@@ -99,8 +99,8 @@ class SQLite(
         }
     }
 
-    class Cn(
-        private val connection: JdbcConnection,
+    class JdbcConnection(
+        private val connection: NativeJdbcConnection,
         override val encoders: Statement.ValueEncoderRegistry
     ) : Connection {
         private val mutex = Mutex()
@@ -156,14 +156,14 @@ class SQLite(
                     } catch (e: Exception) {
                         SQLError(SQLError.Code.Database, e.message).ex()
                     }
-                    Tx(connection, false, encoders)
+                    JdbcTransaction(connection, false, encoders)
                 }
             }
         }
     }
 
-    class Tx(
-        private var connection: JdbcConnection,
+    class JdbcTransaction(
+        private var connection: NativeJdbcConnection,
         private val closeConnectionAfterTx: Boolean,
         override val encoders: Statement.ValueEncoderRegistry
     ) : Transaction {
@@ -231,7 +231,7 @@ class SQLite(
     }
 
     companion object {
-        private fun JdbcResultSet.toResultSet(): ResultSet {
+        private fun NativeJdbcResultSet.toResultSet(): ResultSet {
             fun toRow(): ResultSet.Row {
                 val metaData = this.metaData
                 val columns = (1..metaData.columnCount).map { i ->
@@ -279,7 +279,7 @@ class SQLite(
                 withContext(Dispatchers.IO) {
                     val connection = DriverManager.getConnection(jdbcUrl)
                     connection.autoCommit = true
-                    Cn(connection, encoders).apply {
+                    JdbcConnection(connection, encoders).apply {
                         // Enable WAL mode for file-based databases to improve concurrency
                         // In-memory databases don't support WAL mode
                         if (!isInMemory) {
