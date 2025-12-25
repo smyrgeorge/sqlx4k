@@ -101,15 +101,13 @@ class StatementBasicTests {
         @Suppress("unused")
         class Test(val id: Int)
 
-        class TestEncoder : Statement.ValueEncoder<Test> {
+        class TestEncoder : ValueEncoder<Test> {
             override fun encode(value: Test): Any {
                 return value.id
             }
         }
 
-        val encoders = Statement
-            .ValueEncoderRegistry()
-            .register(Test::class, TestEncoder())
+        val encoders = ValueEncoderRegistry().register(Test::class, TestEncoder())
 
         val sql = "select * from sqlx4k where id = :id"
         val res = Statement.create(sql)

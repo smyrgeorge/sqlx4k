@@ -20,7 +20,7 @@ interface QueryExecutor {
      * This registry is used in methods like `execute`, `fetchAll`, and other database operation methods to ensure
      * that parameters bound to SQL statements are correctly encoded before being executed.
      */
-    val encoders: Statement.ValueEncoderRegistry
+    val encoders: ValueEncoderRegistry
 
     /**
      * Executes the given SQL statement asynchronously.

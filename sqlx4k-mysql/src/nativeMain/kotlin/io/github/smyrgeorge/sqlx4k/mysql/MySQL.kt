@@ -35,7 +35,7 @@ class MySQL(
     username: String,
     password: String,
     options: ConnectionPool.Options = ConnectionPool.Options(),
-    override val encoders: Statement.ValueEncoderRegistry = Statement.ValueEncoderRegistry()
+    override val encoders: ValueEncoderRegistry = ValueEncoderRegistry()
 ) : IMySQL {
 
     private val rt: CPointer<out CPointed> = sqlx4k_of(
@@ -100,7 +100,7 @@ class MySQL(
     class SqlxConnection(
         private val rt: CPointer<out CPointed>,
         private val cn: CPointer<out CPointed>,
-        override val encoders: Statement.ValueEncoderRegistry
+        override val encoders: ValueEncoderRegistry
     ) : Connection {
         private val mutex = Mutex()
         private var _status: Connection.Status = Connection.Status.Open
@@ -174,7 +174,7 @@ class MySQL(
     class SqlxTransaction(
         private val rt: CPointer<out CPointed>,
         private var tx: CPointer<out CPointed>,
-        override val encoders: Statement.ValueEncoderRegistry
+        override val encoders: ValueEncoderRegistry
     ) : Transaction {
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open

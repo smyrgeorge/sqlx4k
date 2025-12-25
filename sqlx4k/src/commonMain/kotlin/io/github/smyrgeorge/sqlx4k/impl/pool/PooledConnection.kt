@@ -15,7 +15,7 @@ class PooledConnection(
     private val connection: Connection,
     private val pool: ConnectionPoolImpl
 ) : Connection {
-    override val encoders: Statement.ValueEncoderRegistry = pool.encoders
+    override val encoders: ValueEncoderRegistry = pool.encoders
     private val mutex = Mutex()
     private var acquired = true
     private val released get() = !acquired

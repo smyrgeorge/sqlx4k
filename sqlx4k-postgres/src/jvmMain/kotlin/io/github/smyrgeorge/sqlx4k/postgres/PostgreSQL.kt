@@ -2,6 +2,7 @@ package io.github.smyrgeorge.sqlx4k.postgres
 
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.r2dbc.pool.ConnectionPoolConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
@@ -37,7 +38,7 @@ class PostgreSQL(
     username: String,
     password: String,
     options: ConnectionPool.Options = ConnectionPool.Options(),
-    override val encoders: Statement.ValueEncoderRegistry = Statement.ValueEncoderRegistry()
+    override val encoders: ValueEncoderRegistry = ValueEncoderRegistry()
 ) : IPostgresSQL by PostgreSQLImpl(
     connectionPool(options, connectionFactory(url, username, password)),
     connectionFactory(url, username, password),

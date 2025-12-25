@@ -102,16 +102,14 @@ class StatementCollectionsTests {
         data class Product(val id: Int, val name: String)
 
         // Custom encoder for Product that extracts the id
-        class ProductEncoder : Statement.ValueEncoder<Product> {
+        class ProductEncoder : ValueEncoder<Product> {
             override fun encode(value: Product): Any {
                 return value.id
             }
         }
 
         // Register the encoder
-        val encoders = Statement
-            .ValueEncoderRegistry()
-            .register(Product::class, ProductEncoder())
+        val encoders = ValueEncoderRegistry().register(Product::class, ProductEncoder())
 
         // List of products
         val products = listOf(

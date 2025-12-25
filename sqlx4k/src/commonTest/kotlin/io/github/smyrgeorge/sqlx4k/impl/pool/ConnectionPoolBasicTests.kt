@@ -5,8 +5,8 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
-import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.pool.util.FakeConnection
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
@@ -25,7 +25,7 @@ class ConnectionPoolBasicTests {
         onCreate: (FakeConnection) -> Unit = {}
     ): ConnectionPoolImpl {
         val options = ConnectionPool.Options(min, max, acquireTimeout, idleTimeout, maxLifetime)
-        return ConnectionPoolImpl(options, Statement.ValueEncoderRegistry.EMPTY) {
+        return ConnectionPoolImpl(options, ValueEncoderRegistry.EMPTY) {
             FakeConnection(nextId++).also(onCreate)
         }
     }

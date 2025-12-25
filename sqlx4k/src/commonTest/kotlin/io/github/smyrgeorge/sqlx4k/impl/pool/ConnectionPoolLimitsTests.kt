@@ -5,7 +5,7 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isNotNull
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.SQLError
-import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.pool.util.FakeConnection
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -32,7 +32,7 @@ class ConnectionPoolLimitsTests {
         onCreate: (FakeConnection) -> Unit = {}
     ): ConnectionPoolImpl {
         val options = ConnectionPool.Options(min, max, acquireTimeout, idleTimeout, maxLifetime)
-        return ConnectionPoolImpl(options, Statement.ValueEncoderRegistry.EMPTY) {
+        return ConnectionPoolImpl(options, ValueEncoderRegistry.EMPTY) {
             FakeConnection(nextId++).also(onCreate)
         }
     }
@@ -323,8 +323,7 @@ class ConnectionPoolLimitsTests {
     fun `Pool counters remain consistent after mixed success and failure`() = runBlocking {
         var failCount = 0
         val options = ConnectionPool.Options(minConnections = null, maxConnections = 5)
-        val pool = ConnectionPoolImpl(options, Statement.ValueEncoderRegistry.EMPTY) {
-            @Suppress("AssignedValueIsNeverRead")
+        val pool = ConnectionPoolImpl(options, ValueEncoderRegistry.EMPTY) {
             if (failCount++ < 2) {
                 error("Simulated failure")
             } else {

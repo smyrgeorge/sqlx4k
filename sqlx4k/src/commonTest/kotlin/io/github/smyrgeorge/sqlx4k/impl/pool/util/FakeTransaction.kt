@@ -1,8 +1,8 @@
 package io.github.smyrgeorge.sqlx4k.impl.pool.util
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
-import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 
 class FakeTransaction : Transaction {
     override var status: Transaction.Status = Transaction.Status.Open
@@ -17,7 +17,7 @@ class FakeTransaction : Transaction {
         return Result.success(Unit)
     }
 
-    override val encoders: Statement.ValueEncoderRegistry = Statement.ValueEncoderRegistry.EMPTY
+    override val encoders: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY
 
     override suspend fun execute(sql: String): Result<Long> = Result.success(0)
     override suspend fun fetchAll(sql: String): Result<ResultSet> =

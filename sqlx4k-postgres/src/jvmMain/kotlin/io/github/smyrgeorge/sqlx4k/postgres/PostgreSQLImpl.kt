@@ -31,7 +31,7 @@ import io.r2dbc.spi.Result as NativeR2dbcResultSet
 class PostgreSQLImpl(
     private val pool: NativeR2dbcConnectionPool,
     private val connectionFactory: PostgresqlConnectionFactory,
-    override val encoders: Statement.ValueEncoderRegistry = Statement.ValueEncoderRegistry()
+    override val encoders: ValueEncoderRegistry = ValueEncoderRegistry()
 ) : IPostgresSQL {
     override suspend fun migrate(
         path: String,
@@ -207,7 +207,7 @@ class PostgreSQLImpl(
 
     class R2dbcConnection(
         private val connection: NativeR2dbcConnection,
-        override val encoders: Statement.ValueEncoderRegistry
+        override val encoders: ValueEncoderRegistry
     ) : Connection {
         private val mutex = Mutex()
         private var _status: Connection.Status = Connection.Status.Open
@@ -279,7 +279,7 @@ class PostgreSQLImpl(
     class R2dbcTransaction(
         private var connection: NativeR2dbcConnection,
         private val closeConnectionAfterTx: Boolean,
-        override val encoders: Statement.ValueEncoderRegistry
+        override val encoders: ValueEncoderRegistry
     ) : Transaction {
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open

@@ -160,11 +160,11 @@ class ExtendedStatementTests {
     @Test
     fun `PostgreSQL-style positional parameters - with custom value encoder`() {
         class CustomType(val value: String)
-        class CustomTypeEncoder : Statement.ValueEncoder<CustomType> {
+        class CustomTypeEncoder : ValueEncoder<CustomType> {
             override fun encode(value: CustomType): Any = value.value
         }
 
-        val encoders = Statement.ValueEncoderRegistry()
+        val encoders = ValueEncoderRegistry()
             .register(CustomType::class, CustomTypeEncoder())
 
         val sql = "SELECT * FROM data WHERE custom_field = $1"

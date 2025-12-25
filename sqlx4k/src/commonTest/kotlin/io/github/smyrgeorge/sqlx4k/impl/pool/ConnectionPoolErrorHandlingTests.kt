@@ -6,7 +6,7 @@ import assertk.assertions.isGreaterThan
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.SQLError
-import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.pool.util.FakeConnection
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -29,7 +29,7 @@ class ConnectionPoolErrorHandlingTests {
         onCreate: (FakeConnection) -> Unit = {}
     ): ConnectionPoolImpl {
         val options = ConnectionPool.Options(min, max, acquireTimeout, idleTimeout, maxLifetime)
-        return ConnectionPoolImpl(options, Statement.ValueEncoderRegistry.EMPTY) {
+        return ConnectionPoolImpl(options, ValueEncoderRegistry.EMPTY) {
             FakeConnection(nextId++).also(onCreate)
         }
     }
@@ -46,7 +46,7 @@ class ConnectionPoolErrorHandlingTests {
         val pool = ConnectionPoolImpl(
             ConnectionPool.Options(null, 2),
             connectionFactory = factory,
-            encoders = Statement.ValueEncoderRegistry.EMPTY
+            encoders = ValueEncoderRegistry.EMPTY
         )
 
         // First acquire should fail
@@ -90,7 +90,7 @@ class ConnectionPoolErrorHandlingTests {
         val pool = ConnectionPoolImpl(
             options = options,
             connectionFactory = factory,
-            encoders = Statement.ValueEncoderRegistry.EMPTY
+            encoders = ValueEncoderRegistry.EMPTY
         )
 
         // Give warmup time to run (some will fail)
@@ -141,7 +141,7 @@ class ConnectionPoolErrorHandlingTests {
         val pool = ConnectionPoolImpl(
             options = options,
             connectionFactory = factory,
-            encoders = Statement.ValueEncoderRegistry.EMPTY
+            encoders = ValueEncoderRegistry.EMPTY
         )
 
         // Give warmup time

@@ -5,7 +5,7 @@ package io.github.smyrgeorge.sqlx4k.impl.pool
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.SQLError
-import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.logging.Logger
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -35,7 +35,7 @@ import kotlin.time.Duration.Companion.seconds
  */
 class ConnectionPoolImpl(
     val options: ConnectionPool.Options,
-    val encoders: Statement.ValueEncoderRegistry,
+    val encoders: ValueEncoderRegistry,
     private val log: Logger? = null,
     private val connectionFactory: ConnectionFactory,
 ) : ConnectionPool {

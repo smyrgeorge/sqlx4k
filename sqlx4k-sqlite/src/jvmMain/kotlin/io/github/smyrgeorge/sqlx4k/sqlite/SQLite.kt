@@ -36,7 +36,7 @@ import java.sql.ResultSet as NativeJdbcResultSet
 class SQLite(
     url: String,
     options: ConnectionPool.Options = ConnectionPool.Options(),
-    override val encoders: Statement.ValueEncoderRegistry = Statement.ValueEncoderRegistry()
+    override val encoders: ValueEncoderRegistry = ValueEncoderRegistry()
 ) : ISQLite {
     private val pool: ConnectionPoolImpl = createConnectionPool(url, options, encoders)
 
@@ -101,7 +101,7 @@ class SQLite(
 
     class JdbcConnection(
         private val connection: NativeJdbcConnection,
-        override val encoders: Statement.ValueEncoderRegistry
+        override val encoders: ValueEncoderRegistry
     ) : Connection {
         private val mutex = Mutex()
         private var _status: Connection.Status = Connection.Status.Open
@@ -165,7 +165,7 @@ class SQLite(
     class JdbcTransaction(
         private var connection: NativeJdbcConnection,
         private val closeConnectionAfterTx: Boolean,
-        override val encoders: Statement.ValueEncoderRegistry
+        override val encoders: ValueEncoderRegistry
     ) : Transaction {
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open
@@ -258,7 +258,7 @@ class SQLite(
         private fun createConnectionPool(
             url: String,
             options: ConnectionPool.Options,
-            encoders: Statement.ValueEncoderRegistry
+            encoders: ValueEncoderRegistry
         ): ConnectionPoolImpl {
             // Ensure the URL has the proper JDBC prefix
             val jdbcUrl = "jdbc:sqlite:${url.removePrefix("jdbc:").removePrefix("sqlite:").removePrefix("//")}"

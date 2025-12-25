@@ -33,7 +33,7 @@ import kotlin.time.Duration
 class SQLite(
     url: String,
     options: ConnectionPool.Options = ConnectionPool.Options(),
-    override val encoders: Statement.ValueEncoderRegistry = Statement.ValueEncoderRegistry()
+    override val encoders: ValueEncoderRegistry = ValueEncoderRegistry()
 ) : ISQLite {
     private val rt: CPointer<out CPointed> = sqlx4k_of(
         url = url,
@@ -97,7 +97,7 @@ class SQLite(
     class SqlxConnection(
         private val rt: CPointer<out CPointed>,
         private val cn: CPointer<out CPointed>,
-        override val encoders: Statement.ValueEncoderRegistry
+        override val encoders: ValueEncoderRegistry
     ) : Connection {
         private val mutex = Mutex()
         private var _status: Connection.Status = Connection.Status.Open
@@ -150,7 +150,7 @@ class SQLite(
     class SqlxTransaction(
         private val rt: CPointer<out CPointed>,
         private var tx: CPointer<out CPointed>,
-        override val encoders: Statement.ValueEncoderRegistry
+        override val encoders: ValueEncoderRegistry
     ) : Transaction {
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open

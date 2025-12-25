@@ -55,7 +55,7 @@ class MySQL(
     username: String,
     password: String,
     options: ConnectionPool.Options = ConnectionPool.Options(),
-    override val encoders: Statement.ValueEncoderRegistry = Statement.ValueEncoderRegistry()
+    override val encoders: ValueEncoderRegistry = ValueEncoderRegistry()
 ) : IMySQL {
     private val connectionFactory: MySqlConnectionFactory = connectionFactory(url, username, password)
     private val poolConfiguration: ConnectionPoolConfiguration = connectionOptions(options, connectionFactory)
@@ -150,7 +150,7 @@ class MySQL(
 
     class R2dbcConnection(
         private val connection: NativeR2dbcConnection,
-        override val encoders: Statement.ValueEncoderRegistry
+        override val encoders: ValueEncoderRegistry
     ) : Connection {
         private val mutex = Mutex()
         private var _status: Connection.Status = Connection.Status.Open
@@ -222,7 +222,7 @@ class MySQL(
     class R2dbcTransaction(
         private var connection: NativeR2dbcConnection,
         private val closeConnectionAfterTx: Boolean,
-        override val encoders: Statement.ValueEncoderRegistry
+        override val encoders: ValueEncoderRegistry
     ) : Transaction {
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open

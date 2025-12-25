@@ -1,7 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.impl.statement
 
 import io.github.smyrgeorge.sqlx4k.SQLError
-import io.github.smyrgeorge.sqlx4k.Statement.ValueEncoderRegistry
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.extensions.encodeValue
 
 /**
