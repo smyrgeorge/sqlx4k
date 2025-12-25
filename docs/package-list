@@ -145,6 +145,9 @@ io.github.smyrgeorge.sqlx4k.impl.migrate.utils
 io.github.smyrgeorge.sqlx4k.impl.pool
 io.github.smyrgeorge.sqlx4k.impl.statement
 io.github.smyrgeorge.sqlx4k.impl.types
+module:sqlx4k-arrow
+io.github.smyrgeorge.sqlx4k.arrow
+io.github.smyrgeorge.sqlx4k.arrow.impl.extensions
 module:sqlx4k-codegen
 io.github.smyrgeorge.sqlx4k.processor
 module:sqlx4k-mysql
