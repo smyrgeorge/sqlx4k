@@ -1,15 +1,15 @@
 package io.github.smyrgeorge.sqlx4k
 
 /**
- * Interface defining a contract for basic CRUD (Create, Read, Update, Delete) operations on a data source.
+ * Defines a repository interface for performing CRUD operations on entities of type [T].
  *
- * This interface abstracts common operations to be implemented for handling entities of type [T].
- * Each operation is asynchronous and returns a [Result], encapsulating either the successful result
- * or an error in case of failure.
+ * This interface provides methods for inserting, updating, deleting, and saving entities
+ * within a data source using an asynchronous approach. It extends [CrudRepositoryHooks]
+ * to support customization hooks that can be applied before specific operations.
  *
- * @param T The type of the entity managed by the repository.
+ * @param T The type of the entities handled by this repository.
  */
-interface CrudRepository<T> {
+interface CrudRepository<T> : CrudRepositoryHooks<T> {
     /**
      * Inserts the given entity into the data source using the specified driver context.
      *

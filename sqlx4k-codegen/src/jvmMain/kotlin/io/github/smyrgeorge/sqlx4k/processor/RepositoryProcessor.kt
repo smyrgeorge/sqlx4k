@@ -189,32 +189,62 @@ class RepositoryProcessor(
      *         - A Boolean flag indicating whether Arrow-specific repository support is enabled.
      */
     private fun parseRepositoryAnnotation(repo: KSClassDeclaration): Quadraple<KSClassDeclaration, String, Boolean, Boolean> {
+        // Recursively find a supertype that matches one of the repository types
+        fun findCrudRepositorySuperType(decl: KSClassDeclaration, visited: MutableSet<String> = mutableSetOf()): KSType? {
+            val qualifiedName = decl.qualifiedName() ?: return null
+
+            // Avoid infinite recursion
+            if (qualifiedName in visited) return null
+            visited.add(qualifiedName)
+
+            // Check direct supertypes
+            for (superType in decl.superTypes) {
+                val resolved = superType.resolve()
+                val superQualifiedName = resolved.declaration.qualifiedName()
+                if (superQualifiedName in TypeNames.REPOSITORY_TYPE_NAMES) {
+                    return resolved
+                }
+            }
+
+            // Recursively check supertypes of supertypes
+            for (superType in decl.superTypes) {
+                val resolved = superType.resolve()
+                val superDecl = resolved.declaration as? KSClassDeclaration ?: continue
+                val found = findCrudRepositorySuperType(superDecl, visited)
+                if (found != null) return found
+            }
+
+            return null
+        }
+
         fun implementsCrudRepository(repo: KSClassDeclaration): Triple<KSClassDeclaration, Boolean, Boolean> {
             val repoTypeNames = TypeNames.REPOSITORY_TYPE_NAMES
-            val repoSimpleNames = repoTypeNames.map { it.substringAfterLast(".") }
 
             // Extract repository super-type information
             if (repo.superTypes.toList().size > 1) error("Repository interface ${repo.qualifiedName()} cannot extend multiple repositories")
-            val st = repo.superTypes.map { it.resolve() }
-                .firstOrNull { it.declaration.qualifiedName() in repoTypeNames }
-                ?: error("@Repository interface ${repo.qualifiedName()} must extend one of ${repoTypeNames.joinToString { "$it<T>" }}")
 
-            // Extract repository type information
-            val useContextParameters = st.declaration.qualifiedName() in TypeNames.CONTEXT_REPOSITORY_TYPE_NAMES
-            val useArrow = st.declaration.qualifiedName() in TypeNames.ARROW_REPOSITORY_TYPE_NAMES
+            // Validate that somewhere in the hierarchy we extend one of the allowed repository types
+            val foundRepoType = findCrudRepositorySuperType(repo)
+                ?: error("@Repository interface ${repo.qualifiedName()} must extend (directly or indirectly) one of ${repoTypeNames.joinToString { "$it<T>" }}")
 
-            // Extract domain type information
-            val typeArg = st.arguments.firstOrNull()?.type?.resolve()
-                ?: error("${repo.qualifiedName()} implements $repoSimpleNames without type argument; expected $repoSimpleNames<T>")
+            // Extract repository type information from the found repository type
+            val useContextParameters = foundRepoType.declaration.qualifiedName() in TypeNames.CONTEXT_REPOSITORY_TYPE_NAMES
+            val useArrow = foundRepoType.declaration.qualifiedName() in TypeNames.ARROW_REPOSITORY_TYPE_NAMES
+
+            // Extract domain type information from the DIRECT supertype (first level)
+            val directSuperType = repo.superTypes.firstOrNull()?.resolve()
+                ?: error("Repository interface ${repo.qualifiedName()} has no supertypes")
+            val typeArg = directSuperType.arguments.firstOrNull()?.type?.resolve()
+                ?: error("${repo.qualifiedName()} implements ${directSuperType.declaration.qualifiedName()} without type argument; expected it to have a type argument <T>")
             val domainDecl = typeArg.declaration as? KSClassDeclaration
-                ?: error("$repoSimpleNames type argument must be a class on ${repo.qualifiedName()}")
+                ?: error("Type argument must be a class on ${repo.qualifiedName()}")
 
             // Ensure @Table
             val hasTable = domainDecl.annotations.any {
                 val qn = it.qualifiedName()
                 qn == TypeNames.TABLE_ANNOTATION
             }
-            if (!hasTable) error("$repoSimpleNames generic parameter must be @Table-annotated (${domainDecl.qualifiedName()})")
+            if (!hasTable) error("Repository generic parameter must be @Table-annotated (${domainDecl.qualifiedName()})")
             return Triple(domainDecl, useContextParameters, useArrow)
         }
 
@@ -580,7 +610,8 @@ class RepositoryProcessor(
         } else {
             file += "    override suspend fun insert(context: QueryExecutor, entity: $domainQn) = run {\n"
         }
-        file += "        val statement = entity.insert()\n"
+        file += "        val e = preInsertHook(entity)\n"
+        file += "        val statement = e.insert()\n"
         file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
         file += "            val one = list.firstOrNull()\n"
         file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmpryResultSet, \"Insert query returned no rows\"))\n"
@@ -611,7 +642,8 @@ class RepositoryProcessor(
         } else {
             file += "    override suspend fun update(context: QueryExecutor, entity: $domainQn) = run {\n"
         }
-        file += "        val statement = entity.update()\n"
+        file += "        val e = preUpdateHook(entity)\n"
+        file += "        val statement = e.update()\n"
         file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
         file += "            val one = list.firstOrNull()\n"
         file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmpryResultSet, \"Update query returned no rows\"))\n"
@@ -641,7 +673,8 @@ class RepositoryProcessor(
         } else {
             file += "    override suspend fun delete(context: QueryExecutor, entity: $domainQn) = run {\n"
         }
-        file += "        val statement = entity.delete()\n"
+        file += "        val e = preDeleteHook(entity)\n"
+        file += "        val statement = e.delete()\n"
         file += "        context.execute(statement).map { kotlin.Unit }\n"
         file += "    }"
         if (useArrow) file += ".toDbResult()"
