@@ -13,9 +13,15 @@ object TypeNames {
 
     // Core interfaces/classes
     const val CRUD_REPOSITORY = "io.github.smyrgeorge.sqlx4k.CrudRepository"
+    const val ARROW_CRUD_REPOSITORY = "io.github.smyrgeorge.sqlx4k.ArrowCrudRepository"
     const val CONTEXT_CRUD_REPOSITORY = "io.github.smyrgeorge.sqlx4k.ContextCrudRepository"
+    const val ARROW_CONTEXT_CRUD_REPOSITORY = "io.github.smyrgeorge.sqlx4k.ArrowContextCrudRepository"
     const val QUERY_EXECUTOR = "io.github.smyrgeorge.sqlx4k.QueryExecutor"
     const val STATEMENT = "io.github.smyrgeorge.sqlx4k.Statement"
+
+    // Sqlx4k types
+    const val DB_RESULT = "io.github.smyrgeorge.sqlx4k.impl.extensions.DbResult"
+    const val TO_SQLX4K_EITHER = "io.github.smyrgeorge.sqlx4k.impl.extensions.toSqlx4kEither"
 
     // Kotlin stdlib
     const val KOTLIN_RESULT = "kotlin.Result"
