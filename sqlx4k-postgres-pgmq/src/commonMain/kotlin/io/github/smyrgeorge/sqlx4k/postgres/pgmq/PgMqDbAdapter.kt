@@ -12,6 +12,6 @@ import io.github.smyrgeorge.sqlx4k.postgres.Notification
  * executing statements and retrieving results, and the `QueryExecutor.Transactional` interface
  * for managing transactions.
  */
-interface PgMqDbAdapter : QueryExecutor, QueryExecutor.Transactional, Migrator.Db {
+interface PgMqDbAdapter : QueryExecutor, QueryExecutor.Transactional, Migrator.QueryExecutor {
     suspend fun listen(channel: String, f: suspend (Notification) -> Unit)
 }
