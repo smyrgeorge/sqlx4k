@@ -10,6 +10,7 @@ pluginManagement {
 }
 
 include("sqlx4k")
+include("sqlx4k-arrow")
 include("sqlx4k-codegen")
 include("sqlx4k-mysql")
 include("sqlx4k-postgres")

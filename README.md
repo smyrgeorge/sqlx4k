@@ -466,8 +466,10 @@ case, each generated method takes a QueryExecutor (e.g., db or transaction) as t
 
 - [CrudRepository<T>](sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/CrudRepository.kt)
 - [ContextCrudRepository<T>](sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/ContextCrudRepository.kt)
-- [ArrowCrudRepository<T>](sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/ArrowCrudRepository.kt)
-- [ArrowContextCrudRepository<T>](sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/ArrowContextCrudRepository.kt)
+- [ArrowCrudRepository<T>](sqlx4k-arrow/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/arrow/ArrowCrudRepository.kt) (
+  using the `sqlx-arrow` package)
+- [ArrowContextCrudRepository<T>](sqlx4k-arrow/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/arrow/ArrowContextCrudRepository.kt) (
+  using the `sqlx-arrow` package)
 
 #### SQL syntax validation (compile-time)
 

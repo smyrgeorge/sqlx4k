@@ -1,4 +1,4 @@
-package io.github.smyrgeorge.sqlx4k.impl.extensions
+package io.github.smyrgeorge.sqlx4k.arrow.impl.extensions
 
 import arrow.core.Either
 import arrow.core.left

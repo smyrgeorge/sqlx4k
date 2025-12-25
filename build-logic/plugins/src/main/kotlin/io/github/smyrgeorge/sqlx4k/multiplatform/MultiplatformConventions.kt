@@ -16,7 +16,7 @@ class MultiplatformConventions : Plugin<Project> {
         val targets = Utils.targetsOf(project)
         project.plugins.apply("org.jetbrains.kotlin.multiplatform")
         project.extensions.configure<KotlinMultiplatformExtension> {
-            val availableTargets = mapOf(
+            val availableTargets = listOfNotNull(
                 Pair("jvm") {
                     jvm {
                         compilerOptions {
@@ -26,14 +26,14 @@ class MultiplatformConventions : Plugin<Project> {
                 },
                 Pair("iosArm64") { iosArm64() },
                 Pair("iosSimulatorArm64") { iosSimulatorArm64() },
-                Pair("androidNativeArm64") { androidNativeArm64() },
-                Pair("androidNativeX64") { androidNativeX64() },
+                if (project.name != "sqlx4k-arrow") Pair("androidNativeArm64") { androidNativeArm64() } else null,
+                if (project.name != "sqlx4k-arrow") Pair("androidNativeX64") { androidNativeX64() } else null,
                 Pair("macosArm64") { macosArm64() },
                 Pair("macosX64") { macosX64() },
                 Pair("linuxArm64") { linuxArm64() },
                 Pair("linuxX64") { linuxX64() },
                 Pair("mingwX64") { mingwX64() },
-            )
+            ).toMap()
 
             targets.forEach {
                 println("Enabling target $it")

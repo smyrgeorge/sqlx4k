@@ -1,5 +1,5 @@
 plugins {
-    id("io.github.smyrgeorge.sqlx4k.multiplatform.lib")
+    id("io.github.smyrgeorge.sqlx4k.multiplatform")
     id("io.github.smyrgeorge.sqlx4k.publish")
     id("io.github.smyrgeorge.sqlx4k.dokka")
 }
@@ -14,15 +14,8 @@ kotlin {
         }
         commonMain {
             dependencies {
-                api(libs.kotlinx.coroutines.core)
-                api(libs.kotlinx.datetime)
-                implementation(libs.kotlinx.io.core)
-            }
-        }
-        commonTest {
-            dependencies {
-                implementation(libs.kotlin.test)
-                implementation(libs.assertk)
+                api(project(":sqlx4k"))
+                api(libs.arrow.core)
             }
         }
     }
