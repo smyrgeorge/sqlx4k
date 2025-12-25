@@ -4,6 +4,7 @@ import com.google.devtools.ksp.processing.*
 import com.google.devtools.ksp.symbol.*
 import com.google.devtools.ksp.validate
 import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.processor.utils.Quadraple
 import java.io.OutputStream
 
 class RepositoryProcessor(
@@ -31,9 +32,6 @@ class RepositoryProcessor(
             ?: error("Missing ${TableProcessor.PACKAGE_OPTION} option")
         logger.info("[RepositoryProcessor] Output package: $outputPackage")
 
-        val useContextParameters = options[ENABLE_CONTEXT_PARAMETERS_OPTION]?.toBoolean() ?: false
-        logger.info("[RepositoryProcessor] Enable context parameters: $useContextParameters")
-
         val globalCheckSqlSyntax = options[VALIDATE_SQL_SYNTAX_OPTION]?.toBoolean() ?: true
         logger.info("[RepositoryProcessor] Validate SQL syntax: $globalCheckSqlSyntax")
 
@@ -59,6 +57,7 @@ class RepositoryProcessor(
         file += "package $outputPackage\n\n"
         file += "import ${TypeNames.STATEMENT}\n"
         file += "import ${TypeNames.QUERY_EXECUTOR}\n"
+        file += "import ${TypeNames.SQL_ERROR}\n"
 
         // For each repository interface, find methods annotated with @Query
         val validatedRepos = repoSymbols.filter { it.validate() }
@@ -67,8 +66,8 @@ class RepositoryProcessor(
                 error("@Repository is only supported on interfaces (${repo.qualifiedName()}).")
 
             // Extract domain and mapper from @Repository annotation on the interface
-            val (domainDecl, mapperTypeName, useArrow) = parseRepositoryAnnotation(repo, useContextParameters)
-            if (useArrow) file += "import ${TypeNames.TO_SQLX4K_EITHER}\n"
+            val (domainDecl, mapperTypeName, useContextParameters, useArrow) = parseRepositoryAnnotation(repo)
+            if (useArrow) file += "import ${TypeNames.TO_DB_RESULT}\n"
 
             // Find all methods declared in the interface
             val fnsAll = repo.declarations.filterIsInstance<KSFunctionDeclaration>().toList()
@@ -183,54 +182,54 @@ class RepositoryProcessor(
      * necessary metadata such as the domain type, the mapper type, and whether Arrow support is used.
      *
      * @param repo The repository interface declaration to analyze.
-     * @param useContextParameters Indicates whether context-specific repository parameters are enabled.
      * @return A Triple containing:
      *         - The class declaration of the domain type used by the repository.
      *         - The fully qualified name of the mapper type specified in the repository annotation.
+     *         - A Boolean flag indicating whether context-specific repository parameters are enabled.
      *         - A Boolean flag indicating whether Arrow-specific repository support is enabled.
      */
-    private fun parseRepositoryAnnotation(
-        repo: KSClassDeclaration,
-        useContextParameters: Boolean
-    ): Triple<KSClassDeclaration, String, Boolean> {
-        fun implementsCrudRepository(repo: KSClassDeclaration): Pair<KSClassDeclaration, Boolean> {
-            val repoTypeNames =
-                if (useContextParameters)
-                    setOf(TypeNames.CONTEXT_CRUD_REPOSITORY, TypeNames.ARROW_CONTEXT_CRUD_REPOSITORY)
-                else
-                    setOf(TypeNames.CRUD_REPOSITORY, TypeNames.ARROW_CRUD_REPOSITORY)
+    private fun parseRepositoryAnnotation(repo: KSClassDeclaration): Quadraple<KSClassDeclaration, String, Boolean, Boolean> {
+        fun implementsCrudRepository(repo: KSClassDeclaration): Triple<KSClassDeclaration, Boolean, Boolean> {
+            val repoTypeNames = TypeNames.REPOSITORY_TYPE_NAMES
             val repoSimpleNames = repoTypeNames.map { it.substringAfterLast(".") }
+
+            // Extract repository super-type information
             if (repo.superTypes.toList().size > 1) error("Repository interface ${repo.qualifiedName()} cannot extend multiple repositories")
-            // find CrudRepository<T>/ArrowCrudRepository<T> or ContextCrudRepository<T>/ArrowContextCrudRepository<T>
             val st = repo.superTypes.map { it.resolve() }
                 .firstOrNull { it.declaration.qualifiedName() in repoTypeNames }
                 ?: error("@Repository interface ${repo.qualifiedName()} must extend one of ${repoTypeNames.joinToString { "$it<T>" }}")
-            val useArrow = st.declaration.qualifiedName() in setOf(TypeNames.ARROW_CRUD_REPOSITORY, TypeNames.ARROW_CONTEXT_CRUD_REPOSITORY)
+
+            // Extract repository type information
+            val useContextParameters = st.declaration.qualifiedName() in TypeNames.CONTEXT_REPOSITORY_TYPE_NAMES
+            val useArrow = st.declaration.qualifiedName() in TypeNames.ARROW_REPOSITORY_TYPE_NAMES
+
+            // Extract domain type information
             val typeArg = st.arguments.firstOrNull()?.type?.resolve()
                 ?: error("${repo.qualifiedName()} implements $repoSimpleNames without type argument; expected $repoSimpleNames<T>")
             val domainDecl = typeArg.declaration as? KSClassDeclaration
                 ?: error("$repoSimpleNames type argument must be a class on ${repo.qualifiedName()}")
-            // ensure @Table
+
+            // Ensure @Table
             val hasTable = domainDecl.annotations.any {
                 val qn = it.qualifiedName()
                 qn == TypeNames.TABLE_ANNOTATION
             }
             if (!hasTable) error("$repoSimpleNames generic parameter must be @Table-annotated (${domainDecl.qualifiedName()})")
-            return domainDecl to useArrow
+            return Triple(domainDecl, useContextParameters, useArrow)
         }
 
         val repoAnn = repo.annotations.firstOrNull { it.qualifiedName() == TypeNames.REPOSITORY_ANNOTATION }
             ?: error("Missing @Repository annotation on interface ${repo.qualifiedName()}")
 
         // Enforce that the interface extends CrudRepository<T> and derive domain from T
-        val (domainDecl, useArrow) = implementsCrudRepository(repo)
+        val (domainDecl, useContextParameters, useArrow) = implementsCrudRepository(repo)
 
         val mapperArg: KSValueArgument? = repoAnn.arguments.firstOrNull { it.name?.asString() == "mapper" }
         val mapperKSType = mapperArg?.value as? KSType
             ?: error("@Repository must declare a mapper, e.g. @Repository(mapper = FooRowMapper::class) on ${repo.qualifiedName()}")
         val mapperTypeName = mapperKSType.declaration.qualifiedName()
             ?: error("Unable to resolve mapper type for ${repo.qualifiedName()}")
-        return Triple(domainDecl, mapperTypeName, useArrow)
+        return Quadraple(domainDecl, mapperTypeName, useContextParameters, useArrow)
     }
 
     /**
@@ -507,7 +506,7 @@ class RepositoryProcessor(
                 file += "            when (list.size) {\n"
                 file += "                0 -> null\n"
                 file += "                1 -> list.first()\n"
-                file += "                else -> return@run Result.failure(IllegalStateException(\"findOneBy query returned more than one row\"))\n"
+                file += "                else -> return@run Result.failure(SQLError(SQLError.Code.MultipleRowsReturned, \"findOneBy query returned more than one row\"))\n"
                 file += "            }\n"
                 file += "        }\n"
             }
@@ -519,14 +518,14 @@ class RepositoryProcessor(
             Prefix.COUNT_ALL, Prefix.COUNT_BY -> {
                 file += "        $contextParamName.fetchAll(statement).map { rs ->\n"
                 file += "            val row = rs.firstOrNull()\n"
-                file += "                ?: return@run Result.failure(IllegalStateException(\"Count query returned no rows\"))\n"
+                file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmpryResultSet, \"Count query returned no rows\"))\n"
                 file += "            row.get(0).asString().toLong()\n"
                 file += "        }\n"
             }
         }
         file += "    }"
-        if (useArrow) file += ".toSqlx4kEither()"
-        file += "\n"
+        if (useArrow) file += ".toDbResult()"
+        file += "\n\n"
     }
 
     /**
@@ -574,12 +573,12 @@ class RepositoryProcessor(
         file += "        val statement = entity.insert()\n"
         file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
         file += "            val one = list.firstOrNull()\n"
-        file += "                ?: return@run Result.failure(IllegalStateException(\"Insert query returned no rows\"))\n"
+        file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmpryResultSet, \"Insert query returned no rows\"))\n"
         file += "            one\n"
         file += "        }\n"
         file += "    }"
-        if (useArrow) file += ".toSqlx4kEither()"
-        file += "\n"
+        if (useArrow) file += ".toDbResult()"
+        file += "\n\n"
 
         // update
         logger.info("[RepositoryProcessor] Emitting CRUD method: update($domainQn)")
@@ -605,12 +604,12 @@ class RepositoryProcessor(
         file += "        val statement = entity.update()\n"
         file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
         file += "            val one = list.firstOrNull()\n"
-        file += "                ?: return@run Result.failure(IllegalStateException(\"Update query returned no rows\"))\n"
+        file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmpryResultSet, \"Update query returned no rows\"))\n"
         file += "            one\n"
         file += "        }\n"
         file += "    }"
-        if (useArrow) file += ".toSqlx4kEither()"
-        file += "\n"
+        if (useArrow) file += ".toDbResult()"
+        file += "\n\n"
 
         // delete
         logger.info("[RepositoryProcessor] Emitting CRUD method: delete($domainQn)")
@@ -635,8 +634,8 @@ class RepositoryProcessor(
         file += "        val statement = entity.delete()\n"
         file += "        context.execute(statement).map { kotlin.Unit }\n"
         file += "    }"
-        if (useArrow) file += ".toSqlx4kEither()"
-        file += "\n"
+        if (useArrow) file += ".toDbResult()"
+        file += "\n\n"
 
         // save
         logger.info("[RepositoryProcessor] Emitting CRUD method: save($domainQn)")
@@ -730,13 +729,5 @@ class RepositoryProcessor(
          * to be provided as part of the processing environment or tool configuration.
          */
         private const val SCHEMA_MIGRATIONS_PATH_OPTION: String = "schema-migrations-path"
-
-        /**
-         * Represents the option flag to enable context parameters for methods in repositories.
-         * When this option is enabled, repository methods are expected to validate the presence
-         * and correctness of a mandatory `context` parameter, which must be an instance of
-         * `io.github.smyrgeorge.sqlx4k.QueryExecutor`.
-         */
-        private const val ENABLE_CONTEXT_PARAMETERS_OPTION: String = "enable-context-parameters"
     }
 }

@@ -56,6 +56,7 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 - [Transactions and coroutine TransactionContext](#transactions) · [TransactionContext (coroutines)](#transactioncontext-coroutines)
 - [Code generation: CRUD and @Repository implementations](#code-generation-crud-and-repository-implementations)
     - [Context-Parameters](#context-parameters)
+    - [List of Repository interfaces](#list-of-repository-interfaces)
     - [SQL syntax validation (compile-time)](#sql-syntax-validation-compile-time)
     - [SQL schema validation (compile-time)](#sql-schema-validation-compile-time)
 - [Database migrations](#database-migrations)
@@ -430,19 +431,8 @@ parameter to every method. This switches your repository to ContextCrudRepositor
 
 To enable this mode:
 
-- Add KSP argument `enable-context-parameters` set to true in your ksp configuration.
 - Make your repository interface extend ContextCrudRepository<T> instead of CrudRepository<T>.
 - Declare your @Query methods with a context(context: QueryExecutor) receiver instead of an explicit context parameter.
-
-ksp configuration example:
-
-```kotlin
-ksp {
-    // ... other args
-    arg("output-package", "io.github.smyrgeorge.sqlx4k.examples.postgres")
-    arg("enable-context-parameters", "true") // see RepositoryProcessor
-}
-```
 
 Repository interface example with context receivers:
 
@@ -471,6 +461,13 @@ with(db) {
 
 If you prefer the explicit-parameter style, keep CrudRepository<T> and do not set enable-context-parameters. In that
 case, each generated method takes a QueryExecutor (e.g., db or transaction) as the first argument.
+
+#### List of Repository interfaces
+
+- [CrudRepository<T>](sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/CrudRepository.kt)
+- [ContextCrudRepository<T>](sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/ContextCrudRepository.kt)
+- [ArrowCrudRepository<T>](sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/ArrowCrudRepository.kt)
+- [ArrowContextCrudRepository<T>](sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/ArrowContextCrudRepository.kt)
 
 #### SQL syntax validation (compile-time)
 
@@ -586,7 +583,7 @@ db.listen("chan0") { notification: Postgres.Notification ->
 ### PostgreSQL Message Queue (PGMQ)
 
 A Kotlin Multiplatform client for building reliable, asynchronous message queues using PostgreSQL and
-the [PGMQ](https://github.com/tembo-io/pgmq) extension.
+the [PGMQ](https://github.com/pgmq/pgmq) extension.
 
 **Features:**
 

@@ -15,15 +15,15 @@ typealias DbResult<T> = Either<SQLError, T>
  * Converts a Kotlin Result to Either<SQLError, T>.
  *
  * If the Result contains a SQLError, it's used as-is.
- * Otherwise, the exception is wrapped in a SQLError with Database code.
+ * Otherwise, the exception is wrapped in a SQLError with UknownError code.
  *
  * @return Either.Right with the success value, or Either.Left with SQLError
  */
-fun <T> Result<T>.toSqlx4kEither(): DbResult<T> =
+fun <T> Result<T>.toDbResult(): DbResult<T> =
     fold(onSuccess = { it.right() }, onFailure = { it.left() })
         .mapLeft { error ->
             when (error) {
                 is SQLError -> error
-                else -> SQLError(SQLError.Code.Database, error.message)
+                else -> SQLError(SQLError.Code.UknownError, error.message)
             }
         }
