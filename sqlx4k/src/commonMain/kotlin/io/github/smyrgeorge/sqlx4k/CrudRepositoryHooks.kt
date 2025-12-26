@@ -37,4 +37,19 @@ interface CrudRepositoryHooks<T> {
      * @return The processed or unmodified entity of type [T].
      */
     suspend fun preDeleteHook(entity: T): T = entity
+
+    /**
+     * This method provides an around-style hook that wraps query execution.
+     * It allows for cross-cutting concerns like metrics, tracing, and logging
+     * to be applied to all database operations.
+     *
+     * The hook receives the method name and statement (containing SQL and bound parameters)
+     * and wraps the actual database execution block.
+     *
+     * @param method The name of the repository method being executed (e.g., "findOneById", "insert")
+     * @param statement The statement containing the SQL query and bound parameters
+     * @param block The actual database operation to execute
+     * @return The result of executing the block
+     */
+    suspend fun <R> aroundQuery(method: String, statement: Statement, block: suspend () -> R): R = block()
 }

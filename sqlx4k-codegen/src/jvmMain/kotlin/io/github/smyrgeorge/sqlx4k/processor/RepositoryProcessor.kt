@@ -190,7 +190,10 @@ class RepositoryProcessor(
      */
     private fun parseRepositoryAnnotation(repo: KSClassDeclaration): Quadraple<KSClassDeclaration, String, Boolean, Boolean> {
         // Recursively find a supertype that matches one of the repository types
-        fun findCrudRepositorySuperType(decl: KSClassDeclaration, visited: MutableSet<String> = mutableSetOf()): KSType? {
+        fun findCrudRepositorySuperType(
+            decl: KSClassDeclaration,
+            visited: MutableSet<String> = mutableSetOf()
+        ): KSType? {
             val qualifiedName = decl.qualifiedName() ?: return null
 
             // Avoid infinite recursion
@@ -228,7 +231,8 @@ class RepositoryProcessor(
                 ?: error("@Repository interface ${repo.qualifiedName()} must extend (directly or indirectly) one of ${repoTypeNames.joinToString { "$it<T>" }}")
 
             // Extract repository type information from the found repository type
-            val useContextParameters = foundRepoType.declaration.qualifiedName() in TypeNames.CONTEXT_REPOSITORY_TYPE_NAMES
+            val useContextParameters =
+                foundRepoType.declaration.qualifiedName() in TypeNames.CONTEXT_REPOSITORY_TYPE_NAMES
             val useArrow = foundRepoType.declaration.qualifiedName() in TypeNames.ARROW_REPOSITORY_TYPE_NAMES
 
             // Extract domain type information from the DIRECT supertype (first level)
@@ -538,11 +542,15 @@ class RepositoryProcessor(
 
         when (prefix) {
             Prefix.FIND_ALL, Prefix.FIND_ALL_BY -> {
-                file += "        $contextParamName.fetchAll(statement, $mapperTypeName)\n"
+                file += "        aroundQuery(\"$name\", statement) {\n"
+                file += "            $contextParamName.fetchAll(statement, $mapperTypeName)\n"
+                file += "        }\n"
             }
 
             Prefix.FIND_ONE_BY -> {
-                file += "        $contextParamName.fetchAll(statement, $mapperTypeName).map { list ->\n"
+                file += "        aroundQuery(\"$name\", statement) {\n"
+                file += "            $contextParamName.fetchAll(statement, $mapperTypeName)\n"
+                file += "        }.map { list ->\n"
                 file += "            when (list.size) {\n"
                 file += "                0 -> null\n"
                 file += "                1 -> list.first()\n"
@@ -552,11 +560,15 @@ class RepositoryProcessor(
             }
 
             Prefix.DELETE_ALL, Prefix.DELETE_BY, Prefix.EXECUTE -> {
-                file += "        $contextParamName.execute(statement)\n"
+                file += "        aroundQuery(\"$name\", statement) {\n"
+                file += "            $contextParamName.execute(statement)\n"
+                file += "        }\n"
             }
 
             Prefix.COUNT_ALL, Prefix.COUNT_BY -> {
-                file += "        $contextParamName.fetchAll(statement).map { rs ->\n"
+                file += "        aroundQuery(\"$name\", statement) {\n"
+                file += "            $contextParamName.fetchAll(statement)\n"
+                file += "        }.map { rs ->\n"
                 file += "            val row = rs.firstOrNull()\n"
                 file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmpryResultSet, \"Count query returned no rows\"))\n"
                 file += "            row.get(0).asString().toLong()\n"
@@ -612,10 +624,11 @@ class RepositoryProcessor(
         }
         file += "        val e = preInsertHook(entity)\n"
         file += "        val statement = e.insert()\n"
-        file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
-        file += "            val one = list.firstOrNull()\n"
+        file += "        aroundQuery(\"insert\", statement) {\n"
+        file += "            context.fetchAll(statement, $mapperTypeName)\n"
+        file += "        }.map { list ->\n"
+        file += "            list.firstOrNull()\n"
         file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmpryResultSet, \"Insert query returned no rows\"))\n"
-        file += "            one\n"
         file += "        }\n"
         file += "    }"
         if (useArrow) file += ".toDbResult()"
@@ -644,10 +657,11 @@ class RepositoryProcessor(
         }
         file += "        val e = preUpdateHook(entity)\n"
         file += "        val statement = e.update()\n"
-        file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
-        file += "            val one = list.firstOrNull()\n"
+        file += "        aroundQuery(\"update\", statement) {\n"
+        file += "            context.fetchAll(statement, $mapperTypeName)\n"
+        file += "        }.map { list ->\n"
+        file += "            list.firstOrNull()\n"
         file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmpryResultSet, \"Update query returned no rows\"))\n"
-        file += "            one\n"
         file += "        }\n"
         file += "    }"
         if (useArrow) file += ".toDbResult()"
@@ -675,7 +689,9 @@ class RepositoryProcessor(
         }
         file += "        val e = preDeleteHook(entity)\n"
         file += "        val statement = e.delete()\n"
-        file += "        context.execute(statement).map { kotlin.Unit }\n"
+        file += "        aroundQuery(\"delete\", statement) {\n"
+        file += "            context.execute(statement)\n"
+        file += "        }.map { kotlin.Unit }\n"
         file += "    }"
         if (useArrow) file += ".toDbResult()"
         file += "\n\n"

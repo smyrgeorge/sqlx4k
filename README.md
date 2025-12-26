@@ -59,6 +59,7 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
     - [List of Repository interfaces](#list-of-repository-interfaces)
     - [SQL syntax validation (compile-time)](#sql-syntax-validation-compile-time)
     - [SQL schema validation (compile-time)](#sql-schema-validation-compile-time)
+    - [Repository hooks](#repository-hooks)
 - [Database migrations](#database-migrations)
 - [PostgreSQL LISTEN/NOTIFY](#listennotify-only-for-postgresql)
 - [Extensions](#extensions)
@@ -466,10 +467,10 @@ case, each generated method takes a QueryExecutor (e.g., db or transaction) as t
 
 - [CrudRepository<T>](sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/CrudRepository.kt)
 - [ContextCrudRepository<T>](sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/ContextCrudRepository.kt)
-- [ArrowCrudRepository<T>](sqlx4k-arrow/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/arrow/ArrowCrudRepository.kt) (
-  using the `sqlx-arrow` package)
-- [ArrowContextCrudRepository<T>](sqlx4k-arrow/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/arrow/ArrowContextCrudRepository.kt) (
-  using the `sqlx-arrow` package)
+- [ArrowCrudRepository<T>](sqlx4k-arrow/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/arrow/ArrowCrudRepository.kt)
+  (using the `sqlx-arrow` package)
+- [ArrowContextCrudRepository<T>](sqlx4k-arrow/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/arrow/ArrowContextCrudRepository.kt)
+  (using the `sqlx-arrow` package)
 
 #### SQL syntax validation (compile-time)
 
@@ -547,6 +548,26 @@ interface UserRepository {
     suspend fun findOneById(context: QueryExecutor, id: Int): Result<User?>
 }
 ```
+
+#### Repository Hooks
+
+The repository system provides powerful hooks to implement cross-cutting concerns like metrics, tracing, logging, and
+monitoring across all database operations. All repository interfaces extend `CrudRepositoryHooks<T>`, which provides the
+following hooks:
+
+**Entity-Level Hooks:**
+
+- `preInsertHook(entity: T): T` - Called before an entity is inserted
+- `preUpdateHook(entity: T): T` - Called before an entity is updated
+- `preDeleteHook(entity: T): T` - Called before an entity is deleted
+
+**Query-Level Hook:**
+
+- `aroundQuery(methodName: String, statement: Statement, block: suspend () -> R): R` - Wraps all query executions
+
+The `aroundQuery` hook is particularly powerful as it wraps **all** database operations (both `@Query` methods and CRUD
+operations), giving you a single interception point for implementing metrics, distributed tracing, query logging, and
+other observability features.
 
 ### Database Migrations
 
