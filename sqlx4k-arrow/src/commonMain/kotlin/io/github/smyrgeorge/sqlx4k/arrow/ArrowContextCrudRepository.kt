@@ -1,6 +1,5 @@
 package io.github.smyrgeorge.sqlx4k.arrow
 
-import io.github.smyrgeorge.sqlx4k.CrudRepositoryHooks
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.arrow.impl.extensions.DbResult
 
@@ -14,7 +13,7 @@ import io.github.smyrgeorge.sqlx4k.arrow.impl.extensions.DbResult
  * @param T The type of the entity managed by the repository.
  */
 @ExperimentalContextParameters
-interface ArrowContextCrudRepository<T> : CrudRepositoryHooks<T> {
+interface ArrowContextCrudRepository<T> {
     /**
      * Inserts the given entity into the data source using the specified driver context.
      *

@@ -9,4 +9,13 @@ package io.github.smyrgeorge.sqlx4k.annotation
  */
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.SOURCE)
-annotation class Query(val value: String, val checkSyntax: Boolean = true, val checkSchema: Boolean = true)
+annotation class Query(val value: String, val checkSyntax: Boolean = true, val checkSchema: Boolean = true) {
+    @Target(AnnotationTarget.FUNCTION)
+    @Retention(AnnotationRetention.SOURCE)
+    annotation class Hook(
+        val kind: Kind,
+        val callFromDefaultCrudMethod: Boolean = true
+    ) {
+        enum class Kind { PRE_INSERT, PRE_UPDATE, PRE_DELETE }
+    }
+}

@@ -4,12 +4,11 @@ package io.github.smyrgeorge.sqlx4k
  * Defines a repository interface for performing CRUD operations on entities of type [T].
  *
  * This interface provides methods for inserting, updating, deleting, and saving entities
- * within a data source using an asynchronous approach. It extends [CrudRepositoryHooks]
- * to support customization hooks that can be applied before specific operations.
+ * within a data source using an asynchronous approach.
  *
  * @param T The type of the entities handled by this repository.
  */
-interface CrudRepository<T> : CrudRepositoryHooks<T> {
+interface CrudRepository<T> {
     /**
      * Inserts the given entity into the data source using the specified driver context.
      *
