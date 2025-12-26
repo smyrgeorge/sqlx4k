@@ -39,7 +39,7 @@
             </a>        <button class="navigation-controls--btn navigation-controls--btn_toc ui-kit_mobile-only" id="toc-toggle" type="button">Toggle table of contents
         </button>
         <div class="navigation-controls--break ui-kit_mobile-only"></div>
-        <div class="library-version" id="library-version">1.5.2
+        <div class="library-version" id="library-version">1.5.3
         </div>
         <div class="navigation-controls">
         <ul class="filter-section filter-section_loading" id="filter-section" aria-label="Target filter">
@@ -94,14 +94,29 @@
   <div class="breadcrumbs"><a href="../../index.html">sqlx4k-arrow</a><span class="delimiter">/</span><a href="../index.html">io.github.smyrgeorge.sqlx4k.arrow</a><span class="delimiter">/</span><span class="current">ArrowCrudRepository</span></div>
   <div class="cover ">
     <h1 class="cover"><span>Arrow</span><wbr><span>Crud</span><wbr><span><span>Repository</span></span></h1>
-    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-arrow/commonMain"><div class="symbol monospace"><span class="token keyword">interface </span><a href="index.html">ArrowCrudRepository</a><span class="token operator">&lt;</span><a href="index.html">T</a><span class="token operator">&gt;</span><span class="source-link-wrapper"><span class="source-link" data-element-type="source-link">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k-arrow/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/arrow/ArrowCrudRepository.kt#L15">source</a>)</span></span></div><p class="paragraph">Interface defining a contract for basic CRUD (Create, Read, Update, Delete) operations on a data source.</p><p class="paragraph">This interface abstracts common operations to be implemented for handling entities of type <a href="index.html">T</a>. Each operation is asynchronous and returns a <a href="../../io.github.smyrgeorge.sqlx4k.arrow.impl.extensions/-db-result/index.html">DbResult</a>, encapsulating either the successful result or an error in case of failure.</p><h4 class="tableheader">Parameters</h4><div class="table"><div class="table-row table-row_content" data-filterable-current=":sqlx4k-arrow/commonMain" data-filterable-set=":sqlx4k-arrow/commonMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><u><span><span>T</span></span></u></div></span></div><div><div class="title"><p class="paragraph">The type of the entity managed by the repository.</p></div></div></div></div></div></div></div>
+    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-arrow/commonMain"><div class="symbol monospace"><span class="token keyword">interface </span><a href="index.html">ArrowCrudRepository</a><span class="token operator">&lt;</span><a href="index.html">T</a><span class="token operator">&gt;</span> : <a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-crud-repository-hooks/index.html">CrudRepositoryHooks</a><span class="token operator">&lt;</span><a href="index.html">T</a><span class="token operator">&gt; </span><span class="source-link-wrapper"><span class="source-link" data-element-type="source-link">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k-arrow/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/arrow/ArrowCrudRepository.kt#L16">source</a>)</span></span></div><p class="paragraph">Interface defining a contract for basic CRUD (Create, Read, Update, Delete) operations on a data source.</p><p class="paragraph">This interface abstracts common operations to be implemented for handling entities of type <a href="index.html">T</a>. Each operation is asynchronous and returns a <a href="../../io.github.smyrgeorge.sqlx4k.arrow.impl.extensions/-db-result/index.html">DbResult</a>, encapsulating either the successful result or an error in case of failure.</p><h4 class="tableheader">Parameters</h4><div class="table"><div class="table-row table-row_content" data-filterable-current=":sqlx4k-arrow/commonMain" data-filterable-set=":sqlx4k-arrow/commonMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><u><span><span>T</span></span></u></div></span></div><div><div class="title"><p class="paragraph">The type of the entity managed by the repository.</p></div></div></div></div></div></div></div>
   </div>
   <div class="tabbedcontent">
     <div class="tabs-section" tabs-section="tabs-section"><button class="section-tab" data-active="" data-togglable="CONSTRUCTOR,TYPE,PROPERTY,FUNCTION">Members</button></div>
     <div class="tabs-section-body">
       <div data-togglable="FUNCTION">
         <h2 class="tableheader">Functions</h2>
-        <div class="table"><a data-name="-1738132608%2FFunctions%2F2022000680" anchor-label="delete" id="-1738132608%2FFunctions%2F2022000680" data-filterable-set=":sqlx4k-arrow/commonMain"></a>
+        <div class="table"><a data-name="1111071487%2FFunctions%2F2022000680" anchor-label="aroundQuery" id="1111071487%2FFunctions%2F2022000680" data-filterable-set=":sqlx4k-arrow/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-arrow/commonMain" data-filterable-set=":sqlx4k-arrow/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="index.html#1111071487%2FFunctions%2F2022000680"><span>around</span><wbr><span><span>Query</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1111071487%2FFunctions%2F2022000680"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-arrow/commonMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><span class="token operator">&lt;</span><a href="index.html#1111071487%2FFunctions%2F2022000680">R</a><span class="token operator">&gt; </span><a href="index.html#1111071487%2FFunctions%2F2022000680"><span class="token function">aroundQuery</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">method<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">statement<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-statement/index.html">Statement</a><span class="token punctuation">, </span></span><span class="parameter ">block<span class="token operator">: </span><span class="token keyword">suspend </span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator"> -&gt; </span><a href="index.html#1111071487%2FFunctions%2F2022000680">R</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="index.html#1111071487%2FFunctions%2F2022000680">R</a></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-1738132608%2FFunctions%2F2022000680" anchor-label="delete" id="-1738132608%2FFunctions%2F2022000680" data-filterable-set=":sqlx4k-arrow/commonMain"></a>
           <div class="table-row table-row_content" data-filterable-current=":sqlx4k-arrow/commonMain" data-filterable-set=":sqlx4k-arrow/commonMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
@@ -127,6 +142,51 @@
               <div>
                 <div class="title">
                   <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-arrow/commonMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="insert.html"><span class="token function">insert</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">context<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-query-executor/index.html">QueryExecutor</a><span class="token punctuation">, </span></span><span class="parameter ">entity<span class="token operator">: </span><a href="index.html">T</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="../../io.github.smyrgeorge.sqlx4k.arrow.impl.extensions/-db-result/index.html">DbResult</a><span class="token operator">&lt;</span><a href="index.html">T</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Inserts the given entity into the data source using the specified driver context.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-1158308682%2FFunctions%2F2022000680" anchor-label="preDeleteHook" id="-1158308682%2FFunctions%2F2022000680" data-filterable-set=":sqlx4k-arrow/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-arrow/commonMain" data-filterable-set=":sqlx4k-arrow/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="index.html#-1158308682%2FFunctions%2F2022000680"><span>pre</span><wbr><span>Delete</span><wbr><span><span>Hook</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1158308682%2FFunctions%2F2022000680"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-arrow/commonMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="index.html#-1158308682%2FFunctions%2F2022000680"><span class="token function">preDeleteHook</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">entity<span class="token operator">: </span><a href="index.html">T</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="index.html">T</a></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-1028841276%2FFunctions%2F2022000680" anchor-label="preInsertHook" id="-1028841276%2FFunctions%2F2022000680" data-filterable-set=":sqlx4k-arrow/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-arrow/commonMain" data-filterable-set=":sqlx4k-arrow/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="index.html#-1028841276%2FFunctions%2F2022000680"><span>pre</span><wbr><span>Insert</span><wbr><span><span>Hook</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1028841276%2FFunctions%2F2022000680"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-arrow/commonMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="index.html#-1028841276%2FFunctions%2F2022000680"><span class="token function">preInsertHook</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">entity<span class="token operator">: </span><a href="index.html">T</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="index.html">T</a></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="1578213076%2FFunctions%2F2022000680" anchor-label="preUpdateHook" id="1578213076%2FFunctions%2F2022000680" data-filterable-set=":sqlx4k-arrow/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-arrow/commonMain" data-filterable-set=":sqlx4k-arrow/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="index.html#1578213076%2FFunctions%2F2022000680"><span>pre</span><wbr><span>Update</span><wbr><span><span>Hook</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1578213076%2FFunctions%2F2022000680"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-arrow/commonMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="index.html#1578213076%2FFunctions%2F2022000680"><span class="token function">preUpdateHook</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">entity<span class="token operator">: </span><a href="index.html">T</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="index.html">T</a></div></div></div>
                 </div>
               </div>
             </div>

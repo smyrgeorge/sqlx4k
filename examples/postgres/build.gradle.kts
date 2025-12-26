@@ -9,12 +9,8 @@ plugins {
 
 kotlin {
     sourceSets {
-        all {
-            languageSettings.enableLanguageFeature("ContextParameters")
-        }
         commonMain {
             dependencies {
-                implementation(project(":sqlx4k-arrow"))
                 implementation(project(":sqlx4k-postgres-pgmq"))
             }
             kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")

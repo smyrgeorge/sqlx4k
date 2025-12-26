@@ -39,7 +39,7 @@
             </a>        <button class="navigation-controls--btn navigation-controls--btn_toc ui-kit_mobile-only" id="toc-toggle" type="button">Toggle table of contents
         </button>
         <div class="navigation-controls--break ui-kit_mobile-only"></div>
-        <div class="library-version" id="library-version">1.5.2
+        <div class="library-version" id="library-version">1.5.3
         </div>
         <div class="navigation-controls">
         <ul class="filter-section filter-section_loading" id="filter-section" aria-label="Target filter">
@@ -148,7 +148,7 @@
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><div class="block"><div class="block"><span class="token annotation builtin">@</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-experimental-context-parameters/index.html"><span class="token annotation builtin">ExperimentalContextParameters</span></a></div></div><span class="token keyword">interface </span><a href="-context-crud-repository/index.html">ContextCrudRepository</a><span class="token operator">&lt;</span><a href="-context-crud-repository/index.html">T</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Interface defining a contract for basic CRUD (Create, Read, Update, Delete) operations on a data source.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><div class="block"><div class="block"><span class="token annotation builtin">@</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-experimental-context-parameters/index.html"><span class="token annotation builtin">ExperimentalContextParameters</span></a></div></div><span class="token keyword">interface </span><a href="-context-crud-repository/index.html">ContextCrudRepository</a><span class="token operator">&lt;</span><a href="-context-crud-repository/index.html">T</a><span class="token operator">&gt;</span> : <a href="-crud-repository-hooks/index.html">CrudRepositoryHooks</a><span class="token operator">&lt;</span><a href="-context-crud-repository/index.html">T</a><span class="token operator">&gt; </span></div><div class="brief "><p class="paragraph">Interface defining a contract for basic CRUD (Create, Read, Update, Delete) operations on a data source.</p></div></div></div>
                 </div>
               </div>
             </div>
@@ -163,7 +163,22 @@
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">interface </span><a href="-crud-repository/index.html">CrudRepository</a><span class="token operator">&lt;</span><a href="-crud-repository/index.html">T</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Interface defining a contract for basic CRUD (Create, Read, Update, Delete) operations on a data source.</p></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">interface </span><a href="-crud-repository/index.html">CrudRepository</a><span class="token operator">&lt;</span><a href="-crud-repository/index.html">T</a><span class="token operator">&gt;</span> : <a href="-crud-repository-hooks/index.html">CrudRepositoryHooks</a><span class="token operator">&lt;</span><a href="-crud-repository/index.html">T</a><span class="token operator">&gt; </span></div><div class="brief "><p class="paragraph">Defines a repository interface for performing CRUD operations on entities of type <a href="-crud-repository/index.html">T</a>.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="396101598%2FClasslikes%2F272526764" anchor-label="CrudRepositoryHooks" id="396101598%2FClasslikes%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="-crud-repository-hooks/index.html"><span>Crud</span><wbr><span>Repository</span><wbr><span><span>Hooks</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="396101598%2FClasslikes%2F272526764"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">interface </span><a href="-crud-repository-hooks/index.html">CrudRepositoryHooks</a><span class="token operator">&lt;</span><a href="-crud-repository-hooks/index.html">T</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Interface providing hooks for CRUD operations in a repository.</p></div></div></div>
                 </div>
               </div>
             </div>
@@ -301,6 +316,36 @@
               <div>
                 <div class="title">
                   <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">interface </span><a href="-transaction/index.html">Transaction</a> : <a href="-query-executor/index.html">QueryExecutor</a></div><div class="brief "><p class="paragraph">Represents a transaction in the system, providing methods to manage and execute transactional operations such as commit and rollback.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-912748623%2FClasslikes%2F272526764" anchor-label="ValueEncoder" id="-912748623%2FClasslikes%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="-value-encoder/index.html"><span>Value</span><wbr><span><span>Encoder</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-912748623%2FClasslikes%2F272526764"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">interface </span><a href="-value-encoder/index.html">ValueEncoder</a><span class="token operator">&lt;</span><a href="-value-encoder/index.html">T</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">An interface for encoding values of type <code class="lang-kotlin">T</code> into a format suitable for usage in database statements. Implementations of this interface will define how to convert a value of type <code class="lang-kotlin">T</code> into a type that can be safely and correctly used within a SQL statement.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="1754410484%2FClasslikes%2F272526764" anchor-label="ValueEncoderRegistry" id="1754410484%2FClasslikes%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="-value-encoder-registry/index.html"><span>Value</span><wbr><span>Encoder</span><wbr><span><span>Registry</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1754410484%2FClasslikes%2F272526764"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="-value-encoder-registry/index.html">ValueEncoderRegistry</a></div><div class="brief "><p class="paragraph">A singleton class responsible for managing a collection of <code class="lang-kotlin">ValueEncoder</code> instances. Each encoder is associated with a specific data type and is used to convert that type into a format suitable for use in database statements.</p></div></div></div>
                 </div>
               </div>
             </div>
