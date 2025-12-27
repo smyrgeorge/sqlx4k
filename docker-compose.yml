@@ -10,6 +10,15 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_USER=postgres
       - POSTGRES_DB=test
+    # Override default config:
+    # max_connections=500, shared_buffers=512MB
+    # Testing purposes only.
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=500"
+      - "-c"
+      - "shared_buffers=512MB"
   mysql:
     image: mysql
     platform: linux/arm64

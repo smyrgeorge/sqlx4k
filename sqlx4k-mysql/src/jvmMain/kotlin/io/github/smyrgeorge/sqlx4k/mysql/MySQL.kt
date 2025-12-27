@@ -85,7 +85,7 @@ class MySQL(
         try {
             pool.disposeLater().awaitFirstOrNull()
         } catch (e: Exception) {
-            SQLError(SQLError.Code.WorkerCrashed, e.message).ex()
+            SQLError(SQLError.Code.WorkerCrashed, e.message, e).ex()
         }
     }
 
@@ -102,7 +102,7 @@ class MySQL(
             val res = try {
                 createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message).ex()
+                SQLError(SQLError.Code.Database, e.message, e).ex()
             } finally {
                 close().awaitFirstOrNull()
             }
@@ -113,14 +113,13 @@ class MySQL(
     override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
         @Suppress("SqlSourceToSinkFlow")
         with(pool.acquire()) {
-            val res = try {
+            try {
                 createStatement(sql).execute().awaitSingle().toResultSet()
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message).ex()
+                SQLError(SQLError.Code.Database, e.message, e).ex()
             } finally {
                 close().awaitFirstOrNull()
             }
-            res
         }
     }
 
@@ -130,7 +129,7 @@ class MySQL(
                 beginTransaction().awaitFirstOrNull()
             } catch (e: Exception) {
                 close().awaitFirstOrNull()
-                SQLError(SQLError.Code.Database, e.message).ex()
+                SQLError(SQLError.Code.Database, e.message, e).ex()
             }
             R2dbcTransaction(this, true, encoders)
         }
@@ -143,7 +142,7 @@ class MySQL(
             when (e) {
                 is PoolShutdownException -> SQLError(SQLError.Code.PoolClosed, e.message).ex()
                 is PoolAcquireTimeoutException -> SQLError(SQLError.Code.PoolTimedOut, e.message).ex()
-                else -> SQLError(SQLError.Code.Pool, e.message).ex()
+                else -> SQLError(SQLError.Code.Pool, e.message, e).ex()
             }
         }
     }
@@ -193,16 +192,25 @@ class MySQL(
                 }
             }
 
-            return if (lock) doExecuteWithLock(sql) else doExecute(sql)
+            return try {
+                if (lock) doExecuteWithLock(sql) else doExecute(sql)
+            } catch (e: Exception) {
+                SQLError(SQLError.Code.Database, e.message, e).ex()
+            }
         }
 
         override suspend fun execute(sql: String): Result<Long> = execute(sql, true)
 
+        @Suppress("DuplicatedCode")
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
-                @Suppress("SqlSourceToSinkFlow")
-                connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
+                try {
+                    @Suppress("SqlSourceToSinkFlow")
+                    connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message).ex()
+                }
             }
         }
 
@@ -212,7 +220,7 @@ class MySQL(
                 try {
                     connection.beginTransaction().awaitFirstOrNull()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message).ex()
+                    SQLError(SQLError.Code.Database, e.message, e).ex()
                 }
                 R2dbcTransaction(connection, false, encoders)
             }
@@ -235,7 +243,7 @@ class MySQL(
                 try {
                     connection.commitTransaction().awaitFirstOrNull()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message).ex()
+                    SQLError(SQLError.Code.Database, e.message, e).ex()
                 } finally {
                     if (closeConnectionAfterTx) connection.close().awaitFirstOrNull()
                 }
@@ -249,7 +257,7 @@ class MySQL(
                 try {
                     connection.rollbackTransaction().awaitFirstOrNull()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message).ex()
+                    SQLError(SQLError.Code.Database, e.message, e).ex()
                 } finally {
                     if (closeConnectionAfterTx) connection.close().awaitFirstOrNull()
                 }
@@ -259,16 +267,25 @@ class MySQL(
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
                 assertIsOpen()
-                @Suppress("SqlSourceToSinkFlow")
-                connection.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
+                try {
+                    @Suppress("SqlSourceToSinkFlow")
+                    connection.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message, e).ex()
+                }
             }
         }
 
+        @Suppress("DuplicatedCode")
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
-                @Suppress("SqlSourceToSinkFlow")
-                connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
+                try {
+                    @Suppress("SqlSourceToSinkFlow")
+                    connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message, e).ex()
+                }
             }
         }
     }

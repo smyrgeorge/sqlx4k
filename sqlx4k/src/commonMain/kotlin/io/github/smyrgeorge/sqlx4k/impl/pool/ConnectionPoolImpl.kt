@@ -87,7 +87,8 @@ class ConnectionPoolImpl(
                 is TimeoutCancellationException -> {
                     SQLError(
                         code = SQLError.Code.PoolTimedOut,
-                        message = "Timed out waiting for connection after ${options.acquireTimeout}"
+                        message = "Timed out waiting for connection after ${options.acquireTimeout}",
+                        cause = error
                     ).ex()
                 }
 

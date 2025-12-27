@@ -55,7 +55,7 @@ class PostgreSQLImpl(
         try {
             pool.disposeLater().awaitFirstOrNull()
         } catch (e: Exception) {
-            SQLError(SQLError.Code.WorkerCrashed, e.message).ex()
+            SQLError(SQLError.Code.WorkerCrashed, e.message, e).ex()
         }
     }
 
@@ -72,7 +72,7 @@ class PostgreSQLImpl(
             val res = try {
                 createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message).ex()
+                SQLError(SQLError.Code.Database, e.message, e).ex()
             } finally {
                 close().awaitFirstOrNull()
             }
@@ -83,14 +83,13 @@ class PostgreSQLImpl(
     override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
         @Suppress("SqlSourceToSinkFlow")
         with(pool.acquire()) {
-            val res = try {
+            try {
                 createStatement(sql).execute().awaitSingle().toResultSet()
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message).ex()
+                SQLError(SQLError.Code.Database, e.message, e).ex()
             } finally {
                 close().awaitFirstOrNull()
             }
-            res
         }
     }
 
@@ -100,7 +99,7 @@ class PostgreSQLImpl(
                 beginTransaction().awaitFirstOrNull()
             } catch (e: Exception) {
                 close().awaitFirstOrNull()
-                SQLError(SQLError.Code.Database, e.message).ex()
+                SQLError(SQLError.Code.Database, e.message, e).ex()
             }
             R2dbcTransaction(this, true, encoders)
         }
@@ -198,9 +197,9 @@ class PostgreSQLImpl(
             create().awaitSingle()
         } catch (e: Exception) {
             when (e) {
-                is PoolShutdownException -> SQLError(SQLError.Code.PoolClosed, e.message).ex()
-                is PoolAcquireTimeoutException -> SQLError(SQLError.Code.PoolTimedOut, e.message).ex()
-                else -> SQLError(SQLError.Code.Pool, e.message).ex()
+                is PoolShutdownException -> SQLError(SQLError.Code.PoolClosed, e.message, e).ex()
+                is PoolAcquireTimeoutException -> SQLError(SQLError.Code.PoolTimedOut, e.message, e).ex()
+                else -> SQLError(SQLError.Code.Pool, e.message, e).ex()
             }
         }
     }
@@ -250,16 +249,25 @@ class PostgreSQLImpl(
                 }
             }
 
-            return if (lock) doExecuteWithLock(sql) else doExecute(sql)
+            return try {
+                if (lock) doExecuteWithLock(sql) else doExecute(sql)
+            } catch (e: Exception) {
+                SQLError(SQLError.Code.Database, e.message, e).ex()
+            }
         }
 
         override suspend fun execute(sql: String): Result<Long> = execute(sql, true)
 
+        @Suppress("DuplicatedCode")
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
-                @Suppress("SqlSourceToSinkFlow")
-                connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
+                try {
+                    @Suppress("SqlSourceToSinkFlow")
+                    connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message, e).ex()
+                }
             }
         }
 
@@ -269,7 +277,7 @@ class PostgreSQLImpl(
                 try {
                     connection.beginTransaction().awaitFirstOrNull()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message).ex()
+                    SQLError(SQLError.Code.Database, e.message, e).ex()
                 }
                 R2dbcTransaction(connection, false, encoders)
             }
@@ -292,7 +300,7 @@ class PostgreSQLImpl(
                 try {
                     connection.commitTransaction().awaitFirstOrNull()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message).ex()
+                    SQLError(SQLError.Code.Database, e.message, e).ex()
                 } finally {
                     if (closeConnectionAfterTx) connection.close().awaitFirstOrNull()
                 }
@@ -306,7 +314,7 @@ class PostgreSQLImpl(
                 try {
                     connection.rollbackTransaction().awaitFirstOrNull()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message).ex()
+                    SQLError(SQLError.Code.Database, e.message, e).ex()
                 } finally {
                     if (closeConnectionAfterTx) connection.close().awaitFirstOrNull()
                 }
@@ -316,16 +324,25 @@ class PostgreSQLImpl(
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
                 assertIsOpen()
-                @Suppress("SqlSourceToSinkFlow")
-                connection.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
+                try {
+                    @Suppress("SqlSourceToSinkFlow")
+                    connection.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message, e).ex()
+                }
             }
         }
 
+        @Suppress("DuplicatedCode")
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
-                @Suppress("SqlSourceToSinkFlow")
-                connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
+                try {
+                    @Suppress("SqlSourceToSinkFlow")
+                    connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message, e).ex()
+                }
             }
         }
     }

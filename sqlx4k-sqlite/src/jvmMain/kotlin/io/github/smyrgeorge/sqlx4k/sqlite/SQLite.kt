@@ -70,7 +70,7 @@ class SQLite(
         try {
             connection.execute(sql).getOrThrow()
         } catch (e: Exception) {
-            SQLError(SQLError.Code.Database, e.message).ex()
+            SQLError(SQLError.Code.Database, e.message, e).ex()
         } finally {
             connection.close()
         }
@@ -81,7 +81,7 @@ class SQLite(
         try {
             connection.fetchAll(sql).getOrThrow()
         } catch (e: Exception) {
-            SQLError(SQLError.Code.Database, e.message).ex()
+            SQLError(SQLError.Code.Database, e.message, e).ex()
         } finally {
             connection.close()
         }
@@ -95,7 +95,7 @@ class SQLite(
             PooledTransaction(tx, connection)
         } catch (e: Exception) {
             connection.close()
-            SQLError(SQLError.Code.Database, e.message).ex()
+            SQLError(SQLError.Code.Database, e.message, e).ex()
         }
     }
 
@@ -123,27 +123,37 @@ class SQLite(
             return Result.success(Unit)
         }
 
+        @Suppress("DuplicatedCode")
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
                 assertIsOpen()
-                withContext(Dispatchers.IO) {
-                    @Suppress("SqlSourceToSinkFlow")
-                    connection.createStatement().use { statement ->
-                        statement.executeUpdate(sql).toLong()
+                try {
+                    withContext(Dispatchers.IO) {
+                        @Suppress("SqlSourceToSinkFlow")
+                        connection.createStatement().use { statement ->
+                            statement.executeUpdate(sql).toLong()
+                        }
                     }
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message).ex()
                 }
             }
         }
 
+        @Suppress("DuplicatedCode")
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
-                withContext(Dispatchers.IO) {
-                    @Suppress("SqlSourceToSinkFlow")
-                    connection.createStatement().use { stmt ->
-                        stmt.executeQuery(sql).toResultSet()
-                    }
-                }.toResult()
+                try {
+                    withContext(Dispatchers.IO) {
+                        @Suppress("SqlSourceToSinkFlow")
+                        connection.createStatement().use { stmt ->
+                            stmt.executeQuery(sql).toResultSet()
+                        }
+                    }.toResult()
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message).ex()
+                }
             }
         }
 
@@ -154,7 +164,7 @@ class SQLite(
                     try {
                         connection.autoCommit = false
                     } catch (e: Exception) {
-                        SQLError(SQLError.Code.Database, e.message).ex()
+                        SQLError(SQLError.Code.Database, e.message, e).ex()
                     }
                     JdbcTransaction(connection, false, encoders)
                 }
@@ -180,7 +190,7 @@ class SQLite(
                         connection.commit()
                         connection.autoCommit = true
                     } catch (e: Exception) {
-                        SQLError(SQLError.Code.Database, e.message).ex()
+                        SQLError(SQLError.Code.Database, e.message, e).ex()
                     } finally {
                         if (closeConnectionAfterTx) connection.close()
                     }
@@ -197,7 +207,7 @@ class SQLite(
                         connection.rollback()
                         connection.autoCommit = true
                     } catch (e: Exception) {
-                        SQLError(SQLError.Code.Database, e.message).ex()
+                        SQLError(SQLError.Code.Database, e.message, e).ex()
                     } finally {
                         if (closeConnectionAfterTx) connection.close()
                     }
@@ -205,27 +215,37 @@ class SQLite(
             }
         }
 
+        @Suppress("DuplicatedCode")
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
                 assertIsOpen()
-                withContext(Dispatchers.IO) {
-                    @Suppress("SqlSourceToSinkFlow")
-                    connection.createStatement().use { statement ->
-                        statement.executeUpdate(sql).toLong()
+                try {
+                    withContext(Dispatchers.IO) {
+                        @Suppress("SqlSourceToSinkFlow")
+                        connection.createStatement().use { statement ->
+                            statement.executeUpdate(sql).toLong()
+                        }
                     }
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message).ex()
                 }
             }
         }
 
+        @Suppress("DuplicatedCode")
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
-                withContext(Dispatchers.IO) {
-                    @Suppress("SqlSourceToSinkFlow")
-                    connection.createStatement().use { stmt ->
-                        stmt.executeQuery(sql).toResultSet()
-                    }
-                }.toResult()
+                try {
+                    withContext(Dispatchers.IO) {
+                        @Suppress("SqlSourceToSinkFlow")
+                        connection.createStatement().use { stmt ->
+                            stmt.executeQuery(sql).toResultSet()
+                        }
+                    }.toResult()
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message).ex()
+                }
             }
         }
     }
