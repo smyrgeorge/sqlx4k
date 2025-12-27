@@ -114,7 +114,10 @@ interface QueryExecutor {
         suspend fun <T> transaction(f: suspend Transaction.() -> T): T {
             val tx: Transaction = begin().getOrThrow()
             val res = try {
-                f(tx)
+                when (val r = f(tx)) {
+                    is Result<*> if r.isFailure -> throw r.exceptionOrNull()!! // Trigger rollback
+                    else -> r
+                }
             } catch (e: Throwable) {
                 tx.rollback().onFailure { rollbackError ->
                     e.addSuppressed(
@@ -135,6 +138,20 @@ interface QueryExecutor {
 
             return res
         }
+
+        /**
+         * Executes a transactional operation within a safe context, returning the result as a [Result].
+         *
+         * This method wraps the execution of a transactional block, ensuring that any exceptions or failures
+         * encountered during the operation are captured and returned as part of a [Result] object. It is useful
+         * for safely managing transactions without explicitly handling rollback or commit logic within the caller's context.
+         *
+         * @param T The type of the result produced by the transactional operation.
+         * @param f A suspend function that defines the transactional operations to be performed.
+         *          The function is executed with the started transaction as the receiver.
+         * @return A [Result] containing either the successful result of the transactional block or an exception if the operation fails.
+         */
+        suspend fun <T> transactionCatching(f: suspend Transaction.() -> T): Result<T> = runCatching { transaction(f) }
     }
 
     /**
