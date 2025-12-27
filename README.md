@@ -53,6 +53,7 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 - [Running queries](#running-queries)
 - [Prepared statements (named and positional parameters)](#prepared-statements)
 - [Row mappers](#rowmappers)
+- [Custom Value Converters](#custom-value-converters)
 - [Transactions and coroutine TransactionContext](#transactions) · [TransactionContext (coroutines)](#transactioncontext-coroutines)
 - [Code generation: CRUD and @Repository implementations](#code-generation-crud-and-repository-implementations)
     - [Auto-Generated RowMapper](#auto-generated-rowmapper)
@@ -280,6 +281,45 @@ object Sqlx4kRowMapper : RowMapper<Sqlx4k> {
 }
 
 val res: List<Sqlx4k> = db.fetchAll("select * from sqlx4k limit 100;", Sqlx4kRowMapper).getOrThrow()
+```
+
+### Custom Value Converters
+
+For custom types that don't have builtin decoders, you can register custom `ValueEncoder` implementations. A
+`ValueEncoder` provides bidirectional conversion between your custom type and the database representation.
+
+**Creating a Custom Encoder:**
+
+```kotlin
+// Define your custom type
+data class Money(val amount: BigDecimal, val currency: String) {
+    override fun toString(): String = "$amount $currency"
+
+    companion object {
+        fun parse(value: String): Money {
+            val parts = value.split(" ")
+            return Money(BigDecimal(parts[0]), parts[1])
+        }
+    }
+}
+
+// Create a ValueEncoder for your type
+object MoneyEncoder : ValueEncoder<Money> {
+    override fun encode(value: Money): Any = value.toString()
+    override fun decode(value: ResultSet.Row.Column): Money = Money.parse(value.asString())
+}
+```
+
+**Registering and Using Custom Encoders:**
+
+```kotlin
+// Create a registry and register your encoder
+val registry = ValueEncoderRegistry()
+    .register<Money>(MoneyEncoder)
+
+// Use the registry when mapping rows
+val mapper = Sqlx4kAutoRowMapper
+val entity = mapper.map(row, registry)
 ```
 
 ### Transactions
