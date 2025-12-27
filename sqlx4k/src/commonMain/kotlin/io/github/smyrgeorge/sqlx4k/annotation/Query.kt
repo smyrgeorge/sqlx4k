@@ -1,5 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.annotation
 
+import org.intellij.lang.annotations.Language
+
 /**
  * Annotation used to define a database query for repository methods.
  *
@@ -9,4 +11,8 @@ package io.github.smyrgeorge.sqlx4k.annotation
  */
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.SOURCE)
-annotation class Query(val value: String, val checkSyntax: Boolean = true, val checkSchema: Boolean = true)
+annotation class Query(
+    @Language("SQL") val value: String,
+    val checkSyntax: Boolean = true,
+    val checkSchema: Boolean = true
+)
