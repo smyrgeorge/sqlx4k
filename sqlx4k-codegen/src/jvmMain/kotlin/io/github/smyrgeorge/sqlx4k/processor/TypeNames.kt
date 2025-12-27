@@ -60,6 +60,7 @@ object TypeNames {
     val DB_RESULT = io.github.smyrgeorge.sqlx4k.arrow.impl.extensions.DbResult::class.qualifiedName!!
     const val TO_DB_RESULT = "io.github.smyrgeorge.sqlx4k.arrow.impl.extensions.toDbResult"
     val ROW_MAPPER = RowMapper::class.qualifiedName!!
+    val AUTO_ROW_MAPPER = io.github.smyrgeorge.sqlx4k.annotation.Repository.AutoRowMapper::class.qualifiedName!!
     val VALUE_ENCODER_REGISTRY = ValueEncoderRegistry::class.qualifiedName!!
     val RESULT_SET = ResultSet::class.qualifiedName!!
 

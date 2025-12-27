@@ -431,7 +431,7 @@ data class Sqlx4k(
     val test: String
 )
 
-@Repository(mapper = Sqlx4kRowMapper::class)
+@Repository
 interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
     // The processor will validate the SQL syntax in the @Query methods.
     // If you want to disable this validation, you can set the "validate-sql-syntax" arg to "false".
@@ -449,6 +449,11 @@ interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
 > [!NOTE]
 > Besides your @Query methods, because your interface extends `CrudRepository<T>`, the generator also adds the CRUD
 > helper methods automatically: `insert`, `update`, `delete`, and `save`.
+
+> [!NOTE]
+> By default, the code generator automatically uses the auto-generated `RowMapper` for your entity (e.g.,
+> `Sqlx4kAutoRowMapper`). You can override this behavior by explicitly providing a custom mapper:
+> `@Repository(mapper = CustomRowMapper::class)`.
 
 Then in your code you can use it like:
 
@@ -516,7 +521,7 @@ To enable this mode:
 Repository interface example with context receivers:
 
 ```kotlin
-@Repository(mapper = Sqlx4kRowMapper::class)
+@Repository
 interface Sqlx4kRepository : ContextCrudRepository<Sqlx4k> {
     @Query("SELECT * FROM sqlx4k WHERE id = :id")
     context(context: QueryExecutor)

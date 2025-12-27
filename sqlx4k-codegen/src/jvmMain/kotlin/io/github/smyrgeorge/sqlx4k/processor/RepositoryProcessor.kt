@@ -260,9 +260,24 @@ class RepositoryProcessor(
 
         val mapperArg: KSValueArgument? = repoAnn.arguments.firstOrNull { it.name?.asString() == "mapper" }
         val mapperKSType = mapperArg?.value as? KSType
-            ?: error("@Repository must declare a mapper, e.g. @Repository(mapper = FooRowMapper::class) on ${repo.qualifiedName()}")
-        val mapperTypeName = mapperKSType.declaration.qualifiedName()
-            ?: error("Unable to resolve mapper type for ${repo.qualifiedName()}")
+
+        // Determine the mapper type name
+        val mapperTypeName = if (mapperKSType == null) {
+            // No mapper specified - use auto-generated mapper (default behavior)
+            val domainSimpleName = domainDecl.simpleName.asString()
+            "${domainSimpleName}AutoRowMapper"
+        } else {
+            val mapperQualifiedName = mapperKSType.declaration.qualifiedName()
+                ?: error("Unable to resolve mapper type for ${repo.qualifiedName()}")
+
+            // Check if using AutoRowMapper explicitly - if so, use the auto-generated mapper
+            if (mapperQualifiedName == TypeNames.AUTO_ROW_MAPPER) {
+                val domainSimpleName = domainDecl.simpleName.asString()
+                "${domainSimpleName}AutoRowMapper"
+            } else {
+                mapperQualifiedName
+            }
+        }
         return Quadraple(domainDecl, mapperTypeName, useContextParameters, useArrow)
     }
 

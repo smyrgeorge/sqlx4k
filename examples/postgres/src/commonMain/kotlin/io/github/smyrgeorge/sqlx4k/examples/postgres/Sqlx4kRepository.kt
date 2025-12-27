@@ -5,7 +5,7 @@ import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.annotation.Query
 import io.github.smyrgeorge.sqlx4k.annotation.Repository
 
-@Repository(mapper = Sqlx4kRowMapper::class)
+@Repository
 interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
     @Query("SELECT * FROM sqlx4k WHERE id = :id")
     suspend fun findOneById(context: QueryExecutor, id: Int): Result<Sqlx4k?>
