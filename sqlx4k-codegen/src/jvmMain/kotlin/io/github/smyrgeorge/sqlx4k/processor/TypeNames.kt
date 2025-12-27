@@ -40,6 +40,9 @@ object TypeNames {
     const val SQL_ERROR = "io.github.smyrgeorge.sqlx4k.SQLError"
     const val DB_RESULT = "io.github.smyrgeorge.sqlx4k.arrow.impl.extensions.DbResult"
     const val TO_DB_RESULT = "io.github.smyrgeorge.sqlx4k.arrow.impl.extensions.toDbResult"
+    const val ROW_MAPPER = "io.github.smyrgeorge.sqlx4k.RowMapper"
+    const val VALUE_ENCODER_REGISTRY = "io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry"
+    const val RESULT_SET = "io.github.smyrgeorge.sqlx4k.ResultSet"
 
     // Kotlin stdlib
     const val KOTLIN_RESULT = "kotlin.Result"

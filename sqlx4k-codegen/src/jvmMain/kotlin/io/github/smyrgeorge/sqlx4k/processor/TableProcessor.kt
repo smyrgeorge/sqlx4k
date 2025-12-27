@@ -11,8 +11,16 @@ class TableProcessor(
     private val codeGenerator: CodeGenerator,
 ) : SymbolProcessor {
 
-    private val dialect: String = when (options[DIALECT_OPTION]?.lowercase()) {
+    private val dialect: String = options[DIALECT_OPTION]?.lowercase() ?: "generic"
+
+    private val queryDialect: String = when (dialect) {
         "mysql" -> "mysql"
+        else -> "generic"
+    }
+
+    private val rowMapperDialect: String = when (dialect) {
+        "mysql" -> "mysql"
+        "postgres", "postgresql" -> "postgres"
         else -> "generic"
     }
 
@@ -42,9 +50,16 @@ class TableProcessor(
             @Suppress("DuplicatedCode")
             file += "@file:Suppress(\"unused\", \"RemoveRedundantQualifierName\", \"SqlNoDataSourceInspection\", \"SqlDialectInspection\")\n\n"
             file += "package $outputPackage\n\n"
+            file += "import ${TypeNames.RESULT_SET}\n"
+            file += "import ${TypeNames.ROW_MAPPER}\n"
             file += "import ${TypeNames.STATEMENT}\n"
+            file += "import ${TypeNames.VALUE_ENCODER_REGISTRY}\n"
+            file += "import io.github.smyrgeorge.sqlx4k.impl.extensions.*\n"
+            if (rowMapperDialect == "postgres") {
+                file += "import io.github.smyrgeorge.sqlx4k.postgres.extensions.*\n"
+            }
 
-            symbol.accept(Visitor(file), Unit)
+            symbol.accept(Visitor(file, queryDialect, rowMapperDialect), Unit)
 
             file.close()
         }
@@ -53,7 +68,11 @@ class TableProcessor(
         return unableToProcess
     }
 
-    inner class Visitor(private val file: OutputStream) : KSVisitorVoid() {
+    inner class Visitor(
+        private val file: OutputStream,
+        private val queryDialect: String,
+        private val rowMapperDialect: String
+    ) : KSVisitorVoid() {
 
         override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
             // Getting the @Table annotation object.
@@ -77,6 +96,9 @@ class TableProcessor(
             insert(tableName, classDeclaration, properties)
             update(tableName, classDeclaration, properties)
             delete(tableName, classDeclaration, properties)
+
+            // Generate RowMapper.
+            rowMapper(classDeclaration, properties)
         }
 
         /**
@@ -143,7 +165,7 @@ class TableProcessor(
             file += " */\n"
             file += "fun ${clazz.qualifiedName?.asString()}.insert(): Statement {\n"
             file += "    // language=SQL\n"
-            file += if (dialect == "mysql") {
+            file += if (this@Visitor.queryDialect == "mysql") {
                 // For MySQL, use LAST_INSERT_ID() since RETURNING is not supported
                 val idProp =
                     allProps.find { it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION } }
@@ -161,7 +183,7 @@ class TableProcessor(
             insertProps.forEachIndexed { index, property ->
                 file += "    statement.bind($index, ${property})\n"
             }
-            if (dialect == "mysql") {
+            if (this@Visitor.queryDialect == "mysql") {
                 val idProp =
                     allProps.find { it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION } }
                 if (idProp != null) {
@@ -233,7 +255,7 @@ class TableProcessor(
             file += " */\n"
             file += "fun ${clazz.qualifiedName()}.update(): Statement {\n"
             file += "    // language=SQL\n"
-            file += if (dialect == "mysql") {
+            file += if (this@Visitor.queryDialect == "mysql") {
                 "    val sql = \"update $table set ${updateProps.joinToString { p -> "${p.toSnakeCase()} = ?" }} where ${
                     id.simpleName().toSnakeCase()
                 } = ?; select $returningColumns from $table where ${id.simpleName().toSnakeCase()} = ?;\"\n"
@@ -248,7 +270,7 @@ class TableProcessor(
                 file += "    statement.bind($index, ${property})\n"
             }
             file += "    statement.bind(${updateProps.size}, ${id.simpleName()})\n"
-            if (dialect == "mysql") {
+            if (this@Visitor.queryDialect == "mysql") {
                 file += "    statement.bind(${updateProps.size + 1}, ${id.simpleName()})\n"
             }
             file += "    return statement\n"
@@ -292,6 +314,134 @@ class TableProcessor(
             file += "    statement.bind(0, ${id.simpleName()})\n"
             file += "    return statement\n"
             file += "}\n"
+        }
+
+        /**
+         * Generates a RowMapper implementation for the given class declaration.
+         *
+         * @param clazz The class declaration for which to generate the RowMapper.
+         * @param props The sequence of properties from the class.
+         */
+        private fun rowMapper(
+            clazz: KSClassDeclaration,
+            props: Sequence<KSPropertyDeclaration>
+        ) {
+            val className = clazz.simpleName.asString()
+            val qualifiedName = clazz.qualifiedName()
+            val mapperName = "${className}AutoRowMapper"
+
+            file += "\n"
+            file += "/**\n"
+            file += " * Auto-generated RowMapper for [$qualifiedName].\n"
+            file += " *\n"
+            file += " * Maps database rows to instances of [$className] using builtin decoders\n"
+            file += " * for standard types and the provided ValueEncoderRegistry for custom types.\n"
+            file += " */\n"
+            file += "object $mapperName : RowMapper<$qualifiedName> {\n"
+            file += "    override fun map(row: ResultSet.Row): $qualifiedName =\n"
+            file += "        map(row, ValueEncoderRegistry.EMPTY)\n"
+            file += "\n"
+            file += "    override fun map(row: ResultSet.Row, converters: ValueEncoderRegistry): $qualifiedName {\n"
+
+            // Generate property mappings
+            val properties = props.toList()
+            properties.forEach { prop ->
+                val propName = prop.simpleName()
+                val columnName = propName.toSnakeCase()
+                val propType = prop.type.resolve()
+                val isNullable = propType.isMarkedNullable
+
+                file += "        val $propName = row.get(\"$columnName\")"
+                file += generateDecoder(prop, propType, isNullable)
+                file += "\n"
+            }
+
+            // Generate the return statement
+            file += "        return $qualifiedName(\n"
+            properties.forEachIndexed { index, prop ->
+                val propName = prop.simpleName()
+                val comma = if (index < properties.size - 1) "," else ""
+                file += "            $propName = $propName$comma\n"
+            }
+            file += "        )\n"
+            file += "    }\n"
+            file += "}\n"
+        }
+
+        /**
+         * Generates the decoder expression for a property based on its type.
+         *
+         * @param prop The property declaration.
+         * @param propType The resolved type of the property.
+         * @param isNullable Whether the type is nullable.
+         * @return The decoder expression as a string (e.g., ".asString()", ".asIntOrNull()").
+         */
+        private fun generateDecoder(
+            prop: KSPropertyDeclaration,
+            propType: KSType,
+            isNullable: Boolean
+        ): String {
+            val typeQualifiedName = propType.declaration.qualifiedName?.asString()
+                ?: error("No type name found for $propType")
+
+            val nullSuffix = if (isNullable) "OrNull" else ""
+
+            // Check for builtin types
+            val builtinDecoder = when (typeQualifiedName) {
+                "kotlin.String" -> "asString$nullSuffix()"
+                "kotlin.Char" -> "asChar$nullSuffix()"
+                "kotlin.Int" -> "asInt$nullSuffix()"
+                "kotlin.UInt" -> "asUInt$nullSuffix()"
+                "kotlin.Long" -> "asLong$nullSuffix()"
+                "kotlin.ULong" -> "asULong$nullSuffix()"
+                "kotlin.Short" -> "asShort$nullSuffix()"
+                "kotlin.UShort" -> "asUShort$nullSuffix()"
+                "kotlin.Float" -> "asFloat$nullSuffix()"
+                "kotlin.Double" -> "asDouble$nullSuffix()"
+                "kotlin.Boolean" -> "asBoolean$nullSuffix()"
+                "kotlin.uuid.Uuid" -> "asUuid$nullSuffix()"
+                "kotlinx.datetime.LocalDate" -> "asLocalDate$nullSuffix()"
+                "kotlinx.datetime.LocalTime" -> "asLocalTime$nullSuffix()"
+                "kotlinx.datetime.LocalDateTime" -> "asLocalDateTime$nullSuffix()"
+                "kotlin.time.Instant" -> "asInstant$nullSuffix()"
+                "kotlin.ByteArray" -> "asByteArray$nullSuffix()"
+                else -> null
+            }
+
+            if (builtinDecoder != null) {
+                return ".$builtinDecoder"
+            }
+
+            // Check for PostgreSQL-specific array types
+            if (this@Visitor.rowMapperDialect == "postgres") {
+                val postgresArrayDecoder = when (typeQualifiedName) {
+                    "kotlin.BooleanArray" -> "asBooleanArray$nullSuffix()"
+                    "kotlin.ShortArray" -> "asShortArray$nullSuffix()"
+                    "kotlin.IntArray" -> "asIntArray$nullSuffix()"
+                    "kotlin.LongArray" -> "asLongArray$nullSuffix()"
+                    "kotlin.FloatArray" -> "asFloatArray$nullSuffix()"
+                    "kotlin.DoubleArray" -> "asDoubleArray$nullSuffix()"
+                    else -> null
+                }
+
+                if (postgresArrayDecoder != null) {
+                    return ".$postgresArrayDecoder"
+                }
+            }
+
+            // Check if it's an enum
+            val declaration = propType.declaration
+            if (declaration is KSClassDeclaration && declaration.classKind == ClassKind.ENUM_CLASS) {
+                return ".asEnum$nullSuffix<$typeQualifiedName>()"
+            }
+
+            // Use custom decoder from registry
+            val propName = prop.simpleName()
+            return if (isNullable) {
+                ".let { col -> converters.get<$typeQualifiedName>()?.decode(col) ?: error(\"No decoder found for type $typeQualifiedName (property: $propName)\") }"
+            } else {
+                ".let { col -> converters.get<$typeQualifiedName>()?.decode(col) ?: error(\"No decoder found for type $typeQualifiedName (property: $propName)\") }"
+            }
         }
     }
 
