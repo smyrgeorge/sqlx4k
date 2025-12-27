@@ -1,21 +1,40 @@
 package io.github.smyrgeorge.sqlx4k.processor
 
+import io.github.smyrgeorge.sqlx4k.ContextCrudRepository
+import io.github.smyrgeorge.sqlx4k.CrudRepository
+import io.github.smyrgeorge.sqlx4k.QueryExecutor
+import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.RowMapper
+import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
+import io.github.smyrgeorge.sqlx4k.annotation.Column
+import io.github.smyrgeorge.sqlx4k.annotation.Id
+import io.github.smyrgeorge.sqlx4k.annotation.Query
+import io.github.smyrgeorge.sqlx4k.annotation.Repository
+import io.github.smyrgeorge.sqlx4k.annotation.Table
+import io.github.smyrgeorge.sqlx4k.arrow.ArrowContextCrudRepository
+import io.github.smyrgeorge.sqlx4k.arrow.ArrowCrudRepository
+
 /**
  * Centralized fully qualified names used by codegen processors to avoid magic strings.
  */
 object TypeNames {
     // Annotations
-    const val REPOSITORY_ANNOTATION = "io.github.smyrgeorge.sqlx4k.annotation.Repository"
-    const val TABLE_ANNOTATION = "io.github.smyrgeorge.sqlx4k.annotation.Table"
-    const val ID_ANNOTATION = "io.github.smyrgeorge.sqlx4k.annotation.Id"
-    const val COLUMN_ANNOTATION = "io.github.smyrgeorge.sqlx4k.annotation.Column"
-    const val QUERY_ANNOTATION = "io.github.smyrgeorge.sqlx4k.annotation.Query"
+    val REPOSITORY_ANNOTATION = Repository::class.qualifiedName!!
+    val TABLE_ANNOTATION = Table::class.qualifiedName!!
+    val ID_ANNOTATION = Id::class.qualifiedName!!
+    val COLUMN_ANNOTATION = Column::class.qualifiedName!!
+    val QUERY_ANNOTATION = Query::class.qualifiedName!!
 
     // Core interfaces/classes
-    const val CRUD_REPOSITORY = "io.github.smyrgeorge.sqlx4k.CrudRepository"
-    const val CONTEXT_CRUD_REPOSITORY = "io.github.smyrgeorge.sqlx4k.ContextCrudRepository"
-    const val ARROW_CRUD_REPOSITORY = "io.github.smyrgeorge.sqlx4k.arrow.ArrowCrudRepository"
-    const val ARROW_CONTEXT_CRUD_REPOSITORY = "io.github.smyrgeorge.sqlx4k.arrow.ArrowContextCrudRepository"
+    val CRUD_REPOSITORY = CrudRepository::class.qualifiedName!!
+
+    @OptIn(ExperimentalContextParameters::class)
+    val CONTEXT_CRUD_REPOSITORY = ContextCrudRepository::class.qualifiedName!!
+    val ARROW_CRUD_REPOSITORY = ArrowCrudRepository::class.qualifiedName!!
+    @OptIn(ExperimentalContextParameters::class)
+    val ARROW_CONTEXT_CRUD_REPOSITORY = ArrowContextCrudRepository::class.qualifiedName!!
 
     val REPOSITORY_TYPE_NAMES = setOf(
         CRUD_REPOSITORY,
@@ -35,18 +54,18 @@ object TypeNames {
     )
 
     // Sqlx4k types
-    const val QUERY_EXECUTOR = "io.github.smyrgeorge.sqlx4k.QueryExecutor"
-    const val STATEMENT = "io.github.smyrgeorge.sqlx4k.Statement"
-    const val SQL_ERROR = "io.github.smyrgeorge.sqlx4k.SQLError"
-    const val DB_RESULT = "io.github.smyrgeorge.sqlx4k.arrow.impl.extensions.DbResult"
+    val QUERY_EXECUTOR = QueryExecutor::class.qualifiedName!!
+    val STATEMENT = Statement::class.qualifiedName!!
+    val SQL_ERROR = SQLError::class.qualifiedName!!
+    val DB_RESULT = io.github.smyrgeorge.sqlx4k.arrow.impl.extensions.DbResult::class.qualifiedName!!
     const val TO_DB_RESULT = "io.github.smyrgeorge.sqlx4k.arrow.impl.extensions.toDbResult"
-    const val ROW_MAPPER = "io.github.smyrgeorge.sqlx4k.RowMapper"
-    const val VALUE_ENCODER_REGISTRY = "io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry"
-    const val RESULT_SET = "io.github.smyrgeorge.sqlx4k.ResultSet"
+    val ROW_MAPPER = RowMapper::class.qualifiedName!!
+    val VALUE_ENCODER_REGISTRY = ValueEncoderRegistry::class.qualifiedName!!
+    val RESULT_SET = ResultSet::class.qualifiedName!!
 
     // Kotlin stdlib
-    const val KOTLIN_RESULT = "kotlin.Result"
-    const val KOTLIN_LIST = "kotlin.collections.List"
-    const val KOTLIN_LONG = "kotlin.Long"
-    const val KOTLIN_INT = "kotlin.Int"
+    val KOTLIN_RESULT = Result::class.qualifiedName!!
+    val KOTLIN_LIST = List::class.qualifiedName!!
+    val KOTLIN_LONG = Long::class.qualifiedName!!
+    val KOTLIN_INT = Int::class.qualifiedName!!
 }

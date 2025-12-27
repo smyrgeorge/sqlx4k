@@ -55,6 +55,7 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 - [Row mappers](#rowmappers)
 - [Transactions and coroutine TransactionContext](#transactions) · [TransactionContext (coroutines)](#transactioncontext-coroutines)
 - [Code generation: CRUD and @Repository implementations](#code-generation-crud-and-repository-implementations)
+    - [Auto-Generated RowMapper](#auto-generated-rowmapper)
     - [Context-Parameters](#context-parameters)
     - [List of Repository interfaces](#list-of-repository-interfaces)
     - [SQL syntax validation (compile-time)](#sql-syntax-validation-compile-time)
@@ -362,10 +363,9 @@ plugins {
 // Then you need to configure the processor (it will generate the necessary code files).
 ksp {
     // Optional: pick the SQL dialect for CRUD generation from @Table classes.
-    // Currently, only "mysql" is special-cased; everything else falls back to a generic ANSI-like dialect.
-    // This setting affects the shape of INSERT/UPDATE/DELETE that TableProcessor emits.
-    // It does NOT affect @Query validation (see notes below).
+    // Supported dialects:
     // arg("dialect", "mysql")
+    // arg("dialect", "postgresql")
 
     // Required: where to place the generated sources.
     arg("output-package", "io.github.smyrgeorge.sqlx4k.examples.postgres")
@@ -421,6 +421,44 @@ val res: List<Sqlx4k> = Sqlx4kRepositoryImpl.selectAll(db).getOrThrow()
 ```
 
 For more details, take a look at the [examples](./examples).
+
+#### Auto-Generated RowMapper
+
+When you annotate a class with `@Table`, the code generator automatically creates a `RowMapper` implementation for
+mapping database rows to your entity. The mapper is named `{ClassName}AutoRowMapper` and is generated in the same file
+as your CRUD queries.
+
+For example, for a class named `Sqlx4k`, the generator creates `Sqlx4kAutoRowMapper`:
+
+```kotlin
+object Sqlx4kAutoRowMapper : RowMapper<Sqlx4k> {
+    override fun map(row: ResultSet.Row): Sqlx4k =
+        map(row, ValueEncoderRegistry.EMPTY)
+
+    override fun map(row: ResultSet.Row, converters: ValueEncoderRegistry): Sqlx4k {
+        val id = row.get("id").asInt()
+        val test = row.get("test").asString()
+        return Sqlx4k(id = id, test = test)
+    }
+}
+```
+
+**Dialect-Specific Decoders:**
+
+When using PostgreSQL, set the dialect in your KSP configuration to enable PostgreSQL-specific decoders:
+
+```kotlin
+ksp {
+    arg("dialect", "postgresql")  // Enables PostgreSQL array decoders
+    arg("output-package", "io.github.smyrgeorge.sqlx4k.examples.postgres")
+}
+```
+
+Supported dialects:
+
+- `"postgresql"` - Enables PostgreSQL-specific extensions (array types)
+- `"mysql"` - Adjusts CRUD query generation for MySQL compatibility
+- Default (or `"generic"`) - Uses standard SQL with builtin decoders
 
 #### Context-Parameters
 

@@ -11,7 +11,8 @@ kotlin {
         }
         jvmMain {
             dependencies {
-                api(project(":sqlx4k"))
+                implementation(project(":sqlx4k"))
+                implementation(project(":sqlx4k-arrow"))
                 implementation(libs.ksp)
                 implementation(libs.jsqlparser)
                 implementation(libs.calcite.core)

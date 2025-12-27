@@ -11,17 +11,22 @@ class TableProcessor(
     private val codeGenerator: CodeGenerator,
 ) : SymbolProcessor {
 
-    private val dialect: String = options[DIALECT_OPTION]?.lowercase() ?: "generic"
-
-    private val queryDialect: String = when (dialect) {
-        "mysql" -> "mysql"
-        else -> "generic"
+    private val dialect: Dialect = when (options[DIALECT_OPTION]?.lowercase()) {
+        "mysql" -> Dialect.MySQL
+        "postgres", "postgresql" -> Dialect.PostgreSQL
+        "sqlite" -> Dialect.SQLite
+        else -> Dialect.Generic
     }
 
-    private val rowMapperDialect: String = when (dialect) {
-        "mysql" -> "mysql"
-        "postgres", "postgresql" -> "postgres"
-        else -> "generic"
+    private val queryDialect: Dialect = when (dialect) {
+        Dialect.MySQL -> Dialect.MySQL
+        else -> Dialect.Generic
+    }
+
+    private val rowMapperDialect: Dialect = when (dialect) {
+        Dialect.MySQL -> Dialect.MySQL
+        Dialect.PostgreSQL -> Dialect.PostgreSQL
+        else -> Dialect.Generic
     }
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
@@ -55,7 +60,7 @@ class TableProcessor(
             file += "import ${TypeNames.STATEMENT}\n"
             file += "import ${TypeNames.VALUE_ENCODER_REGISTRY}\n"
             file += "import io.github.smyrgeorge.sqlx4k.impl.extensions.*\n"
-            if (rowMapperDialect == "postgres") {
+            if (rowMapperDialect == Dialect.PostgreSQL) {
                 file += "import io.github.smyrgeorge.sqlx4k.postgres.extensions.*\n"
             }
 
@@ -70,8 +75,8 @@ class TableProcessor(
 
     inner class Visitor(
         private val file: OutputStream,
-        private val queryDialect: String,
-        private val rowMapperDialect: String
+        private val queryDialect: Dialect,
+        private val rowMapperDialect: Dialect
     ) : KSVisitorVoid() {
 
         override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
@@ -165,10 +170,11 @@ class TableProcessor(
             file += " */\n"
             file += "fun ${clazz.qualifiedName?.asString()}.insert(): Statement {\n"
             file += "    // language=SQL\n"
-            file += if (this@Visitor.queryDialect == "mysql") {
+            file += if (this@Visitor.queryDialect == Dialect.MySQL) {
                 // For MySQL, use LAST_INSERT_ID() since RETURNING is not supported
-                val idProp =
-                    allProps.find { it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION } }
+                val idProp = allProps.find {
+                    it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
+                }
                 if (idProp == null) {
                     logger.warn("MySQL dialect selected but no @Id found on $table. Generating INSERT without fetch.")
                     "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }}) values (${insertProps.joinToString { "?" }});\"\n"
@@ -180,12 +186,11 @@ class TableProcessor(
                 "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }}) values (${insertProps.joinToString { "?" }}) returning $returningColumns;\"\n"
             }
             file += "    val statement = Statement.create(sql)\n"
-            insertProps.forEachIndexed { index, property ->
-                file += "    statement.bind($index, ${property})\n"
-            }
-            if (this@Visitor.queryDialect == "mysql") {
-                val idProp =
-                    allProps.find { it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION } }
+            insertProps.forEachIndexed { index, property -> file += "    statement.bind($index, ${property})\n" }
+            if (this@Visitor.queryDialect == Dialect.MySQL) {
+                val idProp = allProps.find {
+                    it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
+                }
                 if (idProp != null) {
                     file += "    statement.bind(${insertProps.size}, ${idProp.simpleName()})\n"
                 }
@@ -255,7 +260,7 @@ class TableProcessor(
             file += " */\n"
             file += "fun ${clazz.qualifiedName()}.update(): Statement {\n"
             file += "    // language=SQL\n"
-            file += if (this@Visitor.queryDialect == "mysql") {
+            file += if (this@Visitor.queryDialect == Dialect.MySQL) {
                 "    val sql = \"update $table set ${updateProps.joinToString { p -> "${p.toSnakeCase()} = ?" }} where ${
                     id.simpleName().toSnakeCase()
                 } = ?; select $returningColumns from $table where ${id.simpleName().toSnakeCase()} = ?;\"\n"
@@ -270,7 +275,7 @@ class TableProcessor(
                 file += "    statement.bind($index, ${property})\n"
             }
             file += "    statement.bind(${updateProps.size}, ${id.simpleName()})\n"
-            if (this@Visitor.queryDialect == "mysql") {
+            if (this@Visitor.queryDialect == Dialect.MySQL) {
                 file += "    statement.bind(${updateProps.size + 1}, ${id.simpleName()})\n"
             }
             file += "    return statement\n"
@@ -413,7 +418,7 @@ class TableProcessor(
             }
 
             // Check for PostgreSQL-specific array types
-            if (this@Visitor.rowMapperDialect == "postgres") {
+            if (this@Visitor.rowMapperDialect == Dialect.PostgreSQL) {
                 val postgresArrayDecoder = when (typeQualifiedName) {
                     "kotlin.BooleanArray" -> "asBooleanArray$nullSuffix()"
                     "kotlin.ShortArray" -> "asShortArray$nullSuffix()"
