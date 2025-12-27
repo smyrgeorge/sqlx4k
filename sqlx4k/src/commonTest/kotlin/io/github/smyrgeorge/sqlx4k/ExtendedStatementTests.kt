@@ -162,6 +162,7 @@ class ExtendedStatementTests {
         class CustomType(val value: String)
         class CustomTypeEncoder : ValueEncoder<CustomType> {
             override fun encode(value: CustomType): Any = value.value
+            override fun decode(value: ResultSet.Row.Column): CustomType = CustomType(value.asString())
         }
 
         val encoders = ValueEncoderRegistry()

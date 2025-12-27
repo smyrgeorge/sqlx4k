@@ -4,6 +4,7 @@ import assertk.all
 import assertk.assertThat
 import assertk.assertions.contains
 import assertk.assertions.doesNotContain
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
 import kotlin.test.Test
 
 class StatementCollectionsTests {
@@ -103,9 +104,8 @@ class StatementCollectionsTests {
 
         // Custom encoder for Product that extracts the id
         class ProductEncoder : ValueEncoder<Product> {
-            override fun encode(value: Product): Any {
-                return value.id
-            }
+            override fun encode(value: Product): Any = value.id
+            override fun decode(value: ResultSet.Row.Column): Product = Product(value.asInt(), "")
         }
 
         // Register the encoder

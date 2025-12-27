@@ -3,6 +3,7 @@ package io.github.smyrgeorge.sqlx4k
 import assertk.all
 import assertk.assertThat
 import assertk.assertions.contains
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
 import kotlin.test.Test
 import kotlin.test.assertFails
 
@@ -102,9 +103,8 @@ class StatementBasicTests {
         class Test(val id: Int)
 
         class TestEncoder : ValueEncoder<Test> {
-            override fun encode(value: Test): Any {
-                return value.id
-            }
+            override fun encode(value: Test): Any = value.id
+            override fun decode(value: ResultSet.Row.Column): Test = Test(value.asInt())
         }
 
         val encoders = ValueEncoderRegistry().register(TestEncoder())
