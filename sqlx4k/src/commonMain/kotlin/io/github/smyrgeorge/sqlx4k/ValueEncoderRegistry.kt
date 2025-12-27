@@ -3,9 +3,12 @@ package io.github.smyrgeorge.sqlx4k
 import kotlin.reflect.KClass
 
 /**
- * A singleton class responsible for managing a collection of `ValueEncoder` instances.
+ * A registry for managing a collection of `ValueEncoder` instances.
  * Each encoder is associated with a specific data type and is used to convert that type
  * into a format suitable for use in database statements.
+ *
+ * Note: This class is not thread-safe. If concurrent access is required, external
+ * synchronization should be applied.
  */
 class ValueEncoderRegistry {
     private val encoders: MutableMap<KClass<*>, ValueEncoder<*>> = mutableMapOf()
@@ -21,6 +24,13 @@ class ValueEncoderRegistry {
         encoders[type] as ValueEncoder<Any>?
 
     /**
+     * Retrieves a `ValueEncoder` associated with the reified type `T`.
+     *
+     * @return The `ValueEncoder` instance associated with type `T`, or null if none is found.
+     */
+    inline fun <reified T : Any> get(): ValueEncoder<Any>? = get(T::class)
+
+    /**
      * Registers a `ValueEncoder` for a specific type within the `ValueEncoderRegistry`.
      *
      * @param type The `KClass` of the type for which the encoder is being registered.
@@ -33,15 +43,13 @@ class ValueEncoderRegistry {
     }
 
     /**
-     * Unregisters a `ValueEncoder` for the specified type.
+     * Registers a `ValueEncoder` for the reified type `T`.
      *
-     * @param type The `KClass` of the type for which the encoder should be unregistered.
-     * @return The `ValueEncoderRegistry` instance after the encoder has been removed.
+     * @param encoder The `ValueEncoder` instance to associate with type `T`.
+     * @return The `ValueEncoderRegistry` instance after the encoder has been registered.
      */
-    fun unregister(type: KClass<*>): ValueEncoderRegistry {
-        encoders.remove(type)
-        return this
-    }
+    inline fun <reified T : Any> register(encoder: ValueEncoder<T>): ValueEncoderRegistry =
+        register(T::class, encoder)
 
     companion object {
         /**

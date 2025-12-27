@@ -165,7 +165,7 @@ class ExtendedStatementTests {
         }
 
         val encoders = ValueEncoderRegistry()
-            .register(CustomType::class, CustomTypeEncoder())
+            .register(CustomTypeEncoder())
 
         val sql = "SELECT * FROM data WHERE custom_field = $1"
         val customValue = CustomType("custom_value")

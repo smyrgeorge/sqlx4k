@@ -107,7 +107,7 @@ class StatementBasicTests {
             }
         }
 
-        val encoders = ValueEncoderRegistry().register(Test::class, TestEncoder())
+        val encoders = ValueEncoderRegistry().register(TestEncoder())
 
         val sql = "select * from sqlx4k where id = :id"
         val res = Statement.create(sql)

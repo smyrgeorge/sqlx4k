@@ -109,7 +109,7 @@ class StatementCollectionsTests {
         }
 
         // Register the encoder
-        val encoders = ValueEncoderRegistry().register(Product::class, ProductEncoder())
+        val encoders = ValueEncoderRegistry().register(ProductEncoder())
 
         // List of products
         val products = listOf(
