@@ -65,7 +65,7 @@ interface QueryExecutor {
      * @return A Result containing a list of instances of type T mapped from the query result set.
      */
     suspend fun <T> fetchAll(sql: String, rowMapper: RowMapper<T>): Result<List<T>> = runCatching {
-        fetchAll(sql).getOrThrow().let { rowMapper.map(it) }
+        fetchAll(sql).getOrThrow().let { rowMapper.map(it, encoders) }
     }
 
     /**
