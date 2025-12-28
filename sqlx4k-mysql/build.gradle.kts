@@ -19,7 +19,6 @@ kotlin {
                 implementation(libs.kotlin.test)
                 implementation(libs.assertk)
                 implementation(libs.kotlinx.io.core)
-                implementation(libs.arrow.core)
             }
         }
         jvmMain {

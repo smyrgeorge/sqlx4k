@@ -1,6 +1,5 @@
 package io.github.smyrgeorge.sqlx4k
 
-import arrow.core.Either
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import kotlin.time.Duration
@@ -100,41 +99,23 @@ interface QueryExecutor {
         suspend fun begin(): Result<Transaction>
 
         /**
-         * Executes a transactional operation, managing commit or rollback automatically.
+         * Begins (with default isolation level) a transactional operation and executes the provided block of code within the transaction context.
          *
-         * This method begins a new transaction, executes the provided suspend function
-         * within the context of that transaction, and ensures that the transaction is either
-         * committed or rolled back based on the outcome of the operation.
+         * This method starts a new transaction, allowing the caller to perform a series of operations within
+         * a transactional context. If the block of code completes successfully, the transaction is committed.
+         * In case of an exception, the transaction is rolled back.
          *
-         * **Special Return Type Handling:**
-         * - If [f] returns `Result.failure`, the transaction is rolled back and the exception is thrown
-         * - If [f] returns `Result.success(value)`, the transaction is committed and `value` is returned
-         * - If [f] returns `Either.Left`, the transaction is rolled back and:
-         *   - If Left contains a Throwable, it is thrown
-         *   - If Left contains another type, it is wrapped in SQLError(UknownError) and thrown
-         * - If [f] returns `Either.Right(value)`, the transaction is committed and `value` is returned
-         * - For any other return type, the transaction is committed and the value is returned as-is
-         *
-         * Any exceptions thrown during the operation trigger a rollback.
-         *
-         * @param T The type of the result produced by the transactional operation.
-         * @param f A suspend function that defines the transactional operations to be performed.
-         *          The function is executed with the started transaction as the receiver.
-         * @return The result of the transactional operation.
-         * @throws Throwable if the operation fails or if commit/rollback encounters an issue.
+         * @param T The return type of the operation executed within the transaction.
+         * @param f A suspend function representing the transactional operations to be performed.
+         *          It is invoked with the started transaction as the receiver.
+         * @return The result of the operation performed within the transaction context.
+         * @throws Throwable Rethrows any exception encountered during the execution of the transactional block.
          */
         suspend fun <T> transaction(f: suspend Transaction.() -> T): T {
             val tx: Transaction = begin().getOrThrow()
             val res = try {
                 when (val r = f(tx)) {
-                    // Trigger rollback for Result or Either.
-                    is Result<*> if r.isFailure ->
-                        throw r.exceptionOrNull()!!
-
-                    is Either<*, *> if r.isLeft() ->
-                        throw (r.leftOrNull() as? Throwable
-                            ?: SQLError(SQLError.Code.UknownError, r.leftOrNull().toString()))
-
+                    is Result<*> if r.isFailure -> throw r.exceptionOrNull()!! // Trigger rollback
                     else -> r
                 }
             } catch (e: Throwable) {
@@ -159,18 +140,16 @@ interface QueryExecutor {
         }
 
         /**
-         * Executes a transactional operation and safely wraps the result in a [Result].
+         * Executes a transactional operation within a safe context, returning the result as a [Result].
          *
-         * This method begins a new transaction and runs the provided suspend function within the
-         * context of that transaction. It captures any exceptions that occur during the operation,
-         * ensuring they are wrapped in a [Result.Failure]. The transaction is automatically committed
-         * if the operation succeeds or rolled back if an exception is thrown.
+         * This method wraps the execution of a transactional block, ensuring that any exceptions or failures
+         * encountered during the operation are captured and returned as part of a [Result] object. It is useful
+         * for safely managing transactions without explicitly handling rollback or commit logic within the caller's context.
          *
          * @param T The type of the result produced by the transactional operation.
-         * @param f A suspend function defining the transactional operations to be performed.
+         * @param f A suspend function that defines the transactional operations to be performed.
          *          The function is executed with the started transaction as the receiver.
-         * @return A [Result] containing the result of the transactional operation, or a failure
-         *         if an exception occurred during the transaction or commit process.
+         * @return A [Result] containing either the successful result of the transactional block or an exception if the operation fails.
          */
         suspend fun <T> transactionCatching(f: suspend Transaction.() -> T): Result<T> = runCatching { transaction(f) }
     }

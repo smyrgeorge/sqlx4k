@@ -16,7 +16,6 @@ kotlin {
             dependencies {
                 api(libs.kotlinx.coroutines.core)
                 api(libs.kotlinx.datetime)
-                implementation(libs.arrow.core)
                 implementation(libs.kotlinx.io.core)
                 implementation(libs.jetbrains.annotations)
             }
