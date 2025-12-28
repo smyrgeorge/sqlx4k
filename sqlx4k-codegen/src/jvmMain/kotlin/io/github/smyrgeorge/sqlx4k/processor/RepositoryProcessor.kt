@@ -164,7 +164,7 @@ class RepositoryProcessor(
         name.startsWith("deleteBy") -> Prefix.DELETE_BY
         name.startsWith("countBy") -> Prefix.COUNT_BY
         name.startsWith("execute") -> Prefix.EXECUTE
-        else -> error("Invalid repository method name '$name'. Must be one of: findAll, deleteAll, countAll or start with: findAllBy, findOneBy, deleteBy, countBy, execute.")
+        else -> error("Invalid repository method name '$name'. Must start with one of: findAll, deleteAll, countAll or start with: findAllBy, findOneBy, deleteBy, countBy, execute.")
     }
 
     /**
@@ -290,11 +290,10 @@ class RepositoryProcessor(
             val hasExplicitContextParam = params.any { p ->
                 val pType = p.type.resolve()
                 val qn = pType.declaration.qualifiedName()
-                val pName = p.name?.asString()
-                qn == TypeNames.QUERY_EXECUTOR && pName == "context"
+                qn == TypeNames.QUERY_EXECUTOR
             }
             if (hasExplicitContextParam) {
-                error("Repository method '$name' must not declare parameter 'context: ${TypeNames.QUERY_EXECUTOR}' when using context parameters")
+                error("Repository method '$name' must not declare parameter of type'${TypeNames.QUERY_EXECUTOR}' when using context parameters")
             }
             return
         }
@@ -336,14 +335,14 @@ class RepositoryProcessor(
         // Check the return type.
         if (useArrow) {
             if (resultQName != TypeNames.DB_RESULT)
-                error("Repository method '$name' must return ${TypeNames.DB_RESULT}<...> when using context parameters but returns '$returnType'")
+                error("Repository method '$name' must return ${TypeNames.DB_RESULT}<...> but returns '$returnType'")
         } else {
             if (resultQName != TypeNames.KOTLIN_RESULT)
-                error("Repository method '$name' must return kotlin.Result<...> but returns '$returnType'")
+                error("Repository method '$name' must return ${TypeNames.KOTLIN_RESULT}<...> but returns '$returnType'")
         }
 
         val r0 = returnType.arguments.firstOrNull()?.type?.resolve()
-            ?: error("Repository method '$name' must return kotlin.Result<...> with a type argument")
+            ?: error("Repository method '$name' must return ${TypeNames.KOTLIN_RESULT}<...> with a type argument")
 
         fun ensureDomain(inner: KSType, allowNullable: Boolean) {
             val innerDecl = inner.declaration as? KSClassDeclaration
