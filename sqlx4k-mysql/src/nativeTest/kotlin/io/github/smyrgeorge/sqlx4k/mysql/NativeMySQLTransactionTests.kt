@@ -52,4 +52,29 @@ class NativeMySQLTransactionTests {
     fun `TransactionContext withCurrent should create new when none exists`() {
         runner.`TransactionContext withCurrent should create new when none exists`()
     }
+
+    @Test
+    fun `transaction should rollback when returning Result failure`() {
+        runner.`transaction should rollback when returning Result failure`()
+    }
+
+    @Test
+    fun `transaction should rollback when returning Either Left`() {
+        runner.`transaction should rollback when returning Either Left`()
+    }
+
+    @Test
+    fun `transaction should rollback when returning Either Left with non-Throwable`() {
+        runner.`transaction should rollback when returning Either Left with non-Throwable`()
+    }
+
+    @Test
+    fun `transaction should commit when returning Either Right`() {
+        runner.`transaction should commit when returning Either Right`()
+    }
+
+    @Test
+    fun `transaction should commit when returning successful Result`() {
+        runner.`transaction should commit when returning successful Result`()
+    }
 }
