@@ -84,20 +84,11 @@ class RepositoryProcessor(
             fnsAll
                 .filter { fn -> fn.annotations.any { it.qualifiedName() == TypeNames.QUERY_ANNOTATION } }
                 .forEach { fn ->
-                    val queryAnn = fn.annotations.first { it.qualifiedName() == TypeNames.QUERY_ANNOTATION }
-                    val localCheckSyntax = queryAnn.arguments
-                        .firstOrNull { it.name?.asString() == "checkSyntax" }
-                        ?.value as? Boolean ?: true
-                    val localCheckSchema = queryAnn.arguments
-                        .firstOrNull { it.name?.asString() == "checkSchema" }
-                        ?.value as? Boolean ?: true
-                    val doCheckSyntax = globalCheckSqlSyntax && localCheckSyntax
-                    val doCheckSchema = globalCheckSqlSchema && localCheckSchema
                     emitQueryMethod(
                         file = file,
                         fn = fn,
-                        validateSyntax = doCheckSyntax,
-                        validateSchema = doCheckSchema,
+                        globalCheckSqlSyntax = globalCheckSqlSyntax,
+                        globalCheckSqlSchema = globalCheckSqlSchema,
                         mapperTypeName = mapperTypeName,
                         domainDecl = domainDecl,
                         useContextParameters = useContextParameters,
@@ -479,8 +470,8 @@ class RepositoryProcessor(
      *
      * @param file The output stream where the generated method will be written.
      * @param fn The function declaration representing the annotated method.
-     * @param validateSyntax A flag indicating whether the SQL syntax should be validated.
-     * @param validateSchema A flag indicating whether the SQL query should be validated against the schema.
+     * @param globalCheckSqlSyntax A flag indicating whether the SQL syntax should be validated.
+     * @param globalCheckSqlSchema A flag indicating whether the SQL query should be validated against the schema.
      * @param mapperTypeName The name of the mapper used for mapping query results.
      * @param domainDecl The class declaration representing the domain entity associated with this repository.
      * @param useContextParameters A flag indicating whether context parameters are used in the generated method.
@@ -489,8 +480,8 @@ class RepositoryProcessor(
     private fun emitQueryMethod(
         file: OutputStream,
         fn: KSFunctionDeclaration,
-        validateSyntax: Boolean,
-        validateSchema: Boolean,
+        globalCheckSqlSyntax: Boolean,
+        globalCheckSqlSchema: Boolean,
         mapperTypeName: String,
         domainDecl: KSClassDeclaration,
         useContextParameters: Boolean,
@@ -500,9 +491,20 @@ class RepositoryProcessor(
         val prefix: Prefix = parseMethodPrefix(name)
         logger.info("[RepositoryProcessor] Generating @Query method: $name")
 
-        val sql: String = fn.annotations.first { it.qualifiedName() == TypeNames.QUERY_ANNOTATION }
-            .arguments.firstOrNull { it.name?.asString() == "value" }
-            ?.value as? String
+        // Extract query annotation
+        val queryAnn = fn.annotations.first { it.qualifiedName() == TypeNames.QUERY_ANNOTATION }
+        val localCheckSyntax = queryAnn.arguments
+            .firstOrNull { it.name?.asString() == "checkSyntax" }
+            ?.value as? Boolean ?: true
+        val localCheckSchema = queryAnn.arguments
+            .firstOrNull { it.name?.asString() == "checkSchema" }
+            ?.value as? Boolean ?: true
+        // Extract validation flags.
+        val validateSyntax = globalCheckSqlSyntax && localCheckSyntax
+        val validateSchema = globalCheckSqlSchema && localCheckSchema
+
+        val sql: String = queryAnn.arguments
+            .firstOrNull { it.name?.asString() == "value" }?.value as? String
             ?: error("Unable to generate query method (could not extract sql query from the @Query): $fn")
 
         val params = fn.parameters
