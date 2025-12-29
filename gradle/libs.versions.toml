@@ -41,7 +41,7 @@ sqlite-jdbc = "3.51.1.0"
 # https://github.com/arrow-kt/arrow
 arrow = "2.2.1.1"
 # https://mvnrepository.com/artifact/org.jetbrains/annotations/26.0.2
-jetbrains = "26.0.2"
+jetbrains = "26.0.2-1"
 
 [libraries]
 gradle-kotlin-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
