@@ -1,8 +1,12 @@
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq
 
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.Duration
@@ -22,19 +26,19 @@ import kotlin.time.Duration.Companion.seconds
  * @property options Configuration options for the consumer behavior, such as queue name,
  * prefetch size, visibility timeout, and retry delays.
  * @property onMessage A suspendable callback invoked to process each message received from the queue.
- * @property onFaiToRead A suspendable callback invoked when a failure occurs while reading messages from the queue.
+ * @property onFailToRead A suspendable callback invoked when a failure occurs while reading messages from the queue.
  * @property onFailToProcess A suspendable callback invoked when a failure occurs while processing a message.
- * @property onFaiToAck A suspendable callback invoked when a failure occurs while acknowledging (ack) a message.
- * @property onFaiToNack A suspendable callback invoked when a failure occurs while negative acknowledging (nack) a message.
+ * @property onFailToAck A suspendable callback invoked when a failure occurs while acknowledging (ack) a message.
+ * @property onFailToNack A suspendable callback invoked when a failure occurs while negative acknowledging (nack) a message.
  */
 class PgMqConsumer(
     private val pgmq: PgMqClient,
     private val options: Options,
     private val onMessage: suspend (Message) -> Unit,
-    private val onFaiToRead: suspend (Throwable) -> Unit = {},
+    private val onFailToRead: suspend (Throwable) -> Unit = {},
     private val onFailToProcess: suspend (Throwable) -> Unit = {},
-    private val onFaiToAck: suspend (Throwable) -> Unit = {},
-    private val onFaiToNack: suspend (Throwable) -> Unit = {},
+    private val onFailToAck: suspend (Throwable) -> Unit = {},
+    private val onFailToNack: suspend (Throwable) -> Unit = {},
 ) {
     private var notifyJob: Job? = null
     private var fetchJob: Job? = null
@@ -86,10 +90,10 @@ class PgMqConsumer(
                     runCatching { onFailToProcess(f) }
                     val step = options.messageRetryDelayStep * msg.readCt
                     val vt = step.coerceAtMost(options.messageMaxRetryDelay)
-                    pgmq.nack(options.queue, msg.msgId, vt).onFailure { runCatching { onFaiToNack(it) } }
+                    pgmq.nack(options.queue, msg.msgId, vt).onFailure { runCatching { onFailToNack(it) } }
                 }
                 res.onSuccess {
-                    pgmq.ack(options.queue, msg.msgId).onFailure { runCatching { onFaiToAck(it) } }
+                    pgmq.ack(options.queue, msg.msgId).onFailure { runCatching { onFailToAck(it) } }
                 }
             }
         }
@@ -99,7 +103,7 @@ class PgMqConsumer(
         fetchJob = PgChannelScope.launch {
             while (true) {
                 val messages = pgmq.read(options.queue, options.prefetch, options.vtBias).getOrElse {
-                    onFaiToRead(it)
+                    onFailToRead(it)
                     emptyList()
                 }
                 if (messages.isNotEmpty()) {
@@ -128,7 +132,7 @@ class PgMqConsumer(
      * - The fetching delay job (`fetchDelayJob`) that controls delays between fetch operations and resets the fetch delay to zero.
      * - The fetching job (`fetchJob`) responsible for retrieving messages from the queue.
      *
-     * Delays are applied during the stopping process to ensure proper shutdown and cleanup of resources.
+     * Delays are applied during the stopping process to ensure a proper shutdown and cleanup of resources.
      */
     fun stop() {
         PgChannelScope.launch {

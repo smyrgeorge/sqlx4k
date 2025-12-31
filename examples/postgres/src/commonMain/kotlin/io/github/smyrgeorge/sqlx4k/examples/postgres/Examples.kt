@@ -58,10 +58,10 @@ object Examples {
             pgmq = pgmq,
             options = PgMqConsumer.Options(queue = queue.name, enableNotifyInsert = true),
             onMessage = { println("Message received: $it") },
-            onFaiToRead = { println("Error (onFaiToRead): $it") },
+            onFailToRead = { println("Error (onFailToRead): $it") },
             onFailToProcess = { println("Error (onFailToProcess): $it") },
-            onFaiToAck = { println("Error (onFaiToAck): $it") },
-            onFaiToNack = { println("Error (onFaiToNack): $it") },
+            onFailToAck = { println("Error (onFailToAck): $it") },
+            onFailToNack = { println("Error (onFailToNack): $it") },
         )
 
         println("$consumer started.")
