@@ -554,9 +554,12 @@ following hooks:
 
 **Entity-Level Hooks:**
 
-- `preInsertHook(entity: T): T` - Called before an entity is inserted
-- `preUpdateHook(entity: T): T` - Called before an entity is updated
-- `preDeleteHook(entity: T): T` - Called before an entity is deleted
+- `preInsertHook(context: QueryExecutor, entity: T): T` - Called before an entity is inserted
+- `preUpdateHook(context: QueryExecutor, entity: T): T` - Called before an entity is updated
+- `preDeleteHook(context: QueryExecutor, entity: T): T` - Called before an entity is deleted
+- `afterInsertHook(context: QueryExecutor, entity: T): T` - Called after an entity is inserted
+- `afterUpdateHook(context: QueryExecutor, entity: T): T` - Called after an entity is updated
+- `afterDeleteHook(context: QueryExecutor, entity: T): T` - Called after an entity is deleted
 
 **Query-Level Hook:**
 

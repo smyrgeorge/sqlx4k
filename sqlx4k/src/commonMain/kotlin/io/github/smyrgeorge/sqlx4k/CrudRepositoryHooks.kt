@@ -15,28 +15,61 @@ interface CrudRepositoryHooks<T> {
      * This method provides a hook that is invoked before an entity is inserted into the data source.
      * It allows for preprocessing or modifications to the entity prior to the insertion.
      *
+     * @param context The query executor (database connection or transaction)
      * @param entity The entity of type [T] that is about to be inserted.
      * @return The processed or unmodified entity of type [T].
      */
-    suspend fun preInsertHook(entity: T): T = entity
+    suspend fun preInsertHook(context: QueryExecutor, entity: T): T = entity
 
     /**
      * Provides a hook that is invoked before an entity is updated in the data source.
      * This method allows for preprocessing or modifications to the entity prior to the update operation.
      *
+     * @param context The query executor (database connection or transaction)
      * @param entity The entity of type [T] that is about to be updated.
      * @return The processed or unmodified entity of type [T].
      */
-    suspend fun preUpdateHook(entity: T): T = entity
+    suspend fun preUpdateHook(context: QueryExecutor, entity: T): T = entity
 
     /**
      * This method provides a hook that is invoked before an entity is deleted from the data source.
      * It allows for preprocessing or modifications to the entity prior to the deletion operation.
      *
+     * @param context The query executor (database connection or transaction)
      * @param entity The entity of type [T] that is about to be deleted.
      * @return The processed or unmodified entity of type [T].
      */
-    suspend fun preDeleteHook(entity: T): T = entity
+    suspend fun preDeleteHook(context: QueryExecutor, entity: T): T = entity
+
+    /**
+     * This method provides a hook that is invoked after an entity is inserted into the data source.
+     * It allows for post-processing or modifications to the entity after the insertion.
+     *
+     * @param context The query executor (database connection or transaction)
+     * @param entity The entity of type [T] that was inserted (with generated values populated).
+     * @return The processed or unmodified entity of type [T].
+     */
+    suspend fun afterInsertHook(context: QueryExecutor, entity: T): T = entity
+
+    /**
+     * This method provides a hook that is invoked after an entity is updated in the data source.
+     * It allows for post-processing or modifications to the entity after the update operation.
+     *
+     * @param context The query executor (database connection or transaction)
+     * @param entity The entity of type [T] that was updated.
+     * @return The processed or unmodified entity of type [T].
+     */
+    suspend fun afterUpdateHook(context: QueryExecutor, entity: T): T = entity
+
+    /**
+     * This method provides a hook that is invoked after an entity is deleted from the data source.
+     * It allows for post-processing operations after the deletion.
+     *
+     * @param context The query executor (database connection or transaction)
+     * @param entity The entity of type [T] that was deleted.
+     * @return The processed or unmodified entity of type [T].
+     */
+    suspend fun afterDeleteHook(context: QueryExecutor, entity: T): T = entity
 
     /**
      * This method provides an around-style hook that wraps query execution.
