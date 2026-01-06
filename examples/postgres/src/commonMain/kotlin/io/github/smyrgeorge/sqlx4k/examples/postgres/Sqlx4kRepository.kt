@@ -2,6 +2,7 @@ package io.github.smyrgeorge.sqlx4k.examples.postgres
 
 import io.github.smyrgeorge.sqlx4k.CrudRepository
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
+import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.annotation.Query
 import io.github.smyrgeorge.sqlx4k.annotation.Repository
 
@@ -20,6 +21,10 @@ interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
 interface AuditableRepository<T> : CrudRepository<T> {
     override suspend fun preInsertHook(context: QueryExecutor, entity: T): T {
         return entity
+    }
+
+    override suspend fun <R> aroundQuery(method: String, statement: Statement, block: suspend () -> R): R {
+        return block()
     }
 }
 

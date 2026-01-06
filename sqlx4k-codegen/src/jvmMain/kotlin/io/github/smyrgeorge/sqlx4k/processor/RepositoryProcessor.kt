@@ -92,7 +92,8 @@ class RepositoryProcessor(
                         mapperTypeName = mapperTypeName,
                         domainDecl = domainDecl,
                         useContextParameters = useContextParameters,
-                        useArrow = useArrow
+                        useArrow = useArrow,
+                        repo = repo
                     )
                 }
 
@@ -485,7 +486,8 @@ class RepositoryProcessor(
         mapperTypeName: String,
         domainDecl: KSClassDeclaration,
         useContextParameters: Boolean,
-        useArrow: Boolean
+        useArrow: Boolean,
+        repo: KSClassDeclaration
     ) {
         val name = fn.simpleName()
         val prefix: Prefix = parseMethodPrefix(name)
@@ -557,17 +559,27 @@ class RepositoryProcessor(
             if (useContextParameters) "context"
             else params.firstOrNull()?.name?.asString() ?: "context"
 
+        val hasAroundQueryHook = isHookOverridden(repo, "aroundQuery")
+
         when (prefix) {
             Prefix.FIND_ALL, Prefix.FIND_ALL_BY -> {
-                file += "        aroundQuery(\"$name\", statement) {\n"
-                file += "            $contextParamName.fetchAll(statement, $mapperTypeName)\n"
-                file += "        }\n"
+                if (hasAroundQueryHook) {
+                    file += "        aroundQuery(\"$name\", statement) {\n"
+                    file += "            $contextParamName.fetchAll(statement, $mapperTypeName)\n"
+                    file += "        }\n"
+                } else {
+                    file += "        $contextParamName.fetchAll(statement, $mapperTypeName)\n"
+                }
             }
 
             Prefix.FIND_ONE_BY -> {
-                file += "        aroundQuery(\"$name\", statement) {\n"
-                file += "            $contextParamName.fetchAll(statement, $mapperTypeName)\n"
-                file += "        }.map { list ->\n"
+                if (hasAroundQueryHook) {
+                    file += "        aroundQuery(\"$name\", statement) {\n"
+                    file += "            $contextParamName.fetchAll(statement, $mapperTypeName)\n"
+                    file += "        }.map { list ->\n"
+                } else {
+                    file += "        $contextParamName.fetchAll(statement, $mapperTypeName).map { list ->\n"
+                }
                 file += "            when (list.size) {\n"
                 file += "                0 -> null\n"
                 file += "                1 -> list.first()\n"
@@ -577,15 +589,23 @@ class RepositoryProcessor(
             }
 
             Prefix.DELETE_ALL, Prefix.DELETE_BY, Prefix.EXECUTE -> {
-                file += "        aroundQuery(\"$name\", statement) {\n"
-                file += "            $contextParamName.execute(statement)\n"
-                file += "        }\n"
+                if (hasAroundQueryHook) {
+                    file += "        aroundQuery(\"$name\", statement) {\n"
+                    file += "            $contextParamName.execute(statement)\n"
+                    file += "        }\n"
+                } else {
+                    file += "        $contextParamName.execute(statement)\n"
+                }
             }
 
             Prefix.COUNT_ALL, Prefix.COUNT_BY -> {
-                file += "        aroundQuery(\"$name\", statement) {\n"
-                file += "            $contextParamName.fetchAll(statement)\n"
-                file += "        }.map { rs ->\n"
+                if (hasAroundQueryHook) {
+                    file += "        aroundQuery(\"$name\", statement) {\n"
+                    file += "            $contextParamName.fetchAll(statement)\n"
+                    file += "        }.map { rs ->\n"
+                } else {
+                    file += "        $contextParamName.fetchAll(statement).map { rs ->\n"
+                }
                 file += "            val row = rs.firstOrNull()\n"
                 file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmpryResultSet, \"Count query returned no rows\"))\n"
                 file += "            row.get(0).asString().toLong()\n"
@@ -667,6 +687,9 @@ class RepositoryProcessor(
         val domainSimpleName = domainDecl.simpleName()
         logger.info("[RepositoryProcessor] Generating CRUD methods for $domainQn")
 
+        // Check if aroundQuery hook is overridden (used in all CRUD operations)
+        val hasAroundQueryHook = isHookOverridden(repo, "aroundQuery")
+
         // insert
         logger.info("[RepositoryProcessor] Emitting CRUD method: insert($domainQn)")
         file += "    /**\n"
@@ -697,9 +720,13 @@ class RepositoryProcessor(
             file += "        val statement = entity.insert()\n"
         }
 
-        file += "        aroundQuery(\"insert\", statement) {\n"
-        file += "            context.fetchAll(statement, $mapperTypeName)\n"
-        file += "        }.map { list ->\n"
+        if (hasAroundQueryHook) {
+            file += "        aroundQuery(\"insert\", statement) {\n"
+            file += "            context.fetchAll(statement, $mapperTypeName)\n"
+            file += "        }.map { list ->\n"
+        } else {
+            file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
+        }
         file += "            list.firstOrNull()\n"
         file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmpryResultSet, \"Insert query returned no rows\"))\n"
         file += "        }"
@@ -746,9 +773,13 @@ class RepositoryProcessor(
             file += "        val statement = entity.update()\n"
         }
 
-        file += "        aroundQuery(\"update\", statement) {\n"
-        file += "            context.fetchAll(statement, $mapperTypeName)\n"
-        file += "        }.map { list ->\n"
+        if (hasAroundQueryHook) {
+            file += "        aroundQuery(\"update\", statement) {\n"
+            file += "            context.fetchAll(statement, $mapperTypeName)\n"
+            file += "        }.map { list ->\n"
+        } else {
+            file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
+        }
         file += "            list.firstOrNull()\n"
         file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmpryResultSet, \"Update query returned no rows\"))\n"
         file += "        }"
@@ -794,9 +825,13 @@ class RepositoryProcessor(
             file += "        val statement = entity.delete()\n"
         }
 
-        file += "        aroundQuery(\"delete\", statement) {\n"
-        file += "            context.execute(statement)\n"
-        file += "        }"
+        if (hasAroundQueryHook) {
+            file += "        aroundQuery(\"delete\", statement) {\n"
+            file += "            context.execute(statement)\n"
+            file += "        }"
+        } else {
+            file += "        context.execute(statement)\n"
+        }
 
         val hasAfterDeleteHook = isHookOverridden(repo, "afterDeleteHook")
         if (hasAfterDeleteHook) {

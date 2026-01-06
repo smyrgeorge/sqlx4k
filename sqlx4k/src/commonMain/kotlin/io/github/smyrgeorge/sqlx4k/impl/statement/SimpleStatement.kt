@@ -11,5 +11,5 @@ package io.github.smyrgeorge.sqlx4k.impl.statement
  * @param sql The SQL query to be executed.
  */
 class SimpleStatement(private val sql: String) : AbstractStatement(sql) {
-    override fun toString(): String = "SimpleStatement(sql='${sql.take(32)}...')"
+    override fun toString(): String = "SimpleStatement(sql='${sql.take(64).replace('\n', ' ')}...')"
 }
