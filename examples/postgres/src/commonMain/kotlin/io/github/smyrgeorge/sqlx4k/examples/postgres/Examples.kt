@@ -6,9 +6,9 @@ import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.impl.coroutines.TransactionContext
 import io.github.smyrgeorge.sqlx4k.postgres.IPostgresSQL
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.Metrics
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.PgMqClient
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.PgMqConsumer
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.PgMqDbAdapterImpl
+import io.github.smyrgeorge.sqlx4k.postgres.pgmq.PgmqClient
+import io.github.smyrgeorge.sqlx4k.postgres.pgmq.PgmqConsumer
+import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.PgmqDbAdapterImpl
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.seconds
 
@@ -47,16 +47,16 @@ object Examples {
 
     suspend fun pgmq(db: IPostgresSQL) {
         println("\n=== PgMq ===")
-        val queue = PgMqClient.Queue(name = "test_queue", enableNotifyInsert = true)
-        val adapter = PgMqDbAdapterImpl(db)
-        val pgmq = PgMqClient(adapter).apply {
+        val queue = PgmqClient.Queue(name = "test_queue", enableNotifyInsert = true)
+        val adapter = PgmqDbAdapterImpl(db)
+        val pgmq = PgmqClient(adapter).apply {
             drop(queue).getOrThrow() // Drop the queue if it already exists
             create(queue).getOrThrow()
         }
 
-        val consumer = PgMqConsumer(
+        val consumer = PgmqConsumer(
             pgmq = pgmq,
-            options = PgMqConsumer.Options(queue = queue.name, enableNotifyInsert = true),
+            options = PgmqConsumer.Options(queue = queue.name, enableNotifyInsert = true),
             onMessage = { println("Message received: $it") },
             onFailToRead = { println("Error (onFailToRead): $it") },
             onFailToProcess = { println("Error (onFailToProcess): $it") },

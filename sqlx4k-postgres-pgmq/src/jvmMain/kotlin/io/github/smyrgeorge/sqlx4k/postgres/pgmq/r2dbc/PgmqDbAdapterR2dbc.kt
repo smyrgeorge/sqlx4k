@@ -5,7 +5,7 @@ import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.postgres.Notification
 import io.github.smyrgeorge.sqlx4k.postgres.PostgreSQLImpl
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.PgMqDbAdapter
+import io.github.smyrgeorge.sqlx4k.postgres.pgmq.PgmqDbAdapter
 import io.r2dbc.pool.ConnectionPool
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
 
@@ -20,10 +20,10 @@ import io.r2dbc.postgresql.PostgresqlConnectionFactory
  * @param pool The connection pool used for acquiring database connections.
  * @param connectionFactory The factory for creating individual PostgreSQL connections.
  */
-class PgMqDbAdapterR2dbc(
+class PgmqDbAdapterR2dbc(
     private val connectionFactory: PostgresqlConnectionFactory,
     pool: ConnectionPool
-) : PgMqDbAdapter {
+) : PgmqDbAdapter {
     override val encoders: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY
     private val adapter = PostgreSQLImpl(pool, connectionFactory, encoders)
     override suspend fun listen(channel: String, f: suspend (Notification) -> Unit) = adapter.listen(channel, f)

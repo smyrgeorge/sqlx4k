@@ -717,19 +717,19 @@ implementation("io.github.smyrgeorge:sqlx4k-postgres-pgmq:x.y.z")
 
 ```kotlin
 // Create PGMQ client
-val pgmq = PgMqClient(
-    pg = PgMqDbAdapterImpl(db),
-    options = PgMqClient.Options(autoInstall = true)
+val pgmq = PgmqClient(
+    pg = PgmqDbAdapterImpl(db),
+    options = PgmqClient.Options(autoInstall = true)
 )
 
 // Create a queue and send messages
-pgmq.create(PgMqClient.Queue(name = "my_queue")).getOrThrow()
+pgmq.create(PgmqClient.Queue(name = "my_queue")).getOrThrow()
 pgmq.send("my_queue", """{"order": 123}""").getOrThrow()
 
 // High-level consumer with automatic retry
-val consumer = PgMqConsumer(
+val consumer = PgmqConsumer(
     pgmq = pgmq,
-    options = PgMqConsumer.Options(queue = "my_queue"),
+    options = PgmqConsumer.Options(queue = "my_queue"),
     onMessage = { message -> processMessage(message) }
 )
 ```

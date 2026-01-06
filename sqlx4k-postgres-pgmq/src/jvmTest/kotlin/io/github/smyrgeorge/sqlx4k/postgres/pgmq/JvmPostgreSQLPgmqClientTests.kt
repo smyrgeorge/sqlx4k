@@ -1,11 +1,11 @@
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq
 
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.PgMqDbAdapterImpl
+import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.PgmqDbAdapterImpl
 import io.github.smyrgeorge.sqlx4k.postgres.postgreSQL
 import kotlin.test.Test
 
-class JvmPostgreSQLPgMqClientTests {
+class JvmPostgreSQLPgmqClientTests {
 
     private val options = ConnectionPool.Options.builder()
         .maxConnections(2)
@@ -18,15 +18,15 @@ class JvmPostgreSQLPgMqClientTests {
         options = options
     )
 
-    private val client = PgMqClient(
-        pg = PgMqDbAdapterImpl(db),
-        options = PgMqClient.Options(
+    private val client = PgmqClient(
+        pg = PgmqDbAdapterImpl(db),
+        options = PgmqClient.Options(
             autoInstall = true,
             verifyInstallation = true
         )
     )
 
-    private val runner = CommonPostgreSQLPgMqClientTests(client)
+    private val runner = CommonPostgreSQLPgmqClientTests(client)
 
     @Test
     fun `create queue should succeed`() {

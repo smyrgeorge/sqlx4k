@@ -38,8 +38,8 @@ import kotlin.time.Duration.Companion.seconds
  * - Archiving and deleting messages by single or bulk identifiers.
  * - Purging all messages from a queue.
  */
-class PgMqClient(
-    val pg: PgMqDbAdapter,
+class PgmqClient(
+    val pg: PgmqDbAdapter,
     private val options: Options = Options()
 ) {
     init {
@@ -61,7 +61,7 @@ class PgMqClient(
         }
 
         suspend fun installFromFiles() {
-            val files: List<MigrationFile> = listFilesWithContent(options.intallFilesPath)
+            val files: List<MigrationFile> = listFilesWithContent(options.installFilesPath)
                 .filter { it.first != "pgmq.sql" }
                 .sortedBy { it.first }
                 .mapIndexed { i, p ->
@@ -681,12 +681,12 @@ class PgMqClient(
      * @property autoInstall Determines whether the installation process should proceed automatically.
      * @property verifyInstallation Indicates whether the installation should be verified post-process.
      * @property installFromFiles Indicates whether the installation should be performed from SQL files.
-     * @property intallFilesPath Path to the directory containing SQL files for installation.
+     * @property installFilesPath Path to the directory containing SQL files for installation.
      */
     data class Options(
         val autoInstall: Boolean = true,
         val verifyInstallation: Boolean = true,
         val installFromFiles: Boolean = false,
-        val intallFilesPath: String = "./pgmq",
+        val installFilesPath: String = "./pgmq",
     )
 }

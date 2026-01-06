@@ -31,13 +31,13 @@ val db = PostgreSQL(
 )
 
 // Create client (auto-installs/validates PGMQ)
-val pgmq = PgMqClient(
-    pg = PgMqDbAdapterImpl(db),
-    options = PgMqClient.Options(autoInstall = true, verifyInstallation = true)
+val pgmq = PgmqClient(
+    pg = PgmqDbAdapterImpl(db),
+    options = PgmqClient.Options(autoInstall = true, verifyInstallation = true)
 )
 
 // Create a queue (enable NOTIFY for near real-time consumers)
-val queue = PgMqClient.Queue(name = "my_queue", enableNotifyInsert = true)
+val queue = PgmqClient.Queue(name = "my_queue", enableNotifyInsert = true)
 pgmq.create().getOrThrow()
 
 // Send
@@ -53,9 +53,9 @@ pgmq.read("my_queue", quantity = 1, vt = 30.seconds).getOrThrow().forEach { msg 
 ## Lightweight consumer
 
 ```kotlin
-val consumer = PgMqConsumer(
+val consumer = PgmqConsumer(
     pgmq = pgmq,
-    options = PgMqConsumer.Options(
+    options = PgmqConsumer.Options(
         queue = "my_queue",
         prefetch = 10,
         vt = 30.seconds,

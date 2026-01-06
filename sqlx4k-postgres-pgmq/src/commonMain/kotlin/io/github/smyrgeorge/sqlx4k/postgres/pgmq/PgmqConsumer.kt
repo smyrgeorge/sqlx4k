@@ -31,8 +31,8 @@ import kotlin.time.Duration.Companion.seconds
  * @property onFailToAck A suspendable callback invoked when a failure occurs while acknowledging (ack) a message.
  * @property onFailToNack A suspendable callback invoked when a failure occurs while negative acknowledging (nack) a message.
  */
-class PgMqConsumer(
-    private val pgmq: PgMqClient,
+class PgmqConsumer(
+    private val pgmq: PgmqClient,
     private val options: Options,
     private val onMessage: suspend (Message) -> Unit,
     private val onFailToRead: suspend (Throwable) -> Unit = {},

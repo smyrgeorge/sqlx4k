@@ -1,11 +1,11 @@
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq
 
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.PgMqDbAdapterImpl
+import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.PgmqDbAdapterImpl
 import io.github.smyrgeorge.sqlx4k.postgres.postgreSQL
 import kotlin.test.Test
 
-class JvmPostgreSQLPgMqConsumerTests {
+class NativePostgreSQLPgmqConsumerTests {
 
     private val options = ConnectionPool.Options.builder()
         .maxConnections(2)
@@ -18,15 +18,15 @@ class JvmPostgreSQLPgMqConsumerTests {
         options = options
     )
 
-    private val client = PgMqClient(
-        pg = PgMqDbAdapterImpl(db),
-        options = PgMqClient.Options(
+    private val client = PgmqClient(
+        pg = PgmqDbAdapterImpl(db),
+        options = PgmqClient.Options(
             autoInstall = true,
             verifyInstallation = true
         )
     )
 
-    private val runner = CommonPostgreSQLPgMqConsumerTests(client)
+    private val runner = CommonPostgreSQLPgmqConsumerTests(client)
 
     @Test
     fun `consumer should process messages automatically`() {

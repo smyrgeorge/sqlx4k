@@ -12,22 +12,22 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 @Suppress("SqlNoDataSourceInspection")
-class CommonPostgreSQLPgMqConsumerTests(
-    private val client: PgMqClient
+class CommonPostgreSQLPgmqConsumerTests(
+    private val client: PgmqClient
 ) {
 
     private fun newQueue(): String = "test_queue_${Random.nextInt(1000000)}"
 
     fun `consumer should process messages automatically`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName, enableNotifyInsert = true)
+        val queue = PgmqClient.Queue(queueName, enableNotifyInsert = true)
 
         client.create(queue).getOrThrow()
 
         val processedMessages = mutableListOf<Message>()
         val lock = Mutex()
 
-        val consumerOptions = PgMqConsumer.Options(
+        val consumerOptions = PgmqConsumer.Options(
             queue = queueName,
             prefetch = 5,
             vt = 10.seconds,
@@ -35,7 +35,7 @@ class CommonPostgreSQLPgMqConsumerTests(
             enableNotifyInsert = true
         )
 
-        val consumer = PgMqConsumer(
+        val consumer = PgmqConsumer(
             pgmq = client,
             options = consumerOptions,
             onMessage = { msg ->
@@ -79,14 +79,14 @@ class CommonPostgreSQLPgMqConsumerTests(
 
     fun `consumer should retry failed messages with backoff`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
         val attemptCounts = mutableMapOf<Long, Int>()
         val lock = Mutex()
 
-        val consumerOptions = PgMqConsumer.Options(
+        val consumerOptions = PgmqConsumer.Options(
             queue = queueName,
             prefetch = 5,
             vt = 2.seconds,
@@ -96,7 +96,7 @@ class CommonPostgreSQLPgMqConsumerTests(
             messageMaxRetryDelay = 1.seconds
         )
 
-        val consumer = PgMqConsumer(
+        val consumer = PgmqConsumer(
             pgmq = client,
             options = consumerOptions,
             onMessage = { msg ->
@@ -137,16 +137,16 @@ class CommonPostgreSQLPgMqConsumerTests(
 
     fun `consumer should stop gracefully`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
         val processedMessages = mutableListOf<Message>()
         val lock = Mutex()
 
-        val consumer = PgMqConsumer(
+        val consumer = PgmqConsumer(
             pgmq = client,
-            options = PgMqConsumer.Options(
+            options = PgmqConsumer.Options(
                 queue = queueName,
                 prefetch = 5,
                 vt = 10.seconds,
@@ -196,16 +196,16 @@ class CommonPostgreSQLPgMqConsumerTests(
 
     fun `consumer should handle multiple messages with prefetch limit`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
         val processedMessages = mutableListOf<Message>()
         val lock = Mutex()
 
-        val consumer = PgMqConsumer(
+        val consumer = PgmqConsumer(
             pgmq = client,
-            options = PgMqConsumer.Options(
+            options = PgmqConsumer.Options(
                 queue = queueName,
                 prefetch = 3,
                 vt = 10.seconds,
@@ -245,16 +245,16 @@ class CommonPostgreSQLPgMqConsumerTests(
 
     fun `consumer should handle error callbacks properly`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
         val processErrors = mutableListOf<Throwable>()
         val lock = Mutex()
 
-        val consumer = PgMqConsumer(
+        val consumer = PgmqConsumer(
             pgmq = client,
-            options = PgMqConsumer.Options(
+            options = PgmqConsumer.Options(
                 queue = queueName,
                 prefetch = 5,
                 vt = 2.seconds,
@@ -295,16 +295,16 @@ class CommonPostgreSQLPgMqConsumerTests(
 
     fun `consumer should process messages in order when prefetch is 1`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
         val processedOrder = mutableListOf<String>()
         val lock = Mutex()
 
-        val consumer = PgMqConsumer(
+        val consumer = PgmqConsumer(
             pgmq = client,
-            options = PgMqConsumer.Options(
+            options = PgmqConsumer.Options(
                 queue = queueName,
                 prefetch = 1,
                 vt = 10.seconds,
@@ -347,16 +347,16 @@ class CommonPostgreSQLPgMqConsumerTests(
 
     fun `consumer should handle messages with headers`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
         val processedMessages = mutableListOf<Message>()
         val lock = Mutex()
 
-        val consumer = PgMqConsumer(
+        val consumer = PgmqConsumer(
             pgmq = client,
-            options = PgMqConsumer.Options(
+            options = PgmqConsumer.Options(
                 queue = queueName,
                 prefetch = 5,
                 vt = 10.seconds,
@@ -394,16 +394,16 @@ class CommonPostgreSQLPgMqConsumerTests(
 
     fun `consumer should respect visibility timeout`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
         val processedCount = mutableListOf<Long>()
         val lock = Mutex()
 
-        val consumer = PgMqConsumer(
+        val consumer = PgmqConsumer(
             pgmq = client,
-            options = PgMqConsumer.Options(
+            options = PgmqConsumer.Options(
                 queue = queueName,
                 prefetch = 1,
                 vt = 2.seconds,
@@ -438,16 +438,16 @@ class CommonPostgreSQLPgMqConsumerTests(
 
     fun `consumer should work with batch message sending`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName, enableNotifyInsert = true)
+        val queue = PgmqClient.Queue(queueName, enableNotifyInsert = true)
 
         client.create(queue).getOrThrow()
 
         val processedMessages = mutableListOf<Message>()
         val lock = Mutex()
 
-        val consumer = PgMqConsumer(
+        val consumer = PgmqConsumer(
             pgmq = client,
-            options = PgMqConsumer.Options(
+            options = PgmqConsumer.Options(
                 queue = queueName,
                 prefetch = 10,
                 vt = 10.seconds,
@@ -487,16 +487,16 @@ class CommonPostgreSQLPgMqConsumerTests(
 
     fun `consumer metrics should reflect queue state`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
         val processedMessages = mutableListOf<Message>()
         val lock = Mutex()
 
-        val consumer = PgMqConsumer(
+        val consumer = PgmqConsumer(
             pgmq = client,
-            options = PgMqConsumer.Options(
+            options = PgmqConsumer.Options(
                 queue = queueName,
                 prefetch = 5,
                 vt = 10.seconds,
@@ -547,16 +547,16 @@ class CommonPostgreSQLPgMqConsumerTests(
 
     fun `consumer should handle empty queue gracefully`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
         val processedMessages = mutableListOf<Message>()
         val lock = Mutex()
 
-        val consumer = PgMqConsumer(
+        val consumer = PgmqConsumer(
             pgmq = client,
-            options = PgMqConsumer.Options(
+            options = PgmqConsumer.Options(
                 queue = queueName,
                 prefetch = 5,
                 vt = 10.seconds,

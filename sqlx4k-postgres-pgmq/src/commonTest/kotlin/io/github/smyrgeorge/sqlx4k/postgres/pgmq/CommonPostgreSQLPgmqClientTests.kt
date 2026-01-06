@@ -9,15 +9,15 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 @Suppress("SqlNoDataSourceInspection")
-class CommonPostgreSQLPgMqClientTests(
-    private val client: PgMqClient
+class CommonPostgreSQLPgmqClientTests(
+    private val client: PgmqClient
 ) {
 
     private fun newQueue(): String = "test_queue_${Random.nextInt(1000000)}"
 
     fun `create queue should succeed`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         val result = client.create(queue)
         assertThat(result.isSuccess).isTrue()
@@ -32,7 +32,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `create unlogged queue should succeed`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName, unlogged = true)
+        val queue = PgmqClient.Queue(queueName, unlogged = true)
 
         val result = client.create(queue)
         assertThat(result.isSuccess).isTrue()
@@ -49,7 +49,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `send and read single message should work`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
@@ -70,7 +70,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `send message with headers should preserve headers`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
@@ -87,7 +87,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `send batch messages should enqueue all`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
@@ -111,7 +111,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `pop message should remove from queue`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
@@ -131,7 +131,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `pop multiple messages should work`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
@@ -155,7 +155,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `archive message should move to archive`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
@@ -175,7 +175,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `archive multiple messages should work`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
@@ -198,7 +198,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `delete message should remove from queue`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
@@ -218,7 +218,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `delete multiple messages should work`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
@@ -241,7 +241,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `purge queue should remove all messages`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
@@ -265,7 +265,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `setVt should update visibility timeout`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
@@ -289,7 +289,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `ack should delete message`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
@@ -308,7 +308,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `nack should reset visibility timeout`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
@@ -329,7 +329,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `metrics should return queue statistics`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
@@ -350,7 +350,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `delayed message should not be visible immediately`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
@@ -375,7 +375,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `drop queue should succeed`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
@@ -390,8 +390,8 @@ class CommonPostgreSQLPgMqClientTests(
         val queue1Name = newQueue()
         val queue2Name = newQueue()
 
-        val queue1 = PgMqClient.Queue(queue1Name)
-        val queue2 = PgMqClient.Queue(queue2Name)
+        val queue1 = PgmqClient.Queue(queue1Name)
+        val queue2 = PgmqClient.Queue(queue2Name)
 
         client.create(queue1).getOrThrow()
         client.create(queue2).getOrThrow()
@@ -409,7 +409,7 @@ class CommonPostgreSQLPgMqClientTests(
 
     fun `message readCt should increment on repeated reads`() = runBlocking {
         val queueName = newQueue()
-        val queue = PgMqClient.Queue(queueName)
+        val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
