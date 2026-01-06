@@ -1,0 +1,439 @@
+<!doctype html>
+<html class="no-js" lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" charset="UTF-8">
+    <title>PgmqClient</title>
+<link href="../../../images/logo-icon.svg" rel="icon" type="image/svg"><script>var pathToRoot = "../../../";</script>
+    <script>document.documentElement.classList.replace("no-js", "js");</script>
+    <script>const storage = localStorage.getItem("dokka-dark-mode")
+      if (storage == null) {
+        const osDarkSchemePreferred = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+        if (osDarkSchemePreferred === true) {
+          document.getElementsByTagName("html")[0].classList.add("theme-dark")
+        }
+      } else {
+        const savedDarkMode = JSON.parse(storage)
+        if (savedDarkMode === true) {
+          document.getElementsByTagName("html")[0].classList.add("theme-dark")
+        }
+      }
+    </script>
+<script type="text/javascript" src="https://unpkg.com/kotlin-playground@1/dist/playground.min.js" async></script>
+<script type="text/javascript" src="../../../scripts/sourceset_dependencies.js" async></script>
+<link href="../../../styles/style.css" rel="Stylesheet">
+<link href="../../../styles/main.css" rel="Stylesheet">
+<link href="../../../styles/prism.css" rel="Stylesheet">
+<link href="../../../styles/logo-styles.css" rel="Stylesheet">
+<link href="../../../ui-kit/ui-kit.min.css" rel="Stylesheet">
+<script type="text/javascript" src="../../../scripts/safe-local-storage_blocking.js"></script>
+<script type="text/javascript" src="../../../scripts/navigation-loader.js" async></script>
+<script type="text/javascript" src="../../../scripts/platform-content-handler.js" async></script>
+<script type="text/javascript" src="../../../scripts/main.js" defer></script>
+<script type="text/javascript" src="../../../scripts/prism.js" async></script>
+<script type="text/javascript" src="../../../ui-kit/ui-kit.min.js" defer></script></head>
+<body>
+<div class="root">
+    <header class="navigation theme-dark" id="navigation-wrapper" role="banner">
+<a class="library-name--link" href="../../../index.html" tabindex="1">
+                    sqlx4k
+            </a>        <button class="navigation-controls--btn navigation-controls--btn_toc ui-kit_mobile-only" id="toc-toggle" type="button">Toggle table of contents
+        </button>
+        <div class="navigation-controls--break ui-kit_mobile-only"></div>
+        <div class="library-version" id="library-version">1.5.6
+        </div>
+        <div class="navigation-controls">
+        <ul class="filter-section filter-section_loading" id="filter-section" aria-label="Target filter">
+                <button class="platform-tag platform-selector common-like" data-active="" aria-pressed="true" data-filter=":sqlx4k-postgres-pgmq/commonMain">common</button>
+            <div class="dropdown filter-section--dropdown" data-role="dropdown" id="filter-section-dropdown">
+                <button class="button button_dropdown filter-section--dropdown-toggle" role="combobox" data-role="dropdown-toggle" aria-controls="platform-tags-listbox" aria-haspopup="listbox" aria-expanded="false" aria-label="Toggle source sets"></button>
+                <ul role="listbox" id="platform-tags-listbox" class="dropdown--list" data-role="dropdown-listbox" aria-label="Target filter">
+                    <div class="dropdown--header"><span>Target filter</span>
+                        <button class="button" data-role="dropdown-toggle" aria-label="Close target filter">
+                            <i class="ui-kit-icon ui-kit-icon_cross"></i>
+                        </button>
+                    </div>
+                        <li role="option" class="dropdown--option platform-selector-option common-like" tabindex="0">
+                            <label class="checkbox">
+                                <input type="checkbox" class="checkbox--input" id=":sqlx4k-postgres-pgmq/commonMain" data-filter=":sqlx4k-postgres-pgmq/commonMain">
+                                <span class="checkbox--icon"></span>
+                                common
+                            </label>
+                        </li>
+                </ul>
+                <div class="dropdown--overlay"></div>
+            </div>
+        </ul>
+            <button class="navigation-controls--btn navigation-controls--btn_theme" id="theme-toggle-button" type="button">Switch theme
+            </button>
+            <div class="navigation-controls--btn navigation-controls--btn_search" id="searchBar" role="button">Search in
+                API
+            </div>
+        </div>
+    </header>
+    <div id="container">
+        <nav id="leftColumn" class="sidebar" data-item-type="SECTION" data-item-config="{&quot;defaultSize&quot;: 280, &quot;minSize&quot;: 200, &quot;maxSize&quot;: 400}">
+            <a class="toc--skip-link" href="#main">Skip to content</a>
+            <div class="dropdown theme-dark_mobile" data-role="dropdown" id="toc-dropdown">
+                <ul role="listbox" id="toc-listbox" class="dropdown--list dropdown--list_toc-list" data-role="dropdown-listbox" aria-label="Table of contents">
+                    <div class="dropdown--header">
+                            <span>
+                                    sqlx4k
+                            </span>
+                        <button class="button" data-role="dropdown-toggle" aria-label="Close table of contents">
+                            <i class="ui-kit-icon ui-kit-icon_cross"></i>
+                        </button>
+                    </div>
+                    <div class="sidebar--inner" id="sideMenu"></div>
+                </ul>
+                <div class="dropdown--overlay"></div>
+            </div>
+        </nav>
+        <div id="resizer" class="resizer" data-item-type="BAR"></div>
+        <div id="main" data-item-type="SECTION" role="main">
+<div class="main-content" data-page-type="classlike" id="content" pageids="sqlx4k-postgres-pgmq::io.github.smyrgeorge.sqlx4k.postgres.pgmq/PgmqClient///PointingToDeclaration//-1043709490">
+  <div class="breadcrumbs"><a href="../../index.html">sqlx4k-postgres-pgmq</a><span class="delimiter">/</span><a href="../index.html">io.github.smyrgeorge.sqlx4k.postgres.pgmq</a><span class="delimiter">/</span><span class="current">PgmqClient</span></div>
+  <div class="cover ">
+    <h1 class="cover"><span>Pgmq</span><wbr><span><span>Client</span></span></h1>
+    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="index.html">PgmqClient</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword">val </span>pg<span class="token operator">: </span><a href="../-pgmq-db-adapter/index.html">PgmqDbAdapter</a><span class="token punctuation">, </span></span><span class="parameter ">options<span class="token operator">: </span><a href="-options/index.html">PgmqClient.Options</a><span class="token operator"> = </span>Options()</span></span><span class="token punctuation">)</span><span class="source-link-wrapper"><span class="source-link" data-element-type="source-link">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k-postgres-pgmq/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/postgres/pgmq/PgmqClient.kt#L41">source</a>)</span></span></div><p class="paragraph">PgMqClient is a client for interfacing with the pgmq system, providing various messaging queue operations. This client makes use of PostgreSQL as a message queue backend.</p><h4 class="tableheader">Parameters</h4><div class="table"><div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><u><span><span>pg</span></span></u></div></span></div><div><div class="title"><p class="paragraph">The PgMqDbAdapter instance used for executing database queries.</p></div></div></div></div><div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><u><span><span>options</span></span></u></div></span></div><div><div class="title"><p class="paragraph">Configuration options for the client, including installation verification and auto-install behavior.</p><p class="paragraph">Features:</p><ul><li><p class="paragraph">Installation verification of the pgmq extension in the database.</p></li><li><p class="paragraph">Creating and managing queues with optional notification on message insertion.</p></li><li><p class="paragraph">Listing all existing queues.</p></li><li><p class="paragraph">Sending messages to a queue, with support for headers and optional delay.</p></li><li><p class="paragraph">Batch sending of messages to a queue.</p></li><li><p class="paragraph">Popping messages from a queue.</p></li><li><p class="paragraph">Reading messages from a queue with optional visibility timeout.</p></li><li><p class="paragraph">Archiving and deleting messages by single or bulk identifiers.</p></li><li><p class="paragraph">Purging all messages from a queue.</p></li></ul></div></div></div></div></div></div></div>
+  </div>
+  <div class="tabbedcontent">
+    <div class="tabs-section" tabs-section="tabs-section"><button class="section-tab" data-active="" data-togglable="CONSTRUCTOR,TYPE,PROPERTY,FUNCTION">Members</button></div>
+    <div class="tabs-section-body">
+      <div data-togglable="CONSTRUCTOR">
+        <h2 class="tableheader">Constructors</h2>
+        <div class="table"><a data-name="623467770%2FConstructors%2F-1043709490" anchor-label="PgmqClient" id="623467770%2FConstructors%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-togglable="CONSTRUCTOR" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="-pgmq-client.html"><span>Pgmq</span><wbr><span><span>Client</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="623467770%2FConstructors%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">constructor</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">pg<span class="token operator">: </span><a href="../-pgmq-db-adapter/index.html">PgmqDbAdapter</a><span class="token punctuation">, </span></span><span class="parameter ">options<span class="token operator">: </span><a href="-options/index.html">PgmqClient.Options</a><span class="token operator"> = </span>Options()</span></span><span class="token punctuation">)</span></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div data-togglable="TYPE">
+        <h2 class="tableheader">Types</h2>
+        <div class="table"><a data-name="1113919336%2FClasslikes%2F-1043709490" anchor-label="Options" id="1113919336%2FClasslikes%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="-options/index.html"><span><span>Options</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1113919336%2FClasslikes%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">data </span><span class="token keyword">class </span><a href="-options/index.html">Options</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword">val </span>autoInstall<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator"> = </span><span class="token boolean">true</span><span class="token punctuation">, </span></span><span class="parameter "><span class="token keyword">val </span>verifyInstallation<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator"> = </span><span class="token boolean">true</span><span class="token punctuation">, </span></span><span class="parameter "><span class="token keyword">val </span>installFromFiles<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator"> = </span><span class="token boolean">false</span><span class="token punctuation">, </span></span><span class="parameter "><span class="token keyword">val </span>installFilesPath<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator"> = </span><span class="token string">"./pgmq"</span></span></span><span class="token punctuation">)</span></div><div class="brief "><p class="paragraph">A data class that represents configuration options for an installation process.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-1729849963%2FClasslikes%2F-1043709490" anchor-label="Queue" id="-1729849963%2FClasslikes%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="-queue/index.html"><span><span>Queue</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1729849963%2FClasslikes%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">data </span><span class="token keyword">class </span><a href="-queue/index.html">Queue</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword">val </span>name<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter "><span class="token keyword">val </span>unlogged<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator"> = </span><span class="token boolean">false</span><span class="token punctuation">, </span></span><span class="parameter "><span class="token keyword">val </span>enableNotifyInsert<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator"> = </span><span class="token boolean">false</span><span class="token punctuation">, </span></span><span class="parameter "><span class="token keyword">val </span>throttleNotifyInterval<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.time/-duration/index.html">Duration</a><span class="token operator"> = </span>250.milliseconds</span></span><span class="token punctuation">)</span></div><div class="brief "><p class="paragraph">Represents a queue configuration with specific attributes.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div data-togglable="PROPERTY">
+        <h2 class="tableheader">Properties</h2>
+        <div class="table"><a data-name="46767600%2FProperties%2F-1043709490" anchor-label="pg" id="46767600%2FProperties%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="pg.html"><span><span>pg</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="46767600%2FProperties%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">val </span><a href="pg.html">pg</a><span class="token operator">: </span><a href="../-pgmq-db-adapter/index.html">PgmqDbAdapter</a></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div data-togglable="FUNCTION">
+        <h2 class="tableheader">Functions</h2>
+        <div class="table"><a data-name="197678578%2FFunctions%2F-1043709490" anchor-label="ack" id="197678578%2FFunctions%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="ack.html"><span><span>ack</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="197678578%2FFunctions%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="ack.html"><span class="token function">ack</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">id<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Acknowledges a message in the specified queue with the given ID by performing a delete operation.</p></div><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="ack.html"><span class="token function">ack</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">ids<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Acknowledges the provided list of message IDs for the specified queue.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-1211066492%2FFunctions%2F-1043709490" anchor-label="archive" id="-1211066492%2FFunctions%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="archive.html"><span><span>archive</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1211066492%2FFunctions%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="archive.html"><span class="token function">archive</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">id<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Archives an item identified by its ID from a specified queue.</p></div><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="archive.html"><span class="token function">archive</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">ids<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Archives the specified items identified by their IDs from the given queue.</p></div><div class="symbol monospace"><span class="token keyword">context</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">db<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-query-executor/index.html">QueryExecutor</a></span></span><span class="token punctuation">)</span><br><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="archive.html"><span class="token function">archive</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">id<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Archives a message in the specified queue by calling the <code class="lang-kotlin">pgmq.archive</code> function.</p></div><div class="symbol monospace"><span class="token keyword">context</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">db<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-query-executor/index.html">QueryExecutor</a></span></span><span class="token punctuation">)</span><br><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="archive.html"><span class="token function">archive</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">ids<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Archives messages identified by their IDs from a specified queue.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-589558380%2FFunctions%2F-1043709490" anchor-label="bindTopic" id="-589558380%2FFunctions%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="bind-topic.html"><span>bind</span><wbr><span><span>Topic</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-589558380%2FFunctions%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="bind-topic.html"><span class="token function">bindTopic</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">pattern<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">queueName<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-unit/index.html">Unit</a><span class="token operator">&gt;</span></div><div class="symbol monospace"><span class="token keyword">context</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">db<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-query-executor/index.html">QueryExecutor</a></span></span><span class="token punctuation">)</span><br><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="bind-topic.html"><span class="token function">bindTopic</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">pattern<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">queueName<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-unit/index.html">Unit</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Creates a topic binding between a pattern and a queue.</p></div><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="bind-topic.html"><span class="token function">bindTopic</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">patterns<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator">&gt;</span><span class="token punctuation">, </span></span><span class="parameter ">queueName<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-unit/index.html">Unit</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Creates topic bindings for multiple patterns to a single queue.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="1089011856%2FFunctions%2F-1043709490" anchor-label="create" id="1089011856%2FFunctions%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="create.html"><span><span>create</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1089011856%2FFunctions%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="create.html"><span class="token function">create</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="-queue/index.html">PgmqClient.Queue</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-unit/index.html">Unit</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Creates a queue in the system with the specified configuration.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="810574796%2FFunctions%2F-1043709490" anchor-label="delete" id="810574796%2FFunctions%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="delete.html"><span><span>delete</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="810574796%2FFunctions%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="delete.html"><span class="token function">delete</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">id<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Deletes an item with the specified ID from the given queue.</p></div><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="delete.html"><span class="token function">delete</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">ids<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Deletes the specified items from the given queue.</p></div><div class="symbol monospace"><span class="token keyword">context</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">db<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-query-executor/index.html">QueryExecutor</a></span></span><span class="token punctuation">)</span><br><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="delete.html"><span class="token function">delete</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">id<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Deletes a message from the specified queue based on its unique identifier.</p></div><div class="symbol monospace"><span class="token keyword">context</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">db<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-query-executor/index.html">QueryExecutor</a></span></span><span class="token punctuation">)</span><br><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="delete.html"><span class="token function">delete</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">ids<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Deletes messages from the specified queue based on the provided list of IDs.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="513937981%2FFunctions%2F-1043709490" anchor-label="drop" id="513937981%2FFunctions%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="drop.html"><span><span>drop</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="513937981%2FFunctions%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="drop.html"><span class="token function">drop</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="-queue/index.html">PgmqClient.Queue</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Drops the specified queue from the system.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-1229984185%2FFunctions%2F-1043709490" anchor-label="listQueues" id="-1229984185%2FFunctions%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="list-queues.html"><span>list</span><wbr><span><span>Queues</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1229984185%2FFunctions%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="list-queues.html"><span class="token function">listQueues</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="../-queue-record/index.html">QueueRecord</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Retrieves the list of all available queues in the system.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-39554184%2FFunctions%2F-1043709490" anchor-label="metrics" id="-39554184%2FFunctions%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="metrics.html"><span><span>metrics</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-39554184%2FFunctions%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="metrics.html"><span class="token function">metrics</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="../-metrics/index.html">Metrics</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Retrieves a list of metrics from the database using the <code class="lang-kotlin">pgmq.metrics()</code> query.</p></div><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="metrics.html"><span class="token function">metrics</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="../-metrics/index.html">Metrics</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Retrieves metrics for the specified queue.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-1881142043%2FFunctions%2F-1043709490" anchor-label="nack" id="-1881142043%2FFunctions%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="nack.html"><span><span>nack</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1881142043%2FFunctions%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="nack.html"><span class="token function">nack</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">id<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token punctuation">, </span></span><span class="parameter ">vt<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.time/-duration/index.html">Duration</a><span class="token operator"> = </span>Duration.ZERO</span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Sends a negative acknowledgment (nack) to the specified queue for the given message ID, optionally resetting the visibility timeout (VT) to a new duration.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="338253384%2FFunctions%2F-1043709490" anchor-label="pop" id="338253384%2FFunctions%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="pop.html"><span><span>pop</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="338253384%2FFunctions%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="pop.html"><span class="token function">pop</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">quantity<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-int/index.html">Int</a><span class="token operator"> = </span><span class="token constant">1</span></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="../-message/index.html">Message</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div><div class="symbol monospace"><span class="token keyword">context</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">db<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-query-executor/index.html">QueryExecutor</a></span></span><span class="token punctuation">)</span><br><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="pop.html"><span class="token function">pop</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">quantity<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-int/index.html">Int</a><span class="token operator"> = </span><span class="token constant">1</span></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="../-message/index.html">Message</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Removes and retrieves messages from the specified queue.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-1117669971%2FFunctions%2F-1043709490" anchor-label="purge" id="-1117669971%2FFunctions%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="purge.html"><span><span>purge</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1117669971%2FFunctions%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="purge.html"><span class="token function">purge</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="-queue/index.html">PgmqClient.Queue</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Removes all messages from the specified queue.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="2018641360%2FFunctions%2F-1043709490" anchor-label="read" id="2018641360%2FFunctions%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="read.html"><span><span>read</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="2018641360%2FFunctions%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="read.html"><span class="token function">read</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">quantity<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-int/index.html">Int</a><span class="token operator"> = </span><span class="token constant">1</span><span class="token punctuation">, </span></span><span class="parameter ">vt<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.time/-duration/index.html">Duration</a><span class="token operator"> = </span>30.seconds</span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="../-message/index.html">Message</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Reads messages from a specified queue.</p></div><div class="symbol monospace"><span class="token keyword">context</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">db<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-query-executor/index.html">QueryExecutor</a></span></span><span class="token punctuation">)</span><br><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="read.html"><span class="token function">read</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">quantity<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-int/index.html">Int</a><span class="token operator"> = </span><span class="token constant">1</span><span class="token punctuation">, </span></span><span class="parameter ">vt<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.time/-duration/index.html">Duration</a><span class="token operator"> = </span>30.seconds</span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="../-message/index.html">Message</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Reads messages from a specified queue with the given parameters.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="735813396%2FFunctions%2F-1043709490" anchor-label="send" id="735813396%2FFunctions%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="send.html"><span><span>send</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="735813396%2FFunctions%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="send.html"><span class="token function">send</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">message<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">headers<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-map/index.html">Map</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator">&gt;</span><span class="token operator"> = </span>emptyMap()<span class="token punctuation">, </span></span><span class="parameter ">delay<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.time/-duration/index.html">Duration</a><span class="token operator"> = </span>0.seconds</span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span></div><div class="symbol monospace"><span class="token keyword">context</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">db<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-query-executor/index.html">QueryExecutor</a></span></span><span class="token punctuation">)</span><br><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="send.html"><span class="token function">send</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">message<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">headers<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-map/index.html">Map</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator">&gt;</span><span class="token operator"> = </span>emptyMap()<span class="token punctuation">, </span></span><span class="parameter ">delay<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.time/-duration/index.html">Duration</a><span class="token operator"> = </span>0.seconds</span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Sends a message to the specified queue with optional headers and delay.</p></div><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="send.html"><span class="token function">send</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">messages<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator">&gt;</span><span class="token punctuation">, </span></span><span class="parameter ">headers<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-map/index.html">Map</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator">&gt;</span><span class="token operator"> = </span>emptyMap()<span class="token punctuation">, </span></span><span class="parameter ">delay<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.time/-duration/index.html">Duration</a><span class="token operator"> = </span>0.seconds</span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Sends multiple messages to the specified queue with optional headers and delay.</p></div><div class="symbol monospace"><span class="token keyword">context</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">db<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-query-executor/index.html">QueryExecutor</a></span></span><span class="token punctuation">)</span><br><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="send.html"><span class="token function">send</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">messages<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator">&gt;</span><span class="token punctuation">, </span></span><span class="parameter ">headers<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-map/index.html">Map</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator">&gt;</span><span class="token operator"> = </span>emptyMap()<span class="token punctuation">, </span></span><span class="parameter ">delay<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.time/-duration/index.html">Duration</a><span class="token operator"> = </span>0.seconds</span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Sends a batch of messages to the specified queue with optional headers and a delay.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-299990584%2FFunctions%2F-1043709490" anchor-label="sendTopic" id="-299990584%2FFunctions%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="send-topic.html"><span>send</span><wbr><span><span>Topic</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-299990584%2FFunctions%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="send-topic.html"><span class="token function">sendTopic</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">routingKey<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">message<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">headers<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-map/index.html">Map</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator">&gt;</span><span class="token operator"> = </span>emptyMap()<span class="token punctuation">, </span></span><span class="parameter ">delay<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.time/-duration/index.html">Duration</a><span class="token operator"> = </span>0.seconds</span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span></div><div class="symbol monospace"><span class="token keyword">context</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">db<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-query-executor/index.html">QueryExecutor</a></span></span><span class="token punctuation">)</span><br><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="send-topic.html"><span class="token function">sendTopic</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">routingKey<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">message<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">headers<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-map/index.html">Map</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator">&gt;</span><span class="token operator"> = </span>emptyMap()<span class="token punctuation">, </span></span><span class="parameter ">delay<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.time/-duration/index.html">Duration</a><span class="token operator"> = </span>0.seconds</span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Sends a message to all queues that match the routing key pattern.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="459944%2FFunctions%2F-1043709490" anchor-label="setVt" id="459944%2FFunctions%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="set-vt.html"><span>set</span><wbr><span><span>Vt</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="459944%2FFunctions%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="set-vt.html"><span class="token function">setVt</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">id<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token punctuation">, </span></span><span class="parameter ">vt<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.time/-duration/index.html">Duration</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Updates the visibility timeout (VT) for a specific item in the given queue.</p></div><div class="symbol monospace"><span class="token keyword">context</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">db<span class="token operator">: </span><a href="../../../sqlx4k/io.github.smyrgeorge.sqlx4k/-query-executor/index.html">QueryExecutor</a></span></span><span class="token punctuation">)</span><br><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="set-vt.html"><span class="token function">setVt</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">queue<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">id<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token punctuation">, </span></span><span class="parameter ">vt<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.time/-duration/index.html">Duration</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Updates the visibility timeout (VT) for a message in the specified queue.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="1132046927%2FFunctions%2F-1043709490" anchor-label="unbindTopic" id="1132046927%2FFunctions%2F-1043709490" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-postgres-pgmq/commonMain" data-filterable-set=":sqlx4k-postgres-pgmq/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="unbind-topic.html"><span>unbind</span><wbr><span><span>Topic</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1132046927%2FFunctions%2F-1043709490"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-postgres-pgmq/commonMain"><div class="symbol monospace"><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="unbind-topic.html"><span class="token function">unbindTopic</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">pattern<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">queueName<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-boolean/index.html">Boolean</a><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Removes a topic binding between a pattern and a queue.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    <div class="footer">
+        <div class="footer--container">
+            <a href="#content" id="go-to-top-link" class="footer--button footer--button_go-to-top"></a>
+            <div class="footer--content">
+                <div>
+                    <span>Generated by </span>
+                    <a class="footer--link footer--link_external" href="https://github.com/Kotlin/dokka">
+                        Dokka
+                    </a>
+                    <div>© 2026 Copyright</div>
+                </div>
+            </div>
+        </div>
+    </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
