@@ -100,6 +100,7 @@ class RepositoryProcessor(
             // Interface must implement CrudRepository<Domain> which we already validated.
             emitCrudMethods(
                 file = file,
+                repo = repo,
                 domainDecl = domainDecl,
                 mapperTypeName = mapperTypeName,
                 useContextParameters = useContextParameters,
@@ -597,10 +598,58 @@ class RepositoryProcessor(
     }
 
     /**
+     * Checks if a hook method is overridden in the repository interface or its supertypes
+     * (excluding the base CrudRepositoryHooks interface).
+     *
+     * @param repo The repository interface declaration
+     * @param hookMethodName The name of the hook method to check
+     * @return true if the hook is overridden, false if using the default implementation
+     */
+    private fun isHookOverridden(repo: KSClassDeclaration, hookMethodName: String): Boolean {
+        // Check if the repository itself declares the hook
+        val declaredInRepo = repo.declarations
+            .filterIsInstance<KSFunctionDeclaration>()
+            .any { it.simpleName.asString() == hookMethodName }
+
+        if (declaredInRepo) return true
+
+        // Check supertypes (excluding CrudRepositoryHooks itself)
+        fun checkSupertypes(decl: KSClassDeclaration, visited: MutableSet<String> = mutableSetOf()): Boolean {
+            val qualifiedName = decl.qualifiedName() ?: return false
+
+            // Stop if we've reached CrudRepositoryHooks
+            if (qualifiedName == TypeNames.CRUD_REPOSITORY_HOOKS) return false
+
+            // Avoid infinite recursion
+            if (qualifiedName in visited) return false
+            visited.add(qualifiedName)
+
+            // Check if this interface declares the hook
+            val declared = decl.declarations
+                .filterIsInstance<KSFunctionDeclaration>()
+                .any { it.simpleName() == hookMethodName }
+
+            if (declared) return true
+
+            // Recursively check supertypes
+            for (superType in decl.superTypes) {
+                val resolved = superType.resolve()
+                val superDecl = resolved.declaration as? KSClassDeclaration ?: continue
+                if (checkSupertypes(superDecl, visited)) return true
+            }
+
+            return false
+        }
+
+        return checkSupertypes(repo)
+    }
+
+    /**
      * Generates CRUD methods (insert, update, delete, save) for the provided domain class and writes
      * the method definitions to the specified output stream.
      *
      * @param file the output stream where the generated CRUD methods will be written
+     * @param repo the repository interface declaration used to check for overridden hooks
      * @param domainDecl the class declaration of the domain object for which CRUD methods are generated
      * @param mapperTypeName the name of the mapper type used to map query results to the domain object
      * @param useContextParameters whether to include `QueryExecutor` as a context parameter in the method signatures
@@ -608,6 +657,7 @@ class RepositoryProcessor(
      */
     private fun emitCrudMethods(
         file: OutputStream,
+        repo: KSClassDeclaration,
         domainDecl: KSClassDeclaration,
         mapperTypeName: String,
         useContextParameters: Boolean,
@@ -638,16 +688,30 @@ class RepositoryProcessor(
         } else {
             file += "    override suspend fun insert(context: QueryExecutor, entity: $domainQn) = run {\n"
         }
-        file += "        val e = preInsertHook(context, entity)\n"
-        file += "        val statement = e.insert()\n"
+
+        val hasPreInsertHook = isHookOverridden(repo, "preInsertHook")
+        if (hasPreInsertHook) {
+            file += "        val e = preInsertHook(context, entity)\n"
+            file += "        val statement = e.insert()\n"
+        } else {
+            file += "        val statement = entity.insert()\n"
+        }
+
         file += "        aroundQuery(\"insert\", statement) {\n"
         file += "            context.fetchAll(statement, $mapperTypeName)\n"
         file += "        }.map { list ->\n"
         file += "            list.firstOrNull()\n"
         file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmpryResultSet, \"Insert query returned no rows\"))\n"
-        file += "        }.map { entity ->\n"
-        file += "            afterInsertHook(context, entity)\n"
-        file += "        }\n"
+        file += "        }"
+
+        val hasAfterInsertHook = isHookOverridden(repo, "afterInsertHook")
+        if (hasAfterInsertHook) {
+            file += ".map { entity ->\n"
+            file += "            afterInsertHook(context, entity)\n"
+            file += "        }\n"
+        } else {
+            file += "\n"
+        }
         file += "    }"
         if (useArrow) file += ".toDbResult()"
         file += "\n\n"
@@ -673,16 +737,30 @@ class RepositoryProcessor(
         } else {
             file += "    override suspend fun update(context: QueryExecutor, entity: $domainQn) = run {\n"
         }
-        file += "        val e = preUpdateHook(context, entity)\n"
-        file += "        val statement = e.update()\n"
+
+        val hasPreUpdateHook = isHookOverridden(repo, "preUpdateHook")
+        if (hasPreUpdateHook) {
+            file += "        val e = preUpdateHook(context, entity)\n"
+            file += "        val statement = e.update()\n"
+        } else {
+            file += "        val statement = entity.update()\n"
+        }
+
         file += "        aroundQuery(\"update\", statement) {\n"
         file += "            context.fetchAll(statement, $mapperTypeName)\n"
         file += "        }.map { list ->\n"
         file += "            list.firstOrNull()\n"
         file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmpryResultSet, \"Update query returned no rows\"))\n"
-        file += "        }.map { entity ->\n"
-        file += "            afterUpdateHook(context, entity)\n"
-        file += "        }\n"
+        file += "        }"
+
+        val hasAfterUpdateHook = isHookOverridden(repo, "afterUpdateHook")
+        if (hasAfterUpdateHook) {
+            file += ".map { entity ->\n"
+            file += "            afterUpdateHook(context, entity)\n"
+            file += "        }\n"
+        } else {
+            file += "\n"
+        }
         file += "    }"
         if (useArrow) file += ".toDbResult()"
         file += "\n\n"
@@ -707,14 +785,29 @@ class RepositoryProcessor(
         } else {
             file += "    override suspend fun delete(context: QueryExecutor, entity: $domainQn) = run {\n"
         }
-        file += "        val e = preDeleteHook(context, entity)\n"
-        file += "        val statement = e.delete()\n"
+
+        val hasPreDeleteHook = isHookOverridden(repo, "preDeleteHook")
+        if (hasPreDeleteHook) {
+            file += "        val e = preDeleteHook(context, entity)\n"
+            file += "        val statement = e.delete()\n"
+        } else {
+            file += "        val statement = entity.delete()\n"
+        }
+
         file += "        aroundQuery(\"delete\", statement) {\n"
         file += "            context.execute(statement)\n"
-        file += "        }.map {\n"
-        file += "            afterDeleteHook(context, e)\n"
-        file += "            kotlin.Unit\n"
-        file += "        }\n"
+        file += "        }"
+
+        val hasAfterDeleteHook = isHookOverridden(repo, "afterDeleteHook")
+        if (hasAfterDeleteHook) {
+            val entityVar = if (hasPreDeleteHook) "e" else "entity"
+            file += ".map {\n"
+            file += "            afterDeleteHook(context, $entityVar)\n"
+            file += "            kotlin.Unit\n"
+            file += "        }\n"
+        } else {
+            file += ".map { kotlin.Unit }\n"
+        }
         file += "    }"
         if (useArrow) file += ".toDbResult()"
         file += "\n\n"

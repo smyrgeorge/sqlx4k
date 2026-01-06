@@ -2,6 +2,7 @@ package io.github.smyrgeorge.sqlx4k.processor
 
 import io.github.smyrgeorge.sqlx4k.ContextCrudRepository
 import io.github.smyrgeorge.sqlx4k.CrudRepository
+import io.github.smyrgeorge.sqlx4k.CrudRepositoryHooks
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.RowMapper
@@ -28,6 +29,7 @@ object TypeNames {
     val QUERY_ANNOTATION = Query::class.qualifiedName!!
 
     // Core interfaces/classes
+    val CRUD_REPOSITORY_HOOKS = CrudRepositoryHooks::class.qualifiedName!!
     val CRUD_REPOSITORY = CrudRepository::class.qualifiedName!!
 
     @OptIn(ExperimentalContextParameters::class)
