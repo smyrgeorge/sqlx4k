@@ -364,23 +364,23 @@ class RepositoryProcessor(
                 val listQn = r0.declaration.qualifiedName()
                     ?: error("Unable to resolve inner type for method '$name'")
                 if (listQn != TypeNames.KOTLIN_LIST || r0.isMarkedNullable)
-                    error("Method '$name' must return Result<List<T>> where T is the repository domain type")
+                    error("Method '$name' must return List<T> where T is the repository domain type")
                 val tArg = r0.arguments.firstOrNull()?.type?.resolve()
-                    ?: error("Method '$name' must return Result<List<T>> with a generic argument")
+                    ?: error("Method '$name' must return List<T> with a generic argument")
                 ensureDomain(tArg, allowNullable = false)
             }
 
             Prefix.FIND_ONE_BY -> {
                 ensureDomain(r0.makeNotNullable(), allowNullable = true)
                 if (!r0.isMarkedNullable)
-                    error("Method '$name' must return Result<T?> where T is the repository domain type")
+                    error("Method '$name' must return T? where T is the repository domain type")
             }
 
             Prefix.DELETE_ALL, Prefix.COUNT_ALL, Prefix.DELETE_BY, Prefix.COUNT_BY, Prefix.EXECUTE -> {
                 val qn0 = r0.declaration.qualifiedName()
                     ?: error("Unable to resolve inner type for method '$name'")
                 if (qn0 != TypeNames.KOTLIN_LONG || r0.isMarkedNullable)
-                    error("Method '$name' with prefix '${prefix.name.lowercase()}' must return kotlin.Result<kotlin.Long>")
+                    error("Method '$name' with prefix '${prefix.name.lowercase()}' must return ${TypeNames.KOTLIN_LONG}")
             }
         }
     }
@@ -404,7 +404,7 @@ class RepositoryProcessor(
         when (prefix) {
             Prefix.FIND_ALL, Prefix.DELETE_ALL, Prefix.COUNT_ALL -> if (nonContextCount != 0) error("Method '$name' must not have parameters other than context")
             Prefix.FIND_ALL_BY, Prefix.FIND_ONE_BY, Prefix.DELETE_BY, Prefix.COUNT_BY -> if (nonContextCount < 1) error(
-                "Method '$name' must have more than one argument (at least one after context)"
+                "Method '$name' must have more than one argument (at least one besides context)"
             )
 
             Prefix.EXECUTE -> {}
@@ -454,12 +454,15 @@ class RepositoryProcessor(
      *
      * @param file The OutputStream where the named parameter-binding statements will be written.
      * @param params A list of KSValueParameter objects representing the parameters for which bindings are generated. The first parameter is excluded from processing.
+     * @param useContextParameters A flag indicating whether the method uses context parameters. If `true`, the first parameter (assumed to be the context parameter) is excluded from processing.
      */
     private fun emitNamedParameterBindings(
         file: OutputStream,
-        params: List<KSValueParameter>
+        params: List<KSValueParameter>,
+        useContextParameters: Boolean
     ) {
-        params.drop(1).forEach { p ->
+        val drop = if (useContextParameters) 0 else 1
+        params.drop(drop).forEach { p ->
             val pName = p.name?.asString()
                 ?: error("All query parameters must be named when using namedParameters support")
             file += "        statement.bind(\"$pName\", $pName)\n"
@@ -553,7 +556,7 @@ class RepositoryProcessor(
         file += "    override suspend fun $name($paramSig) = run {\n"
         file += "        // language=SQL\n"
         file += "        val statement = Statement.create(\"$sql\")\n"
-        emitNamedParameterBindings(file, params)
+        emitNamedParameterBindings(file, params, useContextParameters)
 
         val contextParamName =
             if (useContextParameters) "context"

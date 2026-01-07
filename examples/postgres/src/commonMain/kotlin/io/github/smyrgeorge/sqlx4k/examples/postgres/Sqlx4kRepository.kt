@@ -1,5 +1,6 @@
 package io.github.smyrgeorge.sqlx4k.examples.postgres
 
+import io.github.smyrgeorge.sqlx4k.ContextCrudRepository
 import io.github.smyrgeorge.sqlx4k.CrudRepository
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.Statement
@@ -32,5 +33,13 @@ interface AuditableRepository<T> : CrudRepository<T> {
 interface Sqlx4kAuditableRepository : AuditableRepository<Sqlx4k> {
     @Query("SELECT * FROM sqlx4k WHERE id = :id")
     suspend fun findOneById(context: QueryExecutor, id: Int): Result<Sqlx4k?>
+}
+
+@Repository
+@OptIn(ExperimentalContextParameters::class)
+interface Sqlx4kContextRepository : ContextCrudRepository<Sqlx4k> {
+    @Query("SELECT * FROM sqlx4k WHERE id = :id")
+    context(context: QueryExecutor)
+    suspend fun findOneById(id: Int): Result<Sqlx4k?>
 }
 
