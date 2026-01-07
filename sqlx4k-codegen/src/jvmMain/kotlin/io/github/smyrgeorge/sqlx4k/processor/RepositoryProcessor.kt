@@ -380,7 +380,7 @@ class RepositoryProcessor(
                 val qn0 = r0.declaration.qualifiedName()
                     ?: error("Unable to resolve inner type for method '$name'")
                 if (qn0 != TypeNames.KOTLIN_LONG || r0.isMarkedNullable)
-                    error("Method '$name' with prefix '${prefix.name.lowercase()}' must return ${TypeNames.KOTLIN_LONG}")
+                    error("Method '$name' must return ${TypeNames.KOTLIN_LONG}")
             }
         }
     }
