@@ -8,7 +8,7 @@ import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
-import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.listFilesWithContent
+import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.listSqlFilesWithContent
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.extensions.toJsonString
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.*
@@ -61,7 +61,7 @@ class PgmqClient(
         }
 
         suspend fun installFromFiles() {
-            val files: List<MigrationFile> = listFilesWithContent(options.installFilesPath)
+            val files: List<MigrationFile> = listSqlFilesWithContent(options.installFilesPath)
                 .filter { it.first != "pgmq.sql" }
                 .sortedBy { it.first }
                 .mapIndexed { i, p ->

@@ -1,6 +1,7 @@
 package io.github.smyrgeorge.sqlx4k
 
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
+import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import kotlin.time.Duration
 
@@ -179,6 +180,30 @@ interface QueryExecutor {
          */
         suspend fun migrate(
             path: String = "./db/migrations",
+            table: String = "_sqlx4k_migrations",
+            schema: String? = null, // The default schema will be used if not provided.
+            createSchema: Boolean = false, // Whether to create the schema if it does not exist.
+            afterStatementExecution: suspend (Statement, Duration) -> Unit = { _, _ -> },
+            afterFileMigration: suspend (Migration, Duration) -> Unit = { _, _ -> }
+        ): Result<Migrator.Results>
+
+        /**
+         * Applies database migrations using the provided list of migration files.
+         * Utilizes the specified settings to manage schema creation, migration tracking, and
+         * callback operations for monitoring the progress of individual statements and file migrations.
+         *
+         * @param files A list of `MigrationFile` objects representing the SQL migration files to be applied.
+         * @param table The name of the database table used to record and track migration progress. Default is "_sqlx4k_migrations".
+         * @param schema The database schema where migrations will be applied. If null, the default schema will be used.
+         * @param createSchema When true, creates the schema if it does not already exist. Default is false.
+         * @param afterStatementExecution A suspendable callback triggered after the execution of each SQL statement.
+         *        Receives the `Statement` executed and the `Duration` of the execution as arguments.
+         * @param afterFileMigration A suspendable callback triggered after the migration of each SQL file.
+         *        Receives the `Migration` and the `Duration` of the migration as arguments.
+         * @return A `Result` object containing the results of the migration process, including details of success or failure.
+         */
+        suspend fun migrate(
+            files: List<MigrationFile>,
             table: String = "_sqlx4k_migrations",
             schema: String? = null, // The default schema will be used if not provided.
             createSchema: Boolean = false, // Whether to create the schema if it does not exist.

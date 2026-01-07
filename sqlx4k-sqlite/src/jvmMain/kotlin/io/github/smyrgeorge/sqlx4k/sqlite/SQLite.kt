@@ -3,6 +3,7 @@ package io.github.smyrgeorge.sqlx4k.sqlite
 import io.github.smyrgeorge.sqlx4k.*
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
+import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.github.smyrgeorge.sqlx4k.impl.pool.ConnectionPoolImpl
 import io.github.smyrgeorge.sqlx4k.impl.pool.PooledConnection
@@ -51,8 +52,26 @@ class SQLite(
         db = this,
         path = path,
         table = table,
-        schema = schema,
-        createSchema = createSchema,
+        schema = null, // SQLite does not support schemas.
+        createSchema = false, // SQLite does not support schemas.
+        dialect = Dialect.SQLite,
+        afterStatementExecution = afterStatementExecution,
+        afterFileMigration = afterFileMigration
+    )
+
+    override suspend fun migrate(
+        files: List<MigrationFile>,
+        table: String,
+        schema: String?,
+        createSchema: Boolean,
+        afterStatementExecution: suspend (Statement, Duration) -> Unit,
+        afterFileMigration: suspend (Migration, Duration) -> Unit
+    ): Result<Migrator.Results> = Migrator.migrate(
+        db = this,
+        files = files,
+        table = table,
+        schema = null, // SQLite does not support schemas.
+        createSchema = false, // SQLite does not support schemas.
         dialect = Dialect.SQLite,
         afterStatementExecution = afterStatementExecution,
         afterFileMigration = afterFileMigration

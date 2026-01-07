@@ -8,9 +8,9 @@ import kotlinx.io.readByteArray
 
 private val fs = SystemFileSystem
 
-private fun readEntireFileUtf8(path: String): String {
+private fun readEntireFileFromDisk(path: Path): String {
     val buffer = Buffer()
-    val source = fs.source(Path(path))
+    val source = fs.source(path)
     try {
         source.readAtMostTo(buffer, Int.MAX_VALUE.toLong())
         return buffer.readByteArray().decodeToString() // UTF-8 by default
@@ -23,17 +23,19 @@ private fun readEntireFileUtf8(path: String): String {
     }
 }
 
-fun listFilesWithContent(path: String): List<Pair<String, String>> {
+fun listSqlFilesWithContent(path: String): List<Pair<String, String>> {
     val dir = Path(path)
     val meta = fs.metadataOrNull(dir) ?: error("Migrations path not found: $path")
     require(meta.isDirectory) { "Migrations path not a directory: $path" }
     return fs.list(dir)
         .filter { p -> p.name.lowercase().endsWith(".sql") && (fs.metadataOrNull(p)!!.isRegularFile) }
         .map { p ->
-            val content = readEntireFileUtf8(p.toString())
+            val content = readEntireFileFromDisk(p)
             p.name to content
         }
 }
 
 fun listMigrationFiles(path: String): List<MigrationFile> =
-    listFilesWithContent(path).map { MigrationFile(it.first, it.second) }
+    listSqlFilesWithContent(path).map { MigrationFile(it.first, it.second) }
+
+expect fun listMigrationFilesFromResources(path: String): List<MigrationFile>
