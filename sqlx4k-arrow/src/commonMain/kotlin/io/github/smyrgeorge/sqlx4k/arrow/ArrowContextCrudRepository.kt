@@ -13,7 +13,6 @@ import io.github.smyrgeorge.sqlx4k.arrow.impl.extensions.DbResult
  *
  * @param T The type of the entity managed by the repository.
  */
-@ExperimentalContextParameters
 interface ArrowContextCrudRepository<T> : CrudRepositoryHooks<T> {
     /**
      * Inserts the given entity into the data source using the specified driver context.

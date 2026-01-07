@@ -1,19 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.processor
 
-import io.github.smyrgeorge.sqlx4k.ContextCrudRepository
-import io.github.smyrgeorge.sqlx4k.CrudRepository
-import io.github.smyrgeorge.sqlx4k.CrudRepositoryHooks
-import io.github.smyrgeorge.sqlx4k.QueryExecutor
-import io.github.smyrgeorge.sqlx4k.ResultSet
-import io.github.smyrgeorge.sqlx4k.RowMapper
-import io.github.smyrgeorge.sqlx4k.SQLError
-import io.github.smyrgeorge.sqlx4k.Statement
-import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
-import io.github.smyrgeorge.sqlx4k.annotation.Column
-import io.github.smyrgeorge.sqlx4k.annotation.Id
-import io.github.smyrgeorge.sqlx4k.annotation.Query
-import io.github.smyrgeorge.sqlx4k.annotation.Repository
-import io.github.smyrgeorge.sqlx4k.annotation.Table
+import io.github.smyrgeorge.sqlx4k.*
+import io.github.smyrgeorge.sqlx4k.annotation.*
 import io.github.smyrgeorge.sqlx4k.arrow.ArrowContextCrudRepository
 import io.github.smyrgeorge.sqlx4k.arrow.ArrowCrudRepository
 
@@ -31,11 +19,8 @@ object TypeNames {
     // Core interfaces/classes
     val CRUD_REPOSITORY_HOOKS = CrudRepositoryHooks::class.qualifiedName!!
     val CRUD_REPOSITORY = CrudRepository::class.qualifiedName!!
-
-    @OptIn(ExperimentalContextParameters::class)
     val CONTEXT_CRUD_REPOSITORY = ContextCrudRepository::class.qualifiedName!!
     val ARROW_CRUD_REPOSITORY = ArrowCrudRepository::class.qualifiedName!!
-    @OptIn(ExperimentalContextParameters::class)
     val ARROW_CONTEXT_CRUD_REPOSITORY = ArrowContextCrudRepository::class.qualifiedName!!
 
     val REPOSITORY_TYPE_NAMES = setOf(

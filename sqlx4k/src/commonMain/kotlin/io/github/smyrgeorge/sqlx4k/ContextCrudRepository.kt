@@ -9,7 +9,6 @@ package io.github.smyrgeorge.sqlx4k
  *
  * @param T The type of the entity managed by the repository.
  */
-@ExperimentalContextParameters
 interface ContextCrudRepository<T> : CrudRepositoryHooks<T> {
     /**
      * Inserts the given entity into the data source using the specified driver context.

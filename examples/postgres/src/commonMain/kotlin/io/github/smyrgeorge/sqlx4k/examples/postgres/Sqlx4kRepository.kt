@@ -36,10 +36,8 @@ interface Sqlx4kAuditableRepository : AuditableRepository<Sqlx4k> {
 }
 
 @Repository
-@OptIn(ExperimentalContextParameters::class)
 interface Sqlx4kContextRepository : ContextCrudRepository<Sqlx4k> {
     @Query("SELECT * FROM sqlx4k WHERE id = :id")
     context(context: QueryExecutor)
     suspend fun findOneById(id: Int): Result<Sqlx4k?>
 }
-
