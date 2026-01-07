@@ -74,7 +74,7 @@ class PostgreSQLImpl(
         try {
             pool.disposeLater().awaitFirstOrNull()
         } catch (e: Exception) {
-            SQLError(SQLError.Code.WorkerCrashed, e.message, e).ex()
+            SQLError(SQLError.Code.WorkerCrashed, e.message, e).raise()
         }
     }
 
@@ -91,7 +91,7 @@ class PostgreSQLImpl(
             val res = try {
                 createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message, e).ex()
+                SQLError(SQLError.Code.Database, e.message, e).raise()
             } finally {
                 close().awaitFirstOrNull()
             }
@@ -105,7 +105,7 @@ class PostgreSQLImpl(
             try {
                 createStatement(sql).execute().awaitSingle().toResultSet()
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message, e).ex()
+                SQLError(SQLError.Code.Database, e.message, e).raise()
             } finally {
                 close().awaitFirstOrNull()
             }
@@ -118,7 +118,7 @@ class PostgreSQLImpl(
                 beginTransaction().awaitFirstOrNull()
             } catch (e: Exception) {
                 close().awaitFirstOrNull()
-                SQLError(SQLError.Code.Database, e.message, e).ex()
+                SQLError(SQLError.Code.Database, e.message, e).raise()
             }
             R2dbcTransaction(this, true, encoders)
         }
@@ -216,9 +216,9 @@ class PostgreSQLImpl(
             create().awaitSingle()
         } catch (e: Exception) {
             when (e) {
-                is PoolShutdownException -> SQLError(SQLError.Code.PoolClosed, e.message, e).ex()
-                is PoolAcquireTimeoutException -> SQLError(SQLError.Code.PoolTimedOut, e.message, e).ex()
-                else -> SQLError(SQLError.Code.Pool, e.message, e).ex()
+                is PoolShutdownException -> SQLError(SQLError.Code.PoolClosed, e.message, e).raise()
+                is PoolAcquireTimeoutException -> SQLError(SQLError.Code.PoolTimedOut, e.message, e).raise()
+                else -> SQLError(SQLError.Code.Pool, e.message, e).raise()
             }
         }
     }
@@ -271,7 +271,7 @@ class PostgreSQLImpl(
             return try {
                 if (lock) doExecuteWithLock(sql) else doExecute(sql)
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message, e).ex()
+                SQLError(SQLError.Code.Database, e.message, e).raise()
             }
         }
 
@@ -285,7 +285,7 @@ class PostgreSQLImpl(
                     @Suppress("SqlSourceToSinkFlow")
                     connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).ex()
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
                 }
             }
         }
@@ -296,7 +296,7 @@ class PostgreSQLImpl(
                 try {
                     connection.beginTransaction().awaitFirstOrNull()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).ex()
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
                 }
                 R2dbcTransaction(connection, false, encoders)
             }
@@ -319,7 +319,7 @@ class PostgreSQLImpl(
                 try {
                     connection.commitTransaction().awaitFirstOrNull()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).ex()
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
                 } finally {
                     if (closeConnectionAfterTx) connection.close().awaitFirstOrNull()
                 }
@@ -333,7 +333,7 @@ class PostgreSQLImpl(
                 try {
                     connection.rollbackTransaction().awaitFirstOrNull()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).ex()
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
                 } finally {
                     if (closeConnectionAfterTx) connection.close().awaitFirstOrNull()
                 }
@@ -347,7 +347,7 @@ class PostgreSQLImpl(
                     @Suppress("SqlSourceToSinkFlow")
                     connection.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).ex()
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
                 }
             }
         }
@@ -360,7 +360,7 @@ class PostgreSQLImpl(
                     @Suppress("SqlSourceToSinkFlow")
                     connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).ex()
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
                 }
             }
         }

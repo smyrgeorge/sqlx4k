@@ -40,7 +40,7 @@ class ResultSet(
      * @return Unit. If an error exists, this method throws an exception and does not return normally.
      */
     fun throwIfError() {
-        error?.ex()
+        error?.raise()
     }
 
     /**
@@ -148,7 +148,7 @@ class ResultSet(
              * @throws SQLError if the value is null.
              */
             fun asString(): String = value
-                ?: SQLError(SQLError.Code.CannotDecode, "Failed to decode value (null)").ex()
+                ?: SQLError(SQLError.Code.CannotDecode, "Failed to decode value (null)").raise()
 
             /**
              * Converts the value of the column to a nullable String.

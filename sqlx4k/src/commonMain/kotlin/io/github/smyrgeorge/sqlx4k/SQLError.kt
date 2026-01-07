@@ -21,7 +21,7 @@ class SQLError(
      * @return Nothing, since this method always throws an exception.
      * @throws SQLError This method always throws the current instance of [SQLError].
      */
-    fun ex(): Nothing = throw this
+    fun raise(): Nothing = throw this
 
     /**
      * Represents various error codes that can occur while interacting with a database or performing related operations.

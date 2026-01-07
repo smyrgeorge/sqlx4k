@@ -37,7 +37,7 @@ class PooledConnection(
         mutex.withLock {
             if (pool.closed.load()) {
                 closeInternal()
-                SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").ex()
+                SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").raise()
             }
 
             acquired = true

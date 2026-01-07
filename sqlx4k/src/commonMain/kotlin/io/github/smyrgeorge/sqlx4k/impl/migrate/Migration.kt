@@ -1,5 +1,4 @@
-@file:Suppress("SqlNoDataSourceInspection")
-@file:OptIn(ExperimentalTime::class)
+@file:Suppress("SqlNoDataSourceInspection", "SqlDialectInspection")
 
 package io.github.smyrgeorge.sqlx4k.impl.migrate
 
@@ -9,7 +8,6 @@ import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInstant
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 import io.github.smyrgeorge.sqlx4k.impl.types.NoQuotingString
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import io.github.smyrgeorge.sqlx4k.RowMapper as Sqlx4kRowMapper
 

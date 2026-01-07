@@ -104,7 +104,7 @@ class MySQL(
         try {
             pool.disposeLater().awaitFirstOrNull()
         } catch (e: Exception) {
-            SQLError(SQLError.Code.WorkerCrashed, e.message, e).ex()
+            SQLError(SQLError.Code.WorkerCrashed, e.message, e).raise()
         }
     }
 
@@ -121,7 +121,7 @@ class MySQL(
             val res = try {
                 createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message, e).ex()
+                SQLError(SQLError.Code.Database, e.message, e).raise()
             } finally {
                 close().awaitFirstOrNull()
             }
@@ -135,7 +135,7 @@ class MySQL(
             try {
                 createStatement(sql).execute().awaitSingle().toResultSet()
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message, e).ex()
+                SQLError(SQLError.Code.Database, e.message, e).raise()
             } finally {
                 close().awaitFirstOrNull()
             }
@@ -148,7 +148,7 @@ class MySQL(
                 beginTransaction().awaitFirstOrNull()
             } catch (e: Exception) {
                 close().awaitFirstOrNull()
-                SQLError(SQLError.Code.Database, e.message, e).ex()
+                SQLError(SQLError.Code.Database, e.message, e).raise()
             }
             R2dbcTransaction(this, true, encoders)
         }
@@ -159,9 +159,9 @@ class MySQL(
             create().awaitSingle()
         } catch (e: Exception) {
             when (e) {
-                is PoolShutdownException -> SQLError(SQLError.Code.PoolClosed, e.message).ex()
-                is PoolAcquireTimeoutException -> SQLError(SQLError.Code.PoolTimedOut, e.message).ex()
-                else -> SQLError(SQLError.Code.Pool, e.message, e).ex()
+                is PoolShutdownException -> SQLError(SQLError.Code.PoolClosed, e.message).raise()
+                is PoolAcquireTimeoutException -> SQLError(SQLError.Code.PoolTimedOut, e.message).raise()
+                else -> SQLError(SQLError.Code.Pool, e.message, e).raise()
             }
         }
     }
@@ -214,7 +214,7 @@ class MySQL(
             return try {
                 if (lock) doExecuteWithLock(sql) else doExecute(sql)
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message, e).ex()
+                SQLError(SQLError.Code.Database, e.message, e).raise()
             }
         }
 
@@ -228,7 +228,7 @@ class MySQL(
                     @Suppress("SqlSourceToSinkFlow")
                     connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message).ex()
+                    SQLError(SQLError.Code.Database, e.message).raise()
                 }
             }
         }
@@ -239,7 +239,7 @@ class MySQL(
                 try {
                     connection.beginTransaction().awaitFirstOrNull()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).ex()
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
                 }
                 R2dbcTransaction(connection, false, encoders)
             }
@@ -262,7 +262,7 @@ class MySQL(
                 try {
                     connection.commitTransaction().awaitFirstOrNull()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).ex()
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
                 } finally {
                     if (closeConnectionAfterTx) connection.close().awaitFirstOrNull()
                 }
@@ -276,7 +276,7 @@ class MySQL(
                 try {
                     connection.rollbackTransaction().awaitFirstOrNull()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).ex()
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
                 } finally {
                     if (closeConnectionAfterTx) connection.close().awaitFirstOrNull()
                 }
@@ -290,7 +290,7 @@ class MySQL(
                     @Suppress("SqlSourceToSinkFlow")
                     connection.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).ex()
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
                 }
             }
         }
@@ -303,7 +303,7 @@ class MySQL(
                     @Suppress("SqlSourceToSinkFlow")
                     connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).ex()
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
                 }
             }
         }

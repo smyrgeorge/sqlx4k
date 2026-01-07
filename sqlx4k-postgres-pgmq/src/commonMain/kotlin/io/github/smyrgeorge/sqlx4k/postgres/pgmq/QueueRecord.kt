@@ -1,8 +1,5 @@
-@file:OptIn(ExperimentalTime::class)
-
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq
 
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /**

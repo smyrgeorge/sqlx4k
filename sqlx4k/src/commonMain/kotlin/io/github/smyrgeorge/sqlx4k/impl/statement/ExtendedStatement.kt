@@ -48,7 +48,7 @@ class ExtendedStatement(private val sql: String) : AbstractStatement(sql) {
             SQLError(
                 code = SQLError.Code.PositionalParameterOutOfBounds,
                 message = "Index '$index' out of bounds."
-            ).ex()
+            ).raise()
         }
         pgParametersValues[index] = value
         return this
@@ -84,7 +84,7 @@ class ExtendedStatement(private val sql: String) : AbstractStatement(sql) {
                     SQLError(
                         code = SQLError.Code.PositionalParameterValueNotSupplied,
                         message = "Value for positional parameter index '$zeroIdx' was not supplied."
-                    ).ex()
+                    ).raise()
                 }
                 sb.append(pgParametersValues[zeroIdx].encodeValue(encoders))
                 return@renderWithScanner j

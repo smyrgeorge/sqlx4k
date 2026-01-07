@@ -71,7 +71,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
             SQLError(
                 code = SQLError.Code.PositionalParameterOutOfBounds,
                 message = "Index '$index' out of bounds."
-            ).ex()
+            ).raise()
         }
         positionalParametersValues[index] = value
         return this
@@ -90,7 +90,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
             SQLError(
                 code = SQLError.Code.NamedParameterNotFound,
                 message = "Parameter '$parameter' not found."
-            ).ex()
+            ).raise()
         }
         namedParametersValues[parameter] = value
         return this
@@ -124,13 +124,13 @@ abstract class AbstractStatement(private val sql: String) : Statement {
                 SQLError(
                     code = SQLError.Code.PositionalParameterValueNotSupplied,
                     message = "Not enough positional parameter values provided."
-                ).ex()
+                ).raise()
             }
             val value = positionalParametersValues.getOrElseNullable(nextIndex) {
                 SQLError(
                     code = SQLError.Code.PositionalParameterValueNotSupplied,
                     message = "Value for positional parameter index '$nextIndex' was not supplied."
-                ).ex()
+                ).raise()
             }
             sb.append(value.encodeValue(encoders))
             @Suppress("AssignedValueIsNeverRead")
@@ -163,7 +163,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
                         SQLError(
                             code = SQLError.Code.NamedParameterValueNotSupplied,
                             message = "Value for named parameter '$name' was not supplied."
-                        ).ex()
+                        ).raise()
                     }
                     sb.append(value.encodeValue(encoders))
                     return@renderWithScanner j

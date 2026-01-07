@@ -18,19 +18,13 @@ import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalTime
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asShort
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asUuid
-import io.github.smyrgeorge.sqlx4k.postgres.extensions.asBooleanArray
+import io.github.smyrgeorge.sqlx4k.postgres.extensions.*
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asByteArray
-import io.github.smyrgeorge.sqlx4k.postgres.extensions.asDoubleArray
-import io.github.smyrgeorge.sqlx4k.postgres.extensions.asFloatArray
-import io.github.smyrgeorge.sqlx4k.postgres.extensions.asIntArray
-import io.github.smyrgeorge.sqlx4k.postgres.extensions.asLongArray
-import io.github.smyrgeorge.sqlx4k.postgres.extensions.asShortArray
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlin.random.Random
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -42,7 +36,7 @@ class CommonPostgreSQLTests(
 
     private fun newTable(): String = "t_${Random.nextInt(1_000_000)}"
 
-    @OptIn(ExperimentalUuidApi::class, ExperimentalTime::class)
+    @OptIn(ExperimentalUuidApi::class)
     fun `Test basic type mappings`() = runBlocking {
         // language=PostgreSQL
         val types = """

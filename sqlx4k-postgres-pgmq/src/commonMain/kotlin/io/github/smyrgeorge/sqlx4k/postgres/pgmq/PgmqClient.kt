@@ -2,13 +2,11 @@
 
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq
 
-import io.github.smyrgeorge.sqlx4k.Dialect
-import io.github.smyrgeorge.sqlx4k.QueryExecutor
-import io.github.smyrgeorge.sqlx4k.Statement
-import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.*
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
-import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.listSqlFilesWithContent
+import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.readSqlFilesFromDisk
+import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.splitSqlStatements
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.extensions.toJsonString
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.*
@@ -47,48 +45,124 @@ class PgmqClient(
         if (options.verifyInstallation) runBlocking { install() }
     }
 
-    private suspend fun install() {
+    /**
+     * Installs the required components or extensions for the `pgmq` functionality.
+     *
+     * This method verifies whether the `pgmq` schema is already installed in the database.
+     * If not, it attempts to install it based on the specified options.
+     *
+     * Key behaviors include:
+     * - Checks for the existence of the `pgmq` schema in the database.
+     * - If the schema is not present, it uses the configuration in `options` to determine
+     *   whether to install from files or extensions, or to raise an error.
+     * - Re-verifies the installation after performing the installation procedure.
+     *
+     * @throws IllegalStateException if the `pgmq` installation cannot be verified and
+     * `options.autoInstall` is disabled.
+     */
+    suspend fun install() {
         suspend fun installed(): Boolean {
-            // language=SQL
+            // language=PostgreSQL
             val sql = "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = 'pgmq')"
             return pg.fetchAll(Statement.create(sql), BooleanRowMapper).toSingleBooleanResult().getOrThrow()
         }
 
-        suspend fun installExtension() {
-            // language=SQL
-            val sql = "CREATE EXTENSION IF NOT EXISTS pgmq"
-            pg.execute(sql).getOrElse { error("Could not create the 'pgmq' extension (${it.message}).") }
-        }
-
-        suspend fun installFromFiles() {
-            val files: List<MigrationFile> = listSqlFilesWithContent(options.installFilesPath)
-                .filter { it.first != "pgmq.sql" }
-                .sortedBy { it.first }
-                .mapIndexed { i, p ->
-                    val name = "$i-${p.first}"
-                    val content = p.second
-                    name to content
-                }.map { MigrationFile(it.first, it.second) }
-
-            Migrator.migrate(
-                db = pg,
-                files = files,
-                table = "migrations",
-                schema = "pgmq",
-                createSchema = true,
-                dialect = Dialect.PostgreSQL,
-                afterStatementExecution = { _, _ -> },
-                afterFileMigration = { m, d -> println("[pgmq] Migrated file: $m, duration: ${d}ms") },
-            )
-        }
-
         if (!installed()) {
             if (!options.autoInstall) error("Could not verify the 'pgmq' installation.")
-            if (options.installFromFiles) installFromFiles() else installExtension()
+            if (options.installFromFiles) installFromMigrationFiles() else installFromExtension()
         }
 
         // Recheck the installation.
         if (!installed()) error("Could not verify the 'pgmq' installation.")
+    }
+
+    /**
+     * Installs the `pgmq` extension in the PostgreSQL database if it is not already installed.
+     *
+     * This method executes a SQL statement to create the `pgmq` extension. If the extension
+     * cannot be created, an error is thrown with a descriptive message.
+     *
+     * Note: This method uses a suspend function, so it must be called from a coroutine
+     * or another suspend function.
+     *
+     * @throws IllegalStateException if the `pgmq` extension cannot be created.
+     */
+    suspend fun installFromExtension() {
+        // language=PostgreSQL
+        val sql = "CREATE EXTENSION IF NOT EXISTS pgmq"
+        pg.execute(sql).getOrElse { error("Could not create the 'pgmq' extension (${it.message}).") }
+    }
+
+    /**
+     * Installs migration files from a specified directory path.
+     *
+     * This method reads SQL migration files from the specified directory, filters out
+     * certain files (e.g., "pgmq.sql"), sorts them, assigns a sequential name to each file,
+     * and installs them using the `installFromFiles` method.
+     *
+     * @param path The directory path where the migration files are located.
+     *             Defaults to the value of `options.installFilesPath`.
+     */
+    suspend fun installFromMigrationFiles(path: String = options.installFilesPath) {
+        val files: List<MigrationFile> = readSqlFilesFromDisk(path)
+            .filter { it.first != "pgmq.sql" }
+            .sortedBy { it.first }
+            .mapIndexed { i, p ->
+                val name = "$i-${p.first}"
+                val content = p.second
+                name to content
+            }.map { MigrationFile(it.first, it.second) }
+
+        installFromMigrationFiles(files)
+    }
+
+    /**
+     * Executes database migrations from a list of migration files.
+     *
+     * @param files A list of migration files to be applied to the database.
+     */
+    suspend fun installFromMigrationFiles(files: List<MigrationFile>) {
+        Migrator.migrate(
+            db = pg,
+            files = files,
+            table = "migrations",
+            schema = "pgmq",
+            createSchema = true,
+            dialect = Dialect.PostgreSQL,
+            afterStatementExecution = { _, _ -> },
+            afterFileMigration = { m, d -> println("[pgmq] Migrated file: $m, duration: ${d}ms") },
+        )
+    }
+
+    /**
+     * Installs extensions by reading SQL files from the specified directory
+     * and processing each file.
+     *
+     * @param path The directory path where SQL files are located.
+     */
+    suspend fun installExtentions(path: String) {
+        val files: List<Pair<String, String>> = readSqlFilesFromDisk(path)
+        files.forEach { installExtension(it) }
+    }
+
+    /**
+     * Installs an extension by executing SQL statements from the provided file.
+     * The file content is split into individual SQL statements,
+     * which are executed in a single transaction.
+     *
+     * @param file A pair containing the file name as the first element and the file content
+     *             (SQL statements as a string) as the second element.
+     * @throws SQLError If the provided file is empty or if there is an error during SQL execution.
+     */
+    suspend fun installExtension(file: Pair<String, String>) {
+        // Split the file content into individual statements.
+        val statements: List<Statement> = splitSqlStatements(file.second).map { Statement.create(it) }
+        if (statements.isEmpty()) SQLError(SQLError.Code.Migrate, "Extention file ${file.first} is empty.").raise()
+
+        // Execute all the statements (of a file) in a single transaction
+        pg.transaction {
+            statements.forEach { statement -> execute(statement).getOrThrow() }
+        }
     }
 
     /**
@@ -105,7 +179,7 @@ class PgmqClient(
     suspend fun create(queue: Queue): Result<Unit> = runCatching {
         context(tx: Transaction)
         suspend fun create(queue: String, unlogged: Boolean): Result<Unit> {
-            // language=SQL
+            // language=PostgreSQL
             val sql = if (unlogged) "SELECT pgmq.create_unlogged(queue_name := ?)"
             else "SELECT pgmq.create(queue_name := ?)"
             val statement = Statement.create(sql).bind(0, queue)
@@ -114,7 +188,7 @@ class PgmqClient(
 
         context(tx: Transaction)
         suspend fun enableNotifyInsert(queue: String, throttleNotifyInterval: Duration): Result<Unit> {
-            // language=SQL
+            // language=PostgreSQL
             val sql = "SELECT pgmq.enable_notify_insert(queue_name := ?, throttle_interval_ms := ?)"
             val statement = Statement.create(sql).bind(0, queue).bind(1, throttleNotifyInterval.inWholeMilliseconds)
             return tx.fetchAll(statement, UnitRowMapper).toSingleUnitResult()
@@ -146,7 +220,7 @@ class PgmqClient(
      *         otherwise it contains an exception.
      */
     suspend fun listQueues(): Result<List<QueueRecord>> {
-        // language=SQL
+        // language=PostgreSQL
         val sql = "SELECT * FROM pgmq.list_queues()"
         return pg.fetchAll(sql, QueueRecordRowMapper)
     }
@@ -162,7 +236,7 @@ class PgmqClient(
      */
     suspend fun drop(queue: Queue): Result<Boolean> = drop(queue.name)
     private suspend fun drop(queue: String): Result<Boolean> {
-        // language=SQL
+        // language=PostgreSQL
         val sql = "SELECT pgmq.drop_queue(queue_name := ?)"
         val statement = Statement.create(sql).bind(0, queue)
         return pg.fetchAll(statement, BooleanRowMapper).toSingleBooleanResult()
@@ -180,7 +254,7 @@ class PgmqClient(
      */
     suspend fun purge(queue: Queue): Result<Long> = purge(queue.name)
     private suspend fun purge(queue: String): Result<Long> {
-        // language=SQL
+        // language=PostgreSQL
         val sql = "SELECT pgmq.purge_queue(queue_name := ?)"
         val statement = Statement.create(sql).bind(0, queue)
         return pg.fetchAll(statement, LongRowMapper).toSingleLongResult() // returns the number of messages purged.
@@ -227,7 +301,7 @@ class PgmqClient(
         headers: Map<String, String> = emptyMap(),
         delay: Duration = 0.seconds
     ): Result<Long> {
-        // language=SQL
+        // language=PostgreSQL
         val sql = "SELECT pgmq.send(queue_name := ?, msg := ?, headers := ?, delay := ?)"
         val statement = Statement.create(sql)
             .bind(0, queue)
@@ -273,7 +347,7 @@ class PgmqClient(
         headers: Map<String, String> = emptyMap(),
         delay: Duration = 0.seconds
     ): Result<List<Long>> {
-        // language=SQL
+        // language=PostgreSQL
         val sql = "SELECT pgmq.send_batch(queue_name := ?, msgs := ARRAY[?]::jsonb[], headers := ?, delay := ?)"
         val statement = Statement.create(sql)
             .bind(0, queue)
@@ -301,7 +375,7 @@ class PgmqClient(
      */
     context(db: QueryExecutor)
     suspend fun pop(queue: String, quantity: Int = 1): Result<List<Message>> {
-        // language=SQL
+        // language=PostgreSQL
         val sql = "SELECT * FROM pgmq.pop(queue_name := ?, qty := ?)"
         val statement = Statement.create(sql).bind(0, queue).bind(1, quantity)
         return db.fetchAll(statement, MessageRowMapper)
@@ -328,7 +402,7 @@ class PgmqClient(
      */
     context(db: QueryExecutor)
     suspend fun read(queue: String, quantity: Int = 1, vt: Duration = 30.seconds): Result<List<Message>> {
-        // language=SQL
+        // language=PostgreSQL
         val sql = "SELECT * FROM pgmq.read(queue_name := ?, qty := ?, vt := ?)"
         val statement = Statement.create(sql)
             .bind(0, queue)
@@ -365,7 +439,7 @@ class PgmqClient(
      */
     context(db: QueryExecutor)
     suspend fun archive(queue: String, id: Long): Result<Boolean> {
-        // language=SQL
+        // language=PostgreSQL
         val sql = "SELECT pgmq.archive(queue_name := ?, msg_id := ?)"
         val statement = Statement.create(sql).bind(0, queue).bind(1, id)
         return db.fetchAll(statement, BooleanRowMapper).toSingleBooleanResult()
@@ -380,7 +454,7 @@ class PgmqClient(
      */
     context(db: QueryExecutor)
     suspend fun archive(queue: String, ids: List<Long>): Result<List<Long>> {
-        // language=SQL
+        // language=PostgreSQL
         val sql = "SELECT pgmq.archive(queue_name := ?, msg_ids := ARRAY[?])"
         val statement = Statement.create(sql).bind(0, queue).bind(1, NoWrappingTuple(ids))
         return db.fetchAll(statement, LongRowMapper).mapCatching {
@@ -417,7 +491,7 @@ class PgmqClient(
      */
     context(db: QueryExecutor)
     suspend fun delete(queue: String, id: Long): Result<Boolean> {
-        // language=SQL
+        // language=PostgreSQL
         val sql = "SELECT pgmq.delete(queue_name := ?, msg_id := ?)"
         val statement = Statement.create(sql).bind(0, queue).bind(1, id)
         return db.fetchAll(statement, BooleanRowMapper).toSingleBooleanResult()
@@ -433,7 +507,7 @@ class PgmqClient(
      */
     context(db: QueryExecutor)
     suspend fun delete(queue: String, ids: List<Long>): Result<List<Long>> {
-        // language=SQL
+        // language=PostgreSQL
         val sql = "SELECT pgmq.delete(queue_name := ?, msg_ids := ARRAY[?])"
         val statement = Statement.create(sql).bind(0, queue).bind(1, NoWrappingTuple(ids))
         return db.fetchAll(statement, LongRowMapper).mapCatching {
@@ -466,7 +540,7 @@ class PgmqClient(
      */
     context(db: QueryExecutor)
     suspend fun setVt(queue: String, id: Long, vt: Duration): Result<Long> {
-        // language=SQL
+        // language=PostgreSQL
         val sql = "SELECT msg_id FROM pgmq.set_vt(queue_name := ?, msg_id := ?, vt := ?)"
         val statement = Statement.create(sql).bind(0, queue).bind(1, id).bind(2, vt.inWholeSeconds)
         return db.fetchAll(statement, LongRowMapper).toSingleLongResult()
@@ -480,7 +554,7 @@ class PgmqClient(
      *         are retrieved for the queue, an error is returned.
      */
     suspend fun metrics(queue: String): Result<Metrics> {
-        // language=SQL
+        // language=PostgreSQL
         val sql = "SELECT * FROM pgmq.metrics(queue_name := ?)"
         val statement = Statement.create(sql).bind(0, queue)
         return pg.fetchAll(statement, MetricsRowMapper).mapCatching {
@@ -496,7 +570,7 @@ class PgmqClient(
      * @return a [Result] containing a list of [Metrics] objects if the retrieval is successful, or an error result otherwise.
      */
     suspend fun metrics(): Result<List<Metrics>> {
-        // language=SQL
+        // language=PostgreSQL
         val sql = "SELECT * FROM pgmq.metrics()"
         return pg.fetchAll(sql, MetricsRowMapper)
     }
@@ -558,7 +632,7 @@ class PgmqClient(
      */
     context(db: QueryExecutor)
     suspend fun bindTopic(pattern: String, queueName: String): Result<Unit> {
-        // language=SQL
+        // language=PostgreSQL
         val sql = "SELECT pgmq.bind_topic(pattern := ?, queue_name := ?)"
         val statement = Statement.create(sql).bind(0, pattern).bind(1, queueName)
         return db.fetchAll(statement, UnitRowMapper).toSingleUnitResult()
@@ -592,7 +666,7 @@ class PgmqClient(
      * @return A [Result] containing `true` if a binding was removed, `false` if no matching binding was found.
      */
     suspend fun unbindTopic(pattern: String, queueName: String): Result<Boolean> {
-        // language=SQL
+        // language=PostgreSQL
         val sql = "SELECT pgmq.unbind_topic(pattern := ?, queue_name := ?)"
         val statement = Statement.create(sql).bind(0, pattern).bind(1, queueName)
         return pg.fetchAll(statement, BooleanRowMapper).toSingleBooleanResult()
@@ -638,7 +712,7 @@ class PgmqClient(
         headers: Map<String, String> = emptyMap(),
         delay: Duration = 0.seconds
     ): Result<Long> {
-        // language=SQL
+        // language=PostgreSQL
         val sql = "SELECT pgmq.send_topic(routing_key := ?, msg := ?, headers := ?, delay := ?)"
         val statement = Statement.create(sql)
             .bind(0, routingKey)
@@ -681,10 +755,10 @@ class PgmqClient(
      * @property autoInstall Determines whether the installation process should proceed automatically.
      * @property verifyInstallation Indicates whether the installation should be verified post-process.
      * @property installFromFiles Indicates whether the installation should be performed from SQL files.
-     * @property installFilesPath Path to the directory containing SQL files for installation.
+     * @property installFilesPath Path to the directory containing SQL migration files for installation.
      */
     data class Options(
-        val autoInstall: Boolean = true,
+        val autoInstall: Boolean = false,
         val verifyInstallation: Boolean = true,
         val installFromFiles: Boolean = false,
         val installFilesPath: String = "./pgmq",

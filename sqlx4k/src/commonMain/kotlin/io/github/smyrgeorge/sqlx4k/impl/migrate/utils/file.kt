@@ -23,7 +23,7 @@ private fun readEntireFileFromDisk(path: Path): String {
     }
 }
 
-fun listSqlFilesWithContent(path: String): List<Pair<String, String>> {
+fun readSqlFilesFromDisk(path: String): List<Pair<String, String>> {
     val dir = Path(path)
     val meta = fs.metadataOrNull(dir) ?: error("Migrations path not found: $path")
     require(meta.isDirectory) { "Migrations path not a directory: $path" }
@@ -35,7 +35,9 @@ fun listSqlFilesWithContent(path: String): List<Pair<String, String>> {
         }
 }
 
-fun listMigrationFiles(path: String): List<MigrationFile> =
-    listSqlFilesWithContent(path).map { MigrationFile(it.first, it.second) }
+expect fun readSqlFilesFromResources(path: String): List<Pair<String, String>>
 
-expect fun listMigrationFilesFromResources(path: String): List<MigrationFile>
+fun readMigrationFilesFromDisk(path: String): List<MigrationFile> =
+    readSqlFilesFromDisk(path).map { MigrationFile(it.first, it.second) }
+
+expect fun readMigrationFilesFromResources(path: String): List<MigrationFile>

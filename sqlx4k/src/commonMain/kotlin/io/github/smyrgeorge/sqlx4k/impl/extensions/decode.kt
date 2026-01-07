@@ -1,19 +1,14 @@
-@file:OptIn(ExperimentalTime::class, ExperimentalUuidApi::class)
+@file:OptIn(ExperimentalUuidApi::class)
 @file:Suppress("unused")
 
 package io.github.smyrgeorge.sqlx4k.impl.extensions
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalDateTime
-import kotlinx.datetime.LocalTime
-import kotlinx.datetime.UtcOffset
+import kotlinx.datetime.*
 import kotlinx.datetime.format.DateTimeFormat
 import kotlinx.datetime.format.FormatStringsInDatetimeFormats
 import kotlinx.datetime.format.byUnicodePattern
-import kotlinx.datetime.toInstant
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -70,7 +65,7 @@ inline fun <reified T : Enum<T>> String.toEnum(): T {
     return try {
         enumValueOf<T>(this)
     } catch (e: Exception) {
-        SQLError(SQLError.Code.CannotDecodeEnumValue, "Cannot decode enum value '$this'.").ex()
+        SQLError(SQLError.Code.CannotDecodeEnumValue, "Cannot decode enum value '$this'.").raise()
     }
 }
 

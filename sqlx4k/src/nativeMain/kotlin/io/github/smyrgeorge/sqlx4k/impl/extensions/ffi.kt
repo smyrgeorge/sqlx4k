@@ -24,7 +24,7 @@ private fun Sqlx4kResult.toError(): SQLError {
 }
 
 fun Sqlx4kResult.throwIfError() {
-    if (isError()) toError().ex()
+    if (isError()) toError().raise()
 }
 
 /**
@@ -108,7 +108,7 @@ inline fun <T> CPointer<Sqlx4kResult>?.use(block: (Sqlx4kResult) -> T): T {
 fun CPointer<Sqlx4kResult>?.throwIfError(): Unit = use { it.throwIfError() }
 fun CPointer<Sqlx4kResult>?.rtOrError(): CPointer<out CPointed> = use {
     it.throwIfError()
-    it.rt ?: SQLError(SQLError.Code.Pool, "Unexpected behaviour while creating the pool.").ex()
+    it.rt ?: SQLError(SQLError.Code.Pool, "Unexpected behaviour while creating the pool.").raise()
 }
 
 fun CPointer<Sqlx4kResult>?.rowsAffectedOrError(): Long = use {

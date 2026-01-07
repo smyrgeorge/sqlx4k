@@ -134,7 +134,7 @@ interface QueryExecutor {
 
             // Commit outside try-catch - if it fails, we don't roll back
             tx.commit().getOrElse {
-                SQLError(SQLError.Code.TransactionCommitFailed, it.message, it).ex()
+                SQLError(SQLError.Code.TransactionCommitFailed, it.message, it).raise()
             }
 
             return res

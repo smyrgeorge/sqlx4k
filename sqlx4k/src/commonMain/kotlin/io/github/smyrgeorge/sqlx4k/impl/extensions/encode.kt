@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalTime::class, ExperimentalUuidApi::class)
+@file:OptIn(ExperimentalUuidApi::class)
 
 package io.github.smyrgeorge.sqlx4k.impl.extensions
 
@@ -8,7 +8,6 @@ import io.github.smyrgeorge.sqlx4k.impl.types.DoubleQuotingString
 import io.github.smyrgeorge.sqlx4k.impl.types.NoQuotingString
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
 import kotlinx.datetime.*
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -74,7 +73,7 @@ fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
                 message = "Could not map named parameter of type ${this::class.simpleName}"
             )
 
-            val encoder = encoders.get(this::class) ?: error.ex()
+            val encoder = encoders.get(this::class) ?: error.raise()
             encoder.encode(this).encodeValue(encoders)
         }
     }

@@ -79,7 +79,7 @@ class ConnectionPoolImpl(
      */
     override suspend fun acquire(): Result<Connection> {
         return runCatching {
-            if (closed.load()) SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").ex()
+            if (closed.load()) SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").raise()
             if (options.acquireTimeout != null) withTimeout(options.acquireTimeout) { acquireConnection() }
             else acquireConnection()
         }.recoverCatching { error ->
@@ -89,7 +89,7 @@ class ConnectionPoolImpl(
                         code = SQLError.Code.PoolTimedOut,
                         message = "Timed out waiting for connection after ${options.acquireTimeout}",
                         cause = error
-                    ).ex()
+                    ).raise()
                 }
 
                 else -> throw error
@@ -101,7 +101,7 @@ class ConnectionPoolImpl(
         while (true) {
             // Early closed check for fail-fast behavior
             if (closed.load()) {
-                SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").ex()
+                SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").raise()
             }
 
             // 1) Try to reuse an idle connection (drain expired ones)
@@ -135,7 +135,7 @@ class ConnectionPoolImpl(
             val received = idleConnections.receiveCatching()
             if (received.isClosed) {
                 // Channel closed (pool is closing/closed) — abort acquire
-                SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").ex()
+                SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").raise()
             }
 
             // Atomically decrement counter when we receive a connection

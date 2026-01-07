@@ -1,17 +1,14 @@
-@file:OptIn(ExperimentalTime::class)
-
 package io.github.smyrgeorge.sqlx4k.impl.migrate
 
 import io.github.smyrgeorge.sqlx4k.Dialect
-import io.github.smyrgeorge.sqlx4k.QueryExecutor as NativeQueryExecutor
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
-import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.listMigrationFiles
+import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.readMigrationFilesFromDisk
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.splitSqlStatements
 import kotlin.time.Clock
 import kotlin.time.Duration
-import kotlin.time.ExperimentalTime
 import kotlin.time.measureTime
+import io.github.smyrgeorge.sqlx4k.QueryExecutor as NativeQueryExecutor
 
 object Migrator {
 
@@ -66,7 +63,7 @@ object Migrator {
         require(path.isNotBlank()) { "Path cannot be blank." }
         migrate(
             db = db,
-            files = listMigrationFiles(path),
+            files = readMigrationFilesFromDisk(path),
             table = table,
             schema = schema,
             createSchema = createSchema,
@@ -113,7 +110,7 @@ object Migrator {
             val dup = files.groupBy { it.version }.filterValues { it.size > 1 }
             if (dup.isNotEmpty()) {
                 val msg = dup.entries.joinToString { (v, l) -> "version=$v -> [" + l.joinToString { it.name } + "]" }
-                SQLError(SQLError.Code.Migrate, "Duplicate migration versions detected: $msg").ex()
+                SQLError(SQLError.Code.Migrate, "Duplicate migration versions detected: $msg").raise()
             }
 
             // Ensure deterministic order and monotonic versions.
@@ -126,7 +123,7 @@ object Migrator {
                     SQLError(
                         SQLError.Code.Migrate,
                         "Non-monotonic migration versions detected in filesystem order: ${prev.name} (v=${prev.version}) then ${curr.name} (v=${curr.version})."
-                    ).ex()
+                    ).raise()
                 }
             }
 
@@ -156,12 +153,12 @@ object Migrator {
                     if (previous.checksum == file.checksum) {
                         validatedCount++
                         return@forEach
-                    } else SQLError(SQLError.Code.Migrate, "Checksum mismatch for migration file ${file.name}").ex()
+                    } else SQLError(SQLError.Code.Migrate, "Checksum mismatch for migration file ${file.name}").raise()
                 }
 
                 // Split the file content into individual statements.
                 val statements: List<Statement> = splitSqlStatements(file.content).map { Statement.create(it) }
-                if (statements.isEmpty()) SQLError(SQLError.Code.Migrate, "Migration file ${file.name} is empty.").ex()
+                if (statements.isEmpty()) SQLError(SQLError.Code.Migrate, "Migration file ${file.name} is empty.").raise()
 
                 // Execute all the statements (of a file) in a single transaction
                 val (migration, duration) = db.transaction {

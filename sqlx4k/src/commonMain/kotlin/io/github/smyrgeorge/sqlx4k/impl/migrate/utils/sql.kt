@@ -1,11 +1,7 @@
-@file:OptIn(ExperimentalTime::class)
-
 package io.github.smyrgeorge.sqlx4k.impl.migrate.utils
 
-import kotlin.time.ExperimentalTime
-
 @Suppress("DuplicatedCode")
-internal fun splitSqlStatements(sql: String): List<String> {
+fun splitSqlStatements(sql: String): List<String> {
     val result = mutableListOf<String>()
     val sb = StringBuilder()
     var i = 0
