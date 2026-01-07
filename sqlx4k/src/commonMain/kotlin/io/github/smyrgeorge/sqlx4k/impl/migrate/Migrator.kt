@@ -1,6 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.impl.migrate
 
 import io.github.smyrgeorge.sqlx4k.Dialect
+import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.readMigrationFilesFromDisk
@@ -8,10 +9,8 @@ import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.splitSqlStatements
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.measureTime
-import io.github.smyrgeorge.sqlx4k.QueryExecutor as NativeQueryExecutor
 
 object Migrator {
-
     /**
      * Represents the results of a specific operation, typically within the context of migrations
      * or data processing tasks.
@@ -51,7 +50,7 @@ object Migrator {
      * @return A `Result` containing a `Results` instance indicating whether the migration was successful or empty if no files were processed.
      */
     suspend fun migrate(
-        db: QueryExecutor,
+        db: Driver,
         path: String,
         table: String,
         schema: String?,
@@ -89,7 +88,7 @@ object Migrator {
      * @return A `Result` containing a `Results` instance indicating whether the migration was successful or empty if no files were processed.
      */
     suspend fun migrate(
-        db: QueryExecutor,
+        db: Driver,
         files: List<MigrationFile>,
         table: String,
         schema: String?,
@@ -199,5 +198,5 @@ object Migrator {
      * This interface extends both `QueryExecutor` and `QueryExecutor.Transactional`,
      * combining the ability to perform query execution with transactional control.
      */
-    interface QueryExecutor : NativeQueryExecutor, NativeQueryExecutor.Transactional
+    interface Driver : QueryExecutor, QueryExecutor.Transactional
 }

@@ -4,7 +4,7 @@ import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 
-interface IPostgresSQL : Driver, Migrator.QueryExecutor {
+interface IPostgresSQL : Driver, Migrator.Driver {
 
     /**
      * Listens for notifications on a specified PostgreSQL channel and executes a callback for each received notification.
