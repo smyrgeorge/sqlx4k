@@ -39,11 +39,13 @@
             </a>        <button class="navigation-controls--btn navigation-controls--btn_toc ui-kit_mobile-only" id="toc-toggle" type="button">Toggle table of contents
         </button>
         <div class="navigation-controls--break ui-kit_mobile-only"></div>
-        <div class="library-version" id="library-version">1.5.7
+        <div class="library-version" id="library-version">1.5.8
         </div>
         <div class="navigation-controls">
         <ul class="filter-section filter-section_loading" id="filter-section" aria-label="Target filter">
                 <button class="platform-tag platform-selector common-like" data-active="" aria-pressed="true" data-filter=":sqlx4k/commonMain">common</button>
+                <button class="platform-tag platform-selector jvm-like" data-active="" aria-pressed="true" data-filter=":sqlx4k/jvmMain">jvm</button>
+                <button class="platform-tag platform-selector native-like" data-active="" aria-pressed="true" data-filter=":sqlx4k/nativeMain">native</button>
             <div class="dropdown filter-section--dropdown" data-role="dropdown" id="filter-section-dropdown">
                 <button class="button button_dropdown filter-section--dropdown-toggle" role="combobox" data-role="dropdown-toggle" aria-controls="platform-tags-listbox" aria-haspopup="listbox" aria-expanded="false" aria-label="Toggle source sets"></button>
                 <ul role="listbox" id="platform-tags-listbox" class="dropdown--list" data-role="dropdown-listbox" aria-label="Target filter">
@@ -57,6 +59,20 @@
                                 <input type="checkbox" class="checkbox--input" id=":sqlx4k/commonMain" data-filter=":sqlx4k/commonMain">
                                 <span class="checkbox--icon"></span>
                                 common
+                            </label>
+                        </li>
+                        <li role="option" class="dropdown--option platform-selector-option jvm-like" tabindex="0">
+                            <label class="checkbox">
+                                <input type="checkbox" class="checkbox--input" id=":sqlx4k/jvmMain" data-filter=":sqlx4k/jvmMain">
+                                <span class="checkbox--icon"></span>
+                                jvm
+                            </label>
+                        </li>
+                        <li role="option" class="dropdown--option platform-selector-option native-like" tabindex="0">
+                            <label class="checkbox">
+                                <input type="checkbox" class="checkbox--input" id=":sqlx4k/nativeMain" data-filter=":sqlx4k/nativeMain">
+                                <span class="checkbox--icon"></span>
+                                native
                             </label>
                         </li>
                 </ul>
@@ -90,7 +106,7 @@
         </nav>
         <div id="resizer" class="resizer" data-item-type="BAR"></div>
         <div id="main" data-item-type="SECTION" role="main">
-<div class="main-content" data-page-type="package" id="content" pageids="sqlx4k::io.github.smyrgeorge.sqlx4k.impl.migrate.utils////PointingToDeclaration//272526764">
+<div class="main-content" data-page-type="package" id="content" pageids="sqlx4k::io.github.smyrgeorge.sqlx4k.impl.migrate.utils////PointingToDeclaration//1815602206">
   <div class="breadcrumbs"><a href="../index.html">sqlx4k</a><span class="delimiter">/</span><span class="current">io.github.smyrgeorge.sqlx4k.impl.migrate.utils</span></div>
   <div class="cover ">
     <h1 class="cover"><span><span>Package-level</span></span> <span><span>declarations</span></span></h1>
@@ -100,32 +116,81 @@
     <div class="tabs-section-body">
       <div data-togglable="FUNCTION">
         <h2 class="tableheader">Functions</h2>
-        <div class="table"><a data-name="329103669%2FFunctions%2F272526764" anchor-label="listFilesWithContent" id="329103669%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+        <div class="table"><a data-name="-773426527%2FFunctions%2F272526764" anchor-label="readMigrationFilesFromDisk" id="-773426527%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
           <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
-                  <div><a href="list-files-with-content.html"><span>list</span><wbr><span>Files</span><wbr><span>With</span><wbr><span><span>Content</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="329103669%2FFunctions%2F272526764"></span>
+                  <div><a href="read-migration-files-from-disk.html"><span>read</span><wbr><span>Migration</span><wbr><span>Files</span><wbr><span>From</span><wbr><span><span>Disk</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-773426527%2FFunctions%2F272526764"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="list-files-with-content.html"><span class="token function">listFilesWithContent</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">path<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-pair/index.html">Pair</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="read-migration-files-from-disk.html"><span class="token function">readMigrationFilesFromDisk</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">path<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="../io.github.smyrgeorge.sqlx4k.impl.migrate/-migration-file/index.html">MigrationFile</a><span class="token operator">&gt;</span></div></div></div>
                 </div>
               </div>
             </div>
           </div>
-<a data-name="-192676510%2FFunctions%2F272526764" anchor-label="listMigrationFiles" id="-192676510%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
-          <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+<a data-name="-876496241%2FFunctions%2F1815602206" anchor-label="readMigrationFilesFromResources" id="-876496241%2FFunctions%2F1815602206" data-filterable-set=":sqlx4k/commonMain,:sqlx4k/jvmMain,:sqlx4k/nativeMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain,:sqlx4k/jvmMain,:sqlx4k/nativeMain" data-filterable-set=":sqlx4k/commonMain,:sqlx4k/jvmMain,:sqlx4k/nativeMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
-                  <div><a href="list-migration-files.html"><span>list</span><wbr><span>Migration</span><wbr><span><span>Files</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-192676510%2FFunctions%2F272526764"></span>
+                  <div><a href="read-migration-files-from-resources.html"><span>read</span><wbr><span>Migration</span><wbr><span>Files</span><wbr><span>From</span><wbr><span><span>Resources</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-876496241%2FFunctions%2F1815602206"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="list-migration-files.html"><span class="token function">listMigrationFiles</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">path<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="../io.github.smyrgeorge.sqlx4k.impl.migrate/-migration-file/index.html">MigrationFile</a><span class="token operator">&gt;</span></div></div></div>
+                  <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
+                    <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain" data-active="" data-toggle=":sqlx4k/commonMain">common</button><button class="platform-bookmark" data-filterable-current=":sqlx4k/jvmMain" data-filterable-set=":sqlx4k/jvmMain" data-toggle=":sqlx4k/jvmMain">jvm</button><button class="platform-bookmark" data-filterable-current=":sqlx4k/nativeMain" data-filterable-set=":sqlx4k/nativeMain" data-toggle=":sqlx4k/nativeMain">native</button></div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">expect </span><span class="token keyword">fun </span><a href="read-migration-files-from-resources.html"><span class="token function">readMigrationFilesFromResources</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">path<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="../io.github.smyrgeorge.sqlx4k.impl.migrate/-migration-file/index.html">MigrationFile</a><span class="token operator">&gt;</span></div></div><div class="content sourceset-dependent-content" data-togglable=":sqlx4k/jvmMain"><div class="symbol monospace"><span class="token keyword">actual </span><span class="token keyword">fun </span><a href="read-migration-files-from-resources.html"><span class="token function">readMigrationFilesFromResources</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">path<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="../io.github.smyrgeorge.sqlx4k.impl.migrate/-migration-file/index.html">MigrationFile</a><span class="token operator">&gt;</span></div></div><div class="content sourceset-dependent-content" data-togglable=":sqlx4k/nativeMain"><div class="symbol monospace"><span class="token keyword">actual </span><span class="token keyword">fun </span><a href="read-migration-files-from-resources.html"><span class="token function">readMigrationFilesFromResources</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">path<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="../io.github.smyrgeorge.sqlx4k.impl.migrate/-migration-file/index.html">MigrationFile</a><span class="token operator">&gt;</span></div></div>                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="648085537%2FFunctions%2F272526764" anchor-label="readSqlFilesFromDisk" id="648085537%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="read-sql-files-from-disk.html"><span>read</span><wbr><span>Sql</span><wbr><span>Files</span><wbr><span>From</span><wbr><span><span>Disk</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="648085537%2FFunctions%2F272526764"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="read-sql-files-from-disk.html"><span class="token function">readSqlFilesFromDisk</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">path<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-pair/index.html">Pair</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-788292337%2FFunctions%2F1815602206" anchor-label="readSqlFilesFromResources" id="-788292337%2FFunctions%2F1815602206" data-filterable-set=":sqlx4k/commonMain,:sqlx4k/jvmMain,:sqlx4k/nativeMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain,:sqlx4k/jvmMain,:sqlx4k/nativeMain" data-filterable-set=":sqlx4k/commonMain,:sqlx4k/jvmMain,:sqlx4k/nativeMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="read-sql-files-from-resources.html"><span>read</span><wbr><span>Sql</span><wbr><span>Files</span><wbr><span>From</span><wbr><span><span>Resources</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-788292337%2FFunctions%2F1815602206"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
+                    <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain" data-active="" data-toggle=":sqlx4k/commonMain">common</button><button class="platform-bookmark" data-filterable-current=":sqlx4k/jvmMain" data-filterable-set=":sqlx4k/jvmMain" data-toggle=":sqlx4k/jvmMain">jvm</button><button class="platform-bookmark" data-filterable-current=":sqlx4k/nativeMain" data-filterable-set=":sqlx4k/nativeMain" data-toggle=":sqlx4k/nativeMain">native</button></div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">expect </span><span class="token keyword">fun </span><a href="read-sql-files-from-resources.html"><span class="token function">readSqlFilesFromResources</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">path<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-pair/index.html">Pair</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div></div><div class="content sourceset-dependent-content" data-togglable=":sqlx4k/jvmMain"><div class="symbol monospace"><span class="token keyword">actual </span><span class="token keyword">fun </span><a href="read-sql-files-from-resources.html"><span class="token function">readSqlFilesFromResources</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">path<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-pair/index.html">Pair</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div></div><div class="content sourceset-dependent-content" data-togglable=":sqlx4k/nativeMain"><div class="symbol monospace"><span class="token keyword">actual </span><span class="token keyword">fun </span><a href="read-sql-files-from-resources.html"><span class="token function">readSqlFilesFromResources</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">path<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-pair/index.html">Pair</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div></div>                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="820094323%2FFunctions%2F272526764" anchor-label="splitSqlStatements" id="820094323%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="split-sql-statements.html"><span>split</span><wbr><span>Sql</span><wbr><span><span>Statements</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="820094323%2FFunctions%2F272526764"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="split-sql-statements.html"><span class="token function">splitSqlStatements</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">sql<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token operator">&gt;</span></div></div></div>
                 </div>
               </div>
             </div>
