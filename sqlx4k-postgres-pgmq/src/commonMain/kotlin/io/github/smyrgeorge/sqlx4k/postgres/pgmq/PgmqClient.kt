@@ -10,9 +10,9 @@ import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.splitSqlStatements
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.extensions.toJsonString
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.*
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.BooleanRowMapper.toSingleBooleanResult
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.LongRowMapper.toSingleLongResult
-import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.UnitRowMapper.toSingleUnitResult
+import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.BooleanRowMapper.toSingleBoolean
+import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.LongRowMapper.toSingleLong
+import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers.UnitRowMapper.toSingleUnit
 import kotlinx.coroutines.runBlocking
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -64,12 +64,12 @@ class PgmqClient(
         suspend fun installed(): Boolean {
             // language=PostgreSQL
             val sql = "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = 'pgmq')"
-            return pg.fetchAll(Statement.create(sql), BooleanRowMapper).toSingleBooleanResult().getOrThrow()
+            return pg.fetchAll(Statement.create(sql), BooleanRowMapper).toSingleBoolean().getOrThrow()
         }
 
         if (!installed()) {
             if (!options.autoInstall) error("Could not verify the 'pgmq' installation.")
-            if (options.installFromFiles) installFromMigrationFiles() else installFromExtension()
+            if (options.installFromFiles) installFromPath() else installFromExtension()
         }
 
         // Recheck the installation.
@@ -94,38 +94,30 @@ class PgmqClient(
     }
 
     /**
-     * Installs migrations from a list of SQL files.
+     * Installs the necessary files from a specified directory path.
      *
-     * @param files A list of file pairs where the first value is the file name and the second value is the SQL content.
-     *              Files with blank content are filtered out. The files are sorted by their names before processing.
+     * @param path The directory path where the SQL files are located. Defaults to the value of `options.installFilesPath`.
+     */
+    suspend fun installFromPath(path: String = options.installFilesPath) {
+        val files = readSqlFilesFromDisk(path)
+        installFromSqlFiles(files)
+    }
+
+    /**
+     * Installs database migrations from a list of SQL files.
+     *
+     * @param files A list of pairs where the first value is the file name or identifier,
+     *              and the second value is the SQL content to be executed.
+     *              Files with blank SQL content will be ignored.
      */
     suspend fun installFromSqlFiles(files: List<Pair<String, String>>) {
         val files = files
             .asSequence()
             .filter { it.second.isNotBlank() }
             .sortedBy { it.first }
-            .mapIndexed { i, p ->
-                val name = "${i + 1}_${p.first}"
-                val content = p.second
-                name to content
-            }.map { MigrationFile(it.first, it.second) }
+            .map { MigrationFile(it.first, it.second) }
             .toList()
         installFromMigrationFiles(files)
-    }
-
-    /**
-     * Installs migration files from a specified directory path.
-     *
-     * This method reads SQL migration files from the specified directory, filters out
-     * certain files (e.g., "pgmq.sql"), sorts them, assigns a sequential name to each file,
-     * and installs them using the `installFromSqlFiles` method.
-     *
-     * @param path The directory path where the migration files are located.
-     *             Defaults to the value of `options.installFilesPath`.
-     */
-    suspend fun installFromMigrationFiles(path: String = options.installFilesPath) {
-        val files = readSqlFilesFromDisk(path)
-        installFromSqlFiles(files)
     }
 
     /**
@@ -195,7 +187,7 @@ class PgmqClient(
             val sql = if (unlogged) "SELECT pgmq.create_unlogged(queue_name := ?)"
             else "SELECT pgmq.create(queue_name := ?)"
             val statement = Statement.create(sql).bind(0, queue)
-            return tx.fetchAll(statement, UnitRowMapper).toSingleUnitResult()
+            return tx.fetchAll(statement, UnitRowMapper).toSingleUnit()
         }
 
         context(tx: Transaction)
@@ -203,7 +195,7 @@ class PgmqClient(
             // language=PostgreSQL
             val sql = "SELECT pgmq.enable_notify_insert(queue_name := ?, throttle_interval_ms := ?)"
             val statement = Statement.create(sql).bind(0, queue).bind(1, throttleNotifyInterval.inWholeMilliseconds)
-            return tx.fetchAll(statement, UnitRowMapper).toSingleUnitResult()
+            return tx.fetchAll(statement, UnitRowMapper).toSingleUnit()
         }
 
         return pg.transaction {
@@ -251,7 +243,7 @@ class PgmqClient(
         // language=PostgreSQL
         val sql = "SELECT pgmq.drop_queue(queue_name := ?)"
         val statement = Statement.create(sql).bind(0, queue)
-        return pg.fetchAll(statement, BooleanRowMapper).toSingleBooleanResult()
+        return pg.fetchAll(statement, BooleanRowMapper).toSingleBoolean()
     }
 
     /**
@@ -269,7 +261,7 @@ class PgmqClient(
         // language=PostgreSQL
         val sql = "SELECT pgmq.purge_queue(queue_name := ?)"
         val statement = Statement.create(sql).bind(0, queue)
-        return pg.fetchAll(statement, LongRowMapper).toSingleLongResult() // returns the number of messages purged.
+        return pg.fetchAll(statement, LongRowMapper).toSingleLong() // returns the number of messages purged.
     }
 
     /**
@@ -320,7 +312,7 @@ class PgmqClient(
             .bind(1, message)
             .bind(2, headers.toJsonString())
             .bind(3, delay.inWholeSeconds)
-        return db.fetchAll(statement, LongRowMapper).toSingleLongResult() // returns the message-id.
+        return db.fetchAll(statement, LongRowMapper).toSingleLong() // returns the message-id.
     }
 
     /**
@@ -454,7 +446,7 @@ class PgmqClient(
         // language=PostgreSQL
         val sql = "SELECT pgmq.archive(queue_name := ?, msg_id := ?)"
         val statement = Statement.create(sql).bind(0, queue).bind(1, id)
-        return db.fetchAll(statement, BooleanRowMapper).toSingleBooleanResult()
+        return db.fetchAll(statement, BooleanRowMapper).toSingleBoolean()
     }
 
     /**
@@ -506,7 +498,7 @@ class PgmqClient(
         // language=PostgreSQL
         val sql = "SELECT pgmq.delete(queue_name := ?, msg_id := ?)"
         val statement = Statement.create(sql).bind(0, queue).bind(1, id)
-        return db.fetchAll(statement, BooleanRowMapper).toSingleBooleanResult()
+        return db.fetchAll(statement, BooleanRowMapper).toSingleBoolean()
     }
 
     /**
@@ -555,7 +547,7 @@ class PgmqClient(
         // language=PostgreSQL
         val sql = "SELECT msg_id FROM pgmq.set_vt(queue_name := ?, msg_id := ?, vt := ?)"
         val statement = Statement.create(sql).bind(0, queue).bind(1, id).bind(2, vt.inWholeSeconds)
-        return db.fetchAll(statement, LongRowMapper).toSingleLongResult()
+        return db.fetchAll(statement, LongRowMapper).toSingleLong()
     }
 
     /**
@@ -647,7 +639,7 @@ class PgmqClient(
         // language=PostgreSQL
         val sql = "SELECT pgmq.bind_topic(pattern := ?, queue_name := ?)"
         val statement = Statement.create(sql).bind(0, pattern).bind(1, queueName)
-        return db.fetchAll(statement, UnitRowMapper).toSingleUnitResult()
+        return db.fetchAll(statement, UnitRowMapper).toSingleUnit()
     }
 
     /**
@@ -681,7 +673,7 @@ class PgmqClient(
         // language=PostgreSQL
         val sql = "SELECT pgmq.unbind_topic(pattern := ?, queue_name := ?)"
         val statement = Statement.create(sql).bind(0, pattern).bind(1, queueName)
-        return pg.fetchAll(statement, BooleanRowMapper).toSingleBooleanResult()
+        return pg.fetchAll(statement, BooleanRowMapper).toSingleBoolean()
     }
 
     /**
@@ -731,7 +723,7 @@ class PgmqClient(
             .bind(1, message)
             .bind(2, headers.toJsonString())
             .bind(3, delay.inWholeSeconds)
-        return db.fetchAll(statement, LongRowMapper).toSingleLongResult()
+        return db.fetchAll(statement, LongRowMapper).toSingleLong()
     }
 
     /**

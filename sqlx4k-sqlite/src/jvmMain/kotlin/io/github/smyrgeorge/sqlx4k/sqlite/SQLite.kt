@@ -60,6 +60,24 @@ class SQLite(
     )
 
     override suspend fun migrate(
+        supplier: () -> List<MigrationFile>,
+        table: String,
+        schema: String?,
+        createSchema: Boolean,
+        afterStatementExecution: suspend (Statement, Duration) -> Unit,
+        afterFileMigration: suspend (Migration, Duration) -> Unit
+    ): Result<Migrator.Results> = Migrator.migrate(
+        db = this,
+        supplier = supplier,
+        table = table,
+        schema = null, // SQLite does not support schemas.
+        createSchema = false, // SQLite does not support schemas.
+        dialect = Dialect.SQLite,
+        afterStatementExecution = afterStatementExecution,
+        afterFileMigration = afterFileMigration
+    )
+
+    override suspend fun migrate(
         files: List<MigrationFile>,
         table: String,
         schema: String?,

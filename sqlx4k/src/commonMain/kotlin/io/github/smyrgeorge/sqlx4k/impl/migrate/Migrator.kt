@@ -4,6 +4,8 @@ import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.impl.mappers.StringRowMapper
+import io.github.smyrgeorge.sqlx4k.impl.mappers.StringRowMapper.toSingleString
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.readMigrationFilesFromDisk
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.splitSqlStatements
 import kotlin.time.Clock
@@ -63,6 +65,44 @@ object Migrator {
         migrate(
             db = db,
             files = readMigrationFilesFromDisk(path),
+            table = table,
+            schema = schema,
+            createSchema = createSchema,
+            dialect = dialect,
+            afterStatementExecution = afterStatementExecution,
+            afterFileMigration = afterFileMigration
+        ).getOrThrow()
+    }
+
+    /**
+     * Executes the migration of a database using the provided configuration and files.
+     *
+     * This function performs database schema migration by applying a sequence of migration files
+     * to the specified database. It handles version tracking, optional schema creation, and dialect-specific nuances.
+     *
+     * @param db The database driver used for executing queries and managing transactions.
+     * @param supplier A function that supplies a list of migration files to be applied to the database.
+     * @param table The name of the table used for migration tracking (e.g., to store the migration history).
+     * @param schema The optional schema in which the migration tracking table resides. If null, defaults to the database's default schema.
+     * @param createSchema Whether to create the schema if it doesn't already exist.
+     * @param dialect The SQL dialect to use for executing structured queries.
+     * @param afterStatementExecution A suspendable callback executed after each SQL statement, providing the executed statement and its execution duration.
+     * @param afterFileMigration A suspendable callback executed after each migration file is applied, providing details of the migration and its duration.
+     * @return A `Result` containing the migration results if successful, or an exception if an error occurs during migration.
+     */
+    suspend fun migrate(
+        db: Driver,
+        supplier: () -> List<MigrationFile>,
+        table: String,
+        schema: String?,
+        createSchema: Boolean,
+        dialect: Dialect,
+        afterStatementExecution: suspend (Statement, Duration) -> Unit,
+        afterFileMigration: suspend (Migration, Duration) -> Unit,
+    ): Result<Results> = runCatching {
+        migrate(
+            db = db,
+            files = supplier(),
             table = table,
             schema = schema,
             createSchema = createSchema,
@@ -157,44 +197,49 @@ object Migrator {
 
                 // Split the file content into individual statements.
                 val statements: List<Statement> = splitSqlStatements(file.content).map { Statement.create(it) }
-                if (statements.isEmpty()) SQLError(SQLError.Code.Migrate, "Migration file ${file.name} is empty.").raise()
+                if (statements.isEmpty()) SQLError(
+                    SQLError.Code.Migrate,
+                    "Migration file ${file.name} is empty."
+                ).raise()
 
                 // Execute all the statements (of a file) in a single transaction
                 val (migration, duration) = db.transaction {
                     // Ensure that the search path is set for the schema.
-                    schema?.let {
+                    val searchPath = schema?.let {
+                        // Find current search path.
+                        val getSearchPathStatement = Migration.getSearchPath(dialect)
+                        val searchPath = fetchAll(getSearchPathStatement, StringRowMapper).toSingleString().getOrThrow()
+
+                        // Set the search path to the desired schema.
                         val setSearchpathStatement = Migration.setSearchpath(it, dialect)
                         execute(setSearchpathStatement).getOrThrow()
+
+                        searchPath
                     }
 
                     val duration = measureTime {
                         statements.forEach { statement ->
                             // Execute the statement
-                            val duration = measureTime { execute(statement).getOrThrow() }
+                            val duration = measureTime {
+                                execute(statement)
+                                    .onFailure { error ->
+                                        // Reset the search path to what it was before.
+                                        searchPath?.let {
+                                            val searchpathStatement = Migration.setSearchpath(it, dialect)
+                                            execute(searchpathStatement).getOrThrow()
+                                        }
+                                        throw error
+                                    }
+                            }
                             // Ensure callback exceptions surface as migration failures
                             afterStatementExecution(statement, duration)
                         }
                     }
 
-                    // Reset the search path to the default schema.
-                    schema?.let {
-                        when (dialect) {
-                            Dialect.PostgreSQL -> {
-                                val resetSearchpathStatement = Migration.resetSearchpath(dialect)
-                                execute(resetSearchpathStatement).getOrThrow()
-                            }
-
-                            Dialect.MySQL -> {
-                                val defaultSearchPathStatement = Migration.getDefaultSearchPath(dialect)
-                                val default = fetchAll(defaultSearchPathStatement)
-                                    .getOrNull()?.firstOrNull()?.get(0)?.asStringOrNull()
-                                    ?: SQLError(SQLError.Code.Migrate, "Failed to retrieve default search path.").raise()
-                                val setSearchpathStatement = Migration.setSearchpath(default, dialect)
-                                execute(setSearchpathStatement).getOrThrow()
-                            }
-
-                            Dialect.SQLite -> error("SQLite does not support schemas.")
-                        }
+                    // Reset the search path to what it was before.
+                    searchPath?.let {
+                        val searchpathStatement = Migration.setSearchpath(it, dialect)
+                        execute(searchpathStatement).getOrThrow()
                     }
 
                     appliedCount++
