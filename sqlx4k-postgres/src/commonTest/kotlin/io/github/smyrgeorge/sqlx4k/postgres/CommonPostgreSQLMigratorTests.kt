@@ -43,8 +43,8 @@ class CommonPostgreSQLMigratorTests(
         rows.map { it.get(0).asLong() }
     }
 
-    private fun countUsers(): Long = runBlocking {
-        db.fetchAll("SELECT count(*) FROM t_users;").getOrThrow().first().get(0).asLong()
+    private fun countUsers(table: String = "t_users"): Long = runBlocking {
+        db.fetchAll("SELECT count(*) FROM $table;").getOrThrow().first().get(0).asLong()
     }
 
     fun `migrate happy path and idempotent`() = runBlocking {
@@ -245,14 +245,14 @@ class CommonPostgreSQLMigratorTests(
                 assertThat(schemaExists(schema)).isEqualTo(true)
                 assertThat(tableExists(qualified)).isEqualTo(true)
                 assertThat(listApplied(qualified)).containsExactly(1L, 2L)
-                assertThat(countUsers()).isEqualTo(1L)
+                assertThat(countUsers("$schema.t_users")).isEqualTo(1L)
             }
 
             // Re-run idempotent with fully qualified table
             assertThat(db.migrate(path = dir.toString(), table = tableName, schema = schema)).isSuccess()
             assertAll {
                 assertThat(listApplied(qualified)).containsExactly(1L, 2L)
-                assertThat(countUsers()).isEqualTo(1L)
+                assertThat(countUsers("$schema.t_users")).isEqualTo(1L)
             }
         } finally {
             runCatching { db.execute("DROP TABLE IF EXISTS t_users CASCADE;").getOrThrow() }

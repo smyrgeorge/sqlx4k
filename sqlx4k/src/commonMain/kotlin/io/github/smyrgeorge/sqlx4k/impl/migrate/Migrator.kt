@@ -161,12 +161,39 @@ object Migrator {
 
                 // Execute all the statements (of a file) in a single transaction
                 val (migration, duration) = db.transaction {
+                    // Ensure that the search path is set for the schema.
+                    schema?.let {
+                        val setSearchpathStatement = Migration.setSearchpath(it, dialect)
+                        execute(setSearchpathStatement).getOrThrow()
+                    }
+
                     val duration = measureTime {
                         statements.forEach { statement ->
                             // Execute the statement
                             val duration = measureTime { execute(statement).getOrThrow() }
                             // Ensure callback exceptions surface as migration failures
                             afterStatementExecution(statement, duration)
+                        }
+                    }
+
+                    // Reset the search path to the default schema.
+                    schema?.let {
+                        when (dialect) {
+                            Dialect.PostgreSQL -> {
+                                val resetSearchpathStatement = Migration.resetSearchpath(dialect)
+                                execute(resetSearchpathStatement).getOrThrow()
+                            }
+
+                            Dialect.MySQL -> {
+                                val defaultSearchPathStatement = Migration.getDefaultSearchPath(dialect)
+                                val default = fetchAll(defaultSearchPathStatement)
+                                    .getOrNull()?.firstOrNull()?.get(0)?.asStringOrNull()
+                                    ?: SQLError(SQLError.Code.Migrate, "Failed to retrieve default search path.").raise()
+                                val setSearchpathStatement = Migration.setSearchpath(default, dialect)
+                                execute(setSearchpathStatement).getOrThrow()
+                            }
+
+                            Dialect.SQLite -> error("SQLite does not support schemas.")
                         }
                     }
 

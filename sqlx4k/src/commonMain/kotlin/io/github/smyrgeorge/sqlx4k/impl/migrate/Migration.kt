@@ -94,7 +94,6 @@ data class Migration(
          */
         internal fun createSchemaIfNotExists(schema: String, dialect: Dialect): Statement {
             require(schema.isNotBlank()) { "Schema name cannot be blank." }
-            require(dialect != Dialect.SQLite) { "SQLite does not support schemas." }
             return when (dialect) {
                 Dialect.PostgreSQL, Dialect.MySQL -> {
                     // language=SQL
@@ -102,6 +101,63 @@ data class Migration(
                     Statement.create(sql).bind(0, NoQuotingString(schema))
                 }
 
+                Dialect.SQLite -> error("SQLite does not support schemas.")
+            }
+        }
+
+        /**
+         * Configures the search path for the specified schema based on the given SQL dialect.
+         *
+         * This method generates and returns an SQL statement for setting the search path
+         * in databases that support schemas. For PostgreSQL, it includes the `public` schema
+         * in the search path by default. In MySQL, it uses the `USE` command to switch
+         * to the specified schema. SQLite does not support schemas and will result in an error.
+         *
+         * @param schema The name of the schema to set in the search path. Must not be blank.
+         * @param dialect The SQL dialect representing the target database system.
+         *                Must not be `Dialect.SQLite` as it does not support schemas.
+         * @return A `Statement` instance configured with the appropriate SQL for the specified dialect.
+         * @throws IllegalArgumentException If the schema name is blank.
+         * @throws IllegalArgumentException If the dialect is `Dialect.SQLite`.
+         */
+        internal fun setSearchpath(schema: String, dialect: Dialect): Statement {
+            require(schema.isNotBlank()) { "Schema name cannot be blank." }
+            return when (dialect) {
+                // language=PostgreSQL
+                Dialect.PostgreSQL -> Statement.create("SET search_path TO $schema, public")
+                // language=MySQL
+                Dialect.MySQL -> Statement.create("USE $schema")
+                Dialect.SQLite -> error("SQLite does not support schemas.")
+            }
+        }
+
+        /**
+         * Resets the search path for the specified SQL dialect.
+         *
+         * This function generates a `Statement` to reset the search path for database schemas,
+         * depending on the provided SQL dialect. Only PostgreSQL supports this operation.
+         * An exception will be thrown for unsupported dialects, such as MySQL and SQLite.
+         *
+         * @param dialect The `Dialect` specifying the SQL dialect for which the search path
+         *                should be reset. Must not be `Dialect.SQLite`.
+         * @return A `Statement` instance that resets the search path for the specified dialect.
+         * @throws IllegalArgumentException If the specified dialect is `Dialect.SQLite`.
+         * @throws UnsupportedOperationException If the dialect does not support resetting the search path.
+         */
+        internal fun resetSearchpath(dialect: Dialect): Statement {
+            return when (dialect) {
+                // language=PostgreSQL
+                Dialect.PostgreSQL -> Statement.create("RESET search_path")
+                Dialect.MySQL -> error("MySQL does not support resetting the search path.")
+                Dialect.SQLite -> error("SQLite does not support schemas.")
+            }
+        }
+
+        internal fun getDefaultSearchPath(dialect: Dialect): Statement {
+            return when (dialect) {
+                Dialect.PostgreSQL -> error("PostgreSQL does not support this operation.")
+                // language=MySQL
+                Dialect.MySQL -> Statement.create("SELECT DATABASE()")
                 Dialect.SQLite -> error("SQLite does not support schemas.")
             }
         }

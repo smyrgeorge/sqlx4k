@@ -94,26 +94,38 @@ class PgmqClient(
     }
 
     /**
+     * Installs migrations from a list of SQL files.
+     *
+     * @param files A list of file pairs where the first value is the file name and the second value is the SQL content.
+     *              Files with blank content are filtered out. The files are sorted by their names before processing.
+     */
+    suspend fun installFromSqlFiles(files: List<Pair<String, String>>) {
+        val files = files
+            .asSequence()
+            .filter { it.second.isNotBlank() }
+            .sortedBy { it.first }
+            .mapIndexed { i, p ->
+                val name = "${i + 1}_${p.first}"
+                val content = p.second
+                name to content
+            }.map { MigrationFile(it.first, it.second) }
+            .toList()
+        installFromMigrationFiles(files)
+    }
+
+    /**
      * Installs migration files from a specified directory path.
      *
      * This method reads SQL migration files from the specified directory, filters out
      * certain files (e.g., "pgmq.sql"), sorts them, assigns a sequential name to each file,
-     * and installs them using the `installFromFiles` method.
+     * and installs them using the `installFromSqlFiles` method.
      *
      * @param path The directory path where the migration files are located.
      *             Defaults to the value of `options.installFilesPath`.
      */
     suspend fun installFromMigrationFiles(path: String = options.installFilesPath) {
-        val files: List<MigrationFile> = readSqlFilesFromDisk(path)
-            .filter { it.first != "pgmq.sql" }
-            .sortedBy { it.first }
-            .mapIndexed { i, p ->
-                val name = "$i-${p.first}"
-                val content = p.second
-                name to content
-            }.map { MigrationFile(it.first, it.second) }
-
-        installFromMigrationFiles(files)
+        val files = readSqlFilesFromDisk(path)
+        installFromSqlFiles(files)
     }
 
     /**
@@ -131,7 +143,7 @@ class PgmqClient(
             dialect = Dialect.PostgreSQL,
             afterStatementExecution = { _, _ -> },
             afterFileMigration = { m, d -> println("[pgmq] Migrated file: $m, duration: ${d}ms") },
-        )
+        ).getOrThrow()
     }
 
     /**

@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitFirstOrNull
+import kotlinx.coroutines.reactive.awaitLast
 import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -89,7 +90,7 @@ class PostgreSQLImpl(
         @Suppress("SqlSourceToSinkFlow")
         with(pool.acquire()) {
             val res = try {
-                createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
+                createStatement(sql).execute().awaitLast().rowsUpdated.awaitFirstOrNull() ?: 0
             } catch (e: Exception) {
                 SQLError(SQLError.Code.Database, e.message, e).raise()
             } finally {
@@ -258,7 +259,7 @@ class PostgreSQLImpl(
 
         private suspend fun execute(sql: String, lock: Boolean): Result<Long> {
             suspend fun doExecute(sql: String): Result<Long> = runCatching {
-                connection.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
+                connection.createStatement(sql).execute().awaitLast().rowsUpdated.awaitFirstOrNull() ?: 0
             }
 
             suspend fun doExecuteWithLock(sql: String): Result<Long> = runCatching {
@@ -345,7 +346,7 @@ class PostgreSQLImpl(
                 assertIsOpen()
                 try {
                     @Suppress("SqlSourceToSinkFlow")
-                    connection.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
+                    connection.createStatement(sql).execute().awaitLast().rowsUpdated.awaitFirstOrNull() ?: 0
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
                 }

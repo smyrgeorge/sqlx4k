@@ -35,4 +35,7 @@ class NativeMySQLMigratorTests {
 
     @Test
     fun `file level transaction rollback on failure`() = runner.`file level transaction rollback on failure`()
+
+//    @Test
+    fun `migrate with explicit schema and createSchema`() = runner.`migrate with explicit schema and createSchema`()
 }
