@@ -3,7 +3,9 @@ package io.github.smyrgeorge.sqlx4k.postgres
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.r2dbc.pool.ConnectionPoolConfiguration
+import io.r2dbc.postgresql.PostgresqlConnectionConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
+import io.r2dbc.postgresql.PostgresqlConnectionFactoryProvider
 import io.r2dbc.spi.ConnectionFactories
 import io.r2dbc.spi.ConnectionFactoryOptions
 import kotlinx.coroutines.launch
@@ -52,7 +54,8 @@ class PostgreSQL(
                 .option(ConnectionFactoryOptions.USER, username)
                 .option(ConnectionFactoryOptions.PASSWORD, password)
                 .build()
-            return ConnectionFactories.get(options) as PostgresqlConnectionFactory
+            val pgOptions = PostgresqlConnectionFactoryProvider.builder(options).build()
+            return PostgresqlConnectionFactory(pgOptions)
         }
 
         private fun connectionOptions(
