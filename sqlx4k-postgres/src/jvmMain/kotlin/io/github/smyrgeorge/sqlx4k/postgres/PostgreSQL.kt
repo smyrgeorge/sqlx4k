@@ -1,15 +1,14 @@
 package io.github.smyrgeorge.sqlx4k.postgres
 
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
-import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.r2dbc.pool.ConnectionPoolConfiguration
-import io.r2dbc.postgresql.PostgresqlConnectionConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
+import io.r2dbc.spi.ConnectionFactories
+import io.r2dbc.spi.ConnectionFactoryOptions
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.runBlocking
-import java.net.URI
 import kotlin.time.toJavaDuration
 import io.r2dbc.pool.ConnectionPool as R2dbcConnectionPool
 
@@ -46,16 +45,14 @@ class PostgreSQL(
 ) {
     companion object {
         private fun connectionFactory(url: String, username: String, password: String): PostgresqlConnectionFactory {
-            val url = URI(url)
-            return PostgresqlConnectionFactory(
-                PostgresqlConnectionConfiguration.builder()
-                    .host(url.host)
-                    .port(url.port.takeIf { it > 0 } ?: 5432)
-                    .database(url.path.removePrefix("/"))
-                    .username(username)
-                    .password(password)
-                    .build()
-            )
+            val url = if (!url.startsWith("r2dbc")) "r2dbc:$url" else url
+            val options = ConnectionFactoryOptions
+                .builder()
+                .from(ConnectionFactoryOptions.parse(url))
+                .option(ConnectionFactoryOptions.USER, username)
+                .option(ConnectionFactoryOptions.PASSWORD, password)
+                .build()
+            return ConnectionFactories.get(options) as PostgresqlConnectionFactory
         }
 
         private fun connectionOptions(
