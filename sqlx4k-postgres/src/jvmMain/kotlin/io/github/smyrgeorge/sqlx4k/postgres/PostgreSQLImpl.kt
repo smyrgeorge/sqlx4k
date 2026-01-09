@@ -259,7 +259,7 @@ class PostgreSQLImpl(
 
                 transactionIsolationLevel?.let {
                     val default = IPostgresSQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL
-                    setTransactionIsolationLevel(default, false)
+                    setTransactionIsolationLevel(default, false).getOrThrow()
                 }
 
                 connection.close().awaitFirstOrNull()
@@ -267,7 +267,7 @@ class PostgreSQLImpl(
         }
 
         private suspend fun setTransactionIsolationLevel(level: IsolationLevel, lock: Boolean): Result<Unit> {
-            // language=SQL
+            // language=PostgreSQL
             val sql = "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL ${level.value}"
             return execute(sql, lock).map { }.also { _transactionIsolationLevel = level }
         }
@@ -283,7 +283,7 @@ class PostgreSQLImpl(
             suspend fun doExecuteWithLock(sql: String): Result<Long> = runCatching {
                 mutex.withLock {
                     assertIsOpen()
-                    return doExecute(sql)
+                    doExecute(sql).getOrThrow()
                 }
             }
 
@@ -323,7 +323,7 @@ class PostgreSQLImpl(
     }
 
     class R2dbcTransaction(
-        private var connection: NativeR2dbcConnection,
+        private val connection: NativeR2dbcConnection,
         private val closeConnectionAfterTx: Boolean,
         override val encoders: ValueEncoderRegistry
     ) : Transaction {

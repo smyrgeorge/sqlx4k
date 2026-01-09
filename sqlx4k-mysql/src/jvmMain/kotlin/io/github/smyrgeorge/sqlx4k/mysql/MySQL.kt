@@ -67,7 +67,7 @@ class MySQL(
     override val encoders: ValueEncoderRegistry = ValueEncoderRegistry()
 ) : IMySQL {
     private val connectionFactory: MySqlConnectionFactory = connectionFactory(url, username, password)
-    private val poolConfiguration: ConnectionPoolConfiguration = connectionOptions(options, connectionFactory)
+    private val poolConfiguration: ConnectionPoolConfiguration = connectionPoolConfiguration(options, connectionFactory)
     private val pool: NativeR2dbcConnectionPool = NativeR2dbcConnectionPool(poolConfiguration).apply {
         runBlocking { launch { runCatching { warmup().awaitSingle() } } }
     }
@@ -209,7 +209,7 @@ class MySQL(
 
                 transactionIsolationLevel?.let {
                     val default = IMySQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL
-                    setTransactionIsolationLevel(default, false)
+                    setTransactionIsolationLevel(default, false).getOrThrow()
                 }
 
                 connection.close().awaitFirstOrNull()
@@ -217,7 +217,7 @@ class MySQL(
         }
 
         private suspend fun setTransactionIsolationLevel(level: IsolationLevel, lock: Boolean): Result<Unit> {
-            // language=SQL
+            // language=MySQL
             val sql = "SET SESSION TRANSACTION ISOLATION LEVEL ${level.value}"
             return execute(sql, lock).map { }.also { _transactionIsolationLevel = level }
         }
@@ -233,7 +233,7 @@ class MySQL(
             suspend fun doExecuteWithLock(sql: String): Result<Long> = runCatching {
                 mutex.withLock {
                     assertIsOpen()
-                    return doExecute(sql)
+                    doExecute(sql).getOrThrow()
                 }
             }
 
@@ -273,7 +273,7 @@ class MySQL(
     }
 
     class R2dbcTransaction(
-        private var connection: NativeR2dbcConnection,
+        private val connection: NativeR2dbcConnection,
         private val closeConnectionAfterTx: Boolean,
         override val encoders: ValueEncoderRegistry
     ) : Transaction {
@@ -387,7 +387,7 @@ class MySQL(
             }
         }
 
-        private fun connectionOptions(
+        private fun connectionPoolConfiguration(
             options: ConnectionPool.Options,
             connectionFactory: MySqlConnectionFactory
         ): ConnectionPoolConfiguration {

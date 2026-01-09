@@ -3,10 +3,8 @@ package io.github.smyrgeorge.sqlx4k.postgres
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.r2dbc.pool.ConnectionPoolConfiguration
-import io.r2dbc.postgresql.PostgresqlConnectionConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
 import io.r2dbc.postgresql.PostgresqlConnectionFactoryProvider
-import io.r2dbc.spi.ConnectionFactories
 import io.r2dbc.spi.ConnectionFactoryOptions
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.awaitSingle
@@ -58,7 +56,7 @@ class PostgreSQL(
             return PostgresqlConnectionFactory(pgOptions)
         }
 
-        private fun connectionOptions(
+        private fun connectionPoolConfiguration(
             options: ConnectionPool.Options,
             connectionFactory: PostgresqlConnectionFactory
         ): ConnectionPoolConfiguration {
@@ -75,7 +73,7 @@ class PostgreSQL(
             options: ConnectionPool.Options,
             connectionFactory: PostgresqlConnectionFactory
         ): R2dbcConnectionPool {
-            val poolConfiguration = connectionOptions(options, connectionFactory)
+            val poolConfiguration = connectionPoolConfiguration(options, connectionFactory)
             return R2dbcConnectionPool(poolConfiguration).apply {
                 runBlocking { launch { runCatching { warmup().awaitSingle() } } }
             }
