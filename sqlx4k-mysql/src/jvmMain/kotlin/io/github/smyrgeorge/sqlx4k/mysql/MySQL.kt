@@ -7,15 +7,24 @@ import io.asyncer.r2dbc.mysql.api.MySqlReadableMetadata
 import io.asyncer.r2dbc.mysql.codec.Codec
 import io.asyncer.r2dbc.mysql.codec.CodecContext
 import io.asyncer.r2dbc.mysql.codec.CodecRegistry
+import io.asyncer.r2dbc.mysql.constant.SslMode
 import io.asyncer.r2dbc.mysql.extension.CodecRegistrar
-import io.github.smyrgeorge.sqlx4k.*
+import io.github.smyrgeorge.sqlx4k.Connection
+import io.github.smyrgeorge.sqlx4k.ConnectionPool
+import io.github.smyrgeorge.sqlx4k.Dialect
+import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufAllocator
 import io.r2dbc.pool.ConnectionPoolConfiguration
+import io.r2dbc.spi.ConnectionFactoryOptions
 import io.r2dbc.spi.Row
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -27,7 +36,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import reactor.pool.PoolAcquireTimeoutException
 import reactor.pool.PoolShutdownException
-import java.net.URI
 import kotlin.jvm.optionals.getOrElse
 import kotlin.time.Duration
 import kotlin.time.toJavaDuration
@@ -329,17 +337,28 @@ class MySQL(
 
     companion object {
         private fun connectionFactory(url: String, username: String, password: String): MySqlConnectionFactory {
-            val url = URI(url)
-            return MySqlConnectionFactory.from(
-                MySqlConnectionConfiguration.builder()
-                    .host(url.host)
-                    .port(url.port.takeIf { it > 0 } ?: 5432)
-                    .database(url.path.removePrefix("/"))
-                    .username(username)
-                    .password(password)
-                    .extendWith(StringRegistrar())
-                    .build()
-            )
+            val url = if (!url.startsWith("r2dbc")) "r2dbc:$url" else url
+            val options = ConnectionFactoryOptions
+                .builder()
+                .from(ConnectionFactoryOptions.parse(url))
+                .option(ConnectionFactoryOptions.USER, username)
+                .option(ConnectionFactoryOptions.PASSWORD, password)
+                .build()
+
+            val builder = MySqlConnectionConfiguration.builder()
+                .host(options.getRequiredValue(ConnectionFactoryOptions.HOST) as String)
+                .port(options.getValue(ConnectionFactoryOptions.PORT) as Int)
+                .database(options.getValue(ConnectionFactoryOptions.DATABASE) as String)
+                .username(options.getRequiredValue(ConnectionFactoryOptions.USER) as String)
+                .password(options.getValue(ConnectionFactoryOptions.PASSWORD) as CharSequence)
+
+            // Map SSL option if present
+            if (options.hasOption(ConnectionFactoryOptions.SSL)) {
+                val ssl = options.getValue(ConnectionFactoryOptions.SSL) as Boolean
+                builder.sslMode(if (ssl) SslMode.REQUIRED else SslMode.DISABLED)
+            }
+
+            return MySqlConnectionFactory.from(builder.extendWith(StringRegistrar()).build())
         }
 
         private class StringCodec : Codec<Any?> {
