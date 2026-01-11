@@ -42,13 +42,14 @@ class CommonMySQLConnectionTests(
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }
     }
 
-    fun `double release should fail with ConnectionIsReleased`() = runBlocking {
+    fun `close should be idempotent`() = runBlocking {
         val cn: Connection = db.acquire().getOrThrow()
+        // First close should succeed
         assertThat(cn.close()).isSuccess()
-        val res = cn.close()
-        assertThat(res).isFailure()
-        val ex = res.exceptionOrNull() as SQLError
-        assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsClosed)
+        // Second close should also succeed (idempotent)
+        assertThat(cn.close()).isSuccess()
+        // Third close should also succeed (idempotent)
+        assertThat(cn.close()).isSuccess()
     }
 
     fun `connection begin-commit and rollback should work`() = runBlocking {

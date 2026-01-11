@@ -147,7 +147,7 @@ class SQLite(
 
         override suspend fun close(): Result<Unit> = runCatching {
             mutex.withLock {
-                assertIsOpen()
+                if (status == Connection.Status.Closed) return@withLock
                 _status = Connection.Status.Closed
                 withContext(Dispatchers.IO) {
                     connection.close()

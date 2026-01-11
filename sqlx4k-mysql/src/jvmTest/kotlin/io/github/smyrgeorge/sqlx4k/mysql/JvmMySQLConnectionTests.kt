@@ -24,8 +24,8 @@ class JvmMySQLConnectionTests {
     }
 
     @Test
-    fun `double release should fail with ConnectionIsReleased`() {
-        runner.`double release should fail with ConnectionIsReleased`()
+    fun `close should be idempotent`() {
+        runner.`close should be idempotent`()
     }
 
     @Test

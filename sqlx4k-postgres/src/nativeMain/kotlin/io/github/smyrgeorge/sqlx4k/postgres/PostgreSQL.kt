@@ -233,7 +233,7 @@ class PostgreSQL(
 
         override suspend fun close(): Result<Unit> = runCatching {
             mutex.withLock {
-                assertIsOpen()
+                if (status == Connection.Status.Closed) return@withLock
                 _status = Connection.Status.Closed
 
                 transactionIsolationLevel?.let {

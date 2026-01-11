@@ -49,7 +49,7 @@ class PooledConnection(
 
     override suspend fun close(): Result<Unit> = runCatching {
         mutex.withLock {
-            assertIsOpen()
+            if (status == Connection.Status.Closed) return@runCatching
             if (released) return@runCatching
             acquired = false
             lastUsedAt = TIME_SOURCE.markNow()

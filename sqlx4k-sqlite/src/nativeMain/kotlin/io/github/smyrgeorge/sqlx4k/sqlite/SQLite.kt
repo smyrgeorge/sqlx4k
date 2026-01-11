@@ -143,7 +143,7 @@ class SQLite(
 
         override suspend fun close(): Result<Unit> = runCatching {
             mutex.withLock {
-                assertIsOpen()
+                if (status == Connection.Status.Closed) return@withLock
                 _status = Connection.Status.Closed
                 sqlx { c -> sqlx4k_cn_release(rt, cn, c, DriverNativeUtils.fn) }.throwIfError()
             }

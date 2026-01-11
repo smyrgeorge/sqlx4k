@@ -11,7 +11,6 @@ import io.github.smyrgeorge.sqlx4k.impl.pool.util.FakeConnection
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
-import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -61,12 +60,16 @@ class ConnectionPoolErrorHandlingTests {
     }
 
     @Test
-    fun `Multiple release calls on same connection should fail`() = runBlocking {
+    fun `close should be idempotent on pooled connections`() = runBlocking {
         val pool = newPool(max = 1)
 
         val c = pool.acquire().getOrThrow()
+        // First close should succeed
         c.close().getOrThrow()
-        assertFails { c.close().getOrThrow() }
+        // Second close should also succeed (idempotent)
+        c.close().getOrThrow()
+        // Third close should also succeed (idempotent)
+        c.close().getOrThrow()
 
         assertThat(pool.poolIdleSize()).isEqualTo(1)
         assertThat(pool.poolSize()).isEqualTo(1)
