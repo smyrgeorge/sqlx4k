@@ -45,7 +45,7 @@ class PostgreSQL(
 ) {
     companion object {
         private fun connectionFactory(url: String, username: String, password: String): PostgresqlConnectionFactory {
-            val url = if (!url.startsWith("r2dbc")) "r2dbc:$url" else url
+            val url = if (!url.startsWith("r2dbc:")) "r2dbc:$url" else url
             val options = ConnectionFactoryOptions
                 .builder()
                 .from(ConnectionFactoryOptions.parse(url))

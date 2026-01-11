@@ -338,7 +338,7 @@ class MySQL(
         }
 
         private fun connectionFactory(url: String, username: String, password: String): MySqlConnectionFactory {
-            val url = if (!url.startsWith("r2dbc")) "r2dbc:$url" else url
+            val url = if (!url.startsWith("r2dbc:")) "r2dbc:$url" else url
             val options = ConnectionFactoryOptions
                 .builder()
                 .from(ConnectionFactoryOptions.parse(url))
