@@ -9,15 +9,8 @@ import io.asyncer.r2dbc.mysql.codec.CodecContext
 import io.asyncer.r2dbc.mysql.codec.CodecRegistry
 import io.asyncer.r2dbc.mysql.constant.SslMode
 import io.asyncer.r2dbc.mysql.extension.CodecRegistrar
-import io.github.smyrgeorge.sqlx4k.Connection
-import io.github.smyrgeorge.sqlx4k.ConnectionPool
-import io.github.smyrgeorge.sqlx4k.Dialect
-import io.github.smyrgeorge.sqlx4k.ResultSet
-import io.github.smyrgeorge.sqlx4k.SQLError
-import io.github.smyrgeorge.sqlx4k.Statement
-import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.*
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
-import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
@@ -29,11 +22,14 @@ import io.r2dbc.spi.Row
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.asFlow
-import kotlinx.coroutines.reactive.awaitFirstOrNull
+import kotlinx.coroutines.reactive.awaitLast
 import kotlinx.coroutines.reactive.awaitSingle
+import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.reactivestreams.Publisher
+import reactor.core.publisher.Mono
 import reactor.pool.PoolAcquireTimeoutException
 import reactor.pool.PoolShutdownException
 import kotlin.jvm.optionals.getOrElse
@@ -128,7 +124,7 @@ class MySQL(
 
     override suspend fun close(): Result<Unit> = runCatching {
         try {
-            pool.disposeLater().awaitFirstOrNull()
+            pool.disposeLater().awaitSingleOrNull()
         } catch (e: Exception) {
             SQLError(SQLError.Code.WorkerCrashed, e.message, e).raise()
         }
@@ -145,11 +141,11 @@ class MySQL(
         @Suppress("SqlSourceToSinkFlow")
         with(pool.acquire()) {
             val res = try {
-                createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
+                createStatement(sql).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
             } catch (e: Exception) {
                 SQLError(SQLError.Code.Database, e.message, e).raise()
             } finally {
-                close().awaitFirstOrNull()
+                close().toMono().awaitSingleOrNull()
             }
             res
         }
@@ -159,11 +155,11 @@ class MySQL(
         @Suppress("SqlSourceToSinkFlow")
         with(pool.acquire()) {
             try {
-                createStatement(sql).execute().awaitSingle().toResultSet()
+                createStatement(sql).execute().awaitLast().toResultSet()
             } catch (e: Exception) {
                 SQLError(SQLError.Code.Database, e.message, e).raise()
             } finally {
-                close().awaitFirstOrNull()
+                close().toMono().awaitSingleOrNull()
             }
         }
     }
@@ -171,9 +167,9 @@ class MySQL(
     override suspend fun begin(): Result<Transaction> = runCatching {
         with(pool.acquire()) {
             try {
-                beginTransaction().awaitFirstOrNull()
+                beginTransaction().toMono().awaitSingleOrNull()
             } catch (e: Exception) {
-                close().awaitFirstOrNull()
+                close().toMono().awaitSingleOrNull()
                 SQLError(SQLError.Code.Database, e.message, e).raise()
             }
             R2dbcTransaction(this, true, encoders)
@@ -212,7 +208,7 @@ class MySQL(
                     setTransactionIsolationLevel(default, false).getOrThrow()
                 }
 
-                connection.close().awaitFirstOrNull()
+                connection.close().toMono().awaitSingleOrNull()
             }
         }
 
@@ -227,7 +223,7 @@ class MySQL(
 
         private suspend fun execute(sql: String, lock: Boolean): Result<Long> {
             suspend fun doExecute(sql: String): Result<Long> = runCatching {
-                connection.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
+                connection.createStatement(sql).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
             }
 
             suspend fun doExecuteWithLock(sql: String): Result<Long> = runCatching {
@@ -252,7 +248,7 @@ class MySQL(
                 assertIsOpen()
                 try {
                     @Suppress("SqlSourceToSinkFlow")
-                    connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
+                    connection.createStatement(sql).execute().awaitLast().toResultSet().toResult()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message).raise()
                 }
@@ -263,7 +259,7 @@ class MySQL(
             mutex.withLock {
                 assertIsOpen()
                 try {
-                    connection.beginTransaction().awaitFirstOrNull()
+                    connection.beginTransaction().toMono().awaitSingleOrNull()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
                 }
@@ -286,11 +282,11 @@ class MySQL(
                 assertIsOpen()
                 _status = Transaction.Status.Closed
                 try {
-                    connection.commitTransaction().awaitFirstOrNull()
+                    connection.commitTransaction().toMono().awaitSingleOrNull()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
                 } finally {
-                    if (closeConnectionAfterTx) connection.close().awaitFirstOrNull()
+                    if (closeConnectionAfterTx) connection.close().toMono().awaitSingleOrNull()
                 }
             }
         }
@@ -300,11 +296,11 @@ class MySQL(
                 assertIsOpen()
                 _status = Transaction.Status.Closed
                 try {
-                    connection.rollbackTransaction().awaitFirstOrNull()
+                    connection.rollbackTransaction().toMono().awaitSingleOrNull()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
                 } finally {
-                    if (closeConnectionAfterTx) connection.close().awaitFirstOrNull()
+                    if (closeConnectionAfterTx) connection.close().toMono().awaitSingleOrNull()
                 }
             }
         }
@@ -314,7 +310,7 @@ class MySQL(
                 assertIsOpen()
                 try {
                     @Suppress("SqlSourceToSinkFlow")
-                    connection.createStatement(sql).execute().awaitSingle().rowsUpdated.awaitFirstOrNull() ?: 0
+                    connection.createStatement(sql).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
                 }
@@ -327,7 +323,7 @@ class MySQL(
                 assertIsOpen()
                 try {
                     @Suppress("SqlSourceToSinkFlow")
-                    connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
+                    connection.createStatement(sql).execute().awaitLast().toResultSet().toResult()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
                 }
@@ -336,6 +332,11 @@ class MySQL(
     }
 
     companion object {
+        private fun <T> Publisher<T>.toMono(): Mono<T> {
+            if (this is Mono<T>) return this
+            error("Publisher is not a Mono: ${this::class.qualifiedName}")
+        }
+
         private fun connectionFactory(url: String, username: String, password: String): MySqlConnectionFactory {
             val url = if (!url.startsWith("r2dbc")) "r2dbc:$url" else url
             val options = ConnectionFactoryOptions

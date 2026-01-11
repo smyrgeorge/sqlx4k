@@ -13,11 +13,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.asFlow
-import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactive.awaitLast
 import kotlinx.coroutines.reactive.awaitSingle
+import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.reactivestreams.Publisher
+import reactor.core.publisher.Mono
 import reactor.pool.PoolAcquireTimeoutException
 import reactor.pool.PoolShutdownException
 import kotlin.coroutines.CoroutineContext
@@ -91,7 +93,7 @@ class PostgreSQLImpl(
 
     override suspend fun close(): Result<Unit> = runCatching {
         try {
-            pool.disposeLater().awaitFirstOrNull()
+            pool.disposeLater().awaitSingleOrNull()
         } catch (e: Exception) {
             SQLError(SQLError.Code.WorkerCrashed, e.message, e).raise()
         }
@@ -108,11 +110,11 @@ class PostgreSQLImpl(
         @Suppress("SqlSourceToSinkFlow")
         with(pool.acquire()) {
             val res = try {
-                createStatement(sql).execute().awaitLast().rowsUpdated.awaitFirstOrNull() ?: 0
+                createStatement(sql).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
             } catch (e: Exception) {
                 SQLError(SQLError.Code.Database, e.message, e).raise()
             } finally {
-                close().awaitFirstOrNull()
+                close().toMono().awaitSingleOrNull()
             }
             res
         }
@@ -122,11 +124,11 @@ class PostgreSQLImpl(
         @Suppress("SqlSourceToSinkFlow")
         with(pool.acquire()) {
             try {
-                createStatement(sql).execute().awaitSingle().toResultSet()
+                createStatement(sql).execute().awaitLast().toResultSet()
             } catch (e: Exception) {
                 SQLError(SQLError.Code.Database, e.message, e).raise()
             } finally {
-                close().awaitFirstOrNull()
+                close().toMono().awaitSingleOrNull()
             }
         }
     }
@@ -134,9 +136,9 @@ class PostgreSQLImpl(
     override suspend fun begin(): Result<Transaction> = runCatching {
         with(pool.acquire()) {
             try {
-                beginTransaction().awaitFirstOrNull()
+                beginTransaction().toMono().awaitSingleOrNull()
             } catch (e: Exception) {
-                close().awaitFirstOrNull()
+                close().toMono().awaitSingleOrNull()
                 SQLError(SQLError.Code.Database, e.message, e).raise()
             }
             R2dbcTransaction(this, true, encoders)
@@ -202,7 +204,7 @@ class PostgreSQLImpl(
                         .thenMany(con.notifications)
                         .asFlow()
                         .collect { f(it.toNotification()) }
-                    con.close().awaitFirstOrNull()
+                    con.close().awaitSingleOrNull()
                 } catch (_: Exception) {
                     retryCount++
                     delay(baseDelay * retryCount)
@@ -262,7 +264,7 @@ class PostgreSQLImpl(
                     setTransactionIsolationLevel(default, false).getOrThrow()
                 }
 
-                connection.close().awaitFirstOrNull()
+                connection.close().toMono().awaitSingleOrNull()
             }
         }
 
@@ -277,7 +279,7 @@ class PostgreSQLImpl(
 
         private suspend fun execute(sql: String, lock: Boolean): Result<Long> {
             suspend fun doExecute(sql: String): Result<Long> = runCatching {
-                connection.createStatement(sql).execute().awaitLast().rowsUpdated.awaitFirstOrNull() ?: 0
+                connection.createStatement(sql).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
             }
 
             suspend fun doExecuteWithLock(sql: String): Result<Long> = runCatching {
@@ -302,7 +304,7 @@ class PostgreSQLImpl(
                 assertIsOpen()
                 try {
                     @Suppress("SqlSourceToSinkFlow")
-                    connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
+                    connection.createStatement(sql).execute().awaitLast().toResultSet().toResult()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
                 }
@@ -313,7 +315,7 @@ class PostgreSQLImpl(
             mutex.withLock {
                 assertIsOpen()
                 try {
-                    connection.beginTransaction().awaitFirstOrNull()
+                    connection.beginTransaction().toMono().awaitSingleOrNull()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
                 }
@@ -336,11 +338,11 @@ class PostgreSQLImpl(
                 assertIsOpen()
                 _status = Transaction.Status.Closed
                 try {
-                    connection.commitTransaction().awaitFirstOrNull()
+                    connection.commitTransaction().toMono().awaitSingleOrNull()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
                 } finally {
-                    if (closeConnectionAfterTx) connection.close().awaitFirstOrNull()
+                    if (closeConnectionAfterTx) connection.close().toMono().awaitSingleOrNull()
                 }
             }
         }
@@ -350,11 +352,11 @@ class PostgreSQLImpl(
                 assertIsOpen()
                 _status = Transaction.Status.Closed
                 try {
-                    connection.rollbackTransaction().awaitFirstOrNull()
+                    connection.rollbackTransaction().toMono().awaitSingleOrNull()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
                 } finally {
-                    if (closeConnectionAfterTx) connection.close().awaitFirstOrNull()
+                    if (closeConnectionAfterTx) connection.close().toMono().awaitSingleOrNull()
                 }
             }
         }
@@ -364,7 +366,7 @@ class PostgreSQLImpl(
                 assertIsOpen()
                 try {
                     @Suppress("SqlSourceToSinkFlow")
-                    connection.createStatement(sql).execute().awaitLast().rowsUpdated.awaitFirstOrNull() ?: 0
+                    connection.createStatement(sql).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
                 }
@@ -377,7 +379,7 @@ class PostgreSQLImpl(
                 assertIsOpen()
                 try {
                     @Suppress("SqlSourceToSinkFlow")
-                    connection.createStatement(sql).execute().awaitSingle().toResultSet().toResult()
+                    connection.createStatement(sql).execute().awaitLast().toResultSet().toResult()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
                 }
@@ -389,6 +391,11 @@ class PostgreSQLImpl(
         private object PgChannelScope : CoroutineScope {
             override val coroutineContext: CoroutineContext
                 get() = EmptyCoroutineContext
+        }
+
+        private fun <T> Publisher<T>.toMono(): Mono<T> {
+            if (this is Mono<T>) return this
+            error("Publisher is not a Mono: ${this::class.qualifiedName}")
         }
 
         private suspend fun NativeR2dbcResultSet.toResultSet(): ResultSet {

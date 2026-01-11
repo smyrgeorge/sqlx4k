@@ -26,6 +26,7 @@ kotlin {
                 implementation(libs.r2dbc.postgresql)
                 implementation(libs.r2dbc.pool)
                 implementation(libs.kotlinx.coroutines.reactive)
+                implementation(libs.kotlinx.coroutines.reactor)
             }
         }
     }
