@@ -15,8 +15,8 @@
 ![](https://img.shields.io/static/v1?label=&message=iOS&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=Android&color=blue)
 
-A coroutine-first SQL toolkit with compile-time query validations for Kotlin Multiplatform. PostgreSQL, MySQL, and
-SQLite supported.
+A coroutine-first SQL toolkit with compile-time query validations for Kotlin Multiplatform. PostgreSQL, MySQL/MariaDB,
+and SQLite supported.
 
 ---
 
@@ -73,19 +73,17 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 
 - Create and publish sqlx4k-gradle-plugin
 - Support streaming large tables (e.g. with cursors)
-- Pure Kotlin implementation for `ConnectionPool` ✅
 - Validate queries at compile time (avoid runtime errors)
     - Syntax checking is already supported (using the `@Query` annotation) ✅
     - Validate queries by accessing the DB schema ✅
     - Validate query literal types (type check query parameters)
 - Add support for SQLite JVM target ✅
 - WASM support (?).
-- Pure Kotlin implementation for PostgreSQL
-- Pure Kotlin implementation for MySQL
 
 ### Supported Databases
 
 - ![MySQL](https://img.shields.io/badge/MySQL-4479A1?logo=mysql&logoColor=white)
+- ![MariaDB](https://img.shields.io/badge/MariaDB-003545?logo=mariadb&logoColor=white)
 - ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?logo=postgresql&logoColor=white)
 - ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
 
