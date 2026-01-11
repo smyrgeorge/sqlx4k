@@ -215,21 +215,29 @@ class MySQL(
     ) : Transaction {
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open
+        private var _commited: Boolean = false
+        private var _rollbacked: Boolean = false
         override val status: Transaction.Status get() = _status
+        override val commited: Boolean get() = _commited
+        override val rollbacked: Boolean get() = _rollbacked
 
         override suspend fun commit(): Result<Unit> = runCatching {
             mutex.withLock {
+                if (commited) return@withLock
                 assertIsOpen()
                 _status = Transaction.Status.Closed
                 sqlx { c -> sqlx4k_tx_commit(rt, tx, c, DriverNativeUtils.fn) }.throwIfError()
+                _commited = true
             }
         }
 
         override suspend fun rollback(): Result<Unit> = runCatching {
             mutex.withLock {
+                if (rollbacked) return@withLock
                 assertIsOpen()
                 _status = Transaction.Status.Closed
                 sqlx { c -> sqlx4k_tx_rollback(rt, tx, c, DriverNativeUtils.fn) }.throwIfError()
+                _rollbacked = true
             }
         }
 

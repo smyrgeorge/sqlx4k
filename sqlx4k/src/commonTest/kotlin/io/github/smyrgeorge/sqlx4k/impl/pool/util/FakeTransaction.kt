@@ -6,14 +6,18 @@ import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 
 class FakeTransaction : Transaction {
     override var status: Transaction.Status = Transaction.Status.Open
+    override var commited: Boolean = false
+    override var rollbacked: Boolean = false
 
     override suspend fun commit(): Result<Unit> {
         status = Transaction.Status.Closed
+        commited = true
         return Result.success(Unit)
     }
 
     override suspend fun rollback(): Result<Unit> {
         status = Transaction.Status.Closed
+        rollbacked = true
         return Result.success(Unit)
     }
 

@@ -9,6 +9,8 @@ package io.github.smyrgeorge.sqlx4k
  */
 interface Transaction : QueryExecutor {
     val status: Status
+    val commited: Boolean
+    val rollbacked: Boolean
 
     /**
      * Checks if the transaction is open and throws an error if it is closed.

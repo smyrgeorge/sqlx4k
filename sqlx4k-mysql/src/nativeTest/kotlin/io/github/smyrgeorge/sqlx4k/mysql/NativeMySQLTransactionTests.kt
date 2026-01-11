@@ -52,4 +52,24 @@ class NativeMySQLTransactionTests {
     fun `TransactionContext withCurrent should create new when none exists`() {
         runner.`TransactionContext withCurrent should create new when none exists`()
     }
+
+    @Test
+    fun `commit should be idempotent`() {
+        runner.`commit should be idempotent`()
+    }
+
+    @Test
+    fun `rollback should be idempotent`() {
+        runner.`rollback should be idempotent`()
+    }
+
+    @Test
+    fun `commit followed by rollback should fail`() {
+        runner.`commit followed by rollback should fail`()
+    }
+
+    @Test
+    fun `rollback followed by commit should fail`() {
+        runner.`rollback followed by commit should fail`()
+    }
 }

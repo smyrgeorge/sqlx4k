@@ -275,14 +275,20 @@ class MySQL(
     ) : Transaction {
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open
+        private var _commited: Boolean = false
+        private var _rollbacked: Boolean = false
         override val status: Transaction.Status get() = _status
+        override val commited: Boolean get() = _commited
+        override val rollbacked: Boolean get() = _rollbacked
 
         override suspend fun commit(): Result<Unit> = runCatching {
             mutex.withLock {
+                if (commited) return@withLock
                 assertIsOpen()
                 _status = Transaction.Status.Closed
                 try {
                     connection.commitTransaction().toMono().awaitSingleOrNull()
+                    _commited = true
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
                 } finally {
@@ -293,10 +299,12 @@ class MySQL(
 
         override suspend fun rollback(): Result<Unit> = runCatching {
             mutex.withLock {
+                if (rollbacked) return@withLock
                 assertIsOpen()
                 _status = Transaction.Status.Closed
                 try {
                     connection.rollbackTransaction().toMono().awaitSingleOrNull()
+                    _rollbacked = true
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
                 } finally {

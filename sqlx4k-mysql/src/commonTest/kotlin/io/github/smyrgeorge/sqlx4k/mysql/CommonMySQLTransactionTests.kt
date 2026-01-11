@@ -176,4 +176,88 @@ class CommonMySQLTransactionTests(
 
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }
     }
+
+    fun `commit should be idempotent`() = runBlocking {
+        val table = newTable()
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+        db.execute("create table if not exists $table(id int auto_increment primary key, v int not null);").getOrThrow()
+
+        val tx = db.begin().getOrThrow()
+        assertThat(tx.execute("insert into $table(v) values (1);")).isSuccess()
+
+        // First commit should succeed
+        assertThat(tx.commit()).isSuccess()
+
+        // Second commit should also succeed (idempotent)
+        assertThat(tx.commit()).isSuccess()
+
+        // Third commit should also succeed (idempotent)
+        assertThat(tx.commit()).isSuccess()
+
+        assertThat(countRows(table)).isEqualTo(1L)
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
+
+    fun `rollback should be idempotent`() = runBlocking {
+        val table = newTable()
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+        db.execute("create table if not exists $table(id int auto_increment primary key, v int not null);").getOrThrow()
+
+        val tx = db.begin().getOrThrow()
+        assertThat(tx.execute("insert into $table(v) values (1);")).isSuccess()
+
+        // First rollback should succeed
+        assertThat(tx.rollback()).isSuccess()
+
+        // Second rollback should also succeed (idempotent)
+        assertThat(tx.rollback()).isSuccess()
+
+        // Third rollback should also succeed (idempotent)
+        assertThat(tx.rollback()).isSuccess()
+
+        assertThat(countRows(table)).isEqualTo(0L)
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
+
+    fun `commit followed by rollback should fail`() = runBlocking {
+        val table = newTable()
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+        db.execute("create table if not exists $table(id int auto_increment primary key, v int not null);").getOrThrow()
+
+        val tx = db.begin().getOrThrow()
+        assertThat(tx.execute("insert into $table(v) values (1);")).isSuccess()
+
+        // Commit should succeed
+        assertThat(tx.commit()).isSuccess()
+
+        // Rollback after commit should fail
+        val res = tx.rollback()
+        assertThat(res).isFailure()
+        val ex = res.exceptionOrNull() as SQLError
+        assertThat(ex.code).isEqualTo(SQLError.Code.TransactionIsClosed)
+
+        assertThat(countRows(table)).isEqualTo(1L)
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
+
+    fun `rollback followed by commit should fail`() = runBlocking {
+        val table = newTable()
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+        db.execute("create table if not exists $table(id int auto_increment primary key, v int not null);").getOrThrow()
+
+        val tx = db.begin().getOrThrow()
+        assertThat(tx.execute("insert into $table(v) values (1);")).isSuccess()
+
+        // Rollback should succeed
+        assertThat(tx.rollback()).isSuccess()
+
+        // Commit after rollback should fail
+        val res = tx.commit()
+        assertThat(res).isFailure()
+        val ex = res.exceptionOrNull() as SQLError
+        assertThat(ex.code).isEqualTo(SQLError.Code.TransactionIsClosed)
+
+        assertThat(countRows(table)).isEqualTo(0L)
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
 }
