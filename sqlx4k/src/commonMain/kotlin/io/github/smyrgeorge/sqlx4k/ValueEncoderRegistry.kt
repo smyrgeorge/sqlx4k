@@ -51,6 +51,24 @@ class ValueEncoderRegistry {
     inline fun <reified T : Any> register(encoder: ValueEncoder<T>): ValueEncoderRegistry =
         register(T::class, encoder)
 
+    /**
+     * Combines the mappings from two `ValueEncoderRegistry` instances into a new registry.
+     *
+     * This operator function creates a new `ValueEncoderRegistry` by merging the encoders
+     * of the current registry and the encoders from the provided registry. If there are
+     * overlapping encoders (i.e., encoders for the same type), the encoders from the
+     * provided registry will override the existing ones.
+     *
+     * @param other The `ValueEncoderRegistry` whose encoders are to be merged.
+     * @return A new `ValueEncoderRegistry` containing the combined encoders from both registries.
+     */
+    operator fun plus(other: ValueEncoderRegistry): ValueEncoderRegistry {
+        val result = ValueEncoderRegistry()
+        result.encoders.putAll(encoders)
+        result.encoders.putAll(other.encoders)
+        return result
+    }
+
     companion object {
         /**
          * A pre-initialized empty instance of `ValueEncoderRegistry`.
