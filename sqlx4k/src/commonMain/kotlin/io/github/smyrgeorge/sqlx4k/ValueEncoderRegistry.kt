@@ -23,12 +23,16 @@ class ValueEncoderRegistry {
     fun get(type: KClass<*>): ValueEncoder<Any>? =
         encoders[type] as ValueEncoder<Any>?
 
+    @Suppress("UNCHECKED_CAST")
+    fun <T : Any> getTyped(type: KClass<T>): ValueEncoder<T>? =
+        encoders[type] as ValueEncoder<T>?
+
     /**
      * Retrieves a `ValueEncoder` associated with the reified type `T`.
      *
      * @return The `ValueEncoder` instance associated with type `T`, or null if none is found.
      */
-    inline fun <reified T : Any> get(): ValueEncoder<Any>? = get(T::class)
+    inline fun <reified T : Any> get(): ValueEncoder<T>? = getTyped(T::class)
 
     /**
      * Registers a `ValueEncoder` for a specific type within the `ValueEncoderRegistry`.
