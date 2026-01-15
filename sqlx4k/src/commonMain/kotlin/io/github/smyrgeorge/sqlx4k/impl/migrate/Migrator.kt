@@ -139,6 +139,7 @@ object Migrator {
     ): Result<Results> = runCatching {
         require(table.isNotBlank()) { "Table name cannot be blank." }
         require(tableRegex.matches(table)) { "Table name must match the regex: $tableRegex" }
+        if (createSchema) require(schema != null) { "Schema must be specified when creating a new schema."}
         if (files.isEmpty()) return@runCatching Results.Empty
 
         var totalCount = 0
