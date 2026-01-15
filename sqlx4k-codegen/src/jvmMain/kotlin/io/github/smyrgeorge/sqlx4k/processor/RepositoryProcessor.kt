@@ -610,7 +610,7 @@ class RepositoryProcessor(
                     file += "        $contextParamName.fetchAll(statement).map { rs ->\n"
                 }
                 file += "            val row = rs.firstOrNull()\n"
-                file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmpryResultSet, \"Count query returned no rows\"))\n"
+                file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Count query returned no rows\"))\n"
                 file += "            row.get(0).asString().toLong()\n"
                 file += "        }\n"
             }
@@ -731,7 +731,7 @@ class RepositoryProcessor(
             file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
         }
         file += "            list.firstOrNull()\n"
-        file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmpryResultSet, \"Insert query returned no rows\"))\n"
+        file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Insert query returned no rows\"))\n"
         file += "        }"
 
         val hasAfterInsertHook = isHookOverridden(repo, "afterInsertHook")
@@ -784,7 +784,7 @@ class RepositoryProcessor(
             file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
         }
         file += "            list.firstOrNull()\n"
-        file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmpryResultSet, \"Update query returned no rows\"))\n"
+        file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Update query returned no rows\"))\n"
         file += "        }"
 
         val hasAfterUpdateHook = isHookOverridden(repo, "afterUpdateHook")

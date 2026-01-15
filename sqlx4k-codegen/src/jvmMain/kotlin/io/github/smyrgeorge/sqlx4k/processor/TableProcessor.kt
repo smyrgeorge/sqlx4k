@@ -443,7 +443,7 @@ class TableProcessor(
             // Use custom decoder from registry
             val propName = prop.simpleName()
             return if (isNullable) {
-                ".let { col -> converters.get<$typeQualifiedName>()?.decode(col) ?: error(\"No decoder found for type $typeQualifiedName (property: $propName)\") }"
+                ".let { col -> if (col.isNull()) null else converters.get<$typeQualifiedName>()?.decode(col) ?: error(\"No decoder found for type $typeQualifiedName (property: $propName)\") }"
             } else {
                 ".let { col -> converters.get<$typeQualifiedName>()?.decode(col) ?: error(\"No decoder found for type $typeQualifiedName (property: $propName)\") }"
             }

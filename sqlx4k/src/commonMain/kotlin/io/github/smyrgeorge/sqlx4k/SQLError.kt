@@ -54,11 +54,11 @@ class SQLError(
         NamedParameterNotFound,
 
         // Other errors:
-        EmpryResultSet,
+        EmptyResultSet,
         MultipleRowsReturned,
-        NamedParameterTypeNotSupported,
+        MissingValueConverter,
         PositionalParameterValueNotSupplied,
         NamedParameterValueNotSupplied,
-        UknownError,
+        UnknownError,
     }
 }

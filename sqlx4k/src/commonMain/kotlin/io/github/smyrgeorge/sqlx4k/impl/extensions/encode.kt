@@ -7,7 +7,12 @@ import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.types.DoubleQuotingString
 import io.github.smyrgeorge.sqlx4k.impl.types.NoQuotingString
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
-import kotlinx.datetime.*
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
+import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -25,7 +30,7 @@ import kotlin.uuid.Uuid
  * @return A string representation of the receiver suitable for database operations.
  * @throws SQLError if the type of the receiver is unsupported and no appropriate renderer is found.
  */
-fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
+internal fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
     return when (this) {
         null -> "null"
         is String -> {
@@ -57,6 +62,7 @@ fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
         is Instant -> "'${toTimestampString()}'"
         is LocalDate, is LocalTime, is LocalDateTime -> "'${this}'"
         is Uuid -> "'${this}'"
+        is Enum<*> -> "'${this.name}'"
         is Iterable<*> -> encodeTuple(encoders)
         is BooleanArray -> asIterable().encodeTuple(encoders)
         is ShortArray -> asIterable().encodeTuple(encoders)
@@ -69,8 +75,8 @@ fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
 
         else -> {
             val error = SQLError(
-                code = SQLError.Code.NamedParameterTypeNotSupported,
-                message = "Could not map named parameter of type ${this::class.simpleName}"
+                code = SQLError.Code.MissingValueConverter,
+                message = "Could not encode value of type ${this::class.simpleName}"
             )
 
             val encoder = encoders.get(this::class) ?: error.raise()

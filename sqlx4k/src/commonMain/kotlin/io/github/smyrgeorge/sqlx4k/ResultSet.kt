@@ -140,6 +140,16 @@ class ResultSet(
             private val value: String?
         ) {
             /**
+             * Checks if the column's value is null.
+             *
+             * This method determines whether the value of the column is absent, returning true
+             * if the value is null and false otherwise.
+             *
+             * @return True if the column value is null; false if the column has a non-null value.
+             */
+            fun isNull(): Boolean = value == null
+
+            /**
              * Converts the column value to a String.
              *
              * If the value is null, an SQLError with code `CannotDecode` is thrown.
