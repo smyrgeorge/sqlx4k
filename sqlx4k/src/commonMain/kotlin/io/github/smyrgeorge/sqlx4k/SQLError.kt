@@ -56,6 +56,7 @@ class SQLError(
         // Other errors:
         EmptyResultSet,
         MultipleRowsReturned,
+        RowMismatch,
         MissingValueConverter,
         PositionalParameterValueNotSupplied,
         NamedParameterValueNotSupplied,

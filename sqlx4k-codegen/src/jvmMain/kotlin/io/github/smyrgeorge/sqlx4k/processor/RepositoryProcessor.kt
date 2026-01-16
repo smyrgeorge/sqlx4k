@@ -765,14 +765,15 @@ class RepositoryProcessor(
         file += "     * Updates an existing $domainSimpleName entity in the database.\n"
         file += "     *\n"
         file += "     * Executes an UPDATE statement based on the entity's ID and returns\n"
-        file += "     * the updated entity with any modified values.\n"
+        file += "     * the updated entity with any modified values. Validates that the returned\n"
+        file += "     * ID matches the original entity's ID.\n"
         file += "     *\n"
         if (!useContextParameters) {
             file += "     * @param context The query executor (database connection or transaction)\n"
         }
         file += "     * @param entity The $domainSimpleName entity to update\n"
         file += "     * @return Result containing the updated $domainSimpleName entity,\n"
-        file += "     *         or an error if the update operation fails\n"
+        file += "     *         or an error if the update operation fails or ID mismatch occurs\n"
         file += "     */\n"
         if (useContextParameters) {
             file += "    context(context: QueryExecutor)\n"
@@ -789,6 +790,12 @@ class RepositoryProcessor(
             file += "        val statement = entity.update()\n"
         }
 
+        // Get @Id property for validation
+        val updateIdProp: KSPropertyDeclaration? = domainDecl.getAllProperties().firstOrNull { p ->
+            p.annotations.any { it.qualifiedName() == TypeNames.ID_ANNOTATION }
+        }
+        val updateIdName = updateIdProp?.simpleName?.getShortName()
+
         // Use applyUpdateResult to merge DB-generated columns back into the entity
         val updateEntityVar = if (hasPreUpdateHook) "e" else "entity"
         if (hasAroundQueryHook) {
@@ -800,7 +807,13 @@ class RepositoryProcessor(
         }
         file += "            val row = rows.firstOrNull()\n"
         file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Update query returned no rows\"))\n"
-        file += "            $updateEntityVar.applyUpdateResult(row)\n"
+        file += "            val result = $updateEntityVar.applyUpdateResult(row)\n"
+        // Add ID validation if @Id property exists
+        if (updateIdName != null) {
+            file += "            if (result.$updateIdName != $updateEntityVar.$updateIdName)\n"
+            file += "                return@run Result.failure(SQLError(SQLError.Code.RowMismatch, \"Update returned different ID: expected \${$updateEntityVar.$updateIdName}, got \${result.$updateIdName}\"))\n"
+        }
+        file += "            result\n"
         file += "        }"
 
         val hasAfterUpdateHook = isHookOverridden(repo, "afterUpdateHook")
@@ -820,14 +833,15 @@ class RepositoryProcessor(
         file += "    /**\n"
         file += "     * Deletes a $domainSimpleName entity from the database.\n"
         file += "     *\n"
-        file += "     * Executes a DELETE statement based on the entity's ID.\n"
+        file += "     * Executes a DELETE statement based on the entity's ID. Validates that\n"
+        file += "     * exactly one row was deleted.\n"
         file += "     *\n"
         if (!useContextParameters) {
             file += "     * @param context The query executor (database connection or transaction)\n"
         }
         file += "     * @param entity The $domainSimpleName entity to delete\n"
         file += "     * @return Result containing Unit on success,\n"
-        file += "     *         or an error if the delete operation fails\n"
+        file += "     *         or an error if the delete operation fails or row count mismatch occurs\n"
         file += "     */\n"
         if (useContextParameters) {
             file += "    context(context: QueryExecutor)\n"
@@ -847,20 +861,26 @@ class RepositoryProcessor(
         if (hasAroundQueryHook) {
             file += "        aroundQuery(\"delete\", statement) {\n"
             file += "            context.execute(statement)\n"
-            file += "        }"
+            file += "        }.map { rowsDeleted ->\n"
         } else {
-            file += "        context.execute(statement)\n"
+            file += "        context.execute(statement).map { rowsDeleted ->\n"
         }
+        file += "            when (rowsDeleted) {\n"
+        file += "                0L -> return@run Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Delete affected 0 rows - entity not found\"))\n"
+        file += "                1L -> kotlin.Unit\n"
+        file += "                else -> return@run Result.failure(SQLError(SQLError.Code.RowMismatch, \"Delete affected \$rowsDeleted rows instead of 1\"))\n"
+        file += "            }\n"
+        file += "        }"
 
         val hasAfterDeleteHook = isHookOverridden(repo, "afterDeleteHook")
         if (hasAfterDeleteHook) {
-            val entityVar = if (hasPreDeleteHook) "e" else "entity"
+            val deleteEntityVar = if (hasPreDeleteHook) "e" else "entity"
             file += ".map {\n"
-            file += "            afterDeleteHook(context, $entityVar)\n"
+            file += "            afterDeleteHook(context, $deleteEntityVar)\n"
             file += "            kotlin.Unit\n"
             file += "        }\n"
         } else {
-            file += "            .map { kotlin.Unit }\n"
+            file += "\n"
         }
         file += "    }"
         if (useArrow) file += ".toDbResult()"
