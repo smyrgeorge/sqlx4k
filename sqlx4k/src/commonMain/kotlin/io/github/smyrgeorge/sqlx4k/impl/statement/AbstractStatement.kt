@@ -133,7 +133,6 @@ abstract class AbstractStatement(private val sql: String) : Statement {
                 ).raise()
             }
             sb.append(value.encodeValue(encoders))
-            @Suppress("AssignedValueIsNeverRead")
             nextIndex += 1
             i + 1
         }
@@ -180,7 +179,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
         writeOutput: Boolean,
         crossinline onNormalChar: String.(i: Int, c: Char, sb: StringBuilder) -> Int?
     ): String {
-        // Pre-size with 60% more space the buffer to reduce reallocation when parameters are replaced.
+        // Pre-size with 60% more space in the buffer to reduce reallocation when parameters are replaced.
         val sb = if (writeOutput) StringBuilder((length * 1.6).toInt()) else StringBuilder(0)
         var i = 0
         var inSQ = false
