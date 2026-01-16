@@ -7,12 +7,7 @@ import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.types.DoubleQuotingString
 import io.github.smyrgeorge.sqlx4k.impl.types.NoQuotingString
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalDateTime
-import kotlinx.datetime.LocalTime
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.number
-import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.*
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -48,6 +43,8 @@ internal fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
             "\"${value.replace("\"", "\"\"")}\""
         }
 
+        // IMPORTANT:
+        // [NoQuotingString] is marked as internal, thus cannot be used outside this module
         is NoQuotingString -> {
             // Fast path: if no single quote present, avoid replace allocation
             if (value.indexOf('\'') < 0) return "$this"
@@ -74,13 +71,24 @@ internal fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
         is NoWrappingTuple -> value.encodeTuple(encoders, false)
 
         else -> {
-            val error = SQLError(
-                code = SQLError.Code.MissingValueConverter,
-                message = "Could not encode value of type ${this::class.simpleName}"
-            )
+            val encoder = encoders.get(this::class)
+                ?: SQLError(
+                    code = SQLError.Code.MissingValueConverter,
+                    message = "Could not encode value of type ${this::class.simpleName}"
+                ).raise()
+            val encoded = encoder.encode(this)
 
-            val encoder = encoders.get(this::class) ?: error.raise()
-            encoder.encode(this).encodeValue(encoders)
+            // Security validation: custom encoders must not return wrapper types that bypass escaping
+            if (encoded is NoQuotingString || encoded is DoubleQuotingString) {
+                SQLError(
+                    code = SQLError.Code.UnsafeStringContent,
+                    message = "Custom encoder for type ${this::class.simpleName} returned an unsafe wrapper type " +
+                            "(NoQuotingString or DoubleQuotingString). Custom encoders must return regular String " +
+                            "values or safe primitive types to prevent SQL injection vulnerabilities."
+                ).raise()
+            }
+
+            encoded.encodeValue(encoders)
         }
     }
 }

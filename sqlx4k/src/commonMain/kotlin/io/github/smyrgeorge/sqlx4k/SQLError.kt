@@ -59,6 +59,8 @@ class SQLError(
         MissingValueConverter,
         PositionalParameterValueNotSupplied,
         NamedParameterValueNotSupplied,
+        InvalidIdentifier,
+        UnsafeStringContent,
         UnknownError,
     }
 }
