@@ -811,7 +811,7 @@ class RepositoryProcessor(
         // Add ID validation if @Id property exists
         if (updateIdName != null) {
             file += "            if (result.$updateIdName != $updateEntityVar.$updateIdName)\n"
-            file += "                return@run Result.failure(SQLError(SQLError.Code.RowMismatch, \"Update returned different ID: expected \${$updateEntityVar.$updateIdName}, got \${result.$updateIdName}\"))\n"
+            file += $$"                return@run Result.failure(SQLError(SQLError.Code.RowMismatch, \"Update returned different ID: expected ${$$updateEntityVar.$$updateIdName}, got ${result.$$updateIdName}\"))\n"
         }
         file += "            result\n"
         file += "        }"
@@ -868,7 +868,7 @@ class RepositoryProcessor(
         file += "            when (rowsDeleted) {\n"
         file += "                0L -> return@run Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Delete affected 0 rows - entity not found\"))\n"
         file += "                1L -> kotlin.Unit\n"
-        file += "                else -> return@run Result.failure(SQLError(SQLError.Code.RowMismatch, \"Delete affected \$rowsDeleted rows instead of 1\"))\n"
+        file += $$"                else -> return@run Result.failure(SQLError(SQLError.Code.RowMismatch, \"Delete affected $rowsDeleted rows instead of 1\"))\n"
         file += "            }\n"
         file += "        }"
 
