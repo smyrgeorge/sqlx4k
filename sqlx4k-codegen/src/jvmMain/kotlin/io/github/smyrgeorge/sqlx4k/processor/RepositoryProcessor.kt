@@ -103,7 +103,6 @@ class RepositoryProcessor(
                 file = file,
                 repo = repo,
                 domainDecl = domainDecl,
-                mapperTypeName = mapperTypeName,
                 useContextParameters = useContextParameters,
                 useArrow = useArrow
             )
@@ -674,7 +673,6 @@ class RepositoryProcessor(
      * @param file the output stream where the generated CRUD methods will be written
      * @param repo the repository interface declaration used to check for overridden hooks
      * @param domainDecl the class declaration of the domain object for which CRUD methods are generated
-     * @param mapperTypeName the name of the mapper type used to map query results to the domain object
      * @param useContextParameters whether to include `QueryExecutor` as a context parameter in the method signatures
      * @param useArrow whether to use the Arrow library for error handling in the generated methods
      */
@@ -682,7 +680,6 @@ class RepositoryProcessor(
         file: OutputStream,
         repo: KSClassDeclaration,
         domainDecl: KSClassDeclaration,
-        mapperTypeName: String,
         useContextParameters: Boolean,
         useArrow: Boolean
     ) {
@@ -723,15 +720,18 @@ class RepositoryProcessor(
             file += "        val statement = entity.insert()\n"
         }
 
+        // Use applyInsertResult to merge DB-generated columns back into the entity
+        val entityVar = if (hasPreInsertHook) "e" else "entity"
         if (hasAroundQueryHook) {
             file += "        aroundQuery(\"insert\", statement) {\n"
-            file += "            context.fetchAll(statement, $mapperTypeName)\n"
-            file += "        }.map { list ->\n"
+            file += "            context.fetchAll(statement)\n"
+            file += "        }.map { rows ->\n"
         } else {
-            file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
+            file += "        context.fetchAll(statement).map { rows ->\n"
         }
-        file += "            list.firstOrNull()\n"
+        file += "            val row = rows.firstOrNull()\n"
         file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Insert query returned no rows\"))\n"
+        file += "            $entityVar.applyInsertResult(row)\n"
         file += "        }"
 
         val hasAfterInsertHook = isHookOverridden(repo, "afterInsertHook")
@@ -776,15 +776,18 @@ class RepositoryProcessor(
             file += "        val statement = entity.update()\n"
         }
 
+        // Use applyUpdateResult to merge DB-generated columns back into the entity
+        val updateEntityVar = if (hasPreUpdateHook) "e" else "entity"
         if (hasAroundQueryHook) {
             file += "        aroundQuery(\"update\", statement) {\n"
-            file += "            context.fetchAll(statement, $mapperTypeName)\n"
-            file += "        }.map { list ->\n"
+            file += "            context.fetchAll(statement)\n"
+            file += "        }.map { rows ->\n"
         } else {
-            file += "        context.fetchAll(statement, $mapperTypeName).map { list ->\n"
+            file += "        context.fetchAll(statement).map { rows ->\n"
         }
-        file += "            list.firstOrNull()\n"
+        file += "            val row = rows.firstOrNull()\n"
         file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Update query returned no rows\"))\n"
+        file += "            $updateEntityVar.applyUpdateResult(row)\n"
         file += "        }"
 
         val hasAfterUpdateHook = isHookOverridden(repo, "afterUpdateHook")
@@ -844,7 +847,7 @@ class RepositoryProcessor(
             file += "            kotlin.Unit\n"
             file += "        }\n"
         } else {
-            file += ".map { kotlin.Unit }\n"
+            file += "            .map { kotlin.Unit }\n"
         }
         file += "    }"
         if (useArrow) file += ".toDbResult()"

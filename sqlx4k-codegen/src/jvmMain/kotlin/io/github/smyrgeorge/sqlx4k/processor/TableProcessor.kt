@@ -80,6 +80,11 @@ class TableProcessor(
     ) : KSVisitorVoid() {
 
         override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
+            // Validate that the class is a data class (required for copy() in merge functions)
+            if (Modifier.DATA !in classDeclaration.modifiers) {
+                error("@Table annotation can only be applied to data classes: ${classDeclaration.qualifiedName?.asString()}")
+            }
+
             // Getting the @Table annotation object.
             val table: KSAnnotation = classDeclaration.annotations.first {
                 it.qualifiedName() == TypeNames.TABLE_ANNOTATION
@@ -99,7 +104,9 @@ class TableProcessor(
 
             // Make queries.
             insert(tableName, classDeclaration, properties)
+            applyInsertResult(classDeclaration, properties)
             update(tableName, classDeclaration, properties)
+            applyUpdateResult(classDeclaration, properties)
             delete(tableName, classDeclaration, properties)
 
             // Generate RowMapper.
@@ -151,8 +158,9 @@ class TableProcessor(
                 .map { it.simpleName() }
                 .toList()
 
-            // Returning should explicitly list all properties (snake_case), not table.*
-            val returningColumns = allProps.joinToString { it.simpleName().toSnakeCase() }
+            // Get DB-generated columns for RETURNING clause
+            val returningColumns = findInsertReturningProps(allProps)
+                .joinToString { it.simpleName().toSnakeCase() }
 
             val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
             file += "\n"
@@ -200,6 +208,26 @@ class TableProcessor(
         }
 
         /**
+         * Generates a function to merge INSERT result (DB-generated columns) back into the entity.
+         *
+         * @param clazz The class declaration for which to generate the merge function.
+         * @param props The sequence of properties from the class.
+         */
+        private fun applyInsertResult(
+            clazz: KSClassDeclaration,
+            props: Sequence<KSPropertyDeclaration>
+        ) {
+            val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
+            val returningProps = findInsertReturningProps(props.toList())
+            emitApplyResultFunction(
+                className,
+                returningProps,
+                "applyInsertResult",
+                "INSERT result (DB-generated columns)"
+            )
+        }
+
+        /**
          * Generates an SQL update statement for the given class declaration and properties.
          *
          * @param clazz The class declaration from which to generate the update statement.
@@ -240,8 +268,9 @@ class TableProcessor(
                 .map { it.simpleName() }
                 .toList()
 
-            // Returning should explicitly list all properties (snake_case), not table.*
-            val returningColumns = allProps.joinToString { it.simpleName().toSnakeCase() }
+            // Get DB-generated columns for RETURNING clause
+            val returningColumns = findUpdateReturningProps(allProps)
+                .joinToString { it.simpleName().toSnakeCase() }
 
             val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
             val idName = id.simpleName.getShortName()
@@ -280,6 +309,26 @@ class TableProcessor(
             }
             file += "    return statement\n"
             file += "}\n"
+        }
+
+        /**
+         * Generates a function to merge UPDATE result (DB-generated columns) back into the entity.
+         *
+         * @param clazz The class declaration for which to generate the merge function.
+         * @param props The sequence of properties from the class.
+         */
+        private fun applyUpdateResult(
+            clazz: KSClassDeclaration,
+            props: Sequence<KSPropertyDeclaration>
+        ) {
+            val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
+            val returningProps = findUpdateReturningProps(props.toList())
+            emitApplyResultFunction(
+                className,
+                returningProps,
+                "applyUpdateResult",
+                "UPDATE result (DB-generated columns)"
+            )
         }
 
         /**
@@ -448,6 +497,111 @@ class TableProcessor(
                 ".let { col -> converters.get<$typeQualifiedName>()?.decode(col) ?: error(\"No decoder found for type $typeQualifiedName (property: $propName)\") }"
             }
         }
+
+        /**
+         * Finds properties that should be returned by INSERT (DB-generated columns).
+         * These are columns with @Id(insert = false) or @Column(insert = false).
+         *
+         * @param allProps All properties of the entity.
+         * @return List of properties that should be in the RETURNING clause for INSERT.
+         */
+        private fun findInsertReturningProps(allProps: List<KSPropertyDeclaration>): List<KSPropertyDeclaration> =
+            allProps.asSequence()
+                .filter { prop ->
+                    val id = prop.annotations.find { a ->
+                        a.qualifiedName() == TypeNames.ID_ANNOTATION
+                    }
+                    if (id != null) {
+                        // @Id(insert = false) means DB generates the ID
+                        val insertArg = id.arguments.find { a -> a.name?.asString() == INSERT_PROPERTY_NAME }
+                        return@filter (insertArg?.value as? Boolean) != true
+                    }
+
+                    val column = prop.annotations.find { a ->
+                        a.qualifiedName() == TypeNames.COLUMN_ANNOTATION
+                    }
+                    if (column != null) {
+                        // @Column(insert = false) means DB generates/defaults the value
+                        val insertArg = column.arguments.find { a -> a.name?.asString() == INSERT_PROPERTY_NAME }
+                        return@filter (insertArg?.value as? Boolean) == false
+                    }
+
+                    false
+                }
+                .toList()
+                .ifEmpty {
+                    // Fallback: if no generated columns found, use @Id only
+                    allProps.filter { prop ->
+                        prop.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
+                    }
+                }
+
+        /**
+         * Finds properties that should be returned by UPDATE (DB-generated columns).
+         * These are @Id properties and columns with @Column(generated = true).
+         *
+         * @param allProps All properties of the entity.
+         * @return List of properties that should be in the RETURNING clause for UPDATE.
+         */
+        private fun findUpdateReturningProps(allProps: List<KSPropertyDeclaration>): List<KSPropertyDeclaration> =
+            allProps.asSequence()
+                .filter { prop ->
+                    // Always include @Id
+                    if (prop.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }) {
+                        return@filter true
+                    }
+
+                    val column = prop.annotations.find { a ->
+                        a.qualifiedName() == TypeNames.COLUMN_ANNOTATION
+                    }
+                    if (column != null) {
+                        // @Column(generated = true) means DB auto-updates this value
+                        val generatedArg = column.arguments.find { a -> a.name?.asString() == GENERATED_PROPERTY_NAME }
+                        return@filter (generatedArg?.value as? Boolean) == true
+                    }
+
+                    false
+                }
+                .toList()
+
+        /**
+         * Generates the copy() call body for applying result row values to an entity.
+         *
+         * @param className The fully qualified class name.
+         * @param returningProps The properties to include in the copy.
+         * @param functionName The name of the generated function.
+         * @param docDescription Description for the KDoc.
+         */
+        private fun emitApplyResultFunction(
+            className: String,
+            returningProps: List<KSPropertyDeclaration>,
+            functionName: String,
+            docDescription: String
+        ) {
+            if (returningProps.isEmpty()) return
+
+            file += "\n"
+            file += "/**\n"
+            file += " * Merges the $docDescription back into this [$className] entity.\n"
+            file += " *\n"
+            file += " * After executing ${if (functionName.contains("Insert")) "an INSERT" else "an UPDATE"} statement, use this function to update the entity\n"
+            file += " * with database-generated values (e.g., ${if (functionName.contains("Insert")) "auto-increment ID, default timestamps" else "auto-updated timestamps, version numbers"}).\n"
+            file += " *\n"
+            file += " * @param row The result row from the statement execution\n"
+            file += " * @return A new instance with the generated values merged in\n"
+            file += " */\n"
+            file += "fun $className.$functionName(row: ResultSet.Row): $className = copy(\n"
+            returningProps.forEachIndexed { index, prop ->
+                val propName = prop.simpleName()
+                val columnName = propName.toSnakeCase()
+                val propType = prop.type.resolve()
+                val isNullable = propType.isMarkedNullable
+                val decoder = generateDecoder(prop, propType, isNullable)
+                val comma = if (index < returningProps.size - 1) "," else ""
+                file += "    $propName = row.get(\"$columnName\")$decoder$comma\n"
+            }
+            file += ")\n"
+        }
     }
 
     operator fun OutputStream.plusAssign(str: String): Unit = write(str.toByteArray())
@@ -479,5 +633,6 @@ class TableProcessor(
 
         private const val INSERT_PROPERTY_NAME = "insert"
         private const val UPDATE_PROPERTY_NAME = "update"
+        private const val GENERATED_PROPERTY_NAME = "generated"
     }
 }
