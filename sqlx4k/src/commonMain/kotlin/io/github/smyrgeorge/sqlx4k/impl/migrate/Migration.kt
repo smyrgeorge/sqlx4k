@@ -5,6 +5,7 @@ package io.github.smyrgeorge.sqlx4k.impl.migrate
 import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInstant
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 import io.github.smyrgeorge.sqlx4k.impl.types.NoQuotingString
@@ -68,7 +69,7 @@ data class Migration(
      * of database query results into domain-specific objects.
      */
     internal object RowMapper : Sqlx4kRowMapper<Migration> {
-        override fun map(row: ResultSet.Row): Migration {
+        override fun map(row: ResultSet.Row, converters: ValueEncoderRegistry): Migration {
             return Migration(
                 version = row.get(0).asLong(),
                 name = row.get(1).asString(),

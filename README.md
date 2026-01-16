@@ -270,7 +270,7 @@ db.fetchAll(st2).getOrThrow().map {
 
 ```kotlin
 object Sqlx4kRowMapper : RowMapper<Sqlx4k> {
-    override fun map(row: ResultSet.Row): Sqlx4k {
+    override fun map(row: ResultSet.Row, converters: ValueEncoderRegistry): Sqlx4k {
         val id: ResultSet.Row.Column = row.get(0)
         val test: ResultSet.Row.Column = row.get(1)
         // Use built-in mapping methods to map the values to the corresponding type.
@@ -475,9 +475,6 @@ For example, for a class named `Sqlx4k`, the generator creates `Sqlx4kAutoRowMap
 
 ```kotlin
 object Sqlx4kAutoRowMapper : RowMapper<Sqlx4k> {
-    override fun map(row: ResultSet.Row): Sqlx4k =
-        map(row, ValueEncoderRegistry.EMPTY)
-
     override fun map(row: ResultSet.Row, converters: ValueEncoderRegistry): Sqlx4k {
         val id = row.get("id").asInt()
         val test = row.get("test").asString()

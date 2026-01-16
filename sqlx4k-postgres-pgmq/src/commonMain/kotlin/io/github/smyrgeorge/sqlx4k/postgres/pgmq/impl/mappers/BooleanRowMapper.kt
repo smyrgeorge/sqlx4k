@@ -2,10 +2,11 @@ package io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.RowMapper
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asBoolean
 
 internal object BooleanRowMapper : RowMapper<Boolean> {
-    override fun map(row: ResultSet.Row): Boolean {
+    override fun map(row: ResultSet.Row, converters: ValueEncoderRegistry): Boolean {
         require(row.size == 1) { "Expected a single column, got ${row.size}" }
         return row.get(0).asBoolean()
     }

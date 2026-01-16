@@ -404,9 +404,6 @@ class TableProcessor(
             file += " * for standard types and the provided ValueEncoderRegistry for custom types.\n"
             file += " */\n"
             file += "object $mapperName : RowMapper<$qualifiedName> {\n"
-            file += "    override fun map(row: ResultSet.Row): $qualifiedName =\n"
-            file += "        map(row, ValueEncoderRegistry.EMPTY)\n"
-            file += "\n"
             file += "    override fun map(row: ResultSet.Row, converters: ValueEncoderRegistry): $qualifiedName {\n"
 
             // Generate property mappings

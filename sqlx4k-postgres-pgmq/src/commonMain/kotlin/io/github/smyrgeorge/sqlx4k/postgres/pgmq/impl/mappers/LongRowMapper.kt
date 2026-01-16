@@ -2,10 +2,11 @@ package io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.mappers
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.RowMapper
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 
 internal object LongRowMapper : RowMapper<Long> {
-    override fun map(row: ResultSet.Row): Long {
+    override fun map(row: ResultSet.Row, converters: ValueEncoderRegistry): Long {
         require(row.size == 1) { "Expected a single column, got ${row.size}" }
         return row.get(0).asLong()
     }

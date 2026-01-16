@@ -16,19 +16,11 @@ interface RowMapper<T> {
     fun map(rs: ResultSet, converters: ValueEncoderRegistry): List<T> = rs.map { map(it, converters) }
 
     /**
-     * Maps the given database row to an object of type T.
-     *
-     * @param row The ResultSet.Row representing a single database row to be mapped.
-     * @return An object of type T that represents the mapped data from the row.
-     */
-    fun map(row: ResultSet.Row): T
-
-    /**
      * Maps the given database row to an object of type T using the provided value encoders.
      *
      * @param row The ResultSet.Row representing a single database row to be mapped.
      * @param converters The ValueEncoderRegistry used to decode the values in the row.
      * @return An object of type T that represents the mapped data from the row.
      */
-    fun map(row: ResultSet.Row, converters: ValueEncoderRegistry): T = map(row)
+    fun map(row: ResultSet.Row, converters: ValueEncoderRegistry): T
 }

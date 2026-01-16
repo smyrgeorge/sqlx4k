@@ -16,9 +16,6 @@ import kotlin.reflect.KClass
 @Retention(AnnotationRetention.SOURCE)
 annotation class Repository(val mapper: KClass<out RowMapper<*>> = AutoRowMapper::class) {
     object AutoRowMapper : RowMapper<Any> {
-        override fun map(row: ResultSet.Row): Any =
-            error("AutoRowMapper cannot be used directly. Use a RowMapper<T> instead.")
-
         override fun map(row: ResultSet.Row, converters: ValueEncoderRegistry): Any =
             error("AutoRowMapper cannot be used directly. Use a RowMapper<T> instead.")
     }
