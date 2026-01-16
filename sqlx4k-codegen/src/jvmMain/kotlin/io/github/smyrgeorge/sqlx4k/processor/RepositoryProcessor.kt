@@ -1,7 +1,20 @@
 package io.github.smyrgeorge.sqlx4k.processor
 
-import com.google.devtools.ksp.processing.*
-import com.google.devtools.ksp.symbol.*
+import com.google.devtools.ksp.processing.CodeGenerator
+import com.google.devtools.ksp.processing.Dependencies
+import com.google.devtools.ksp.processing.KSPLogger
+import com.google.devtools.ksp.processing.Resolver
+import com.google.devtools.ksp.processing.SymbolProcessor
+import com.google.devtools.ksp.symbol.ClassKind
+import com.google.devtools.ksp.symbol.KSAnnotated
+import com.google.devtools.ksp.symbol.KSAnnotation
+import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSDeclaration
+import com.google.devtools.ksp.symbol.KSFunctionDeclaration
+import com.google.devtools.ksp.symbol.KSPropertyDeclaration
+import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.KSValueArgument
+import com.google.devtools.ksp.symbol.KSValueParameter
 import com.google.devtools.ksp.validate
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.processor.utils.Quadraple
@@ -541,7 +554,7 @@ class RepositoryProcessor(
             file += "     * @param $pName Query parameter\n"
         }
         val returnDesc = when (prefix) {
-            Prefix.FIND_ALL, Prefix.FIND_ALL_BY -> "Result containing list of ${domainDecl.simpleName()} entities"
+            Prefix.FIND_ALL, Prefix.FIND_ALL_BY -> "Result containing a list of ${domainDecl.simpleName()} entities"
             Prefix.FIND_ONE_BY -> "Result containing a single ${domainDecl.simpleName()} entity or null if not found"
             Prefix.DELETE_ALL, Prefix.DELETE_BY, Prefix.EXECUTE -> "Result containing the number of affected rows"
             Prefix.COUNT_ALL, Prefix.COUNT_BY -> "Result containing the count"
@@ -858,8 +871,8 @@ class RepositoryProcessor(
         file += "    /**\n"
         file += "     * Saves a $domainSimpleName entity to the database.\n"
         file += "     *\n"
-        file += "     * Automatically determines whether to INSERT (if entity is new) or\n"
-        file += "     * UPDATE (if entity already exists) based on the ID field value.\n"
+        file += "     * Automatically determines whether to INSERT (if the entity is new) or\n"
+        file += "     * UPDATE (if the entity already exists) based on the ID field value.\n"
         file += "     * For Int IDs, 0 indicates a new entity. For Long IDs, 0L indicates new.\n"
         file += "     *\n"
         if (!useContextParameters) {

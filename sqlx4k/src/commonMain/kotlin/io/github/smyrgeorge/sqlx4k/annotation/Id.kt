@@ -1,10 +1,38 @@
 package io.github.smyrgeorge.sqlx4k.annotation
 
 /**
- * This annotation is used to indicate that a property is an identifier for a database
- * entity. The identifier can optionally be included in insert operations.
+ * Marks a property as the primary key identifier for a database entity.
  *
- * @property insert Specifies whether the identifier should be included in insert operations.
+ * The annotated property is used in the WHERE clause of generated UPDATE and DELETE statements
+ * to identify the target row. It is always included in the RETURNING clause of both INSERT
+ * and UPDATE statements.
+ *
+ * ## Behavior
+ *
+ * | `insert` value | INSERT behavior | Common use case |
+ * |----------------|-----------------|-----------------|
+ * | `false` (default) | Excluded from INSERT, returned via RETURNING | Auto-increment / DB-generated IDs |
+ * | `true` | Included in INSERT values | Application-generated IDs (e.g., UUID) |
+ *
+ * ## Examples
+ *
+ * **Auto-increment primary key (default):**
+ * ```kotlin
+ * @Id
+ * val id: Long
+ * ```
+ *
+ * **Application-generated UUID:**
+ * ```kotlin
+ * @Id(insert = true)
+ * val id: Uuid
+ * ```
+ *
+ * @property insert Whether to include the ID in INSERT statements. Set to `false` (default) for
+ *                  database-generated IDs (auto-increment, sequences). Set to `true` when the
+ *                  application provides the ID value (e.g., UUIDs).
+ *
+ * @see Column For configuring non-primary-key columns with database-generated values.
  */
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.SOURCE)

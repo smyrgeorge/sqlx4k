@@ -1,7 +1,19 @@
 package io.github.smyrgeorge.sqlx4k.processor
 
-import com.google.devtools.ksp.processing.*
-import com.google.devtools.ksp.symbol.*
+import com.google.devtools.ksp.processing.CodeGenerator
+import com.google.devtools.ksp.processing.Dependencies
+import com.google.devtools.ksp.processing.KSPLogger
+import com.google.devtools.ksp.processing.Resolver
+import com.google.devtools.ksp.processing.SymbolProcessor
+import com.google.devtools.ksp.symbol.ClassKind
+import com.google.devtools.ksp.symbol.KSAnnotated
+import com.google.devtools.ksp.symbol.KSAnnotation
+import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSPropertyDeclaration
+import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.KSValueArgument
+import com.google.devtools.ksp.symbol.KSVisitorVoid
+import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.validate
 import java.io.OutputStream
 
@@ -499,7 +511,7 @@ class TableProcessor(
         }
 
         /**
-         * Finds properties that should be returned by INSERT (DB-generated columns).
+         * Finds properties that INSERT should return (DB-generated columns).
          * These are columns with @Id(insert = false) or @Column(insert = false).
          *
          * @param allProps All properties of the entity.
@@ -537,8 +549,8 @@ class TableProcessor(
                 }
 
         /**
-         * Finds properties that should be returned by UPDATE (DB-generated columns).
-         * These are @Id properties and columns with @Column(generated = true).
+         * Finds properties that UPDATE should return (DB-generated columns).
+         * These are @Id properties and columns with @Column(update = false).
          *
          * @param allProps All properties of the entity.
          * @return List of properties that should be in the RETURNING clause for UPDATE.
@@ -555,9 +567,9 @@ class TableProcessor(
                         a.qualifiedName() == TypeNames.COLUMN_ANNOTATION
                     }
                     if (column != null) {
-                        // @Column(generated = true) means DB auto-updates this value
-                        val generatedArg = column.arguments.find { a -> a.name?.asString() == GENERATED_PROPERTY_NAME }
-                        return@filter (generatedArg?.value as? Boolean) == true
+                        // @Column(update = false) means DB auto-updates this value
+                        val updateArg = column.arguments.find { a -> a.name?.asString() == UPDATE_PROPERTY_NAME }
+                        return@filter (updateArg?.value as? Boolean) == false
                     }
 
                     false
@@ -633,6 +645,5 @@ class TableProcessor(
 
         private const val INSERT_PROPERTY_NAME = "insert"
         private const val UPDATE_PROPERTY_NAME = "update"
-        private const val GENERATED_PROPERTY_NAME = "generated"
     }
 }
