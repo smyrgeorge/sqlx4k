@@ -17,7 +17,7 @@ import com.google.devtools.ksp.symbol.KSValueArgument
 import com.google.devtools.ksp.symbol.KSValueParameter
 import com.google.devtools.ksp.validate
 import io.github.smyrgeorge.sqlx4k.Statement
-import io.github.smyrgeorge.sqlx4k.processor.utils.Quadraple
+import io.github.smyrgeorge.sqlx4k.processor.utils.Quadruple
 import java.io.OutputStream
 
 class RepositoryProcessor(
@@ -193,7 +193,7 @@ class RepositoryProcessor(
      *         - A Boolean flag indicating whether context-specific repository parameters are enabled.
      *         - A Boolean flag indicating whether Arrow-specific repository support is enabled.
      */
-    private fun parseRepositoryAnnotation(repo: KSClassDeclaration): Quadraple<KSClassDeclaration, String, Boolean, Boolean> {
+    private fun parseRepositoryAnnotation(repo: KSClassDeclaration): Quadruple<KSClassDeclaration, String, Boolean, Boolean> {
         // Recursively find a supertype that matches one of the repository types
         fun findCrudRepositorySuperType(
             decl: KSClassDeclaration,
@@ -283,7 +283,7 @@ class RepositoryProcessor(
                 mapperQualifiedName
             }
         }
-        return Quadraple(domainDecl, mapperTypeName, useContextParameters, useArrow)
+        return Quadruple(domainDecl, mapperTypeName, useContextParameters, useArrow)
     }
 
     /**
