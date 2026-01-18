@@ -2,6 +2,7 @@ plugins {
     id("io.github.smyrgeorge.sqlx4k.multiplatform.jvm")
     id("io.github.smyrgeorge.sqlx4k.publish")
     id("io.github.smyrgeorge.sqlx4k.dokka")
+    alias(libs.plugins.ksp)
 }
 
 kotlin {
@@ -19,5 +20,21 @@ kotlin {
                 implementation(libs.log4k.slf4j)
             }
         }
+        jvmTest {
+            dependencies {
+                implementation(project(":sqlx4k"))
+                implementation(libs.kotlin.test)
+                implementation(libs.assertk)
+            }
+        }
     }
+}
+
+ksp {
+    arg("output-package", "io.github.smyrgeorge.sqlx4k.processor.test.generated")
+}
+
+dependencies {
+    // Use the codegen processor from this project for jvmTest
+    add("kspJvmTest", project(":sqlx4k-codegen"))
 }

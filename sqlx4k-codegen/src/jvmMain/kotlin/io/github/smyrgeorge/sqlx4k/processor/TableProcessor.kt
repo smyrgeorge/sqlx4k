@@ -71,6 +71,7 @@ class TableProcessor(
             file += "import ${TypeNames.ROW_MAPPER}\n"
             file += "import ${TypeNames.STATEMENT}\n"
             file += "import ${TypeNames.VALUE_ENCODER_REGISTRY}\n"
+            file += "import ${TypeNames.SQL_ERROR}\n"
             file += "import io.github.smyrgeorge.sqlx4k.impl.extensions.*\n"
             if (rowMapperDialect == Dialect.PostgreSQL) {
                 file += "import io.github.smyrgeorge.sqlx4k.postgres.extensions.*\n"
@@ -172,6 +173,7 @@ class TableProcessor(
 
             // Get DB-generated columns for RETURNING clause
             val returningColumns = findInsertReturningProps(allProps)
+                .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName}") }
                 .joinToString { it.simpleName().toSnakeCase() }
 
             val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
@@ -231,6 +233,7 @@ class TableProcessor(
         ) {
             val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
             val returningProps = findInsertReturningProps(props.toList())
+                .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName}") }
             emitApplyResultFunction(
                 className,
                 returningProps,
@@ -282,6 +285,7 @@ class TableProcessor(
 
             // Get DB-generated columns for RETURNING clause
             val returningColumns = findUpdateReturningProps(allProps)
+                .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName}") }
                 .joinToString { it.simpleName().toSnakeCase() }
 
             val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
@@ -335,6 +339,7 @@ class TableProcessor(
         ) {
             val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
             val returningProps = findUpdateReturningProps(props.toList())
+                .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName}") }
             emitApplyResultFunction(
                 className,
                 returningProps,
@@ -501,9 +506,9 @@ class TableProcessor(
             // Use custom decoder from registry
             val propName = prop.simpleName()
             return if (isNullable) {
-                ".let { col -> if (col.isNull()) null else converters.get<$typeQualifiedName>()?.decode(col) ?: error(\"No decoder found for type $typeQualifiedName (property: $propName)\") }"
+                ".let { col -> if (col.isNull()) null else converters.get<$typeQualifiedName>()?.decode(col) ?: throw SQLError(SQLError.Code.MissingValueConverter, \"No decoder found for type $typeQualifiedName (property: $propName)\") }"
             } else {
-                ".let { col -> converters.get<$typeQualifiedName>()?.decode(col) ?: error(\"No decoder found for type $typeQualifiedName (property: $propName)\") }"
+                ".let { col -> converters.get<$typeQualifiedName>()?.decode(col) ?: throw SQLError(SQLError.Code.MissingValueConverter, \"No decoder found for type $typeQualifiedName (property: $propName)\") }"
             }
         }
 
@@ -597,9 +602,10 @@ class TableProcessor(
             file += " * with database-generated values (e.g., ${if (functionName.contains("Insert")) "auto-increment ID, default timestamps" else "auto-updated timestamps, version numbers"}).\n"
             file += " *\n"
             file += " * @param row The result row from the statement execution\n"
+            file += " * @param converters The registry containing custom type decoders\n"
             file += " * @return A new instance with the generated values merged in\n"
             file += " */\n"
-            file += "fun $className.$functionName(row: ResultSet.Row): $className = copy(\n"
+            file += "fun $className.$functionName(row: ResultSet.Row, converters: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY): $className = copy(\n"
             returningProps.forEachIndexed { index, prop ->
                 val propName = prop.simpleName()
                 val columnName = propName.toSnakeCase()
