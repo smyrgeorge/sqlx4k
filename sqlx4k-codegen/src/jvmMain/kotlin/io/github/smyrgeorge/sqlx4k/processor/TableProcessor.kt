@@ -405,7 +405,7 @@ class TableProcessor(
             file += "/**\n"
             file += " * Auto-generated RowMapper for [$qualifiedName].\n"
             file += " *\n"
-            file += " * Maps database rows to instances of [$className] using builtin decoders\n"
+            file += " * Maps database rows to instances of [$qualifiedName] using builtin decoders\n"
             file += " * for standard types and the provided ValueEncoderRegistry for custom types.\n"
             file += " */\n"
             file += "object $mapperName : RowMapper<$qualifiedName> {\n"
