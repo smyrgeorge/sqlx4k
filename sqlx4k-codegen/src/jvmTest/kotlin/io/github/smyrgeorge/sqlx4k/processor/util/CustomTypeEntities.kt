@@ -1,4 +1,4 @@
-package io.github.smyrgeorge.sqlx4k.processor.test.entities
+package io.github.smyrgeorge.sqlx4k.processor.util
 
 import io.github.smyrgeorge.sqlx4k.annotation.Column
 import io.github.smyrgeorge.sqlx4k.annotation.Id

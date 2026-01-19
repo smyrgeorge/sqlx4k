@@ -1,4 +1,4 @@
-package io.github.smyrgeorge.sqlx4k.processor.test
+package io.github.smyrgeorge.sqlx4k.processor
 
 import assertk.assertThat
 import assertk.assertions.contains
@@ -8,12 +8,12 @@ import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.ValueEncoder
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
-import io.github.smyrgeorge.sqlx4k.processor.test.entities.GeoPoint
-import io.github.smyrgeorge.sqlx4k.processor.test.entities.Invoice
-import io.github.smyrgeorge.sqlx4k.processor.test.entities.Money
-import io.github.smyrgeorge.sqlx4k.processor.test.entities.Payment
-import io.github.smyrgeorge.sqlx4k.processor.test.entities.Store
-import io.github.smyrgeorge.sqlx4k.processor.test.entities.Transaction
+import io.github.smyrgeorge.sqlx4k.processor.util.GeoPoint
+import io.github.smyrgeorge.sqlx4k.processor.util.Invoice
+import io.github.smyrgeorge.sqlx4k.processor.util.Money
+import io.github.smyrgeorge.sqlx4k.processor.util.Payment
+import io.github.smyrgeorge.sqlx4k.processor.util.Store
+import io.github.smyrgeorge.sqlx4k.processor.util.Transaction
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.InvoiceAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.PaymentAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.StoreAutoRowMapper

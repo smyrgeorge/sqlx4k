@@ -21,10 +21,12 @@ kotlin {
             }
         }
         jvmTest {
+            languageSettings.enableLanguageFeature("ContextParameters")
             dependencies {
                 implementation(project(":sqlx4k"))
                 implementation(libs.kotlin.test)
                 implementation(libs.assertk)
+                implementation(libs.kotlinx.coroutines.test)
             }
         }
     }

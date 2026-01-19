@@ -1,17 +1,17 @@
-package io.github.smyrgeorge.sqlx4k.processor.test
+package io.github.smyrgeorge.sqlx4k.processor
 
 import assertk.assertThat
 import assertk.assertions.isEqualTo
 import assertk.assertions.isNull
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
-import io.github.smyrgeorge.sqlx4k.processor.test.entities.Article
-import io.github.smyrgeorge.sqlx4k.processor.test.entities.Comment
-import io.github.smyrgeorge.sqlx4k.processor.test.entities.Customer
-import io.github.smyrgeorge.sqlx4k.processor.test.entities.Order
-import io.github.smyrgeorge.sqlx4k.processor.test.entities.Product
-import io.github.smyrgeorge.sqlx4k.processor.test.entities.Tag
-import io.github.smyrgeorge.sqlx4k.processor.test.entities.User
+import io.github.smyrgeorge.sqlx4k.processor.util.Article
+import io.github.smyrgeorge.sqlx4k.processor.util.Comment
+import io.github.smyrgeorge.sqlx4k.processor.util.Customer
+import io.github.smyrgeorge.sqlx4k.processor.util.Order
+import io.github.smyrgeorge.sqlx4k.processor.util.Product
+import io.github.smyrgeorge.sqlx4k.processor.util.Tag
+import io.github.smyrgeorge.sqlx4k.processor.util.User
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.ArticleAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.CommentAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.CustomerAutoRowMapper
