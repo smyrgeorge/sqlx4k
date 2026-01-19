@@ -39,7 +39,7 @@
             </a>        <button class="navigation-controls--btn navigation-controls--btn_toc ui-kit_mobile-only" id="toc-toggle" type="button">Toggle table of contents
         </button>
         <div class="navigation-controls--break ui-kit_mobile-only"></div>
-        <div class="library-version" id="library-version">1.5.12
+        <div class="library-version" id="library-version">1.5.13
         </div>
         <div class="navigation-controls">
         <ul class="filter-section filter-section_loading" id="filter-section" aria-label="Target filter">
@@ -94,7 +94,7 @@
   <div class="breadcrumbs"><a href="../../index.html">sqlx4k</a><span class="delimiter">/</span><a href="../index.html">io.github.smyrgeorge.sqlx4k.impl.types</a><span class="delimiter">/</span><span class="current">DoubleQuotingString</span></div>
   <div class="cover ">
     <h1 class="cover"><span>Double</span><wbr><span>Quoting</span><wbr><span><span>String</span></span></h1>
-    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><div class="block"><div class="block"><span class="token annotation builtin">@</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.jvm/-jvm-inline/index.html"><span class="token annotation builtin">JvmInline</span></a></div></div><span class="token keyword">value </span><span class="token keyword">class </span><a href="index.html">DoubleQuotingString</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword">val </span>value<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="source-link-wrapper"><span class="source-link" data-element-type="source-link">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/impl/types/DoubleQuotingString.kt#L21">source</a>)</span></span></div><p class="paragraph">A wrapper class for representing a string value that applies double quotes.</p><p class="paragraph">This class is useful for SQL identifiers (table names, column names) that need to be quoted with double quotation marks. Double quotes within the value are automatically escaped by doubling them (SQL standard).</p><p class="paragraph">⚠️ <strong>Best Practice</strong>: Use this ONLY for trusted identifiers. For user-controlled table/column names, validate against a whitelist before using this class.</p><p class="paragraph">Example: <code class="lang-kotlin">DoubleQuotingString("user")</code> → <code class="lang-kotlin">"user"</code> Escaping: <code class="lang-kotlin">DoubleQuotingString("my\"table")</code> → <code class="lang-kotlin">"my""table"</code></p></div></div>
+    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><div class="block"><div class="block"><span class="token annotation builtin">@</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.jvm/-jvm-inline/index.html"><span class="token annotation builtin">JvmInline</span></a></div></div><span class="token keyword">value </span><span class="token keyword">class </span><a href="index.html">DoubleQuotingString</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword">val </span>value<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span><span class="source-link-wrapper"><span class="source-link" data-element-type="source-link">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/impl/types/DoubleQuotingString.kt#L27">source</a>)</span></span></div><p class="paragraph">A wrapper class for representing a string value that applies double quotes for SQL identifiers.</p><p class="paragraph">This class is useful for SQL identifiers (table names, column names) that need to be quoted with double quotation marks. Double quotes within the value are automatically escaped by doubling them (SQL standard).</p><p class="paragraph">⚠️ <strong>SECURITY</strong>: This class includes built-in validation to prevent SQL injection attacks. The identifier must:</p><ul><li><p class="paragraph">Not be empty or exceed 128 characters</p></li><li><p class="paragraph">Start with a letter (a-z, A-Z) or underscore (_)</p></li><li><p class="paragraph">Contain only letters, digits, underscores, or dots (for schema.table notation)</p></li><li><p class="paragraph">Invalid identifiers will throw an <a href="../../io.github.smyrgeorge.sqlx4k/-s-q-l-error/index.html">io.github.smyrgeorge.sqlx4k.SQLError</a> with code <a href="../../io.github.smyrgeorge.sqlx4k/-s-q-l-error/-code/-invalid-identifier/index.html">io.github.smyrgeorge.sqlx4k.SQLError.Code.InvalidIdentifier</a></p></li></ul><p class="paragraph">Example: <code class="lang-kotlin">DoubleQuotingString("user")</code> → <code class="lang-kotlin">"user"</code> Schema-qualified: <code class="lang-kotlin">DoubleQuotingString("public.users")</code> → <code class="lang-kotlin">"public"."users"</code> Escaping: <code class="lang-kotlin">DoubleQuotingString("my\"table")</code> → <code class="lang-kotlin">"my""table"</code></p></div></div>
   </div>
   <div class="tabbedcontent">
     <div class="tabs-section" tabs-section="tabs-section"><button class="section-tab" data-active="" data-togglable="CONSTRUCTOR,TYPE,PROPERTY,FUNCTION">Members</button></div>
@@ -112,6 +112,25 @@
               <div>
                 <div class="title">
                   <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">constructor</span><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">value<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div data-togglable="TYPE">
+        <h2 class="tableheader">Types</h2>
+        <div class="table"><a data-name="210311178%2FClasslikes%2F272526764" anchor-label="Companion" id="210311178%2FClasslikes%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="-companion/index.html"><span><span>Companion</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="210311178%2FClasslikes%2F272526764"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">object </span><a href="-companion/index.html">Companion</a></div></div></div>
                 </div>
               </div>
             </div>
