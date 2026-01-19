@@ -51,7 +51,7 @@ class TableProcessor(
 
         logger.info("sqlx4k-codegen: TableProcessor dialect = $dialect")
 
-        // Processing each class declaration, annotated with @Function.
+        // Processing each class declaration, annotated with @Table.
         symbols.forEach { symbol ->
             val className = symbol.simpleName.asString()
             val file: OutputStream = codeGenerator.createNewFile(
@@ -173,7 +173,7 @@ class TableProcessor(
 
             // Get DB-generated columns for RETURNING clause
             val returningColumns = findInsertReturningProps(allProps)
-                .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName}") }
+                .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName.asString()}") }
                 .joinToString { it.simpleName().toSnakeCase() }
 
             val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
@@ -190,32 +190,26 @@ class TableProcessor(
             file += " *\n"
             file += " * @return A prepared [Statement] with bound values ready for execution\n"
             file += " */\n"
-            file += "fun ${clazz.qualifiedName?.asString()}.insert(): Statement {\n"
+            file += "fun ${clazz.qualifiedName()}.insert(): Statement {\n"
             file += "    // language=SQL\n"
             file += if (this@Visitor.queryDialect == Dialect.MySQL) {
                 // For MySQL, use LAST_INSERT_ID() since RETURNING is not supported
                 val idProp = allProps.find {
                     it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
-                }
-                if (idProp == null) {
-                    logger.warn("MySQL dialect selected but no @Id found on $table. Generating INSERT without fetch.")
-                    "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }}) values (${insertProps.joinToString { "?" }});\"\n"
-                } else {
-                    val idCol = idProp.simpleName().toSnakeCase()
-                    "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }}) values (${insertProps.joinToString { "?" }}); select $returningColumns from $table where $idCol = coalesce(nullif(last_insert_id(), 0), ?);\"\n"
-                }
+                } ?: error("MySQL dialect requires an @Id property for insert() on table: $table")
+                val idCol = idProp.simpleName().toSnakeCase()
+                "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }}) values (${insertProps.joinToString { "?" }}); select $returningColumns from $table where $idCol = coalesce(nullif(last_insert_id(), 0), ?);\"\n"
             } else {
                 "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }}) values (${insertProps.joinToString { "?" }}) returning $returningColumns;\"\n"
             }
             file += "    val statement = Statement.create(sql)\n"
             insertProps.forEachIndexed { index, property -> file += "    statement.bind($index, ${property})\n" }
             if (this@Visitor.queryDialect == Dialect.MySQL) {
-                val idProp = allProps.find {
+                // idProp is guaranteed to exist for MySQL (error thrown above if missing)
+                val idProp = allProps.first {
                     it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
                 }
-                if (idProp != null) {
-                    file += "    statement.bind(${insertProps.size}, ${idProp.simpleName()})\n"
-                }
+                file += "    statement.bind(${insertProps.size}, ${idProp.simpleName()})\n"
             }
             file += "    return statement\n"
             file += "}\n"
@@ -233,7 +227,7 @@ class TableProcessor(
         ) {
             val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
             val returningProps = findInsertReturningProps(props.toList())
-                .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName}") }
+                .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName.asString()}") }
             emitApplyResultFunction(
                 className,
                 returningProps,
@@ -285,7 +279,7 @@ class TableProcessor(
 
             // Get DB-generated columns for RETURNING clause
             val returningColumns = findUpdateReturningProps(allProps)
-                .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName}") }
+                .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName.asString()}") }
                 .joinToString { it.simpleName().toSnakeCase() }
 
             val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
@@ -339,7 +333,7 @@ class TableProcessor(
         ) {
             val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
             val returningProps = findUpdateReturningProps(props.toList())
-                .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName}") }
+                .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName.asString()}") }
             emitApplyResultFunction(
                 className,
                 returningProps,
