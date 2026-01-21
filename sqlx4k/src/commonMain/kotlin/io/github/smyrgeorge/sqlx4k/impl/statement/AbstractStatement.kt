@@ -4,6 +4,7 @@ import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.extensions.encodeValue
+import io.github.smyrgeorge.sqlx4k.impl.statement.AbstractStatement.Companion.NOT_SET
 
 /**
  * Represents an abstract implementation of a SQL statement that supports binding
@@ -18,16 +19,22 @@ import io.github.smyrgeorge.sqlx4k.impl.extensions.encodeValue
  */
 abstract class AbstractStatement(private val sql: String) : Statement {
     /**
+     * Holds the extracted parameters from the SQL statement as a pair of named parameter names
+     * and the count of positional parameters. Computed once during construction via single-pass scanning.
+     */
+    private val extractedParameters: Pair<Set<String>, Int> = extractParameters()
+
+    /**
      * A set containing the names of all named parameters extracted from the SQL statement.
      * It is populated using a parser that skips over string literals, comments, and
      * PostgreSQL dollar-quoted strings.
      */
-    override val extractedNamedParameters: Set<String> = extractNamedParameters()
+    final override val extractedNamedParameters: Set<String> = extractedParameters.first
 
     /**
      * The count of positional parameter placeholders ('?') extracted from the SQL query.
      */
-    override val extractedPositionalParameters: Int = extractPositionalParameters()
+    final override val extractedPositionalParameters: Int = extractedParameters.second
 
     /**
      * A mutable map that holds the values bound to named parameters in an SQL statement.
@@ -40,23 +47,19 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * with their corresponding bound values. Any named parameter without a bound value will result
      * in an error during rendering.
      */
-    private val namedParametersValues: MutableMap<String, Any?> = mutableMapOf()
+    private val namedParametersValues: MutableMap<String, Any?> = HashMap(extractedNamedParameters.size)
 
     /**
-     * A mutable map storing the values bound to positional parameters in a SQL statement.
+     * An array storing the values bound to positional parameters in a SQL statement.
      *
-     * The keys represent the index of positional parameters (zero-based), and the values
-     * are the objects bound to these parameters. The values may be `null` if a `null` is
-     * explicitly bound to a parameter.
+     * The array index corresponds directly to the positional parameter index (zero-based).
+     * Values may be `null` if explicitly bound to a `null` value. The sentinel [NOT_SET]
+     * is used to distinguish between "not yet bound" and "bound to null".
      *
-     * This map is used to manage parameter bindings when rendering the final SQL statement
-     * or executing the statement and ensures that each positional parameter has a value
-     * assigned before the statement is executed.
-     *
-     * Modifications to this map occur primarily through method calls that bind values to
-     * positional parameters.
+     * This array is used to manage parameter bindings when rendering the final SQL statement
+     * and ensures that each positional parameter has a value assigned before execution.
      */
-    private val positionalParametersValues: MutableMap<Int, Any?> = mutableMapOf()
+    private val positionalParametersValues: Array<Any?> = Array(extractedPositionalParameters) { NOT_SET }
 
     /**
      * Binds a value to a positional parameter in the statement based on the given index.
@@ -86,7 +89,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * @throws SQLError if the specified named parameter is not found.
      */
     override fun bind(parameter: String, value: Any?): AbstractStatement {
-        if (!extractedNamedParameters.contains(parameter)) {
+        if (parameter !in extractedNamedParameters) {
             SQLError(
                 code = SQLError.Code.NamedParameterNotFound,
                 message = "Parameter '$parameter' not found."
@@ -126,7 +129,8 @@ abstract class AbstractStatement(private val sql: String) : Statement {
                     message = "Not enough positional parameter values provided."
                 ).raise()
             }
-            val value = positionalParametersValues.getOrElseNullable(nextIndex) {
+            val value = positionalParametersValues[nextIndex]
+            if (value === NOT_SET) {
                 SQLError(
                     code = SQLError.Code.PositionalParameterValueNotSupplied,
                     message = "Value for positional parameter index '$nextIndex' was not supplied."
@@ -144,7 +148,6 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      */
     private fun String.renderNamedParameters(encoders: ValueEncoderRegistry): String {
         if (extractedNamedParameters.isEmpty()) return this
-
         return renderWithScanner { i, c, sb ->
             if (c != ':') return@renderWithScanner null
 
@@ -153,9 +156,9 @@ abstract class AbstractStatement(private val sql: String) : Statement {
                 sb.append("::")
                 return@renderWithScanner i + 2
             }
-            if (i + 1 < length && isIdentStart(this[i + 1])) {
+            if (i + 1 < length && this[i + 1].isIdentStart()) {
                 var j = i + 2
-                while (j < length && isIdentPart(this[j])) j++
+                while (j < length && this[j].isIdentPart()) j++
                 val name = substring(i + 1, j)
                 if (name in extractedNamedParameters) {
                     val value = namedParametersValues.getOrElseNullable(name) {
@@ -177,10 +180,16 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      */
     protected inline fun String.scan(
         writeOutput: Boolean,
+        extractedNamedParametersSize: Int = 0,
+        extractedPositionalParametersSize: Int = 0,
         crossinline onNormalChar: String.(i: Int, c: Char, sb: StringBuilder) -> Int?
     ): String {
-        // Pre-size with 60% more space in the buffer to reduce reallocation when parameters are replaced.
-        val sb = if (writeOutput) StringBuilder((length * 1.6).toInt()) else StringBuilder(0)
+        // Estimate buffer size based on the number of parameters to replace.
+        // Each parameter placeholder (? or :name) will be replaced by an encoded value.
+        val totalParams = extractedPositionalParametersSize + extractedNamedParametersSize
+        val estimatedSize = length + (totalParams * AVERAGE_PARAM_SIZE)
+        val sb = if (writeOutput) StringBuilder(estimatedSize) else EMPTY_SB
+
         var i = 0
         var inSQ = false
         var inDQ = false
@@ -331,7 +340,12 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      */
     protected inline fun String.renderWithScanner(
         crossinline onNormalChar: String.(i: Int, c: Char, sb: StringBuilder) -> Int?
-    ): String = scan(writeOutput = true, onNormalChar = onNormalChar)
+    ): String = scan(
+        writeOutput = true,
+        extractedNamedParametersSize = extractedNamedParameters.size,
+        extractedPositionalParametersSize = extractedPositionalParameters,
+        onNormalChar = onNormalChar
+    )
 
     /**
      * Scans a string using the provided callback for normal-context characters.
@@ -345,104 +359,71 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * and the current character (`c`). Returning a new index alters the scan position, while returning
      * `null` continues the scan from the default next index.
      */
-    protected fun String.scanWithExtractor(
-        onNormalChar: String.(i: Int, c: Char) -> Int?
+    protected inline fun String.scanWithExtractor(
+        crossinline onNormalChar: String.(i: Int, c: Char) -> Int?
     ) {
         scan(writeOutput = false) { i, c, _ -> onNormalChar(this, i, c) }
     }
 
     /**
-     * Checks if the character sequence starts with a "dollar tag" at the given index.
-     *
-     * A "dollar tag" is defined as a sequence beginning with a dollar sign ('$'),
-     * followed by alphanumeric characters or underscores, and ending with another
-     * dollar sign ('$'). If a valid dollar tag is found at the specified index,
-     * it is extracted and returned; otherwise, null is returned.
-     *
-     * @param start The starting index in the character sequence to check for the dollar tag.
-     * @return The extracted dollar tag if it exists at the specified index, or null if no valid dollar tag is found.
-     */
-    protected fun CharSequence.startsWithDollarTagAt(start: Int): String? {
-        if (start + 1 >= length) return null
-        if (this[start] != '$') return null
-        var j = start + 1
-        while (j < length && (this[j].isLetterOrDigit() || this[j] == '_')) j++
-        return if (j < length && this[j] == '$') substring(start, j + 1) else null
-    }
-
-    /**
-     * Determines if the given character can represent the start of an identifier.
-     * Uses a constant-time lookup table for ASCII characters.
-     *
-     * @param ch The character to check.
-     * @return True if the character is an uppercase or lowercase English letter or underscore, false otherwise.
-     */
-    private fun isIdentStart(ch: Char): Boolean {
-        val code = ch.code
-        return code < 128 && IDENT_START[code]
-    }
-
-    /**
-     * Determines if the given character can be part of an identifier.
-     * Uses a constant-time lookup table for ASCII characters.
-     *
-     * This includes characters that can start an identifier, the underscore character ('_'), and digits.
-     *
-     * @param ch The character to check.
-     * @return True if the character can be part of an identifier, false otherwise.
-     */
-    private fun isIdentPart(ch: Char): Boolean {
-        val code = ch.code
-        return code < 128 && IDENT_PART[code]
-    }
-
-    /**
-     * Extracts all named parameters from the SQL statement.
+     * Extracts both named and positional parameters from the SQL statement in a single pass.
      *
      * Named parameters are identified by a colon (`:`) followed by a valid identifier.
-     * The method skips over content inside comments, quotes, or PostgreSQL type casts (`::`)
-     * to ensure accurate extraction of named parameters.
+     * Positional parameters are denoted by the `?` character. The method scans the SQL string once,
+     * skipping over content inside comments, quotes, or dollar-quoted sections,
+     * to ensure accurate extraction of both parameter types.
      *
-     * @return A set containing unique named parameter names found in the SQL statement.
+     * @return A pair containing the set of named parameter names and the count of positional parameters.
      */
-    private fun extractNamedParameters(): Set<String> {
-        val names = linkedSetOf<String>()
+    private fun extractParameters(): Pair<Set<String>, Int> {
+        val names = hashSetOf<String>()
+        var positionalCount = 0
         sql.scanWithExtractor { i, c ->
+            // Check for positional parameter '?'
+            if (c == '?') {
+                positionalCount++
+                return@scanWithExtractor i + 1
+            }
+            // Check for named parameter ':'
             if (c != ':') return@scanWithExtractor null
             // Skip PostgreSQL type casts '::'
             if (i + 1 < length && this[i + 1] == ':') return@scanWithExtractor i + 2
-            if (i + 1 < length && isIdentStart(this[i + 1])) {
+            if (i + 1 < length && this[i + 1].isIdentStart()) {
                 var j = i + 2
-                while (j < length && isIdentPart(this[j])) j++
+                while (j < length && this[j].isIdentPart()) j++
                 names.add(substring(i + 1, j))
                 return@scanWithExtractor j
             }
             null
         }
-        return names
-    }
-
-    /**
-     * Extracts the count of positional parameter placeholders from the SQL statement.
-     *
-     * Positional parameters are denoted by the `?` character. The method scans the SQL string,
-     * skipping over content such as comments, quotes, and dollar-quoted sections,
-     * to ensure accurate identification of placeholders.
-     *
-     * @return The count of positional parameters found in the SQL statement.
-     */
-    private fun extractPositionalParameters(): Int {
-        var count = 0
-        sql.scanWithExtractor { i, c ->
-            if (c == '?') {
-                count++; return@scanWithExtractor i + 1
-            }
-            null
-        }
-        return count
+        return Pair(names, positionalCount)
     }
 
     companion object {
+        /**
+         * Sentinel object used to distinguish between "not yet bound" and "bound to null"
+         * in the positional parameters array.
+         */
+        private val NOT_SET = Any()
+
+        /**
+         * A pre-initialized empty instance of [StringBuilder].
+         *
+         * This constant is used internally to provide a reusable
+         * and mutable instance of [StringBuilder] that is initially empty.
+         * It can reduce object allocation when working with methods
+         * requiring a temporary [StringBuilder].
+         */
+        @PublishedApi
+        internal val EMPTY_SB = StringBuilder()
+
+        /**
+         * Average estimated size (in characters) of an encoded parameter value.
+         * Used for pre-sizing the StringBuilder buffer during rendering.
+         */
+        @PublishedApi
+        internal const val AVERAGE_PARAM_SIZE = 16
+
         /**
          * Lookup table for identifier start characters (constant-time check).
          * Covers ASCII range: a-z, A-Z, _
@@ -457,6 +438,44 @@ abstract class AbstractStatement(private val sql: String) : Statement {
          */
         private val IDENT_PART = BooleanArray(128) { ch ->
             ch == '_'.code || ch in 'a'.code..'z'.code || ch in 'A'.code..'Z'.code || ch in '0'.code..'9'.code
+        }
+
+        /**
+         * Determines if the given character can represent the start of an identifier.
+         * Uses a constant-time lookup table for ASCII characters.
+         *
+         * @return True if the character is an uppercase or lowercase English letter or underscore, false otherwise.
+         */
+        private fun Char.isIdentStart(): Boolean = code < 128 && IDENT_START[code]
+
+        /**
+         * Determines if the given character can be part of an identifier.
+         * Uses a constant-time lookup table for ASCII characters.
+         *
+         * This includes characters that can start an identifier, the underscore character ('_'), and digits.
+         *
+         * @return True if the character can be part of an identifier, false otherwise.
+         */
+        private fun Char.isIdentPart(): Boolean = code < 128 && IDENT_PART[code]
+
+        /**
+         * Checks if the character sequence starts with a "dollar tag" at the given index.
+         *
+         * A "dollar tag" is defined as a sequence beginning with a dollar sign ('$'),
+         * followed by alphanumeric characters or underscores, and ending with another
+         * dollar sign ('$'). If a valid dollar tag is found at the specified index,
+         * it is extracted and returned; otherwise, null is returned.
+         *
+         * @param start The starting index in the character sequence to check for the dollar tag.
+         * @return The extracted dollar tag if it exists at the specified index, or null if no valid dollar tag is found.
+         */
+        @PublishedApi
+        internal fun CharSequence.startsWithDollarTagAt(start: Int): String? {
+            if (start + 1 >= length) return null
+            if (this[start] != '$') return null
+            var j = start + 1
+            while (j < length && (this[j].isLetterOrDigit() || this[j] == '_')) j++
+            return if (j < length && this[j] == '$') substring(start, j + 1) else null
         }
 
         /**
