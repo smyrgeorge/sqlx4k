@@ -16,6 +16,8 @@ import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.validate
 import io.github.smyrgeorge.sqlx4k.processor.TypeNames.BUILT_IN_TYPES
+import io.github.smyrgeorge.sqlx4k.processor.TypeNames.builtInDecoder
+import io.github.smyrgeorge.sqlx4k.processor.TypeNames.postgresArrayDecoder
 import java.io.OutputStream
 
 class TableProcessor(
@@ -469,43 +471,14 @@ class TableProcessor(
             }
 
             // Check for builtin types
-            val builtinDecoder = when (typeQualifiedName) {
-                "kotlin.String" -> "asString$nullSuffix()"
-                "kotlin.Char" -> "asChar$nullSuffix()"
-                "kotlin.Int" -> "asInt$nullSuffix()"
-                "kotlin.UInt" -> "asUInt$nullSuffix()"
-                "kotlin.Long" -> "asLong$nullSuffix()"
-                "kotlin.ULong" -> "asULong$nullSuffix()"
-                "kotlin.Short" -> "asShort$nullSuffix()"
-                "kotlin.UShort" -> "asUShort$nullSuffix()"
-                "kotlin.Float" -> "asFloat$nullSuffix()"
-                "kotlin.Double" -> "asDouble$nullSuffix()"
-                "kotlin.Boolean" -> "asBoolean$nullSuffix()"
-                "kotlin.uuid.Uuid" -> "asUuid$nullSuffix()"
-                "kotlinx.datetime.LocalDate" -> "asLocalDate$nullSuffix()"
-                "kotlinx.datetime.LocalTime" -> "asLocalTime$nullSuffix()"
-                "kotlinx.datetime.LocalDateTime" -> "asLocalDateTime$nullSuffix()"
-                "kotlin.time.Instant" -> "asInstant$nullSuffix()"
-                "kotlin.ByteArray" -> "asByteArray$nullSuffix()"
-                else -> null
-            }
-
+            val builtinDecoder = builtInDecoder(typeQualifiedName, nullSuffix)
             if (builtinDecoder != null) {
                 return ".$builtinDecoder"
             }
 
             // Check for PostgreSQL-specific array types
             if (this@Visitor.rowMapperDialect == Dialect.PostgreSQL) {
-                val postgresArrayDecoder = when (typeQualifiedName) {
-                    "kotlin.BooleanArray" -> "asBooleanArray$nullSuffix()"
-                    "kotlin.ShortArray" -> "asShortArray$nullSuffix()"
-                    "kotlin.IntArray" -> "asIntArray$nullSuffix()"
-                    "kotlin.LongArray" -> "asLongArray$nullSuffix()"
-                    "kotlin.FloatArray" -> "asFloatArray$nullSuffix()"
-                    "kotlin.DoubleArray" -> "asDoubleArray$nullSuffix()"
-                    else -> null
-                }
-
+                val postgresArrayDecoder = postgresArrayDecoder(typeQualifiedName, nullSuffix)
                 if (postgresArrayDecoder != null) {
                     return ".$postgresArrayDecoder"
                 }
@@ -642,40 +615,31 @@ class TableProcessor(
         return replace(pattern, "_$0").lowercase()
     }
 
-    /**
-     * Gets the @Converter annotation from a property if present.
-     */
     private fun KSPropertyDeclaration.getConverterAnnotation(): KSAnnotation? =
         annotations.find { it.qualifiedName() == TypeNames.CONVERTER_ANNOTATION }
 
-    /**
-     * Extracts the encoder class declaration from a @Converter annotation.
-     */
     private fun KSAnnotation.getEncoderClassDeclaration(): KSClassDeclaration? {
         val valueArg = arguments.find { it.name?.asString() == "value" } ?: return null
         val classType = valueArg.value as? KSType ?: return null
         return classType.declaration as? KSClassDeclaration
     }
 
-    /**
-     * Gets the fully qualified name of the encoder class from a @Converter annotation.
-     */
     private fun KSAnnotation.getEncoderClassName(): String? {
         val classDecl = getEncoderClassDeclaration() ?: return null
         return classDecl.qualifiedName?.asString()
     }
 
-    /**
-     * Checks if a type is a built-in type that has native decoder support.
-     */
     private fun isBuiltInType(typeQualifiedName: String): Boolean = typeQualifiedName in BUILT_IN_TYPES
 
     /**
-     * Validates that the @Converter encoder is valid:
-     * - Must be a Kotlin object (singleton), not a class
-     * - Must implement ValueEncoder<T>
-     * - T must match the property type
-     * - Property type must not be a built-in type
+     * Validates the compatibility between a property type and its associated @Converter encoder type.
+     * Ensures that @Converter annotations are only applied to valid types, checks for type matching,
+     * and validates that the encoder satisfies the required conditions.
+     *
+     * @param prop The property declaration to be validated.
+     * @param converterAnnotation The @Converter annotation applied to the property.
+     * @throws IllegalStateException If the validation fails due to mismatched types, invalid encoder class definition,
+     *                                or unsupported property types.
      */
     private fun validateConverterTypeCompatibility(
         prop: KSPropertyDeclaration,
@@ -745,7 +709,17 @@ class TableProcessor(
     }
 
     /**
-     * Generates the bind expression for a property, using @Converter encoder object if present.
+     * Generates a bind expression for a given property declaration. If the property is annotated with
+     * a `@Converter`, the method validates the compatibility between the property type and the converter's
+     * encoder type. Consequently, it generates the appropriate expression by utilizing the encoder's
+     * `encode` method. If no `@Converter` is present, the property's name is returned as-is.
+     *
+     * @param prop The property declaration for which the bind expression is generated.
+     * @return A `String` representing the bind expression for the property. If the property has a
+     *         compatible `@Converter`, the resulting expression applies the encoder; otherwise,
+     *         it returns the property's name.
+     * @throws IllegalStateException If the `@Converter` annotation is invalid or if the encoder class
+     *                                is incompatible with the property type.
      */
     private fun generateBindExpression(prop: KSPropertyDeclaration): String {
         val propName = prop.simpleName()

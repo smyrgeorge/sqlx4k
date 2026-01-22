@@ -94,6 +94,7 @@ object TypeNames {
         "kotlinx.datetime.LocalDateTime",
         "kotlin.time.Instant",
         "kotlin.ByteArray",
+        // Array types (Postgres only)
         "kotlin.BooleanArray",
         "kotlin.ShortArray",
         "kotlin.IntArray",
@@ -101,4 +102,37 @@ object TypeNames {
         "kotlin.FloatArray",
         "kotlin.DoubleArray"
     )
+
+    fun builtInDecoder(typeQualifiedName: String, nullSuffix: String): String? =
+        when (typeQualifiedName) {
+            "kotlin.String" -> "asString$nullSuffix()"
+            "kotlin.Char" -> "asChar$nullSuffix()"
+            "kotlin.Int" -> "asInt$nullSuffix()"
+            "kotlin.UInt" -> "asUInt$nullSuffix()"
+            "kotlin.Long" -> "asLong$nullSuffix()"
+            "kotlin.ULong" -> "asULong$nullSuffix()"
+            "kotlin.Short" -> "asShort$nullSuffix()"
+            "kotlin.UShort" -> "asUShort$nullSuffix()"
+            "kotlin.Float" -> "asFloat$nullSuffix()"
+            "kotlin.Double" -> "asDouble$nullSuffix()"
+            "kotlin.Boolean" -> "asBoolean$nullSuffix()"
+            "kotlin.uuid.Uuid" -> "asUuid$nullSuffix()"
+            "kotlinx.datetime.LocalDate" -> "asLocalDate$nullSuffix()"
+            "kotlinx.datetime.LocalTime" -> "asLocalTime$nullSuffix()"
+            "kotlinx.datetime.LocalDateTime" -> "asLocalDateTime$nullSuffix()"
+            "kotlin.time.Instant" -> "asInstant$nullSuffix()"
+            "kotlin.ByteArray" -> "asByteArray$nullSuffix()"
+            else -> null
+        }
+
+    fun postgresArrayDecoder(typeQualifiedName: String, nullSuffix: String): String? =
+        when (typeQualifiedName) {
+            "kotlin.BooleanArray" -> "asBooleanArray$nullSuffix()"
+            "kotlin.ShortArray" -> "asShortArray$nullSuffix()"
+            "kotlin.IntArray" -> "asIntArray$nullSuffix()"
+            "kotlin.LongArray" -> "asLongArray$nullSuffix()"
+            "kotlin.FloatArray" -> "asFloatArray$nullSuffix()"
+            "kotlin.DoubleArray" -> "asDoubleArray$nullSuffix()"
+            else -> null
+        }
 }
