@@ -15,6 +15,7 @@ import com.google.devtools.ksp.symbol.KSValueArgument
 import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.validate
+import io.github.smyrgeorge.sqlx4k.processor.TypeNames.BUILT_IN_TYPES
 import java.io.OutputStream
 
 class TableProcessor(
@@ -142,8 +143,8 @@ class TableProcessor(
             // Materialize all properties to avoid multiple sequence traversals
             val allProps = props.toList()
 
-            // Find insertable properties.
-            val insertProps = allProps.asSequence()
+            // Find insertable properties (keep full declarations for @Converter support).
+            val insertPropDeclarations = allProps.asSequence()
                 .filter {
                     val id =
                         it.annotations.find { a ->
@@ -168,8 +169,8 @@ class TableProcessor(
 
                     (insert?.value as? Boolean) ?: true
                 }
-                .map { it.simpleName() }
                 .toList()
+            val insertProps = insertPropDeclarations.map { it.simpleName() }
 
             // Get DB-generated columns for RETURNING clause
             val returningColumns = findInsertReturningProps(allProps)
@@ -203,13 +204,17 @@ class TableProcessor(
                 "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }}) values (${insertProps.joinToString { "?" }}) returning $returningColumns;\"\n"
             }
             file += "    val statement = Statement.create(sql)\n"
-            insertProps.forEachIndexed { index, property -> file += "    statement.bind($index, ${property})\n" }
+            insertPropDeclarations.forEachIndexed { index, prop ->
+                val bindExpr = generateBindExpression(prop)
+                file += "    statement.bind($index, $bindExpr)\n"
+            }
             if (this@Visitor.queryDialect == Dialect.MySQL) {
                 // idProp is guaranteed to exist for MySQL (error thrown above if missing)
                 val idProp = allProps.first {
                     it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
                 }
-                file += "    statement.bind(${insertProps.size}, ${idProp.simpleName()})\n"
+                val idBindExpr = generateBindExpression(idProp)
+                file += "    statement.bind(${insertProps.size}, $idBindExpr)\n"
             }
             file += "    return statement\n"
             file += "}\n"
@@ -259,8 +264,8 @@ class TableProcessor(
                 return
             }
 
-            // Find updatable properties.
-            val updateProps = allProps.asSequence()
+            // Find updatable properties (keep full declarations for @Converter support).
+            val updatePropDeclarations = allProps.asSequence()
                 // Exclude @Id from the update query,
                 .filter { it.simpleName() != id.simpleName() }
                 .filter {
@@ -274,8 +279,8 @@ class TableProcessor(
 
                     (update?.value as? Boolean) ?: true
                 }
-                .map { it.simpleName() }
                 .toList()
+            val updateProps = updatePropDeclarations.map { it.simpleName() }
 
             // Get DB-generated columns for RETURNING clause
             val returningColumns = findUpdateReturningProps(allProps)
@@ -310,12 +315,14 @@ class TableProcessor(
             }
 
             file += "    val statement = Statement.create(sql)\n"
-            updateProps.forEachIndexed { index, property ->
-                file += "    statement.bind($index, ${property})\n"
+            updatePropDeclarations.forEachIndexed { index, prop ->
+                val bindExpr = generateBindExpression(prop)
+                file += "    statement.bind($index, $bindExpr)\n"
             }
-            file += "    statement.bind(${updateProps.size}, ${id.simpleName()})\n"
+            val idBindExpr = generateBindExpression(id)
+            file += "    statement.bind(${updateProps.size}, $idBindExpr)\n"
             if (this@Visitor.queryDialect == Dialect.MySQL) {
-                file += "    statement.bind(${updateProps.size + 1}, ${id.simpleName()})\n"
+                file += "    statement.bind(${updateProps.size + 1}, $idBindExpr)\n"
             }
             file += "    return statement\n"
             file += "}\n"
@@ -447,6 +454,19 @@ class TableProcessor(
                 ?: error("No type name found for $propType")
 
             val nullSuffix = if (isNullable) "OrNull" else ""
+
+            // Check for @Converter annotation first - uses 'object' directly (no instantiation)
+            val converterAnnotation = prop.getConverterAnnotation()
+            if (converterAnnotation != null) {
+                validateConverterTypeCompatibility(prop, converterAnnotation)
+                val encoderClassName = converterAnnotation.getEncoderClassName()
+                    ?: error("Cannot get encoder class name from @Converter on property ${prop.simpleName()}")
+                return if (isNullable) {
+                    ".let { col -> if (col.isNull()) null else $encoderClassName.decode(col) }"
+                } else {
+                    ".let { col -> $encoderClassName.decode(col) }"
+                }
+            }
 
             // Check for builtin types
             val builtinDecoder = when (typeQualifiedName) {
@@ -620,6 +640,128 @@ class TableProcessor(
     private fun String.toSnakeCase(): String {
         val pattern = "(?<=.)[A-Z]".toRegex()
         return replace(pattern, "_$0").lowercase()
+    }
+
+    /**
+     * Gets the @Converter annotation from a property if present.
+     */
+    private fun KSPropertyDeclaration.getConverterAnnotation(): KSAnnotation? =
+        annotations.find { it.qualifiedName() == TypeNames.CONVERTER_ANNOTATION }
+
+    /**
+     * Extracts the encoder class declaration from a @Converter annotation.
+     */
+    private fun KSAnnotation.getEncoderClassDeclaration(): KSClassDeclaration? {
+        val valueArg = arguments.find { it.name?.asString() == "value" } ?: return null
+        val classType = valueArg.value as? KSType ?: return null
+        return classType.declaration as? KSClassDeclaration
+    }
+
+    /**
+     * Gets the fully qualified name of the encoder class from a @Converter annotation.
+     */
+    private fun KSAnnotation.getEncoderClassName(): String? {
+        val classDecl = getEncoderClassDeclaration() ?: return null
+        return classDecl.qualifiedName?.asString()
+    }
+
+    /**
+     * Checks if a type is a built-in type that has native decoder support.
+     */
+    private fun isBuiltInType(typeQualifiedName: String): Boolean = typeQualifiedName in BUILT_IN_TYPES
+
+    /**
+     * Validates that the @Converter encoder is valid:
+     * - Must be a Kotlin object (singleton), not a class
+     * - Must implement ValueEncoder<T>
+     * - T must match the property type
+     * - Property type must not be a built-in type
+     */
+    private fun validateConverterTypeCompatibility(
+        prop: KSPropertyDeclaration,
+        converterAnnotation: KSAnnotation
+    ) {
+        val propType = prop.type.resolve()
+        val propTypeQualifiedName = propType.declaration.qualifiedName?.asString()
+            ?: error("No type name found for property ${prop.simpleName()}")
+
+        // Check that the property is not a built-in type
+        val baseTypeName = propTypeQualifiedName.removeSuffix("?")
+        if (isBuiltInType(baseTypeName)) {
+            error(
+                "@Converter cannot be used on built-in type '$propTypeQualifiedName'. " +
+                        "Property: ${prop.simpleName()} in ${prop.parentDeclaration?.simpleName?.asString()}"
+            )
+        }
+
+        val encoderClassDecl = converterAnnotation.getEncoderClassDeclaration()
+            ?: error("Invalid @Converter: cannot resolve encoder class for property ${prop.simpleName()}")
+
+        // Validate that the encoder is an object (singleton), not a class
+        if (encoderClassDecl.classKind != ClassKind.OBJECT) {
+            error(
+                "@Converter encoder '${encoderClassDecl.qualifiedName?.asString()}' must be declared as an 'object', not a 'class'. " +
+                        "Property: ${prop.simpleName()} in ${prop.parentDeclaration?.simpleName?.asString()}"
+            )
+        }
+
+        // Find the ValueEncoder<T> supertype to extract T
+        val valueEncoderSupertype = encoderClassDecl.superTypes
+            .map { it.resolve() }
+            .find { superType ->
+                superType.declaration.qualifiedName?.asString() == TypeNames.VALUE_ENCODER
+            }
+
+        if (valueEncoderSupertype == null) {
+            error(
+                "@Converter encoder '${encoderClassDecl.qualifiedName?.asString()}' must implement ValueEncoder<T>. " +
+                        "Property: ${prop.simpleName()}"
+            )
+        }
+
+        // Get the type argument T from ValueEncoder<T>
+        val encoderTypeArg = valueEncoderSupertype.arguments.firstOrNull()?.type?.resolve()
+        val encoderTypeQualifiedName = encoderTypeArg?.declaration?.qualifiedName?.asString()
+
+        if (encoderTypeQualifiedName == null) {
+            logger.warn(
+                "Cannot verify type compatibility for @Converter on property ${prop.simpleName()}. " +
+                        "Encoder: ${encoderClassDecl.qualifiedName?.asString()}"
+            )
+            return
+        }
+
+        // Compare base types (without nullability)
+        val propBaseType = propTypeQualifiedName.removeSuffix("?")
+        val encoderBaseType = encoderTypeQualifiedName.removeSuffix("?")
+
+        if (propBaseType != encoderBaseType) {
+            error(
+                "@Converter type mismatch: Encoder '${encoderClassDecl.qualifiedName?.asString()}' " +
+                        "handles type '$encoderTypeQualifiedName' but property '${prop.simpleName()}' " +
+                        "has type '$propTypeQualifiedName'."
+            )
+        }
+    }
+
+    /**
+     * Generates the bind expression for a property, using @Converter encoder object if present.
+     */
+    private fun generateBindExpression(prop: KSPropertyDeclaration): String {
+        val propName = prop.simpleName()
+        val converterAnnotation = prop.getConverterAnnotation()
+        if (converterAnnotation != null) {
+            validateConverterTypeCompatibility(prop, converterAnnotation)
+            val encoderClassName = converterAnnotation.getEncoderClassName()
+                ?: error("Cannot get encoder class name from @Converter on property $propName")
+            val propType = prop.type.resolve()
+            return if (propType.isMarkedNullable) {
+                "$propName?.let { $encoderClassName.encode(it) }"
+            } else {
+                "$encoderClassName.encode($propName)"
+            }
+        }
+        return propName
     }
 
     companion object {

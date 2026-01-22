@@ -1,6 +1,9 @@
 package io.github.smyrgeorge.sqlx4k.processor.util
 
+import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.ValueEncoder
 import io.github.smyrgeorge.sqlx4k.annotation.Column
+import io.github.smyrgeorge.sqlx4k.annotation.Converter
 import io.github.smyrgeorge.sqlx4k.annotation.Id
 import io.github.smyrgeorge.sqlx4k.annotation.Table
 
@@ -84,5 +87,84 @@ data class Payment(
     val id: Long,
     val amount: Money,
     @Column(insert = false, update = false)
+    val processedAmount: Money?
+)
+
+// =====================================================
+// ValueEncoder implementations for @Converter tests
+// =====================================================
+
+/**
+ * ValueEncoder object for Money type - used with @Converter annotation.
+ * Must be declared as an object (singleton) for use with @Converter.
+ */
+object MoneyEncoder : ValueEncoder<Money> {
+    override fun encode(value: Money): Any = value.toString()
+    override fun decode(value: ResultSet.Row.Column): Money = Money.parse(value.asString())
+}
+
+/**
+ * ValueEncoder object for GeoPoint type - used with @Converter annotation.
+ * Must be declared as an object (singleton) for use with @Converter.
+ */
+object GeoPointEncoder : ValueEncoder<GeoPoint> {
+    override fun encode(value: GeoPoint): Any = value.toString()
+    override fun decode(value: ResultSet.Row.Column): GeoPoint = GeoPoint.parse(value.asString())
+}
+
+// =====================================================
+// Entities using @Converter annotation
+// =====================================================
+
+/**
+ * Entity with @Converter for a custom Money type.
+ */
+@Table("converter_invoices")
+data class ConverterInvoice(
+    @Id
+    val id: Long,
+    val description: String,
+    @Converter(MoneyEncoder::class)
+    val totalAmount: Money
+)
+
+/**
+ * Entity with @Converter for a nullable custom type.
+ */
+@Table("converter_stores")
+data class ConverterStore(
+    @Id
+    val id: Long,
+    val name: String,
+    @Converter(GeoPointEncoder::class)
+    val location: GeoPoint?
+)
+
+/**
+ * Entity with multiple @Converter annotations for different custom types.
+ */
+@Table("converter_transactions")
+data class ConverterTransaction(
+    @Id
+    val id: Long,
+    @Converter(MoneyEncoder::class)
+    val fromAmount: Money,
+    @Converter(MoneyEncoder::class)
+    val toAmount: Money,
+    @Converter(GeoPointEncoder::class)
+    val exchangeLocation: GeoPoint?
+)
+
+/**
+ * Entity with @Converter and @Column annotations combined.
+ */
+@Table("converter_payments")
+data class ConverterPayment(
+    @Id
+    val id: Long,
+    @Converter(MoneyEncoder::class)
+    val amount: Money,
+    @Column(insert = false, update = false)
+    @Converter(MoneyEncoder::class)
     val processedAmount: Money?
 )

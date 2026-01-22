@@ -57,6 +57,7 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 - [Transactions and coroutine TransactionContext](#transactions) · [TransactionContext (coroutines)](#transactioncontext-coroutines)
 - [Code generation: CRUD and @Repository implementations](#code-generation-crud-and-repository-implementations)
     - [Auto-Generated RowMapper](#auto-generated-rowmapper)
+    - [Property-Level Converters](#property-level-converters-converter)
     - [Context-Parameters](#context-parameters)
     - [Repository hooks](#repository-hooks)
     - [List of Repository interfaces](#list-of-repository-interfaces)
@@ -499,6 +500,50 @@ Supported dialects:
 - `"postgresql"` - Enables PostgreSQL-specific extensions (array types)
 - `"mysql"` - Adjusts CRUD query generation for MySQL compatibility
 - Default (or `"generic"`) - Uses standard SQL with builtin decoders
+
+#### Property-Level Converters (@Converter)
+
+For custom types, you can use the `@Converter` annotation to specify a `ValueEncoder` directly on the property.
+This provides compile-time type safety, avoids runtime registry lookups, and eliminates object instantiation overhead.
+
+**Defining a Custom Encoder:**
+
+```kotlin
+// Define your custom type
+data class Money(val amount: Double, val currency: String) {
+    override fun toString(): String = "$amount:$currency"
+
+    companion object {
+        fun parse(value: String): Money {
+            val parts = value.split(":")
+            return Money(parts[0].toDouble(), parts[1])
+        }
+    }
+}
+
+// Create a ValueEncoder as an object (singleton) - NOT a class
+object MoneyEncoder : ValueEncoder<Money> {
+    override fun encode(value: Money): Any = value.toString()
+    override fun decode(value: ResultSet.Row.Column): Money = Money.parse(value.asString())
+}
+```
+
+**Using @Converter on Properties:**
+
+```kotlin
+@Table("invoices")
+data class Invoice(
+    @Id
+    val id: Long,
+    val description: String,
+    @Converter(MoneyEncoder::class)
+    val totalAmount: Money
+)
+```
+
+> [!NOTE]
+> When using `@Converter`, you don't need to register the encoder in a `ValueEncoderRegistry`.
+> The encoder object is referenced directly in the generated code, avoiding any instantiation overhead.
 
 #### Context-Parameters
 

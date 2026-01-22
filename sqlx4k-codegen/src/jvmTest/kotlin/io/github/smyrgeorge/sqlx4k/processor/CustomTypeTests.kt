@@ -8,12 +8,20 @@ import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.ValueEncoder
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
+import io.github.smyrgeorge.sqlx4k.processor.util.ConverterInvoice
+import io.github.smyrgeorge.sqlx4k.processor.util.ConverterPayment
+import io.github.smyrgeorge.sqlx4k.processor.util.ConverterStore
+import io.github.smyrgeorge.sqlx4k.processor.util.ConverterTransaction
 import io.github.smyrgeorge.sqlx4k.processor.util.GeoPoint
 import io.github.smyrgeorge.sqlx4k.processor.util.Invoice
 import io.github.smyrgeorge.sqlx4k.processor.util.Money
 import io.github.smyrgeorge.sqlx4k.processor.util.Payment
 import io.github.smyrgeorge.sqlx4k.processor.util.Store
 import io.github.smyrgeorge.sqlx4k.processor.util.Transaction
+import io.github.smyrgeorge.sqlx4k.processor.test.generated.ConverterInvoiceAutoRowMapper
+import io.github.smyrgeorge.sqlx4k.processor.test.generated.ConverterPaymentAutoRowMapper
+import io.github.smyrgeorge.sqlx4k.processor.test.generated.ConverterStoreAutoRowMapper
+import io.github.smyrgeorge.sqlx4k.processor.test.generated.ConverterTransactionAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.InvoiceAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.PaymentAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.StoreAutoRowMapper
@@ -595,5 +603,273 @@ class CustomTypeTests {
         assertThat(mapped.fromAmount).isEqualTo(original.fromAmount)
         assertThat(mapped.toAmount).isEqualTo(original.toAmount)
         assertThat(mapped.exchangeLocation).isEqualTo(original.exchangeLocation)
+    }
+
+    // ===========================================
+    // @Converter Annotation Tests
+    // ===========================================
+    // These tests verify that entities using @Converter annotation
+    // generate code that uses the encoder directly without registry lookup.
+
+    @Test
+    fun `ConverterInvoice insert uses encoder directly`() {
+        val invoice = ConverterInvoice(
+            id = 0,
+            description = "Test Invoice",
+            totalAmount = Money(100.50, "USD")
+        )
+
+        // Empty registry should work because @Converter uses encoder directly
+        val sql = invoice.insert().render(ValueEncoderRegistry.EMPTY)
+
+        assertThat(sql).contains("insert into converter_invoices")
+        assertThat(sql).contains("'Test Invoice'")
+        assertThat(sql).contains("'100.5:USD'")
+    }
+
+    @Test
+    fun `ConverterInvoice update uses encoder directly`() {
+        val invoice = ConverterInvoice(
+            id = 42,
+            description = "Updated Invoice",
+            totalAmount = Money(200.75, "EUR")
+        )
+
+        val sql = invoice.update().render(ValueEncoderRegistry.EMPTY)
+
+        assertThat(sql).contains("update converter_invoices")
+        assertThat(sql).contains("set description = 'Updated Invoice', total_amount = '200.75:EUR'")
+        assertThat(sql).contains("where id = 42")
+    }
+
+    @Test
+    fun `ConverterInvoice RowMapper uses encoder directly without registry`() {
+        val testRow = row(
+            column(0, "id", "INT8", "1"),
+            column(1, "description", "TEXT", "Test Invoice"),
+            column(2, "total_amount", "TEXT", "99.99:USD")
+        )
+
+        // Empty registry should work because @Converter uses encoder directly
+        val result = ConverterInvoiceAutoRowMapper.map(testRow, ValueEncoderRegistry.EMPTY)
+
+        assertThat(result.id).isEqualTo(1L)
+        assertThat(result.description).isEqualTo("Test Invoice")
+        assertThat(result.totalAmount).isEqualTo(Money(99.99, "USD"))
+    }
+
+    @Test
+    fun `ConverterStore insert handles nullable GeoPoint with encoder`() {
+        val storeWithLocation = ConverterStore(
+            id = 0,
+            name = "NYC Store",
+            location = GeoPoint(40.7128, -74.0060)
+        )
+
+        val sql = storeWithLocation.insert().render(ValueEncoderRegistry.EMPTY)
+
+        assertThat(sql).contains("insert into converter_stores")
+        assertThat(sql).contains("'NYC Store'")
+        assertThat(sql).contains("'40.7128,-74.006'")
+    }
+
+    @Test
+    fun `ConverterStore insert handles null GeoPoint`() {
+        val storeWithoutLocation = ConverterStore(
+            id = 0,
+            name = "Online Store",
+            location = null
+        )
+
+        val sql = storeWithoutLocation.insert().render(ValueEncoderRegistry.EMPTY)
+
+        assertThat(sql).contains("insert into converter_stores")
+        assertThat(sql).contains("'Online Store'")
+        assertThat(sql).contains("null")
+    }
+
+    @Test
+    fun `ConverterStore RowMapper handles non-null GeoPoint`() {
+        val testRow = row(
+            column(0, "id", "INT8", "1"),
+            column(1, "name", "TEXT", "NYC Store"),
+            column(2, "location", "TEXT", "40.7128,-74.006")
+        )
+
+        val result = ConverterStoreAutoRowMapper.map(testRow, ValueEncoderRegistry.EMPTY)
+
+        assertThat(result.id).isEqualTo(1L)
+        assertThat(result.name).isEqualTo("NYC Store")
+        assertThat(result.location).isEqualTo(GeoPoint(40.7128, -74.006))
+    }
+
+    @Test
+    fun `ConverterStore RowMapper handles null GeoPoint`() {
+        val testRow = row(
+            column(0, "id", "INT8", "2"),
+            column(1, "name", "TEXT", "Online Store"),
+            column(2, "location", "TEXT", null)
+        )
+
+        val result = ConverterStoreAutoRowMapper.map(testRow, ValueEncoderRegistry.EMPTY)
+
+        assertThat(result.id).isEqualTo(2L)
+        assertThat(result.name).isEqualTo("Online Store")
+        assertThat(result.location).isNull()
+    }
+
+    @Test
+    fun `ConverterTransaction with multiple converters`() {
+        val transaction = ConverterTransaction(
+            id = 0,
+            fromAmount = Money(100.0, "USD"),
+            toAmount = Money(85.0, "EUR"),
+            exchangeLocation = GeoPoint(51.5074, -0.1278)
+        )
+
+        val sql = transaction.insert().render(ValueEncoderRegistry.EMPTY)
+
+        assertThat(sql).contains("insert into converter_transactions")
+        assertThat(sql).contains("'100.0:USD'")
+        assertThat(sql).contains("'85.0:EUR'")
+        assertThat(sql).contains("'51.5074,-0.1278'")
+    }
+
+    @Test
+    fun `ConverterTransaction RowMapper with multiple converters`() {
+        val testRow = row(
+            column(0, "id", "INT8", "1"),
+            column(1, "from_amount", "TEXT", "100.0:USD"),
+            column(2, "to_amount", "TEXT", "85.0:EUR"),
+            column(3, "exchange_location", "TEXT", "51.5074,-0.1278")
+        )
+
+        val result = ConverterTransactionAutoRowMapper.map(testRow, ValueEncoderRegistry.EMPTY)
+
+        assertThat(result.id).isEqualTo(1L)
+        assertThat(result.fromAmount).isEqualTo(Money(100.0, "USD"))
+        assertThat(result.toAmount).isEqualTo(Money(85.0, "EUR"))
+        assertThat(result.exchangeLocation).isEqualTo(GeoPoint(51.5074, -0.1278))
+    }
+
+    @Test
+    fun `ConverterPayment combines Converter with Column annotations`() {
+        val payment = ConverterPayment(
+            id = 0,
+            amount = Money(75.0, "USD"),
+            processedAmount = Money(74.50, "USD")
+        )
+
+        val sql = payment.insert().render(ValueEncoderRegistry.EMPTY)
+
+        // processedAmount should be excluded from insert due to @Column(insert = false)
+        assertThat(sql).contains("insert into converter_payments(amount)")
+        assertThat(sql).contains("'75.0:USD'")
+    }
+
+    @Test
+    fun `ConverterPayment update excludes processedAmount column`() {
+        val payment = ConverterPayment(
+            id = 25,
+            amount = Money(150.0, "USD"),
+            processedAmount = Money(149.0, "USD")
+        )
+
+        val sql = payment.update().render(ValueEncoderRegistry.EMPTY)
+
+        // processedAmount should be excluded from update due to @Column(update = false)
+        assertThat(sql).contains("update converter_payments set amount = '150.0:USD' where id = 25")
+    }
+
+    @Test
+    fun `ConverterPayment RowMapper maps both properties`() {
+        val testRow = row(
+            column(0, "id", "INT8", "1"),
+            column(1, "amount", "TEXT", "100.0:USD"),
+            column(2, "processed_amount", "TEXT", "99.0:USD")
+        )
+
+        val result = ConverterPaymentAutoRowMapper.map(testRow, ValueEncoderRegistry.EMPTY)
+
+        assertThat(result.id).isEqualTo(1L)
+        assertThat(result.amount).isEqualTo(Money(100.0, "USD"))
+        assertThat(result.processedAmount).isEqualTo(Money(99.0, "USD"))
+    }
+
+    @Test
+    fun `ConverterPayment RowMapper handles null processedAmount`() {
+        val testRow = row(
+            column(0, "id", "INT8", "2"),
+            column(1, "amount", "TEXT", "75.0:EUR"),
+            column(2, "processed_amount", "TEXT", null)
+        )
+
+        val result = ConverterPaymentAutoRowMapper.map(testRow, ValueEncoderRegistry.EMPTY)
+
+        assertThat(result.amount).isEqualTo(Money(75.0, "EUR"))
+        assertThat(result.processedAmount).isNull()
+    }
+
+    @Test
+    fun `ConverterInvoice round-trip preserves data without registry`() {
+        val original = ConverterInvoice(
+            id = 0,
+            description = "Round-trip Test",
+            totalAmount = Money(123.45, "USD")
+        )
+
+        // Simulate what gets inserted (no registry needed)
+        val insertSql = original.insert().render(ValueEncoderRegistry.EMPTY)
+        assertThat(insertSql).contains("'123.45:USD'")
+
+        // Simulate what comes back from DB
+        val dbRow = row(
+            column(0, "id", "INT8", "1"),
+            column(1, "description", "TEXT", "Round-trip Test"),
+            column(2, "total_amount", "TEXT", "123.45:USD")
+        )
+
+        // Map without registry (encoder used directly)
+        val mapped = ConverterInvoiceAutoRowMapper.map(dbRow, ValueEncoderRegistry.EMPTY)
+
+        assertThat(mapped.description).isEqualTo(original.description)
+        assertThat(mapped.totalAmount).isEqualTo(original.totalAmount)
+    }
+
+    @Test
+    fun `ConverterStore round-trip with nullable location`() {
+        // With location
+        val withLocation = ConverterStore(
+            id = 0,
+            name = "Physical Store",
+            location = GeoPoint(40.7128, -74.0060)
+        )
+
+        val insertSql1 = withLocation.insert().render(ValueEncoderRegistry.EMPTY)
+        assertThat(insertSql1).contains("'40.7128,-74.006'")
+
+        // Without location
+        val withoutLocation = ConverterStore(
+            id = 0,
+            name = "Online Store",
+            location = null
+        )
+
+        val insertSql2 = withoutLocation.insert().render(ValueEncoderRegistry.EMPTY)
+        assertThat(insertSql2).contains("null")
+    }
+
+    @Test
+    fun `ConverterTransaction delete does not use encoder`() {
+        val transaction = ConverterTransaction(
+            id = 99,
+            fromAmount = Money(50.0, "USD"),
+            toAmount = Money(45.0, "EUR"),
+            exchangeLocation = null
+        )
+
+        val sql = transaction.delete().render(ValueEncoderRegistry.EMPTY)
+
+        assertThat(sql).isEqualTo("delete from converter_transactions where id = 99;")
     }
 }
