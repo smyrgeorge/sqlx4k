@@ -12,7 +12,6 @@ import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSPropertyDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSValueArgument
-import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.validate
 import io.github.smyrgeorge.sqlx4k.processor.TypeNames.BUILT_IN_TYPES
@@ -80,530 +79,545 @@ class TableProcessor(
                 file += "import io.github.smyrgeorge.sqlx4k.postgres.extensions.*\n"
             }
 
-            symbol.accept(Visitor(file, queryDialect, rowMapperDialect), Unit)
+            processClassDeclaration(file, symbol)
 
             file.close()
         }
 
-        val unableToProcess = symbols.filterNot { it.validate() }.toList()
-        return unableToProcess
+        return symbols.filterNot { it.validate() }.toList()
     }
 
-    inner class Visitor(
-        private val file: OutputStream,
-        private val queryDialect: Dialect,
-        private val rowMapperDialect: Dialect
-    ) : KSVisitorVoid() {
-
-        override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
-            // Validate that the class is a data class (required for copy() in merge functions)
-            if (Modifier.DATA !in classDeclaration.modifiers) {
-                error("@Table annotation can only be applied to data classes: ${classDeclaration.qualifiedName?.asString()}")
-            }
-
-            // Getting the @Table annotation object.
-            val table: KSAnnotation = classDeclaration.annotations.first {
-                it.qualifiedName() == TypeNames.TABLE_ANNOTATION
-            }
-
-            // Getting the 'name' argument object from the @Table.
-            val nameArgument: KSValueArgument = table.arguments
-                .first { arg -> arg.name?.asString() == "name" }
-
-            // Getting the value of the 'name' argument.
-            val tableName = nameArgument.value as String
-
-            // Getting the list of member properties of the annotated class.
-            val properties: Sequence<KSPropertyDeclaration> = classDeclaration
-                .getAllProperties()
-                .filter { it.validate() }
-
-            // Make queries.
-            insert(tableName, classDeclaration, properties)
-            applyInsertResult(classDeclaration, properties)
-            update(tableName, classDeclaration, properties)
-            applyUpdateResult(classDeclaration, properties)
-            delete(tableName, classDeclaration, properties)
-
-            // Generate RowMapper.
-            rowMapper(classDeclaration, properties)
+    /**
+     * Processes a class declaration annotated with @Table.
+     * Generates CRUD queries and RowMapper for the entity.
+     *
+     * @param file The output stream to write the generated code.
+     * @param classDeclaration The class declaration to process.
+     */
+    private fun processClassDeclaration(file: OutputStream, classDeclaration: KSClassDeclaration) {
+        // Validate that the class is a data class (required for copy() in merge functions)
+        if (Modifier.DATA !in classDeclaration.modifiers) {
+            error("@Table annotation can only be applied to data classes: ${classDeclaration.qualifiedName?.asString()}")
         }
 
-        /**
-         * Generates an SQL insert statement for the provided class declaration and properties.
-         *
-         * @param clazz The class declaration from which to generate the insert statement.
-         * @param table The name of the table into which the data will be inserted.
-         * @param props The sequence of properties from the class, which will be filtered
-         *                    to include only those that should be inserted.
-         */
-        private fun insert(
-            table: String,
-            clazz: KSClassDeclaration,
-            props: Sequence<KSPropertyDeclaration>
-        ) {
-            // Materialize all properties to avoid multiple sequence traversals
-            val allProps = props.toList()
-
-            // Find insertable properties (keep full declarations for @Converter support).
-            val insertPropDeclarations = allProps.asSequence()
-                .filter {
-                    val id =
-                        it.annotations.find { a ->
-                            a.qualifiedName() == TypeNames.ID_ANNOTATION
-                        } ?: return@filter true
-
-                    val insert: KSValueArgument? = id.arguments.find { a ->
-                        a.name?.asString() == INSERT_PROPERTY_NAME
-                    }
-
-                    (insert?.value as? Boolean) ?: false
-                }
-                .filter {
-                    val column =
-                        it.annotations.find { a ->
-                            a.qualifiedName() == TypeNames.COLUMN_ANNOTATION
-                        } ?: return@filter true
-
-                    val insert: KSValueArgument? = column.arguments.find { a ->
-                        a.name?.asString() == INSERT_PROPERTY_NAME
-                    }
-
-                    (insert?.value as? Boolean) ?: true
-                }
-                .toList()
-            val insertProps = insertPropDeclarations.map { it.simpleName() }
-
-            // Get DB-generated columns for RETURNING clause
-            val returningColumns = findInsertReturningProps(allProps)
-                .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName.asString()}") }
-                .joinToString { it.simpleName().toSnakeCase() }
-
-            val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
-            file += "\n"
-            file += "/**\n"
-            file += " * Creates an INSERT statement for this [$className] entity.\n"
-            file += " *\n"
-            file += " * Generates a prepared SQL INSERT statement with placeholders for the entity's\n"
-            file += " * insertable properties. Properties marked with `@Id(insert = false)` or\n"
-            file += " * `@Column(insert = false)` are excluded from the insert.\n"
-            file += " *\n"
-            file += " * The statement includes a RETURNING clause (or equivalent for MySQL) to fetch\n"
-            file += " * the inserted row with any database-generated values.\n"
-            file += " *\n"
-            file += " * @return A prepared [Statement] with bound values ready for execution\n"
-            file += " */\n"
-            file += "fun ${clazz.qualifiedName()}.insert(): Statement {\n"
-            file += "    // language=SQL\n"
-            file += if (this@Visitor.queryDialect == Dialect.MySQL) {
-                // For MySQL, use LAST_INSERT_ID() since RETURNING is not supported
-                val idProp = allProps.find {
-                    it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
-                } ?: error("MySQL dialect requires an @Id property for insert() on table: $table")
-                val idCol = idProp.simpleName().toSnakeCase()
-                "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }}) values (${insertProps.joinToString { "?" }}); select $returningColumns from $table where $idCol = coalesce(nullif(last_insert_id(), 0), ?);\"\n"
-            } else {
-                "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }}) values (${insertProps.joinToString { "?" }}) returning $returningColumns;\"\n"
-            }
-            file += "    val statement = Statement.create(sql)\n"
-            insertPropDeclarations.forEachIndexed { index, prop ->
-                val bindExpr = generateBindExpression(prop)
-                file += "    statement.bind($index, $bindExpr)\n"
-            }
-            if (this@Visitor.queryDialect == Dialect.MySQL) {
-                // idProp is guaranteed to exist for MySQL (error thrown above if missing)
-                val idProp = allProps.first {
-                    it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
-                }
-                val idBindExpr = generateBindExpression(idProp)
-                file += "    statement.bind(${insertProps.size}, $idBindExpr)\n"
-            }
-            file += "    return statement\n"
-            file += "}\n"
+        // Getting the @Table annotation object.
+        val table: KSAnnotation = classDeclaration.annotations.first {
+            it.qualifiedName() == TypeNames.TABLE_ANNOTATION
         }
 
-        /**
-         * Generates a function to merge INSERT result (DB-generated columns) back into the entity.
-         *
-         * @param clazz The class declaration for which to generate the merge function.
-         * @param props The sequence of properties from the class.
-         */
-        private fun applyInsertResult(
-            clazz: KSClassDeclaration,
-            props: Sequence<KSPropertyDeclaration>
-        ) {
-            val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
-            val returningProps = findInsertReturningProps(props.toList())
-                .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName.asString()}") }
-            emitApplyResultFunction(
-                className,
-                returningProps,
-                "applyInsertResult",
-                "INSERT result (DB-generated columns)"
-            )
-        }
+        // Getting the 'name' argument object from the @Table.
+        val nameArgument: KSValueArgument = table.arguments
+            .first { arg -> arg.name?.asString() == "name" }
 
-        /**
-         * Generates an SQL update statement for the given class declaration and properties.
-         *
-         * @param clazz The class declaration from which to generate the update statement.
-         * @param table The name of the table to be updated.
-         * @param props The sequence of properties from the class, which will be filtered to include
-         *                   only those that should be updated.
-         */
-        private fun update(
-            table: String,
-            clazz: KSClassDeclaration,
-            props: Sequence<KSPropertyDeclaration>
-        ) {
-            // Materialize all properties to avoid multiple sequence traversals
-            val allProps = props.toList()
+        // Getting the value of the 'name' argument.
+        val tableName = nameArgument.value as String
 
-            val id: KSPropertyDeclaration = allProps.find {
-                it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
-            } ?: run {
-                logger.warn("Skipping $table.update() because no property found annotated with @Id.")
-                return
+        // Getting the list of member properties of the annotated class.
+        val properties: Sequence<KSPropertyDeclaration> = classDeclaration
+            .getAllProperties()
+            .filter { it.validate() }
+
+        // Make queries.
+        emitInsert(file, tableName, classDeclaration, properties)
+        emitApplyInsertResult(file, classDeclaration, properties)
+        emitUpdate(file, tableName, classDeclaration, properties)
+        emitApplyUpdateResult(file, classDeclaration, properties)
+        emitDelete(file, tableName, classDeclaration, properties)
+
+        // Generate RowMapper.
+        emitRowMapper(file, classDeclaration, properties)
+    }
+
+    /**
+     * Generates an SQL insert statement for the provided class declaration and properties.
+     *
+     * @param file The output stream to write the generated code.
+     * @param table The name of the table into which the data will be inserted.
+     * @param clazz The class declaration from which to generate the insert statement.
+     * @param props The sequence of properties from the class, which will be filtered
+     *              to include only those that should be inserted.
+     */
+    private fun emitInsert(
+        file: OutputStream,
+        table: String,
+        clazz: KSClassDeclaration,
+        props: Sequence<KSPropertyDeclaration>
+    ) {
+        // Materialize all properties to avoid multiple sequence traversals
+        val allProps = props.toList()
+
+        // Find insertable properties (keep full declarations for @Converter support).
+        val insertPropDeclarations = allProps.asSequence()
+            .filter {
+                val id =
+                    it.annotations.find { a ->
+                        a.qualifiedName() == TypeNames.ID_ANNOTATION
+                    } ?: return@filter true
+
+                val insert: KSValueArgument? = id.arguments.find { a ->
+                    a.name?.asString() == INSERT_PROPERTY_NAME
+                }
+
+                (insert?.value as? Boolean) ?: false
             }
-
-            // Find updatable properties (keep full declarations for @Converter support).
-            val updatePropDeclarations = allProps.asSequence()
-                // Exclude @Id from the update query,
-                .filter { it.simpleName() != id.simpleName() }
-                .filter {
-                    val column = it.annotations.find { a ->
+            .filter {
+                val column =
+                    it.annotations.find { a ->
                         a.qualifiedName() == TypeNames.COLUMN_ANNOTATION
                     } ?: return@filter true
 
-                    val update = column.arguments.find { a ->
-                        a.name?.asString() == UPDATE_PROPERTY_NAME
-                    }
-
-                    (update?.value as? Boolean) ?: true
+                val insert: KSValueArgument? = column.arguments.find { a ->
+                    a.name?.asString() == INSERT_PROPERTY_NAME
                 }
-                .toList()
-            val updateProps = updatePropDeclarations.map { it.simpleName() }
 
-            // Get DB-generated columns for RETURNING clause
-            val returningColumns = findUpdateReturningProps(allProps)
-                .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName.asString()}") }
-                .joinToString { it.simpleName().toSnakeCase() }
-
-            val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
-            val idName = id.simpleName.getShortName()
-            file += "\n"
-            file += "/**\n"
-            file += " * Creates an UPDATE statement for this [$className] entity.\n"
-            file += " *\n"
-            file += " * Generates a prepared SQL UPDATE statement with placeholders for the entity's\n"
-            file += " * updatable properties. The entity is identified by its @Id property `$idName`.\n"
-            file += " * Properties marked with `@Column(update = false)` are excluded from the update.\n"
-            file += " *\n"
-            file += " * The statement includes a RETURNING clause (or equivalent for MySQL) to fetch\n"
-            file += " * the updated row with any modified values.\n"
-            file += " *\n"
-            file += " * @return A prepared [Statement] with bound values ready for execution\n"
-            file += " */\n"
-            file += "fun ${clazz.qualifiedName()}.update(): Statement {\n"
-            file += "    // language=SQL\n"
-            file += if (this@Visitor.queryDialect == Dialect.MySQL) {
-                "    val sql = \"update $table set ${updateProps.joinToString { p -> "${p.toSnakeCase()} = ?" }} where ${
-                    id.simpleName().toSnakeCase()
-                } = ?; select $returningColumns from $table where ${id.simpleName().toSnakeCase()} = ?;\"\n"
-            } else {
-                "    val sql = \"update $table set ${updateProps.joinToString { p -> "${p.toSnakeCase()} = ?" }} where ${
-                    id.simpleName().toSnakeCase()
-                } = ? returning $returningColumns;\"\n"
+                (insert?.value as? Boolean) ?: true
             }
+            .toList()
+        val insertProps = insertPropDeclarations.map { it.simpleName() }
 
-            file += "    val statement = Statement.create(sql)\n"
-            updatePropDeclarations.forEachIndexed { index, prop ->
-                val bindExpr = generateBindExpression(prop)
-                file += "    statement.bind($index, $bindExpr)\n"
-            }
-            val idBindExpr = generateBindExpression(id)
-            file += "    statement.bind(${updateProps.size}, $idBindExpr)\n"
-            if (this@Visitor.queryDialect == Dialect.MySQL) {
-                file += "    statement.bind(${updateProps.size + 1}, $idBindExpr)\n"
-            }
-            file += "    return statement\n"
-            file += "}\n"
-        }
+        // Get DB-generated columns for RETURNING clause
+        val returningColumns = findInsertReturningProps(allProps)
+            .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName.asString()}") }
+            .joinToString { it.simpleName().toSnakeCase() }
 
-        /**
-         * Generates a function to merge UPDATE result (DB-generated columns) back into the entity.
-         *
-         * @param clazz The class declaration for which to generate the merge function.
-         * @param props The sequence of properties from the class.
-         */
-        private fun applyUpdateResult(
-            clazz: KSClassDeclaration,
-            props: Sequence<KSPropertyDeclaration>
-        ) {
-            val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
-            val returningProps = findUpdateReturningProps(props.toList())
-                .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName.asString()}") }
-            emitApplyResultFunction(
-                className,
-                returningProps,
-                "applyUpdateResult",
-                "UPDATE result (DB-generated columns)"
-            )
-        }
-
-        /**
-         * Generates an SQL delete statement for the provided class declaration based on its properties.
-         *
-         * @param clazz The class declaration from which to generate the delete statement.
-         * @param table The name of the table to be deleted from.
-         * @param props The sequence of properties from the class, used to identify the primary key.
-         */
-        private fun delete(
-            table: String,
-            clazz: KSClassDeclaration,
-            props: Sequence<KSPropertyDeclaration>
-        ) {
-            val id: KSPropertyDeclaration = props.find {
+        val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
+        file += "\n"
+        file += "/**\n"
+        file += " * Creates an INSERT statement for this [$className] entity.\n"
+        file += " *\n"
+        file += " * Generates a prepared SQL INSERT statement with placeholders for the entity's\n"
+        file += " * insertable properties. Properties marked with `@Id(insert = false)` or\n"
+        file += " * `@Column(insert = false)` are excluded from the insert.\n"
+        file += " *\n"
+        file += " * The statement includes a RETURNING clause (or equivalent for MySQL) to fetch\n"
+        file += " * the inserted row with any database-generated values.\n"
+        file += " *\n"
+        file += " * @return A prepared [Statement] with bound values ready for execution\n"
+        file += " */\n"
+        file += "fun ${clazz.qualifiedName()}.insert(): Statement {\n"
+        file += "    // language=SQL\n"
+        file += if (queryDialect == Dialect.MySQL) {
+            // For MySQL, use LAST_INSERT_ID() since RETURNING is not supported
+            val idProp = allProps.find {
                 it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
-            } ?: run {
-                logger.warn("Skipping $table.delete() because no property found annotated with @Id.")
-                return
+            } ?: error("MySQL dialect requires an @Id property for insert() on table: $table")
+            val idCol = idProp.simpleName().toSnakeCase()
+            "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }}) values (${insertProps.joinToString { "?" }}); select $returningColumns from $table where $idCol = coalesce(nullif(last_insert_id(), 0), ?);\"\n"
+        } else {
+            "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }}) values (${insertProps.joinToString { "?" }}) returning $returningColumns;\"\n"
+        }
+        file += "    val statement = Statement.create(sql)\n"
+        insertPropDeclarations.forEachIndexed { index, prop ->
+            val bindExpr = generateBindExpression(prop)
+            file += "    statement.bind($index, $bindExpr)\n"
+        }
+        if (queryDialect == Dialect.MySQL) {
+            // idProp is guaranteed to exist for MySQL (error thrown above if missing)
+            val idProp = allProps.first {
+                it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
             }
+            val idBindExpr = generateBindExpression(idProp)
+            file += "    statement.bind(${insertProps.size}, $idBindExpr)\n"
+        }
+        file += "    return statement\n"
+        file += "}\n"
+    }
 
-            val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
-            val idName = id.simpleName.getShortName()
-            file += "\n"
-            file += "/**\n"
-            file += " * Creates a DELETE statement for this [$className] entity.\n"
-            file += " *\n"
-            file += " * Generates a prepared SQL DELETE statement that removes the entity\n"
-            file += " * from the database. The entity is identified by its @Id property `$idName`.\n"
-            file += " *\n"
-            file += " * @return A prepared [Statement] with bound values ready for execution\n"
-            file += " */\n"
-            file += "fun ${clazz.qualifiedName()}.delete(): Statement {\n"
-            file += "    // language=SQL\n"
-            file += "    val sql = \"delete from $table where ${id.simpleName().toSnakeCase()} = ?;\"\n"
-            file += "    val statement = Statement.create(sql)\n"
-            file += "    statement.bind(0, ${id.simpleName()})\n"
-            file += "    return statement\n"
-            file += "}\n"
+    /**
+     * Generates a function to merge INSERT result (DB-generated columns) back into the entity.
+     *
+     * @param file The output stream to write the generated code.
+     * @param clazz The class declaration for which to generate the merge function.
+     * @param props The sequence of properties from the class.
+     */
+    private fun emitApplyInsertResult(
+        file: OutputStream,
+        clazz: KSClassDeclaration,
+        props: Sequence<KSPropertyDeclaration>
+    ) {
+        val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
+        val returningProps = findInsertReturningProps(props.toList())
+            .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName.asString()}") }
+        emitApplyResultFunction(
+            file,
+            className,
+            returningProps,
+            "applyInsertResult",
+            "INSERT result (DB-generated columns)"
+        )
+    }
+
+    /**
+     * Generates an SQL update statement for the given class declaration and properties.
+     *
+     * @param file The output stream to write the generated code.
+     * @param table The name of the table to be updated.
+     * @param clazz The class declaration from which to generate the update statement.
+     * @param props The sequence of properties from the class, which will be filtered to include
+     *              only those that should be updated.
+     */
+    private fun emitUpdate(
+        file: OutputStream,
+        table: String,
+        clazz: KSClassDeclaration,
+        props: Sequence<KSPropertyDeclaration>
+    ) {
+        // Materialize all properties to avoid multiple sequence traversals
+        val allProps = props.toList()
+
+        val id: KSPropertyDeclaration = allProps.find {
+            it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
+        } ?: run {
+            logger.warn("Skipping $table.update() because no property found annotated with @Id.")
+            return
         }
 
-        /**
-         * Generates a RowMapper implementation for the given class declaration.
-         *
-         * @param clazz The class declaration for which to generate the RowMapper.
-         * @param props The sequence of properties from the class.
-         */
-        private fun rowMapper(
-            clazz: KSClassDeclaration,
-            props: Sequence<KSPropertyDeclaration>
-        ) {
-            val className = clazz.simpleName.asString()
-            val qualifiedName = clazz.qualifiedName()
-            val mapperName = "${className}AutoRowMapper"
+        // Find updatable properties (keep full declarations for @Converter support).
+        val updatePropDeclarations = allProps.asSequence()
+            // Exclude @Id from the update query,
+            .filter { it.simpleName() != id.simpleName() }
+            .filter {
+                val column = it.annotations.find { a ->
+                    a.qualifiedName() == TypeNames.COLUMN_ANNOTATION
+                } ?: return@filter true
 
-            file += "\n"
-            file += "/**\n"
-            file += " * Auto-generated RowMapper for [$qualifiedName].\n"
-            file += " *\n"
-            file += " * Maps database rows to instances of [$qualifiedName] using builtin decoders\n"
-            file += " * for standard types and the provided ValueEncoderRegistry for custom types.\n"
-            file += " */\n"
-            file += "object $mapperName : RowMapper<$qualifiedName> {\n"
-            file += "    override fun map(row: ResultSet.Row, converters: ValueEncoderRegistry): $qualifiedName {\n"
+                val update = column.arguments.find { a ->
+                    a.name?.asString() == UPDATE_PROPERTY_NAME
+                }
 
-            // Generate property mappings
-            val properties = props.toList()
-            properties.forEach { prop ->
-                val propName = prop.simpleName()
-                val columnName = propName.toSnakeCase()
-                val propType = prop.type.resolve()
-                val isNullable = propType.isMarkedNullable
-
-                file += "        val $propName = row.get(\"$columnName\")"
-                file += generateDecoder(prop, propType, isNullable)
-                file += "\n"
+                (update?.value as? Boolean) ?: true
             }
+            .toList()
+        val updateProps = updatePropDeclarations.map { it.simpleName() }
 
-            // Generate the return statement
-            file += "        return $qualifiedName(\n"
-            properties.forEachIndexed { index, prop ->
-                val propName = prop.simpleName()
-                val comma = if (index < properties.size - 1) "," else ""
-                file += "            $propName = $propName$comma\n"
-            }
-            file += "        )\n"
-            file += "    }\n"
-            file += "}\n"
+        // Get DB-generated columns for RETURNING clause
+        val returningColumns = findUpdateReturningProps(allProps)
+            .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName.asString()}") }
+            .joinToString { it.simpleName().toSnakeCase() }
+
+        val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
+        val idName = id.simpleName.getShortName()
+        file += "\n"
+        file += "/**\n"
+        file += " * Creates an UPDATE statement for this [$className] entity.\n"
+        file += " *\n"
+        file += " * Generates a prepared SQL UPDATE statement with placeholders for the entity's\n"
+        file += " * updatable properties. The entity is identified by its @Id property `$idName`.\n"
+        file += " * Properties marked with `@Column(update = false)` are excluded from the update.\n"
+        file += " *\n"
+        file += " * The statement includes a RETURNING clause (or equivalent for MySQL) to fetch\n"
+        file += " * the updated row with any modified values.\n"
+        file += " *\n"
+        file += " * @return A prepared [Statement] with bound values ready for execution\n"
+        file += " */\n"
+        file += "fun ${clazz.qualifiedName()}.update(): Statement {\n"
+        file += "    // language=SQL\n"
+        file += if (queryDialect == Dialect.MySQL) {
+            "    val sql = \"update $table set ${updateProps.joinToString { p -> "${p.toSnakeCase()} = ?" }} where ${
+                id.simpleName().toSnakeCase()
+            } = ?; select $returningColumns from $table where ${id.simpleName().toSnakeCase()} = ?;\"\n"
+        } else {
+            "    val sql = \"update $table set ${updateProps.joinToString { p -> "${p.toSnakeCase()} = ?" }} where ${
+                id.simpleName().toSnakeCase()
+            } = ? returning $returningColumns;\"\n"
         }
 
-        /**
-         * Generates the decoder expression for a property based on its type.
-         *
-         * @param prop The property declaration.
-         * @param propType The resolved type of the property.
-         * @param isNullable Whether the type is nullable.
-         * @return The decoder expression as a string (e.g., ".asString()", ".asIntOrNull()").
-         */
-        private fun generateDecoder(
-            prop: KSPropertyDeclaration,
-            propType: KSType,
-            isNullable: Boolean
-        ): String {
-            val typeQualifiedName = propType.declaration.qualifiedName?.asString()
-                ?: error("No type name found for $propType")
+        file += "    val statement = Statement.create(sql)\n"
+        updatePropDeclarations.forEachIndexed { index, prop ->
+            val bindExpr = generateBindExpression(prop)
+            file += "    statement.bind($index, $bindExpr)\n"
+        }
+        val idBindExpr = generateBindExpression(id)
+        file += "    statement.bind(${updateProps.size}, $idBindExpr)\n"
+        if (queryDialect == Dialect.MySQL) {
+            file += "    statement.bind(${updateProps.size + 1}, $idBindExpr)\n"
+        }
+        file += "    return statement\n"
+        file += "}\n"
+    }
 
-            val nullSuffix = if (isNullable) "OrNull" else ""
+    /**
+     * Generates a function to merge UPDATE result (DB-generated columns) back into the entity.
+     *
+     * @param file The output stream to write the generated code.
+     * @param clazz The class declaration for which to generate the merge function.
+     * @param props The sequence of properties from the class.
+     */
+    private fun emitApplyUpdateResult(
+        file: OutputStream,
+        clazz: KSClassDeclaration,
+        props: Sequence<KSPropertyDeclaration>
+    ) {
+        val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
+        val returningProps = findUpdateReturningProps(props.toList())
+            .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName.asString()}") }
+        emitApplyResultFunction(
+            file,
+            className,
+            returningProps,
+            "applyUpdateResult",
+            "UPDATE result (DB-generated columns)"
+        )
+    }
 
-            // Check for @Converter annotation first - uses 'object' directly (no instantiation)
-            val converterAnnotation = prop.getConverterAnnotation()
-            if (converterAnnotation != null) {
-                validateConverterTypeCompatibility(prop, converterAnnotation)
-                val encoderClassName = converterAnnotation.getEncoderClassName()
-                    ?: error("Cannot get encoder class name from @Converter on property ${prop.simpleName()}")
-                return if (isNullable) {
-                    ".let { col -> if (col.isNull()) null else $encoderClassName.decode(col) }"
-                } else {
-                    ".let { col -> $encoderClassName.decode(col) }"
-                }
-            }
+    /**
+     * Generates an SQL delete statement for the provided class declaration based on its properties.
+     *
+     * @param file The output stream to write the generated code.
+     * @param table The name of the table to be deleted from.
+     * @param clazz The class declaration from which to generate the delete statement.
+     * @param props The sequence of properties from the class, used to identify the primary key.
+     */
+    private fun emitDelete(
+        file: OutputStream,
+        table: String,
+        clazz: KSClassDeclaration,
+        props: Sequence<KSPropertyDeclaration>
+    ) {
+        val id: KSPropertyDeclaration = props.find {
+            it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
+        } ?: run {
+            logger.warn("Skipping $table.delete() because no property found annotated with @Id.")
+            return
+        }
 
-            // Check for builtin types
-            val builtinDecoder = builtInDecoder(typeQualifiedName, nullSuffix)
-            if (builtinDecoder != null) {
-                return ".$builtinDecoder"
-            }
+        val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
+        val idName = id.simpleName.getShortName()
+        file += "\n"
+        file += "/**\n"
+        file += " * Creates a DELETE statement for this [$className] entity.\n"
+        file += " *\n"
+        file += " * Generates a prepared SQL DELETE statement that removes the entity\n"
+        file += " * from the database. The entity is identified by its @Id property `$idName`.\n"
+        file += " *\n"
+        file += " * @return A prepared [Statement] with bound values ready for execution\n"
+        file += " */\n"
+        file += "fun ${clazz.qualifiedName()}.delete(): Statement {\n"
+        file += "    // language=SQL\n"
+        file += "    val sql = \"delete from $table where ${id.simpleName().toSnakeCase()} = ?;\"\n"
+        file += "    val statement = Statement.create(sql)\n"
+        file += "    statement.bind(0, ${id.simpleName()})\n"
+        file += "    return statement\n"
+        file += "}\n"
+    }
 
-            // Check for PostgreSQL-specific array types
-            if (this@Visitor.rowMapperDialect == Dialect.PostgreSQL) {
-                val postgresArrayDecoder = postgresArrayDecoder(typeQualifiedName, nullSuffix)
-                if (postgresArrayDecoder != null) {
-                    return ".$postgresArrayDecoder"
-                }
-            }
+    /**
+     * Generates a RowMapper implementation for the given class declaration.
+     *
+     * @param file The output stream to write the generated code.
+     * @param clazz The class declaration for which to generate the RowMapper.
+     * @param props The sequence of properties from the class.
+     */
+    private fun emitRowMapper(
+        file: OutputStream,
+        clazz: KSClassDeclaration,
+        props: Sequence<KSPropertyDeclaration>
+    ) {
+        val className = clazz.simpleName.asString()
+        val qualifiedName = clazz.qualifiedName()
+        val mapperName = "${className}AutoRowMapper"
 
-            // Check if it's an enum
-            val declaration = propType.declaration
-            if (declaration is KSClassDeclaration && declaration.classKind == ClassKind.ENUM_CLASS) {
-                return ".asEnum$nullSuffix<$typeQualifiedName>()"
-            }
+        file += "\n"
+        file += "/**\n"
+        file += " * Auto-generated RowMapper for [$qualifiedName].\n"
+        file += " *\n"
+        file += " * Maps database rows to instances of [$qualifiedName] using builtin decoders\n"
+        file += " * for standard types and the provided ValueEncoderRegistry for custom types.\n"
+        file += " */\n"
+        file += "object $mapperName : RowMapper<$qualifiedName> {\n"
+        file += "    override fun map(row: ResultSet.Row, converters: ValueEncoderRegistry): $qualifiedName {\n"
 
-            // Use custom decoder from registry
+        // Generate property mappings
+        val properties = props.toList()
+        properties.forEach { prop ->
             val propName = prop.simpleName()
-            return if (isNullable) {
-                ".let { col -> if (col.isNull()) null else converters.get<$typeQualifiedName>()?.decode(col) ?: throw SQLError(SQLError.Code.MissingValueConverter, \"No decoder found for type $typeQualifiedName (property: $propName)\") }"
-            } else {
-                ".let { col -> converters.get<$typeQualifiedName>()?.decode(col) ?: throw SQLError(SQLError.Code.MissingValueConverter, \"No decoder found for type $typeQualifiedName (property: $propName)\") }"
-            }
-        }
+            val columnName = propName.toSnakeCase()
+            val propType = prop.type.resolve()
+            val isNullable = propType.isMarkedNullable
 
-        /**
-         * Finds properties that INSERT should return (DB-generated columns).
-         * These are columns with @Id(insert = false) or @Column(insert = false).
-         *
-         * @param allProps All properties of the entity.
-         * @return List of properties that should be in the RETURNING clause for INSERT.
-         */
-        private fun findInsertReturningProps(allProps: List<KSPropertyDeclaration>): List<KSPropertyDeclaration> =
-            allProps.asSequence()
-                .filter { prop ->
-                    val id = prop.annotations.find { a ->
-                        a.qualifiedName() == TypeNames.ID_ANNOTATION
-                    }
-                    if (id != null) {
-                        // @Id(insert = false) means DB generates the ID
-                        val insertArg = id.arguments.find { a -> a.name?.asString() == INSERT_PROPERTY_NAME }
-                        return@filter (insertArg?.value as? Boolean) != true
-                    }
-
-                    val column = prop.annotations.find { a ->
-                        a.qualifiedName() == TypeNames.COLUMN_ANNOTATION
-                    }
-                    if (column != null) {
-                        // @Column(insert = false) means DB generates/defaults the value
-                        val insertArg = column.arguments.find { a -> a.name?.asString() == INSERT_PROPERTY_NAME }
-                        return@filter (insertArg?.value as? Boolean) == false
-                    }
-
-                    false
-                }
-                .toList()
-                .ifEmpty {
-                    // Fallback: if no generated columns found, use @Id only
-                    allProps.filter { prop ->
-                        prop.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
-                    }
-                }
-
-        /**
-         * Finds properties that UPDATE should return (DB-generated columns).
-         * These are @Id properties and columns with @Column(update = false).
-         *
-         * @param allProps All properties of the entity.
-         * @return List of properties that should be in the RETURNING clause for UPDATE.
-         */
-        private fun findUpdateReturningProps(allProps: List<KSPropertyDeclaration>): List<KSPropertyDeclaration> =
-            allProps.asSequence()
-                .filter { prop ->
-                    // Always include @Id
-                    if (prop.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }) {
-                        return@filter true
-                    }
-
-                    val column = prop.annotations.find { a ->
-                        a.qualifiedName() == TypeNames.COLUMN_ANNOTATION
-                    }
-                    if (column != null) {
-                        // @Column(update = false) means DB auto-updates this value
-                        val updateArg = column.arguments.find { a -> a.name?.asString() == UPDATE_PROPERTY_NAME }
-                        return@filter (updateArg?.value as? Boolean) == false
-                    }
-
-                    false
-                }
-                .toList()
-
-        /**
-         * Generates the copy() call body for applying result row values to an entity.
-         *
-         * @param className The fully qualified class name.
-         * @param returningProps The properties to include in the copy.
-         * @param functionName The name of the generated function.
-         * @param docDescription Description for the KDoc.
-         */
-        private fun emitApplyResultFunction(
-            className: String,
-            returningProps: List<KSPropertyDeclaration>,
-            functionName: String,
-            docDescription: String
-        ) {
-            if (returningProps.isEmpty()) return
-
+            file += "        val $propName = row.get(\"$columnName\")"
+            file += generateDecoder(prop, propType, isNullable)
             file += "\n"
-            file += "/**\n"
-            file += " * Merges the $docDescription back into this [$className] entity.\n"
-            file += " *\n"
-            file += " * After executing ${if (functionName.contains("Insert")) "an INSERT" else "an UPDATE"} statement, use this function to update the entity\n"
-            file += " * with database-generated values (e.g., ${if (functionName.contains("Insert")) "auto-increment ID, default timestamps" else "auto-updated timestamps, version numbers"}).\n"
-            file += " *\n"
-            file += " * @param row The result row from the statement execution\n"
-            file += " * @param converters The registry containing custom type decoders\n"
-            file += " * @return A new instance with the generated values merged in\n"
-            file += " */\n"
-            file += "fun $className.$functionName(row: ResultSet.Row, converters: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY): $className = copy(\n"
-            returningProps.forEachIndexed { index, prop ->
-                val propName = prop.simpleName()
-                val columnName = propName.toSnakeCase()
-                val propType = prop.type.resolve()
-                val isNullable = propType.isMarkedNullable
-                val decoder = generateDecoder(prop, propType, isNullable)
-                val comma = if (index < returningProps.size - 1) "," else ""
-                file += "    $propName = row.get(\"$columnName\")$decoder$comma\n"
-            }
-            file += ")\n"
         }
+
+        // Generate the return statement
+        file += "        return $qualifiedName(\n"
+        properties.forEachIndexed { index, prop ->
+            val propName = prop.simpleName()
+            val comma = if (index < properties.size - 1) "," else ""
+            file += "            $propName = $propName$comma\n"
+        }
+        file += "        )\n"
+        file += "    }\n"
+        file += "}\n"
+    }
+
+    /**
+     * Generates the decoder expression for a property based on its type.
+     *
+     * @param prop The property declaration.
+     * @param propType The resolved type of the property.
+     * @param isNullable Whether the type is nullable.
+     * @return The decoder expression as a string (e.g., ".asString()", ".asIntOrNull()").
+     */
+    private fun generateDecoder(
+        prop: KSPropertyDeclaration,
+        propType: KSType,
+        isNullable: Boolean
+    ): String {
+        val typeQualifiedName = propType.declaration.qualifiedName?.asString()
+            ?: error("No type name found for $propType")
+
+        val nullSuffix = if (isNullable) "OrNull" else ""
+
+        // Check for @Converter annotation first - uses 'object' directly (no instantiation)
+        val converterAnnotation = prop.getConverterAnnotation()
+        if (converterAnnotation != null) {
+            validateConverterTypeCompatibility(prop, converterAnnotation)
+            val encoderClassName = converterAnnotation.getEncoderClassName()
+                ?: error("Cannot get encoder class name from @Converter on property ${prop.simpleName()}")
+            return if (isNullable) {
+                ".let { col -> if (col.isNull()) null else $encoderClassName.decode(col) }"
+            } else {
+                ".let { col -> $encoderClassName.decode(col) }"
+            }
+        }
+
+        // Check for builtin types
+        val builtinDecoder = builtInDecoder(typeQualifiedName, nullSuffix)
+        if (builtinDecoder != null) {
+            return ".$builtinDecoder"
+        }
+
+        // Check for PostgreSQL-specific array types
+        if (rowMapperDialect == Dialect.PostgreSQL) {
+            val postgresArrayDecoder = postgresArrayDecoder(typeQualifiedName, nullSuffix)
+            if (postgresArrayDecoder != null) {
+                return ".$postgresArrayDecoder"
+            }
+        }
+
+        // Check if it's an enum
+        val declaration = propType.declaration
+        if (declaration is KSClassDeclaration && declaration.classKind == ClassKind.ENUM_CLASS) {
+            return ".asEnum$nullSuffix<$typeQualifiedName>()"
+        }
+
+        // Use custom decoder from registry
+        val propName = prop.simpleName()
+        return if (isNullable) {
+            ".let { col -> if (col.isNull()) null else converters.get<$typeQualifiedName>()?.decode(col) ?: throw SQLError(SQLError.Code.MissingValueConverter, \"No decoder found for type $typeQualifiedName (property: $propName)\") }"
+        } else {
+            ".let { col -> converters.get<$typeQualifiedName>()?.decode(col) ?: throw SQLError(SQLError.Code.MissingValueConverter, \"No decoder found for type $typeQualifiedName (property: $propName)\") }"
+        }
+    }
+
+    /**
+     * Finds properties that INSERT should return (DB-generated columns).
+     * These are columns with @Id(insert = false) or @Column(insert = false).
+     *
+     * @param allProps All properties of the entity.
+     * @return List of properties that should be in the RETURNING clause for INSERT.
+     */
+    private fun findInsertReturningProps(allProps: List<KSPropertyDeclaration>): List<KSPropertyDeclaration> =
+        allProps.asSequence()
+            .filter { prop ->
+                val id = prop.annotations.find { a ->
+                    a.qualifiedName() == TypeNames.ID_ANNOTATION
+                }
+                if (id != null) {
+                    // @Id(insert = false) means DB generates the ID
+                    val insertArg = id.arguments.find { a -> a.name?.asString() == INSERT_PROPERTY_NAME }
+                    return@filter (insertArg?.value as? Boolean) != true
+                }
+
+                val column = prop.annotations.find { a ->
+                    a.qualifiedName() == TypeNames.COLUMN_ANNOTATION
+                }
+                if (column != null) {
+                    // @Column(insert = false) means DB generates/defaults the value
+                    val insertArg = column.arguments.find { a -> a.name?.asString() == INSERT_PROPERTY_NAME }
+                    return@filter (insertArg?.value as? Boolean) == false
+                }
+
+                false
+            }
+            .toList()
+            .ifEmpty {
+                // Fallback: if no generated columns found, use @Id only
+                allProps.filter { prop ->
+                    prop.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
+                }
+            }
+
+    /**
+     * Finds properties that UPDATE should return (DB-generated columns).
+     * These are @Id properties and columns with @Column(update = false).
+     *
+     * @param allProps All properties of the entity.
+     * @return List of properties that should be in the RETURNING clause for UPDATE.
+     */
+    private fun findUpdateReturningProps(allProps: List<KSPropertyDeclaration>): List<KSPropertyDeclaration> =
+        allProps.asSequence()
+            .filter { prop ->
+                // Always include @Id
+                if (prop.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }) {
+                    return@filter true
+                }
+
+                val column = prop.annotations.find { a ->
+                    a.qualifiedName() == TypeNames.COLUMN_ANNOTATION
+                }
+                if (column != null) {
+                    // @Column(update = false) means DB auto-updates this value
+                    val updateArg = column.arguments.find { a -> a.name?.asString() == UPDATE_PROPERTY_NAME }
+                    return@filter (updateArg?.value as? Boolean) == false
+                }
+
+                false
+            }
+            .toList()
+
+    /**
+     * Generates the copy() call body for applying result row values to an entity.
+     *
+     * @param file The output stream to write the generated code.
+     * @param className The fully qualified class name.
+     * @param returningProps The properties to include in the copy.
+     * @param functionName The name of the generated function.
+     * @param docDescription Description for the KDoc.
+     */
+    private fun emitApplyResultFunction(
+        file: OutputStream,
+        className: String,
+        returningProps: List<KSPropertyDeclaration>,
+        functionName: String,
+        docDescription: String
+    ) {
+        if (returningProps.isEmpty()) return
+
+        file += "\n"
+        file += "/**\n"
+        file += " * Merges the $docDescription back into this [$className] entity.\n"
+        file += " *\n"
+        file += " * After executing ${if (functionName.contains("Insert")) "an INSERT" else "an UPDATE"} statement, use this function to update the entity\n"
+        file += " * with database-generated values (e.g., ${if (functionName.contains("Insert")) "auto-increment ID, default timestamps" else "auto-updated timestamps, version numbers"}).\n"
+        file += " *\n"
+        file += " * @param row The result row from the statement execution\n"
+        file += " * @param converters The registry containing custom type decoders\n"
+        file += " * @return A new instance with the generated values merged in\n"
+        file += " */\n"
+        file += "fun $className.$functionName(row: ResultSet.Row, converters: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY): $className = copy(\n"
+        returningProps.forEachIndexed { index, prop ->
+            val propName = prop.simpleName()
+            val columnName = propName.toSnakeCase()
+            val propType = prop.type.resolve()
+            val isNullable = propType.isMarkedNullable
+            val decoder = generateDecoder(prop, propType, isNullable)
+            val comma = if (index < returningProps.size - 1) "," else ""
+            file += "    $propName = row.get(\"$columnName\")$decoder$comma\n"
+        }
+        file += ")\n"
     }
 
     operator fun OutputStream.plusAssign(str: String): Unit = write(str.toByteArray())

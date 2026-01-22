@@ -123,8 +123,7 @@ class RepositoryProcessor(
             file.close()
         }
 
-        val unableToProcess = repoSymbols.filterNot { it.validate() }.toList()
-        return unableToProcess
+        return repoSymbols.filterNot { it.validate() }.toList()
     }
 
     /**
