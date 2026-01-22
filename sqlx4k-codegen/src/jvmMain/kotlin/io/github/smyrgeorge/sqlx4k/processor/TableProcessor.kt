@@ -175,12 +175,12 @@ class TableProcessor(
             .toList()
         val insertProps = insertPropDeclarations.map { it.simpleName() }
 
+        val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
         // Get DB-generated columns for RETURNING clause
         val returningColumns = findInsertReturningProps(allProps)
-            .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName.asString()}") }
+            .ifEmpty { error("RETURNING  SQL clause cannot be empty for entity (check that a property marked with @Id existis): $className") }
             .joinToString { it.simpleName().toSnakeCase() }
 
-        val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
         file += "\n"
         file += "/**\n"
         file += " * Creates an INSERT statement for this [$className] entity.\n"
@@ -237,7 +237,7 @@ class TableProcessor(
     ) {
         val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
         val returningProps = findInsertReturningProps(props.toList())
-            .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName.asString()}") }
+            .ifEmpty { error("RETURNING  SQL clause cannot be empty for entity (check that a property marked with @Id existis): $className") }
         emitApplyResultFunction(
             file,
             className,
@@ -290,12 +290,12 @@ class TableProcessor(
             .toList()
         val updateProps = updatePropDeclarations.map { it.simpleName() }
 
+        val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
         // Get DB-generated columns for RETURNING clause
         val returningColumns = findUpdateReturningProps(allProps)
-            .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName.asString()}") }
+            .ifEmpty { error("RETURNING  SQL clause cannot be empty for entity (check that a property marked with @Id existis): $className") }
             .joinToString { it.simpleName().toSnakeCase() }
 
-        val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
         val idName = id.simpleName.getShortName()
         file += "\n"
         file += "/**\n"
@@ -350,7 +350,7 @@ class TableProcessor(
     ) {
         val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
         val returningProps = findUpdateReturningProps(props.toList())
-            .ifEmpty { error("RETURNING clause cannot be empty for entity: ${clazz.simpleName.asString()}") }
+            .ifEmpty { error("RETURNING  SQL clause cannot be empty for entity (check that a property marked with @Id existis): $className") }
         emitApplyResultFunction(
             file,
             className,
