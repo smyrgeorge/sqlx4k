@@ -57,6 +57,7 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 - [Transactions and coroutine TransactionContext](#transactions) · [TransactionContext (coroutines)](#transactioncontext-coroutines)
 - [Code generation: CRUD and @Repository implementations](#code-generation-crud-and-repository-implementations)
     - [Auto-Generated RowMapper](#auto-generated-rowmapper)
+    - [Batch Operations](#batch-operations)
     - [Property-Level Converters](#property-level-converters-converter)
     - [Context-Parameters](#context-parameters)
     - [Repository hooks](#repository-hooks)
