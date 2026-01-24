@@ -599,16 +599,19 @@ class RepositoryProcessor(
                 if (hasAroundQueryHook) {
                     file += "        aroundQuery(\"$name\", statement) {\n"
                     file += "            $contextParamName.fetchAll(statement, $mapperTypeName)\n"
-                    file += "        }.map { list ->\n"
+                    file += "        }.fold(\n"
                 } else {
-                    file += "        $contextParamName.fetchAll(statement, $mapperTypeName).map { list ->\n"
+                    file += "        $contextParamName.fetchAll(statement, $mapperTypeName).fold(\n"
                 }
-                file += "            when (list.size) {\n"
-                file += "                0 -> null\n"
-                file += "                1 -> list.first()\n"
-                file += "                else -> return@run Result.failure(SQLError(SQLError.Code.MultipleRowsReturned, \"findOneBy query returned more than one row\"))\n"
-                file += "            }\n"
-                file += "        }\n"
+                file += "            onSuccess = { list ->\n"
+                file += "                when (list.size) {\n"
+                file += "                    0 -> Result.success(null)\n"
+                file += "                    1 -> Result.success(list.first())\n"
+                file += "                    else -> Result.failure(SQLError(SQLError.Code.MultipleRowsReturned, \"findOneBy query returned more than one row\"))\n"
+                file += "                }\n"
+                file += "            },\n"
+                file += "            onFailure = { Result.failure(it) }\n"
+                file += "        )\n"
             }
 
             Prefix.DELETE_ALL, Prefix.DELETE_BY, Prefix.EXECUTE -> {
@@ -625,14 +628,20 @@ class RepositoryProcessor(
                 if (hasAroundQueryHook) {
                     file += "        aroundQuery(\"$name\", statement) {\n"
                     file += "            $contextParamName.fetchAll(statement)\n"
-                    file += "        }.map { rs ->\n"
+                    file += "        }.fold(\n"
                 } else {
-                    file += "        $contextParamName.fetchAll(statement).map { rs ->\n"
+                    file += "        $contextParamName.fetchAll(statement).fold(\n"
                 }
-                file += "            val row = rs.firstOrNull()\n"
-                file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Count query returned no rows\"))\n"
-                file += "            row.get(0).asLong()\n"
-                file += "        }\n"
+                file += "            onSuccess = { rs ->\n"
+                file += "                val row = rs.firstOrNull()\n"
+                file += "                if (row == null) {\n"
+                file += "                    Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Count query returned no rows\"))\n"
+                file += "                } else {\n"
+                file += "                    Result.success(row.get(0).asLong())\n"
+                file += "                }\n"
+                file += "            },\n"
+                file += "            onFailure = { Result.failure(it) }\n"
+                file += "        )\n"
             }
         }
         file += "    }"
@@ -746,14 +755,20 @@ class RepositoryProcessor(
         if (hasAroundQueryHook) {
             file += "        aroundQuery(\"insert\", statement) {\n"
             file += "            context.fetchAll(statement)\n"
-            file += "        }.map { rows ->\n"
+            file += "        }.fold(\n"
         } else {
-            file += "        context.fetchAll(statement).map { rows ->\n"
+            file += "        context.fetchAll(statement).fold(\n"
         }
-        file += "            val row = rows.firstOrNull()\n"
-        file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Insert query returned no rows\"))\n"
-        file += "            $entityVar.applyInsertResult(row, context.encoders)\n"
-        file += "        }"
+        file += "            onSuccess = { rows ->\n"
+        file += "                val row = rows.firstOrNull()\n"
+        file += "                if (row == null) {\n"
+        file += "                    Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Insert query returned no rows\"))\n"
+        file += "                } else {\n"
+        file += "                    Result.success($entityVar.applyInsertResult(row, context.encoders))\n"
+        file += "                }\n"
+        file += "            },\n"
+        file += "            onFailure = { Result.failure(it) }\n"
+        file += "        )"
 
         val hasAfterInsertHook = isHookOverridden(repo, "afterInsertHook")
         if (hasAfterInsertHook) {
@@ -809,20 +824,30 @@ class RepositoryProcessor(
         if (hasAroundQueryHook) {
             file += "        aroundQuery(\"update\", statement) {\n"
             file += "            context.fetchAll(statement)\n"
-            file += "        }.map { rows ->\n"
+            file += "        }.fold(\n"
         } else {
-            file += "        context.fetchAll(statement).map { rows ->\n"
+            file += "        context.fetchAll(statement).fold(\n"
         }
-        file += "            val row = rows.firstOrNull()\n"
-        file += "                ?: return@run Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Update query returned no rows\"))\n"
-        file += "            val result = $updateEntityVar.applyUpdateResult(row, context.encoders)\n"
+        file += "            onSuccess = { rows ->\n"
+        file += "                val row = rows.firstOrNull()\n"
+        file += "                if (row == null) {\n"
+        file += "                    Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Update query returned no rows\"))\n"
+        file += "                } else {\n"
+        file += "                    val result = $updateEntityVar.applyUpdateResult(row, context.encoders)\n"
         // Add ID validation if @Id property exists
         if (updateIdName != null) {
-            file += "            if (result.$updateIdName != $updateEntityVar.$updateIdName)\n"
-            file += $$"                return@run Result.failure(SQLError(SQLError.Code.RowMismatch, \"Update returned different ID: expected ${$$updateEntityVar.$$updateIdName}, got ${result.$$updateIdName}\"))\n"
+            file += "                    if (result.$updateIdName != $updateEntityVar.$updateIdName) {\n"
+            file += $$"                        Result.failure(SQLError(SQLError.Code.RowMismatch, \"Update returned row with unexpected ID: updated entity had ID ${$$updateEntityVar.$$updateIdName}, but database returned ID ${result.$$updateIdName}\"))\n"
+            file += "                    } else {\n"
+            file += "                        Result.success(result)\n"
+            file += "                    }\n"
+        } else {
+            file += "                    Result.success(result)\n"
         }
-        file += "            result\n"
-        file += "        }"
+        file += "                }\n"
+        file += "            },\n"
+        file += "            onFailure = { Result.failure(it) }\n"
+        file += "        )"
 
         val hasAfterUpdateHook = isHookOverridden(repo, "afterUpdateHook")
         if (hasAfterUpdateHook) {
@@ -869,16 +894,19 @@ class RepositoryProcessor(
         if (hasAroundQueryHook) {
             file += "        aroundQuery(\"delete\", statement) {\n"
             file += "            context.execute(statement)\n"
-            file += "        }.map { rowsDeleted ->\n"
+            file += "        }.fold(\n"
         } else {
-            file += "        context.execute(statement).map { rowsDeleted ->\n"
+            file += "        context.execute(statement).fold(\n"
         }
-        file += "            when (rowsDeleted) {\n"
-        file += "                0L -> return@run Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Delete affected 0 rows - entity not found\"))\n"
-        file += "                1L -> kotlin.Unit\n"
-        file += $$"                else -> return@run Result.failure(SQLError(SQLError.Code.RowMismatch, \"Delete affected $rowsDeleted rows instead of 1\"))\n"
-        file += "            }\n"
-        file += "        }"
+        file += "            onSuccess = { rowsDeleted ->\n"
+        file += "                when (rowsDeleted) {\n"
+        file += "                    0L -> Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Delete affected 0 rows - entity not found\"))\n"
+        file += "                    1L -> Result.success(kotlin.Unit)\n"
+        file += $$"                    else -> Result.failure(SQLError(SQLError.Code.RowMismatch, \"Delete affected $rowsDeleted rows instead of 1\"))\n"
+        file += "                }\n"
+        file += "            },\n"
+        file += "            onFailure = { Result.failure(it) }\n"
+        file += "        )"
 
         val hasAfterDeleteHook = isHookOverridden(repo, "afterDeleteHook")
         if (hasAfterDeleteHook) {

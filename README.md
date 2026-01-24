@@ -501,6 +501,54 @@ Supported dialects:
 - `"mysql"` - Adjusts CRUD query generation for MySQL compatibility
 - Default (or `"generic"`) - Uses standard SQL with builtin decoders
 
+#### Batch Operations
+
+The code generator creates batch `INSERT` and `UPDATE` operations for efficiently processing multiple entities in a
+single database round-trip. These operations use multi-row SQL statements with `RETURNING` clauses to retrieve
+database-generated values.
+
+**Batch Insert:**
+
+```kotlin
+// Insert multiple entities at once
+val users = listOf(
+    User(name = "Alice", email = "alice@example.com"),
+    User(name = "Bob", email = "bob@example.com"),
+    User(name = "Charlie", email = "charlie@example.com")
+)
+
+// Returns all inserted entities with generated IDs
+val insertedUsers: Result<List<User>> = userRepository.batchInsert(db, users)
+```
+
+**Batch Update:**
+
+```kotlin
+// Update multiple entities at once
+val updatedUsers = users.map { it.copy(status = "active") }
+
+// Returns all updated entities with any DB-modified values
+val result: Result<List<User>> = userRepository.batchUpdate(db, updatedUsers)
+```
+
+**Database Support:**
+
+| Operation     | PostgreSQL | SQLite | MySQL | Generic |
+|---------------|:----------:|:------:|:-----:|:-------:|
+| `batchInsert` |     ✅      |   ✅    |   ❌   |    ✅    |
+| `batchUpdate` |     ✅      |   ❌    |   ❌   |    ✅    |
+
+- **PostgreSQL**: Full support for both batch operations using multi-row `INSERT ... RETURNING` and
+  `UPDATE ... FROM (VALUES ...) ... RETURNING` syntax.
+- **SQLite**: Supports batch insert using multi-row `INSERT ... RETURNING`. Batch update is not supported due to lack
+  of `UPDATE ... FROM VALUES` syntax.
+- **MySQL**: Neither batch operation is supported because MySQL lacks `RETURNING` clause support.
+- **Generic**: Generates code for both operations but actual support depends on the underlying database.
+
+> [!NOTE]
+> For unsupported operations, the generated repository methods throw `UnsupportedOperationException` at runtime.
+> The generated code includes documentation indicating which dialects support each operation.
+
 #### Property-Level Converters (@Converter)
 
 For custom types, you can use the `@Converter` annotation to specify a `ValueEncoder` directly on the property.

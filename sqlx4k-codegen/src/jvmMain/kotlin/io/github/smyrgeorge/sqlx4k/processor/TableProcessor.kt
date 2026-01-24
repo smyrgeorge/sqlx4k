@@ -345,7 +345,7 @@ class TableProcessor(
         file += "    val sql = \"delete from $table where ${id.simpleName().toSnakeCase()} = ?;\"\n"
         file += "    val statement = Statement.create(sql)\n"
         val idBindExpr = generateBindExpression(id)
-    file += "    statement.bind(0, $idBindExpr)\n"
+        file += "    statement.bind(0, $idBindExpr)\n"
         file += "    return statement\n"
         file += "}\n"
     }
