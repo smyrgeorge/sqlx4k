@@ -65,4 +65,36 @@ interface CrudRepository<T> : CrudRepositoryHooks<T> {
      *         or an error if the operation fails.
      */
     suspend fun save(context: QueryExecutor, entity: T): Result<T>
+
+    /**
+     * Inserts multiple entities into the data source using the specified driver context.
+     *
+     * This method performs an asynchronous batch insert operation and returns the result.
+     * If the operation is successful, the result will contain the list of inserted entities.
+     * In case of failure, the result contains the error details.
+     *
+     * Note: Batch insert is not supported for MySQL dialect (no multi-row INSERT with RETURNING).
+     *
+     * @param context The database driver context used to execute the batch insert operation.
+     * @param entities The collection of entities of type [T] to be inserted into the data source.
+     * @return A [Result] containing the list of inserted entities of type [T] if the operation is successful,
+     *         or an error if the operation fails.
+     */
+    suspend fun batchInsert(context: QueryExecutor, entities: Iterable<T>): Result<List<T>>
+
+    /**
+     * Updates multiple entities in the data source using the specified driver context.
+     *
+     * This method performs an asynchronous batch update operation and returns the result.
+     * If the operation is successful, the result will contain the list of updated entities.
+     * In case of failure, the result contains the error details.
+     *
+     * Note: Batch update is not supported for SQLite dialect (no FROM VALUES / ON DUPLICATE KEY support).
+     *
+     * @param context The database driver context used to execute the batch update operation.
+     * @param entities The collection of entities of type [T] to be updated in the data source.
+     * @return A [Result] containing the list of updated entities of type [T] if the operation is successful,
+     *         or an error if the operation fails.
+     */
+    suspend fun batchUpdate(context: QueryExecutor, entities: Iterable<T>): Result<List<T>>
 }

@@ -905,7 +905,7 @@ class TableProcessor(
         file += " * @param converters The registry containing custom type decoders\n"
         file += " * @return A new instance with the generated values merged in\n"
         file += " */\n"
-        file += "fun $className.$functionName(row: ResultSet.Row, converters: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY): $className = copy(\n"
+        file += "fun $className.$functionName(row: ResultSet.Row, converters: ValueEncoderRegistry): $className = copy(\n"
 
         returningProps.forEachIndexed { index, prop ->
             val propName = prop.simpleName()
@@ -952,7 +952,7 @@ class TableProcessor(
         file += " * @return A list of new instances with the generated values merged in\n"
         file += " * @throws IllegalArgumentException if the number of rows doesn't match the number of entities\n"
         file += " */\n"
-        file += "fun Iterable<$className>.$functionName(rows: List<ResultSet.Row>, converters: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY): List<$className> {\n"
+        file += "fun Iterable<$className>.$functionName(rows: List<ResultSet.Row>, converters: ValueEncoderRegistry): List<$className> {\n"
         file += "    val items = this.toList()\n"
         file += $$"    require(items.size == rows.size) { \"Result rows count (${rows.size}) doesn't match entities count (${items.size})\" }\n"
         file += "    return items.zip(rows).map { (item, row) ->\n"
