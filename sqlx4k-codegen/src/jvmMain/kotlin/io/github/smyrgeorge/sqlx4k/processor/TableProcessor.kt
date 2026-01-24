@@ -126,9 +126,9 @@ class TableProcessor(
         emitDelete(file, tableName, classDeclaration, properties)
 
         // Make batch queries.
-        // Batch insert: Not supported by MySQL (no multi-row INSERT with RETURNING).
-        // Batch update: Not supported by SQLite (no FROM VALUES / ON DUPLICATE KEY support).
-        // Generic dialect: Supports all batch operations but may produce SQL syntax errors
+        // Batch insert: Supported by PostgreSQL, SQLite, and Generic (requires multi-row INSERT with RETURNING).
+        // Batch update: Supported by PostgreSQL and Generic (requires FROM VALUES with RETURNING).
+        // Generic dialect: Generates code for all batch operations but may produce SQL syntax errors
         //                  depending on the actual database being used.
         emitBatchInsert(file, tableName, classDeclaration, properties)
         emitApplyBatchInsertResult(file, classDeclaration, properties)
@@ -352,7 +352,7 @@ class TableProcessor(
 
     /**
      * Generates a batch INSERT statement for the provided class declaration.
-     * Only supported for PostgreSQL and SQLite dialects.
+     * Supported for PostgreSQL, SQLite, and Generic dialects.
      *
      * @param file The output stream to write the generated code.
      * @param table The name of the table into which the data will be inserted.
@@ -365,7 +365,7 @@ class TableProcessor(
         clazz: KSClassDeclaration,
         props: Sequence<KSPropertyDeclaration>
     ) {
-        // Only support PostgreSQL and SQLite (not MySQL)
+        // Only support PostgreSQL, SQLite, and Generic (not MySQL)
         if (dialect == Dialect.MySQL) return
 
         val ctx = prepareInsertContext(clazz, props)
@@ -418,7 +418,7 @@ class TableProcessor(
         clazz: KSClassDeclaration,
         props: Sequence<KSPropertyDeclaration>
     ) {
-        // Only support PostgreSQL and SQLite (not MySQL)
+        // Only support PostgreSQL, SQLite, and Generic (not MySQL)
         if (dialect == Dialect.MySQL) return
 
         val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
@@ -436,7 +436,7 @@ class TableProcessor(
 
     /**
      * Generates a batch UPDATE statement for the provided class declaration.
-     * Supported for PostgreSQL (FROM VALUES syntax) and MySQL (ON DUPLICATE KEY UPDATE).
+     * Supported for PostgreSQL and Generic dialects (requires FROM VALUES with RETURNING).
      *
      * @param file The output stream to write the generated code.
      * @param table The name of the table to be updated.
@@ -449,8 +449,8 @@ class TableProcessor(
         clazz: KSClassDeclaration,
         props: Sequence<KSPropertyDeclaration>
     ) {
-        // Only support PostgreSQL and MySQL (not SQLite)
-        if (dialect == Dialect.SQLite) return
+        // Only support PostgreSQL and Generic (not MySQL or SQLite)
+        if (dialect == Dialect.MySQL || dialect == Dialect.SQLite) return
 
         val ctx = prepareUpdateContext(table, clazz, props) ?: return
         val (allProps, id, updatePropDeclarations, updateProps, className, idName, idColumn) = ctx
@@ -465,15 +465,11 @@ class TableProcessor(
         file += "/**\n"
         file += " * Creates a batch UPDATE statement for this collection of [$className] entities.\n"
         file += " *\n"
-        file += if (dialect == Dialect.MySQL) {
-            " * Generates a prepared SQL statement using MySQL's INSERT ... ON DUPLICATE KEY UPDATE syntax\n"
-        } else {
-            " * Generates a prepared SQL UPDATE statement using PostgreSQL's FROM VALUES syntax\n"
-        }
+        file += " * Generates a prepared SQL UPDATE statement using PostgreSQL's FROM VALUES syntax\n"
         file += " * for efficient batch updates. Each entity is identified by its @Id property `$idName`.\n"
         file += " * Properties marked with `@Column(update = false)` are excluded from the update.\n"
         file += " *\n"
-        file += " * The statement includes a ${if (dialect == Dialect.MySQL) "SELECT" else "RETURNING"} clause to fetch the updated rows.\n"
+        file += " * The statement includes a RETURNING clause to fetch the updated rows.\n"
         file += " *\n"
         file += " * @return A prepared [Statement] with bound values ready for execution\n"
         file += " * @throws IllegalArgumentException if the collection is empty\n"
@@ -483,27 +479,14 @@ class TableProcessor(
         file += "    require(items.isNotEmpty()) { \"Cannot create batch update statement for empty collection\" }\n"
         file += "    val valuePlaceholders = items.indices.joinToString(\", \") { \"$singleValuePlaceholder\" }\n"
 
-        if (dialect == Dialect.MySQL) {
-            // MySQL: INSERT ... ON DUPLICATE KEY UPDATE + SELECT for returning
-            val returningColumns = findUpdateReturningProps(allProps)
-                .ifEmpty { error("RETURNING SQL clause cannot be empty for entity (check that a property marked with @Id exists): $className") }
-                .joinToString { it.simpleName().toSnakeCase() }
-            val onDuplicateSetClause = updateProps.joinToString(", ") { p -> "${p.toSnakeCase()} = VALUES(${p.toSnakeCase()})" }
-            val idPlaceholders = "items.indices.joinToString(\", \") { \"?\" }"
+        // PostgreSQL: UPDATE ... FROM (VALUES ...) + RETURNING
+        val returningColumns = findUpdateReturningProps(allProps)
+            .ifEmpty { error("RETURNING SQL clause cannot be empty for entity (check that a property marked with @Id exists): $className") }
+            .joinToString { "t.${it.simpleName().toSnakeCase()}" }
+        val setClause = updateProps.joinToString(", ") { p -> "${p.toSnakeCase()} = v.${p.toSnakeCase()}" }
 
-            file += "    val idPlaceholders = $idPlaceholders\n"
-            file += "    // language=SQL\n"
-            file += $$"    val sql = \"insert into $$table($$valueColumnsList) values $valuePlaceholders on duplicate key update $$onDuplicateSetClause; select $$returningColumns from $$table where $$idColumn in ($idPlaceholders);\"\n"
-        } else {
-            // PostgreSQL: UPDATE ... FROM (VALUES ...) + RETURNING
-            val returningColumns = findUpdateReturningProps(allProps)
-                .ifEmpty { error("RETURNING SQL clause cannot be empty for entity (check that a property marked with @Id exists): $className") }
-                .joinToString { "t.${it.simpleName().toSnakeCase()}" }
-            val setClause = updateProps.joinToString(", ") { p -> "${p.toSnakeCase()} = v.${p.toSnakeCase()}" }
-
-            file += "    // language=SQL\n"
-            file += $$"    val sql = \"update $$table as t set $$setClause from (values $valuePlaceholders) as v($$valueColumnsList) where t.$$idColumn = v.$$idColumn returning $$returningColumns;\"\n"
-        }
+        file += "    // language=SQL\n"
+        file += $$"    val sql = \"update $$table as t set $$setClause from (values $valuePlaceholders) as v($$valueColumnsList) where t.$$idColumn = v.$$idColumn returning $$returningColumns;\"\n"
 
         file += "    val statement = Statement.create(sql)\n"
         file += "    items.forEachIndexed { itemIndex, item ->\n"
@@ -517,15 +500,6 @@ class TableProcessor(
             file += "        statement.bind(offset + ${index + 1}, $bindExpr)\n"
         }
         file += "    }\n"
-
-        if (dialect == Dialect.MySQL) {
-            // For MySQL, also bind the IDs for the SELECT WHERE IN clause
-            file += "    // Bind IDs for the SELECT ... WHERE id IN (...) clause\n"
-            file += "    val selectOffset = items.size * $propsCount\n"
-            file += "    items.forEachIndexed { itemIndex, item ->\n"
-            file += "        statement.bind(selectOffset + itemIndex, $idBindExpr)\n"
-            file += "    }\n"
-        }
 
         file += "    return statement\n"
         file += "}\n"
@@ -543,8 +517,8 @@ class TableProcessor(
         clazz: KSClassDeclaration,
         props: Sequence<KSPropertyDeclaration>
     ) {
-        // Not supported by SQLite (no FROM VALUES / ON DUPLICATE KEY support)
-        if (dialect == Dialect.SQLite) return
+        // Only support PostgreSQL and Generic (not MySQL or SQLite)
+        if (dialect == Dialect.MySQL || dialect == Dialect.SQLite) return
 
         val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
         val returningProps = findUpdateReturningProps(props.toList())
