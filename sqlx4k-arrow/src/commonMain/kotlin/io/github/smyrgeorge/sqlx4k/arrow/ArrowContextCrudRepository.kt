@@ -1,15 +1,16 @@
 package io.github.smyrgeorge.sqlx4k.arrow
 
+import arrow.core.raise.Raise
 import io.github.smyrgeorge.sqlx4k.CrudRepositoryHooks
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
+import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.arrow.impl.extensions.DbResult
 
 /**
  * Interface defining a contract for basic CRUD (Create, Read, Update, Delete) operations on a data source.
  *
  * This interface abstracts common operations to be implemented for handling entities of type [T].
- * Each operation is asynchronous and returns a [DbResult], encapsulating either the successful result
- * or an error in case of failure.
+ * Each operation is asynchronous and returns [T], or lifts the [SQLError] into Arrow's [Raise] in case of failure.
  *
  * @param T The type of the entity managed by the repository.
  */
@@ -25,8 +26,8 @@ interface ArrowContextCrudRepository<T> : CrudRepositoryHooks<T> {
      * @return A [DbResult] containing the inserted entity of type [T] if the operation is successful,
      *         or an error if the operation fails.
      */
-    context(context: QueryExecutor)
-    suspend fun insert(entity: T): DbResult<T>
+    context(context: QueryExecutor, raise: Raise<SQLError>)
+    suspend fun insert(entity: T): T
 
     /**
      * Updates the given entity in the data source using the specified driver context.
@@ -39,8 +40,8 @@ interface ArrowContextCrudRepository<T> : CrudRepositoryHooks<T> {
      * @return A [DbResult] containing the updated entity of type [T] if the operation is successful,
      *         or an error if the operation fails.
      */
-    context(context: QueryExecutor)
-    suspend fun update(entity: T): DbResult<T>
+    context(context: QueryExecutor, raise: Raise<SQLError>)
+    suspend fun update(entity: T): T
 
     /**
      * Deletes the given entity from the data source using the specified driver context.
@@ -53,8 +54,8 @@ interface ArrowContextCrudRepository<T> : CrudRepositoryHooks<T> {
      * @return A [DbResult] containing a [Unit] value if the operation is successful,
      *         or an error if the operation fails.
      */
-    context(context: QueryExecutor)
-    suspend fun delete(entity: T): DbResult<Unit>
+    context(context: QueryExecutor, raise: Raise<SQLError>)
+    suspend fun delete(entity: T)
 
     /**
      * Saves the given entity to the data source using the specified driver context.
@@ -67,6 +68,6 @@ interface ArrowContextCrudRepository<T> : CrudRepositoryHooks<T> {
      * @return A [DbResult] containing the saved entity of type [T] if the operation is successful,
      *         or an error if the operation fails.
      */
-    context(context: QueryExecutor)
-    suspend fun save(entity: T): DbResult<T>
+    context(context: QueryExecutor, raise: Raise<SQLError>)
+    suspend fun save(entity: T): T
 }
