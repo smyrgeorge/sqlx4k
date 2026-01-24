@@ -877,7 +877,7 @@ class TableProcessor(
             .toList()
 
     /**
-     * Generates the copy() call body for applying result row values to an entity.
+     * Generates a function to merge result row values back into an entity using copy().
      *
      * @param file The output stream to write the generated code.
      * @param className The fully qualified class name.
@@ -906,31 +906,18 @@ class TableProcessor(
         file += " * @return A new instance with the generated values merged in\n"
         file += " */\n"
         file += "fun $className.$functionName(row: ResultSet.Row, converters: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY): $className = copy(\n"
-        emitCopyPropsFromRow(file, returningProps, "    ")
-        file += ")\n"
-    }
 
-    /**
-     * Emits the property assignments for a copy() call from a result row.
-     *
-     * @param file The output stream to write the generated code.
-     * @param returningProps The properties to include in the copy.
-     * @param indent The indentation string to use for each line.
-     */
-    private fun emitCopyPropsFromRow(
-        file: OutputStream,
-        returningProps: List<KSPropertyDeclaration>,
-        indent: String
-    ) {
         returningProps.forEachIndexed { index, prop ->
             val propName = prop.simpleName()
-            val columnName = propName.toSnakeCase()
             val propType = prop.type.resolve()
             val isNullable = propType.isMarkedNullable
             val decoder = generateDecoder(prop, propType, isNullable)
             val comma = if (index < returningProps.size - 1) "," else ""
-            file += "$indent$propName = row.get(\"$columnName\")$decoder$comma\n"
+            // Use index-based access for better performance (avoids map lookup)
+            file += "    $propName = row.get($index)$decoder$comma\n"
         }
+
+        file += ")\n"
     }
 
     /**
@@ -969,9 +956,7 @@ class TableProcessor(
         file += "    val items = this.toList()\n"
         file += $$"    require(items.size == rows.size) { \"Result rows count (${rows.size}) doesn't match entities count (${items.size})\" }\n"
         file += "    return items.zip(rows).map { (item, row) ->\n"
-        file += "        item.copy(\n"
-        emitCopyPropsFromRow(file, returningProps, "            ")
-        file += "        )\n"
+        file += "        item.$functionName(row, converters)\n"
         file += "    }\n"
         file += "}\n"
     }
