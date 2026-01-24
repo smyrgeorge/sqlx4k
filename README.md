@@ -537,12 +537,12 @@ val result: Result<List<User>> = userRepository.batchUpdate(db, updatedUsers)
 | Operation     | PostgreSQL | SQLite | MySQL | Generic |
 |---------------|:----------:|:------:|:-----:|:-------:|
 | `batchInsert` |     ✅      |   ✅    |   ❌   |    ✅    |
-| `batchUpdate` |     ✅      |   ❌    |   ❌   |    ✅    |
+| `batchUpdate` |     ✅      |   ✅    |   ❌   |    ✅    |
 
 - **PostgreSQL**: Full support for both batch operations using multi-row `INSERT ... RETURNING` and
   `UPDATE ... FROM (VALUES ...) ... RETURNING` syntax.
-- **SQLite**: Supports batch insert using multi-row `INSERT ... RETURNING`. Batch update is not supported due to lack
-  of `UPDATE ... FROM VALUES` syntax.
+- **SQLite**: Full support for both batch operations using multi-row `INSERT ... RETURNING` and
+  `WITH ... UPDATE ... FROM ... RETURNING` syntax (CTE-based approach).
 - **MySQL**: Neither batch operation is supported because MySQL lacks `RETURNING` clause support.
 - **Generic**: Generates code for both operations but actual support depends on the underlying database.
 

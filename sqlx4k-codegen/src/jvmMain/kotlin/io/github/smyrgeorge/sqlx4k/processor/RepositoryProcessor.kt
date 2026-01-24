@@ -1060,8 +1060,8 @@ class RepositoryProcessor(
             }
         }
 
-        // batchUpdate (supported for PostgreSQL and Generic, not MySQL or SQLite)
-        if (dialect == Dialect.PostgreSQL || dialect == Dialect.Generic) {
+        // batchUpdate (supported for PostgreSQL, SQLite, and Generic, not MySQL)
+        if (dialect != Dialect.MySQL) {
             logger.info("[RepositoryProcessor] Emitting CRUD method: batchUpdate(Iterable<$domainQn>)")
             file += "\n"
             file += "    /**\n"
@@ -1070,7 +1070,7 @@ class RepositoryProcessor(
             file += "     * Executes a batch UPDATE statement and returns the updated entities with any\n"
             file += "     * modified values.\n"
             file += "     *\n"
-            file += "     * Note: Supported for PostgreSQL and Generic dialects (requires FROM VALUES with RETURNING).\n"
+            file += "     * Note: Supported for PostgreSQL, SQLite, and Generic dialects (requires FROM VALUES with RETURNING).\n"
             file += "     *\n"
             if (!useContextParameters) {
                 file += "     * @param context The query executor (database connection or transaction)\n"
@@ -1122,19 +1122,14 @@ class RepositoryProcessor(
             if (useArrow) file += ".toDbResult()"
             file += "\n"
         } else {
-            // MySQL and SQLite don't support batch update - generate error method
-            logger.info("[RepositoryProcessor] Emitting unsupported CRUD method: batchUpdate(Iterable<$domainQn>) for ${dialect.name}")
+            // MySQL doesn't support batch update - generate error method
+            logger.info("[RepositoryProcessor] Emitting unsupported CRUD method: batchUpdate(Iterable<$domainQn>) for MySQL")
             file += "\n"
             file += "    /**\n"
-            file += "     * Batch update is not supported for ${dialect.name} dialect.\n"
+            file += "     * Batch update is not supported for MySQL dialect.\n"
             file += "     *\n"
-            if (dialect == Dialect.MySQL) {
-                file += "     * MySQL does not support UPDATE ... FROM (VALUES ...) syntax with RETURNING clause,\n"
-                file += "     * which is required for batch update operations.\n"
-            } else {
-                file += "     * SQLite does not support UPDATE ... FROM (VALUES ...) syntax or ON DUPLICATE KEY UPDATE,\n"
-                file += "     * which are required for batch update operations.\n"
-            }
+            file += "     * MySQL does not support UPDATE ... FROM (VALUES ...) syntax with RETURNING clause,\n"
+            file += "     * which is required for batch update operations.\n"
             file += "     *\n"
             if (!useContextParameters) {
                 file += "     * @param context The query executor (database connection or transaction)\n"
@@ -1148,15 +1143,10 @@ class RepositoryProcessor(
             } else {
                 file += "    override suspend fun batchUpdate(context: QueryExecutor, entities: Iterable<$domainQn>)"
             }
-            val errorMessage = if (dialect == Dialect.MySQL) {
-                "Batch update is not supported for MySQL dialect (no UPDATE FROM VALUES with RETURNING support)"
-            } else {
-                "Batch update is not supported for SQLite dialect (no FROM VALUES / ON DUPLICATE KEY UPDATE support)"
-            }
             file += if (useArrow) {
-                ": DbResult<List<$domainQn>> = throw UnsupportedOperationException(\"$errorMessage\")\n"
+                ": DbResult<List<$domainQn>> = throw UnsupportedOperationException(\"Batch update is not supported for MySQL dialect (no UPDATE FROM VALUES with RETURNING support)\")\n"
             } else {
-                ": Result<List<$domainQn>> = throw UnsupportedOperationException(\"$errorMessage\")\n"
+                ": Result<List<$domainQn>> = throw UnsupportedOperationException(\"Batch update is not supported for MySQL dialect (no UPDATE FROM VALUES with RETURNING support)\")\n"
             }
         }
     }
