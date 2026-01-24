@@ -3,6 +3,7 @@ package io.github.smyrgeorge.sqlx4k
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
+import org.intellij.lang.annotations.Language
 import kotlin.time.Duration
 
 /**
@@ -29,7 +30,7 @@ interface QueryExecutor {
      * @param sql the SQL statement to be executed.
      * @return a result containing the number of affected rows.
      */
-    suspend fun execute(sql: String): Result<Long>
+    suspend fun execute(@Language("SQL") sql: String): Result<Long>
 
     /**
      * Executes the given SQL statement asynchronously.
@@ -46,7 +47,7 @@ interface QueryExecutor {
      * @param sql the SQL statement to be executed.
      * @return a result containing the retrieved result set.
      */
-    suspend fun fetchAll(sql: String): Result<ResultSet>
+    suspend fun fetchAll(@Language("SQL") sql: String): Result<ResultSet>
 
     /**
      * Fetches all results of the given SQL statement asynchronously.
@@ -65,7 +66,7 @@ interface QueryExecutor {
      * @param rowMapper The RowMapper to use for converting rows in the ResultSet to instances of type T.
      * @return A Result containing a list of instances of type T mapped from the query result set.
      */
-    suspend fun <T> fetchAll(sql: String, rowMapper: RowMapper<T>): Result<List<T>> = runCatching {
+    suspend fun <T> fetchAll(@Language("SQL") sql: String, rowMapper: RowMapper<T>): Result<List<T>> = runCatching {
         fetchAll(sql).getOrThrow().let { rowMapper.map(it, encoders) }
     }
 

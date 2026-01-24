@@ -2,10 +2,9 @@
 
 ## Setup
 
-- All tests were performed on my MacBook Pro M1 Max, 64GB RAM.
+- All tests were performed on my local machine.
 - The database was installed inside a Docker container, using ARM64 images.
 - Apart from the database drivers, the rest of the code was kept as similar as possible.
-- The Docker engine was using the new Docker VMM.
 
 ## Runs
 
@@ -19,13 +18,3 @@ We conducted three scenarios:
 
 In each scenario, we used **4 workers**. Each worker executed the test **1000 times** in a loop.
 We performed **10 runs** per scenario and calculated the average execution time.
-
-## Results
-
-### PostgreSQL
-
-| kind              |   no-tx   | tx-commit | tx-rollback |
-|-------------------|:---------:|:---------:|:-----------:|
-| rust-sqlx         | 3.414700s |           |             |
-| spring-boot-r2dbc | 2.982300s | 4.623800s |  3.522100s  |
-| sqlx4k            | 3.484700s | 4.884900s |  3.552010s  |

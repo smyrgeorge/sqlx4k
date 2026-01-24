@@ -38,6 +38,7 @@ class Sqlx4kService(
         f: suspend (A) -> Unit
     ): Unit = withContext(context) { map { async { f(it) } }.awaitAll() }
 
+    @Suppress("KotlinUnreachableCode")
     suspend fun bench() {
         databaseClient.sql("drop table if exists sqlx4k;").await()
         databaseClient.sql("create table sqlx4k(id integer, test text);").await()

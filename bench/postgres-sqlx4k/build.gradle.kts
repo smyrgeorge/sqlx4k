@@ -13,14 +13,13 @@ kotlin {
             dependencies {
                 implementation(project(":sqlx4k-postgres"))
             }
-        }
-        nativeMain {
             kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
         }
     }
 }
 
 ksp {
+    arg("dialect", "postgresql")
     arg("output-package", "io.github.smyrgeorge.sqlx4k.bench.postgres.sqlx4k")
 }
 
