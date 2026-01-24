@@ -5,14 +5,19 @@ package io.github.smyrgeorge.sqlx4k.impl.extensions
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
-import kotlinx.datetime.*
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.UtcOffset
 import kotlinx.datetime.format.DateTimeFormat
 import kotlinx.datetime.format.FormatStringsInDatetimeFormats
 import kotlinx.datetime.format.byUnicodePattern
+import kotlinx.datetime.toInstant
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
+//@formatter:off
 fun ResultSet.Row.Column.asChar(): Char = asString().asChar()
 fun ResultSet.Row.Column.asCharOrNull(): Char? = asStringOrNull()?.asChar()
 fun ResultSet.Row.Column.asInt(): Int = asString().toInt()
@@ -47,6 +52,7 @@ fun ResultSet.Row.Column.asInstant(): Instant = asString().asInstant()
 fun ResultSet.Row.Column.asInstantOrNull(): Instant? = asStringOrNull()?.asInstant()
 fun ResultSet.Row.Column.asByteArray(): ByteArray = asString().removePrefix("\\x").hexToByteArray()
 fun ResultSet.Row.Column.asByteArrayOrNull(): ByteArray? = asStringOrNull()?.removePrefix("\\x")?.hexToByteArray()
+//@formatter:on
 
 private fun String.asChar(): Char {
     require(length == 1) { "Invalid char value: $this" }
