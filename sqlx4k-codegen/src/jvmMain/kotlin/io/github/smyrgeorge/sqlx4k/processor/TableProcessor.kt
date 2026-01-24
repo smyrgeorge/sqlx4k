@@ -489,11 +489,11 @@ class TableProcessor(
         val setClause = updateProps.joinToString(", ") { p -> "${p.toSnakeCase()} = v.${p.toSnakeCase()}" }
 
         file += "    // language=SQL\n"
-        if (dialect == Dialect.SQLite) {
+        file += if (dialect == Dialect.SQLite) {
             // SQLite requires CTE (WITH clause) for column aliases on VALUES
-            file += $$"    val sql = \"with v($$valueColumnsList) as (values $valuePlaceholders) update $$table set $$setClause from v where $$table.$$idColumn = v.$$idColumn returning $$returningColumns;\"\n"
+            $$"    val sql = \"with v($$valueColumnsList) as (values $valuePlaceholders) update $$table set $$setClause from v where $$table.$$idColumn = v.$$idColumn returning $$returningColumns;\"\n"
         } else {
-            file += $$"    val sql = \"update $$table as t set $$setClause from (values $valuePlaceholders) as v($$valueColumnsList) where t.$$idColumn = v.$$idColumn returning $$returningColumns;\"\n"
+            $$"    val sql = \"update $$table as t set $$setClause from (values $valuePlaceholders) as v($$valueColumnsList) where t.$$idColumn = v.$$idColumn returning $$returningColumns;\"\n"
         }
 
         file += "    val statement = Statement.create(sql)\n"
