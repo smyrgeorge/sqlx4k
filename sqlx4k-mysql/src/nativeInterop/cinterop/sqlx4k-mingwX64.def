@@ -1,4 +1,4 @@
-package = sqlx4k
+package = sqlx4k.mysql
 headers = sqlx4k_mysql.h
 compilerOpts = -I./src/rust/target
 staticLibraries = libsqlx4k_mysql.a

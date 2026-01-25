@@ -1,18 +1,45 @@
 package io.github.smyrgeorge.sqlx4k.sqlite
 
-import io.github.smyrgeorge.sqlx4k.*
+import io.github.smyrgeorge.sqlx4k.Connection
+import io.github.smyrgeorge.sqlx4k.ConnectionPool
+import io.github.smyrgeorge.sqlx4k.Dialect
+import io.github.smyrgeorge.sqlx4k.DriverNativeUtils
+import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
-import io.github.smyrgeorge.sqlx4k.impl.extensions.*
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
+import io.github.smyrgeorge.sqlx4k.impl.extensions.rowsAffectedOrError
+import io.github.smyrgeorge.sqlx4k.impl.extensions.rtOrError
+import io.github.smyrgeorge.sqlx4k.impl.extensions.sqlx
+import io.github.smyrgeorge.sqlx4k.impl.extensions.throwIfError
+import io.github.smyrgeorge.sqlx4k.impl.extensions.toResultSet
+import io.github.smyrgeorge.sqlx4k.impl.extensions.use
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
+import kotlin.time.Duration
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import sqlx4k.*
-import kotlin.time.Duration
+import sqlx4k.sqlite.sqlx4k_close
+import sqlx4k.sqlite.sqlx4k_cn_acquire
+import sqlx4k.sqlite.sqlx4k_cn_fetch_all
+import sqlx4k.sqlite.sqlx4k_cn_query
+import sqlx4k.sqlite.sqlx4k_cn_release
+import sqlx4k.sqlite.sqlx4k_cn_tx_begin
+import sqlx4k.sqlite.sqlx4k_fetch_all
+import sqlx4k.sqlite.sqlx4k_of
+import sqlx4k.sqlite.sqlx4k_pool_idle_size
+import sqlx4k.sqlite.sqlx4k_pool_size
+import sqlx4k.sqlite.sqlx4k_query
+import sqlx4k.sqlite.sqlx4k_tx_begin
+import sqlx4k.sqlite.sqlx4k_tx_commit
+import sqlx4k.sqlite.sqlx4k_tx_fetch_all
+import sqlx4k.sqlite.sqlx4k_tx_query
+import sqlx4k.sqlite.sqlx4k_tx_rollback
 
 /**
  * A database driver for SQLite, implemented with connection pooling and transactional support.
