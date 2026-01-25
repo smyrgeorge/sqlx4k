@@ -47,7 +47,8 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * with their corresponding bound values. Any named parameter without a bound value will result
      * in an error during rendering.
      */
-    private val namedParametersValues: MutableMap<String, Any?> = HashMap(extractedNamedParameters.size)
+    private val namedParametersValues: MutableMap<String, Any?> =
+        HashMap((extractedNamedParameters.size / 0.75f + 1).toInt())
 
     /**
      * An array storing the values bound to positional parameters in a SQL statement.
@@ -59,7 +60,8 @@ abstract class AbstractStatement(private val sql: String) : Statement {
      * This array is used to manage parameter bindings when rendering the final SQL statement
      * and ensures that each positional parameter has a value assigned before execution.
      */
-    private val positionalParametersValues: Array<Any?> = Array(extractedPositionalParameters) { NOT_SET }
+    private val positionalParametersValues: Array<Any?> =
+        Array(extractedPositionalParameters) { NOT_SET }
 
     /**
      * Binds a value to a positional parameter in the statement based on the given index.
@@ -95,7 +97,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
                 message = "Parameter '$parameter' not found."
             ).raise()
         }
-        namedParametersValues[parameter] = value
+        namedParametersValues[parameter] = value ?: NULL_VALUE
         return this
     }
 
@@ -161,7 +163,7 @@ abstract class AbstractStatement(private val sql: String) : Statement {
                 while (j < length && this[j].isIdentPart()) j++
                 val name = substring(i + 1, j)
                 if (name in extractedNamedParameters) {
-                    val value = namedParametersValues.getOrElseNullable(name) {
+                    val value = namedParametersValues.getNullableOrElse(name) {
                         SQLError(
                             code = SQLError.Code.NamedParameterValueNotSupplied,
                             message = "Value for named parameter '$name' was not supplied."
@@ -407,6 +409,18 @@ abstract class AbstractStatement(private val sql: String) : Statement {
         private val NOT_SET = Any()
 
         /**
+         * A placeholder value used to represent a null equivalent within the context
+         * of the `AbstractStatement` class. This is particularly useful for internal
+         * operations where null handling is required but cannot be directly represented
+         * or stored as `null` due to potential ambiguities or Kotlin's null safety rules.
+         *
+         * This object serves as a unique, non-null sentinel value and is not intended
+         * for external use or comparison beyond its defined purpose within the scope of
+         * `AbstractStatement`'s internal logic.
+         */
+        private val NULL_VALUE = Any()
+
+        /**
          * A pre-initialized empty instance of [StringBuilder].
          *
          * This constant is used internally to provide a reusable
@@ -474,26 +488,29 @@ abstract class AbstractStatement(private val sql: String) : Statement {
             if (start + 1 >= length) return null
             if (this[start] != '$') return null
             var j = start + 1
-            while (j < length && (this[j].isLetterOrDigit() || this[j] == '_')) j++
+            while (j < length && this[j].isIdentPart()) j++
             return if (j < length && this[j] == '$') substring(start, j + 1) else null
         }
 
         /**
-         * Retrieves the value corresponding to the specified key from the map. If the key is not found
-         * and does not exist in the map, the provided default value is returned. If the key exists with
-         * a `null` value, `null` is returned.
+         * Retrieves the nullable value associated with the given key in the map or returns a default value
+         * if the key is not present or its associated value is `null`.
          *
-         * @param key The key whose associated value is to be returned.
-         * @param defaultValue A lambda function that provides the default value to return if the key is not found.
-         * @return The value associated with the specified key, or the result of the `defaultValue` function if the key is not found and does not exist in the map.
+         * This function is particularly useful when the map may store `null` values or when a key is not guaranteed
+         * to exist in the map, allowing a fallback default value to be provided dynamically.
+         *
+         * @param key The key whose associated value is to be retrieved or for which the default value will be computed.
+         * @param defaultValue A lambda function that supplies the default value when the key is not present
+         * or its value is `null`.
+         * @return The value associated with the provided key if it exists and is not `null`, otherwise the result of
+         * invoking the `defaultValue` function. Returns `null` if the `defaultValue` lambda itself returns `null`.
          */
-        private inline fun <K, V> Map<K, V>.getOrElseNullable(key: K, defaultValue: () -> V): V {
+        private inline fun <K, V> Map<K, V?>.getNullableOrElse(key: K, defaultValue: () -> V): V? {
             val value = get(key)
-            if (value == null && !containsKey(key)) {
-                return defaultValue()
-            } else {
-                @Suppress("UNCHECKED_CAST")
-                return value as V
+            return when {
+                value === NULL_VALUE -> null
+                value == null -> defaultValue()
+                else -> value
             }
         }
     }
