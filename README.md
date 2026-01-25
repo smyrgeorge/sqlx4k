@@ -406,6 +406,7 @@ ksp {
     // Supported dialects:
     // arg("dialect", "mysql")
     // arg("dialect", "postgresql")
+    // arg("dialect", "sqlite")
 
     // Required: where to place the generated sources.
     arg("output-package", "io.github.smyrgeorge.sqlx4k.examples.postgres")
@@ -498,8 +499,9 @@ ksp {
 
 Supported dialects:
 
-- `"postgresql"` - Enables PostgreSQL-specific extensions (array types)
 - `"mysql"` - Adjusts CRUD query generation for MySQL compatibility
+- `"postgresql"` - Enables PostgreSQL-specific extensions (array types)
+- `"sqlite"` - Adjusts CRUD query generation for SQLite compatibility
 - Default (or `"generic"`) - Uses standard SQL with builtin decoders
 
 #### Batch Operations
