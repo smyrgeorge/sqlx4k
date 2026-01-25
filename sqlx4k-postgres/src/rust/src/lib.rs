@@ -19,12 +19,12 @@ use tokio::runtime::Runtime;
 static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
 #[derive(Debug)]
-struct Sqlx4k {
+struct Sqlx4kPostgreSql {
     connect_options: PgConnectOptions,
     pool: PgPool,
 }
 
-impl Sqlx4k {
+impl Sqlx4kPostgreSql {
     async fn query(&self, sql: &str) -> *mut Sqlx4kResult {
         let result = self.pool.execute(sql).await;
         let result = match result {
@@ -39,7 +39,7 @@ impl Sqlx4k {
 
     async fn fetch_all(&self, sql: &str) -> *mut Sqlx4kResult {
         let result = self.pool.fetch_all(sql).await;
-        sqlx4k_result_of(result).leak()
+        sqlx4k_postgresql_result_of(result).leak()
     }
 
     async fn cn_acquire(&self) -> *mut Sqlx4kResult {
@@ -88,7 +88,7 @@ impl Sqlx4k {
     async fn cn_fetch_all(&self, cn: Ptr, sql: &str) -> *mut Sqlx4kResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<Postgres>) };
         let result = cn.fetch_all(sql).await;
-        sqlx4k_result_of(result).leak()
+        sqlx4k_postgresql_result_of(result).leak()
     }
 
     async fn cn_tx_begin(&self, cn: Ptr) -> *mut Sqlx4kResult {
@@ -171,7 +171,7 @@ impl Sqlx4k {
         let result = tx.fetch_all(sql).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
-        let result = sqlx4k_result_of(result);
+        let result = sqlx4k_postgresql_result_of(result);
         let result = Sqlx4kResult {
             tx: tx as *mut c_void,
             ..result
@@ -186,7 +186,7 @@ impl Sqlx4k {
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_of(
+pub extern "C" fn sqlx4k_postgresql_of(
     url: *const c_char,
     username: *const c_char,
     password: *const c_char,
@@ -246,7 +246,7 @@ pub extern "C" fn sqlx4k_of(
         Ok(pool) => pool,
         Err(err) => return sqlx4k_error_result_of(err).leak(),
     };
-    let sqlx4k = Sqlx4k {
+    let sqlx4k = Sqlx4kPostgreSql {
         connect_options: options,
         pool,
     };
@@ -261,26 +261,26 @@ pub extern "C" fn sqlx4k_of(
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_pool_size(rt: *mut c_void) -> c_int {
-    let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
+pub extern "C" fn sqlx4k_postgresql_pool_size(rt: *mut c_void) -> c_int {
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     sqlx4k.pool.size() as c_int
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_pool_idle_size(rt: *mut c_void) -> c_int {
-    let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
+pub extern "C" fn sqlx4k_postgresql_pool_idle_size(rt: *mut c_void) -> c_int {
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     sqlx4k.pool.num_idle() as c_int
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_close(
+pub extern "C" fn sqlx4k_postgresql_close(
     rt: *mut c_void,
     callback: *mut c_void,
     fun: extern "C" fn(Ptr, *mut Sqlx4kResult),
 ) {
     let callback = Ptr { ptr: callback };
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
         let result = sqlx4k.close().await;
         fun(callback, result)
@@ -288,7 +288,7 @@ pub extern "C" fn sqlx4k_close(
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_query(
+pub extern "C" fn sqlx4k_postgresql_query(
     rt: *mut c_void,
     sql: *const c_char,
     callback: *mut c_void,
@@ -297,7 +297,7 @@ pub extern "C" fn sqlx4k_query(
     let callback = Ptr { ptr: callback };
     let sql = c_chars_to_str(sql).to_owned();
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
         let result = sqlx4k.query(&sql).await;
         fun(callback, result)
@@ -305,7 +305,7 @@ pub extern "C" fn sqlx4k_query(
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_fetch_all(
+pub extern "C" fn sqlx4k_postgresql_fetch_all(
     rt: *mut c_void,
     sql: *const c_char,
     callback: *mut c_void,
@@ -314,7 +314,7 @@ pub extern "C" fn sqlx4k_fetch_all(
     let callback = Ptr { ptr: callback };
     let sql = c_chars_to_str(sql).to_owned();
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
         let result = sqlx4k.fetch_all(&sql).await;
         fun(callback, result)
@@ -322,14 +322,14 @@ pub extern "C" fn sqlx4k_fetch_all(
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_cn_acquire(
+pub extern "C" fn sqlx4k_postgresql_cn_acquire(
     rt: *mut c_void,
     callback: *mut c_void,
     fun: extern "C" fn(Ptr, *mut Sqlx4kResult),
 ) {
     let callback = Ptr { ptr: callback };
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
         let result = sqlx4k.cn_acquire().await;
         fun(callback, result)
@@ -337,7 +337,7 @@ pub extern "C" fn sqlx4k_cn_acquire(
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_cn_release(
+pub extern "C" fn sqlx4k_postgresql_cn_release(
     rt: *mut c_void,
     cn: *mut c_void,
     callback: *mut c_void,
@@ -346,7 +346,7 @@ pub extern "C" fn sqlx4k_cn_release(
     let cn = Ptr { ptr: cn };
     let callback = Ptr { ptr: callback };
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
         let result = sqlx4k.cn_release(cn).await;
         fun(callback, result)
@@ -354,7 +354,7 @@ pub extern "C" fn sqlx4k_cn_release(
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_cn_query(
+pub extern "C" fn sqlx4k_postgresql_cn_query(
     rt: *mut c_void,
     cn: *mut c_void,
     sql: *const c_char,
@@ -365,7 +365,7 @@ pub extern "C" fn sqlx4k_cn_query(
     let callback = Ptr { ptr: callback };
     let sql = c_chars_to_str(sql).to_owned();
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
         let result = sqlx4k.cn_query(cn, &sql).await;
         fun(callback, result)
@@ -373,7 +373,7 @@ pub extern "C" fn sqlx4k_cn_query(
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_cn_fetch_all(
+pub extern "C" fn sqlx4k_postgresql_cn_fetch_all(
     rt: *mut c_void,
     cn: *mut c_void,
     sql: *const c_char,
@@ -384,7 +384,7 @@ pub extern "C" fn sqlx4k_cn_fetch_all(
     let callback = Ptr { ptr: callback };
     let sql = c_chars_to_str(sql).to_owned();
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
         let result = sqlx4k.cn_fetch_all(cn, &sql).await;
         fun(callback, result)
@@ -392,7 +392,7 @@ pub extern "C" fn sqlx4k_cn_fetch_all(
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_cn_tx_begin(
+pub extern "C" fn sqlx4k_postgresql_cn_tx_begin(
     rt: *mut c_void,
     cn: *mut c_void,
     callback: *mut c_void,
@@ -401,7 +401,7 @@ pub extern "C" fn sqlx4k_cn_tx_begin(
     let cn = Ptr { ptr: cn };
     let callback = Ptr { ptr: callback };
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
         let result = sqlx4k.cn_tx_begin(cn).await;
         fun(callback, result)
@@ -409,14 +409,14 @@ pub extern "C" fn sqlx4k_cn_tx_begin(
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_tx_begin(
+pub extern "C" fn sqlx4k_postgresql_tx_begin(
     rt: *mut c_void,
     callback: *mut c_void,
     fun: extern "C" fn(Ptr, *mut Sqlx4kResult),
 ) {
     let callback = Ptr { ptr: callback };
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
         let result = sqlx4k.tx_begin().await;
         fun(callback, result)
@@ -424,7 +424,7 @@ pub extern "C" fn sqlx4k_tx_begin(
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_tx_commit(
+pub extern "C" fn sqlx4k_postgresql_tx_commit(
     rt: *mut c_void,
     tx: *mut c_void,
     callback: *mut c_void,
@@ -433,7 +433,7 @@ pub extern "C" fn sqlx4k_tx_commit(
     let tx = Ptr { ptr: tx };
     let callback = Ptr { ptr: callback };
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
         let result = sqlx4k.tx_commit(tx).await;
         fun(callback, result)
@@ -441,7 +441,7 @@ pub extern "C" fn sqlx4k_tx_commit(
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_tx_rollback(
+pub extern "C" fn sqlx4k_postgresql_tx_rollback(
     rt: *mut c_void,
     tx: *mut c_void,
     callback: *mut c_void,
@@ -450,7 +450,7 @@ pub extern "C" fn sqlx4k_tx_rollback(
     let tx = Ptr { ptr: tx };
     let callback = Ptr { ptr: callback };
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
         let result = sqlx4k.tx_rollback(tx).await;
         fun(callback, result)
@@ -458,7 +458,7 @@ pub extern "C" fn sqlx4k_tx_rollback(
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_tx_query(
+pub extern "C" fn sqlx4k_postgresql_tx_query(
     rt: *mut c_void,
     tx: *mut c_void,
     sql: *const c_char,
@@ -469,7 +469,7 @@ pub extern "C" fn sqlx4k_tx_query(
     let callback = Ptr { ptr: callback };
     let sql = c_chars_to_str(sql).to_owned();
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
         let result = sqlx4k.tx_query(tx, &sql).await;
         fun(callback, result)
@@ -477,7 +477,7 @@ pub extern "C" fn sqlx4k_tx_query(
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_tx_fetch_all(
+pub extern "C" fn sqlx4k_postgresql_tx_fetch_all(
     rt: *mut c_void,
     tx: *mut c_void,
     sql: *const c_char,
@@ -488,7 +488,7 @@ pub extern "C" fn sqlx4k_tx_fetch_all(
     let callback = Ptr { ptr: callback };
     let sql = c_chars_to_str(sql).to_owned();
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
         let result = sqlx4k.tx_fetch_all(tx, &sql).await;
         fun(callback, result)
@@ -496,7 +496,7 @@ pub extern "C" fn sqlx4k_tx_fetch_all(
 }
 
 #[no_mangle]
-pub extern "C" fn sqlx4k_listen(
+pub extern "C" fn sqlx4k_postgresql_listen(
     rt: *mut c_void,
     channels: *const c_char,
     notify_id: c_int,
@@ -507,7 +507,7 @@ pub extern "C" fn sqlx4k_listen(
     let callback = Ptr { ptr: callback };
     let channels = c_chars_to_str(channels).to_owned();
     let runtime = RUNTIME.get().unwrap();
-    let sqlx4k = unsafe { &*(rt as *mut Sqlx4k) };
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
         // Create a pool of 1 without timeouts (as they don't apply here)
         // We only use the pool to handle re-connections
@@ -532,7 +532,7 @@ pub extern "C" fn sqlx4k_listen(
 
         loop {
             while let Some(item) = listener.try_recv().await.unwrap() {
-                let result = sqlx4k_result_of_pg_notification(item).leak();
+                let result = sqlx4k_postgresql_result_of_pg_notification(item).leak();
                 notify(notify_id, result)
             }
             // Automatically reconnect if connection closes.
@@ -540,7 +540,7 @@ pub extern "C" fn sqlx4k_listen(
     });
 }
 
-fn sqlx4k_result_of_pg_notification(item: PgNotification) -> Sqlx4kResult {
+fn sqlx4k_postgresql_result_of_pg_notification(item: PgNotification) -> Sqlx4kResult {
     let column = Sqlx4kSchemaColumn {
         ordinal: 0,
         name: CString::new(item.channel()).unwrap().into_raw(),
@@ -578,11 +578,11 @@ fn sqlx4k_result_of_pg_notification(item: PgNotification) -> Sqlx4kResult {
     }
 }
 
-fn sqlx4k_result_of(result: Result<Vec<PgRow>, sqlx::Error>) -> Sqlx4kResult {
+fn sqlx4k_postgresql_result_of(result: Result<Vec<PgRow>, sqlx::Error>) -> Sqlx4kResult {
     match result {
         Ok(rows) => {
             let schema: Sqlx4kSchema = if rows.len() > 0 {
-                sqlx4k_schema_of(rows.get(0).unwrap())
+                sqlx4k_postgresql_schema_of(rows.get(0).unwrap())
             } else {
                 Sqlx4kSchema::default()
             };
@@ -590,7 +590,7 @@ fn sqlx4k_result_of(result: Result<Vec<PgRow>, sqlx::Error>) -> Sqlx4kResult {
             let schema = Box::new(schema);
             let schema = Box::leak(schema);
 
-            let rows: Vec<Sqlx4kRow> = rows.iter().map(|r| sqlx4k_row_of(r)).collect();
+            let rows: Vec<Sqlx4kRow> = rows.iter().map(|r| sqlx4k_postgresql_row_of(r)).collect();
             let size = rows.len();
             let rows: Box<[Sqlx4kRow]> = rows.into_boxed_slice();
             let rows: &mut [Sqlx4kRow] = Box::leak(rows);
@@ -607,7 +607,7 @@ fn sqlx4k_result_of(result: Result<Vec<PgRow>, sqlx::Error>) -> Sqlx4kResult {
     }
 }
 
-fn sqlx4k_schema_of(row: &PgRow) -> Sqlx4kSchema {
+fn sqlx4k_postgresql_schema_of(row: &PgRow) -> Sqlx4kSchema {
     let columns = row.columns();
     if columns.is_empty() {
         Sqlx4kSchema::default()
@@ -640,7 +640,7 @@ fn sqlx4k_schema_of(row: &PgRow) -> Sqlx4kSchema {
     }
 }
 
-fn sqlx4k_row_of(row: &PgRow) -> Sqlx4kRow {
+fn sqlx4k_postgresql_row_of(row: &PgRow) -> Sqlx4kRow {
     let columns = row.columns();
     if columns.is_empty() {
         Sqlx4kRow::default()

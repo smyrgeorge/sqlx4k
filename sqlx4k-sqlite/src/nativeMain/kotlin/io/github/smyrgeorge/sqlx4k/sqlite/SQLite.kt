@@ -24,22 +24,22 @@ import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import sqlx4k.sqlite.sqlx4k_close
-import sqlx4k.sqlite.sqlx4k_cn_acquire
-import sqlx4k.sqlite.sqlx4k_cn_fetch_all
-import sqlx4k.sqlite.sqlx4k_cn_query
-import sqlx4k.sqlite.sqlx4k_cn_release
-import sqlx4k.sqlite.sqlx4k_cn_tx_begin
-import sqlx4k.sqlite.sqlx4k_fetch_all
-import sqlx4k.sqlite.sqlx4k_of
-import sqlx4k.sqlite.sqlx4k_pool_idle_size
-import sqlx4k.sqlite.sqlx4k_pool_size
-import sqlx4k.sqlite.sqlx4k_query
-import sqlx4k.sqlite.sqlx4k_tx_begin
-import sqlx4k.sqlite.sqlx4k_tx_commit
-import sqlx4k.sqlite.sqlx4k_tx_fetch_all
-import sqlx4k.sqlite.sqlx4k_tx_query
-import sqlx4k.sqlite.sqlx4k_tx_rollback
+import sqlx4k.sqlite.sqlx4k_sqlite_close
+import sqlx4k.sqlite.sqlx4k_sqlite_cn_acquire
+import sqlx4k.sqlite.sqlx4k_sqlite_cn_fetch_all
+import sqlx4k.sqlite.sqlx4k_sqlite_cn_query
+import sqlx4k.sqlite.sqlx4k_sqlite_cn_release
+import sqlx4k.sqlite.sqlx4k_sqlite_cn_tx_begin
+import sqlx4k.sqlite.sqlx4k_sqlite_fetch_all
+import sqlx4k.sqlite.sqlx4k_sqlite_of
+import sqlx4k.sqlite.sqlx4k_sqlite_pool_idle_size
+import sqlx4k.sqlite.sqlx4k_sqlite_pool_size
+import sqlx4k.sqlite.sqlx4k_sqlite_query
+import sqlx4k.sqlite.sqlx4k_sqlite_tx_begin
+import sqlx4k.sqlite.sqlx4k_sqlite_tx_commit
+import sqlx4k.sqlite.sqlx4k_sqlite_tx_fetch_all
+import sqlx4k.sqlite.sqlx4k_sqlite_tx_query
+import sqlx4k.sqlite.sqlx4k_sqlite_tx_rollback
 
 /**
  * A database driver for SQLite, implemented with connection pooling and transactional support.
@@ -63,7 +63,7 @@ class SQLite(
     options: ConnectionPool.Options = ConnectionPool.Options(),
     override val encoders: ValueEncoderRegistry = ValueEncoderRegistry()
 ) : ISQLite {
-    private val rt: CPointer<out CPointed> = sqlx4k_of(
+    private val rt: CPointer<out CPointed> = sqlx4k_sqlite_of(
         url = url,
         username = null,
         password = null,
@@ -129,30 +129,30 @@ class SQLite(
     )
 
     override suspend fun close(): Result<Unit> = runCatching {
-        sqlx { c -> sqlx4k_close(rt, c, DriverNativeUtils.fn) }.throwIfError()
+        sqlx { c -> sqlx4k_sqlite_close(rt, c, DriverNativeUtils.fn) }.throwIfError()
     }
 
-    override fun poolSize(): Int = sqlx4k_pool_size(rt)
-    override fun poolIdleSize(): Int = sqlx4k_pool_idle_size(rt)
+    override fun poolSize(): Int = sqlx4k_sqlite_pool_size(rt)
+    override fun poolIdleSize(): Int = sqlx4k_sqlite_pool_idle_size(rt)
 
     override suspend fun acquire(): Result<Connection> = runCatching {
-        sqlx { c -> sqlx4k_cn_acquire(rt, c, DriverNativeUtils.fn) }.use {
+        sqlx { c -> sqlx4k_sqlite_cn_acquire(rt, c, DriverNativeUtils.fn) }.use {
             it.throwIfError()
             SqlxConnection(rt, it.cn!!, encoders)
         }
     }
 
     override suspend fun execute(sql: String): Result<Long> = runCatching {
-        sqlx { c -> sqlx4k_query(rt, sql, c, DriverNativeUtils.fn) }.rowsAffectedOrError()
+        sqlx { c -> sqlx4k_sqlite_query(rt, sql, c, DriverNativeUtils.fn) }.rowsAffectedOrError()
     }
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> {
-        val res = sqlx { c -> sqlx4k_fetch_all(rt, sql, c, DriverNativeUtils.fn) }
+        val res = sqlx { c -> sqlx4k_sqlite_fetch_all(rt, sql, c, DriverNativeUtils.fn) }
         return res.use { it.toResultSet() }.toResult()
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
-        sqlx { c -> sqlx4k_tx_begin(rt, c, DriverNativeUtils.fn) }.use {
+        sqlx { c -> sqlx4k_sqlite_tx_begin(rt, c, DriverNativeUtils.fn) }.use {
             it.throwIfError()
             SqlxTransaction(rt, it.tx!!, encoders)
         }
@@ -172,7 +172,7 @@ class SQLite(
             mutex.withLock {
                 if (status == Connection.Status.Closed) return@withLock
                 _status = Connection.Status.Closed
-                sqlx { c -> sqlx4k_cn_release(rt, cn, c, DriverNativeUtils.fn) }.throwIfError()
+                sqlx { c -> sqlx4k_sqlite_cn_release(rt, cn, c, DriverNativeUtils.fn) }.throwIfError()
             }
         }
 
@@ -184,7 +184,7 @@ class SQLite(
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
                 assertIsOpen()
-                sqlx { c -> sqlx4k_cn_query(rt, cn, sql, c, DriverNativeUtils.fn) }.use {
+                sqlx { c -> sqlx4k_sqlite_cn_query(rt, cn, sql, c, DriverNativeUtils.fn) }.use {
                     it.throwIfError()
                     it.rows_affected.toLong()
                 }
@@ -194,7 +194,7 @@ class SQLite(
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
-                sqlx { c -> sqlx4k_cn_fetch_all(rt, cn, sql, c, DriverNativeUtils.fn) }
+                sqlx { c -> sqlx4k_sqlite_cn_fetch_all(rt, cn, sql, c, DriverNativeUtils.fn) }
                     .use { it.toResultSet() }
                     .toResult()
             }
@@ -203,7 +203,7 @@ class SQLite(
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
                 assertIsOpen()
-                sqlx { c -> sqlx4k_cn_tx_begin(rt, cn, c, DriverNativeUtils.fn) }.use {
+                sqlx { c -> sqlx4k_sqlite_cn_tx_begin(rt, cn, c, DriverNativeUtils.fn) }.use {
                     it.throwIfError()
                     SqlxTransaction(rt, it.tx!!, encoders)
                 }
@@ -229,7 +229,7 @@ class SQLite(
                 if (commited) return@withLock
                 assertIsOpen()
                 _status = Transaction.Status.Closed
-                sqlx { c -> sqlx4k_tx_commit(rt, tx, c, DriverNativeUtils.fn) }.throwIfError()
+                sqlx { c -> sqlx4k_sqlite_tx_commit(rt, tx, c, DriverNativeUtils.fn) }.throwIfError()
                 _commited = true
             }
         }
@@ -239,7 +239,7 @@ class SQLite(
                 if (rollbacked) return@withLock
                 assertIsOpen()
                 _status = Transaction.Status.Closed
-                sqlx { c -> sqlx4k_tx_rollback(rt, tx, c, DriverNativeUtils.fn) }.throwIfError()
+                sqlx { c -> sqlx4k_sqlite_tx_rollback(rt, tx, c, DriverNativeUtils.fn) }.throwIfError()
                 _rollbacked = true
             }
         }
@@ -247,7 +247,7 @@ class SQLite(
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
                 assertIsOpen()
-                sqlx { c -> sqlx4k_tx_query(rt, tx, sql, c, DriverNativeUtils.fn) }.use {
+                sqlx { c -> sqlx4k_sqlite_tx_query(rt, tx, sql, c, DriverNativeUtils.fn) }.use {
                     tx = it.tx!!
                     it.throwIfError()
                     it.rows_affected.toLong()
@@ -258,7 +258,7 @@ class SQLite(
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
-                sqlx { c -> sqlx4k_tx_fetch_all(rt, tx, sql, c, DriverNativeUtils.fn) }.use {
+                sqlx { c -> sqlx4k_sqlite_tx_fetch_all(rt, tx, sql, c, DriverNativeUtils.fn) }.use {
                     tx = it.tx!!
                     it.toResultSet()
                 }.toResult()
