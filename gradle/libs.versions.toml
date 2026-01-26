@@ -8,7 +8,7 @@ kotlinx-datetime = "0.7.1"
 # https://github.com/Kotlin/kotlinx.coroutines
 kotlinx-coroutines = "1.10.2"
 # https://github.com/Kotlin/kotlinx.serialization
-kotlinx-serialization = "1.9.0"
+kotlinx-serialization = "1.10.0"
 # https://github.com/vanniktech/gradle-maven-publish-plugin
 publish = "0.36.0"
 # https://github.com/Kotlin/dokka
