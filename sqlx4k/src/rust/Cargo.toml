@@ -4,13 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["lib"]
+crate-type = ["cdylib", "rlib"]
 
 [profile.release]
-opt-level = "z"
+opt-level = 3
 strip = true
 lto = true
 panic = "abort"
+codegen-units = 1
 
 [dependencies]
 # https://crates.io/crates/sqlx
