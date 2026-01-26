@@ -39,7 +39,7 @@
             </a>        <button class="navigation-controls--btn navigation-controls--btn_toc ui-kit_mobile-only" id="toc-toggle" type="button">Toggle table of contents
         </button>
         <div class="navigation-controls--break ui-kit_mobile-only"></div>
-        <div class="library-version" id="library-version">1.5.14
+        <div class="library-version" id="library-version">1.5.15
         </div>
         <div class="navigation-controls">
         <ul class="filter-section filter-section_loading" id="filter-section" aria-label="Target filter">
@@ -157,6 +157,36 @@
               <div>
                 <div class="title">
                   <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><span class="token operator">&lt;</span><a href="../-crud-repository-hooks/around-query.html">R</a><span class="token operator">&gt; </span><a href="../-crud-repository-hooks/around-query.html"><span class="token function">aroundQuery</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">method<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">statement<span class="token operator">: </span><a href="../-statement/index.html">Statement</a><span class="token punctuation">, </span></span><span class="parameter ">block<span class="token operator">: </span><span class="token keyword">suspend </span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator"> -&gt; </span><a href="../-crud-repository-hooks/around-query.html">R</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="../-crud-repository-hooks/around-query.html">R</a></div><div class="brief "><p class="paragraph">This method provides an around-style hook that wraps query execution. It allows for cross-cutting concerns like metrics, tracing, and logging to be applied to all database operations.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="885262052%2FFunctions%2F272526764" anchor-label="batchInsert" id="885262052%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="batch-insert.html"><span>batch</span><wbr><span><span>Insert</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="885262052%2FFunctions%2F272526764"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="batch-insert.html"><span class="token function">batchInsert</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">context<span class="token operator">: </span><a href="../-query-executor/index.html">QueryExecutor</a><span class="token punctuation">, </span></span><span class="parameter ">entities<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-iterable/index.html">Iterable</a><span class="token operator">&lt;</span><a href="index.html">T</a><span class="token operator">&gt;</span></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="index.html">T</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Inserts multiple entities into the data source using the specified driver context.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="938905300%2FFunctions%2F272526764" anchor-label="batchUpdate" id="938905300%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="batch-update.html"><span>batch</span><wbr><span><span>Update</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="938905300%2FFunctions%2F272526764"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">suspend </span><span class="token keyword">fun </span><a href="batch-update.html"><span class="token function">batchUpdate</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">context<span class="token operator">: </span><a href="../-query-executor/index.html">QueryExecutor</a><span class="token punctuation">, </span></span><span class="parameter ">entities<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-iterable/index.html">Iterable</a><span class="token operator">&lt;</span><a href="index.html">T</a><span class="token operator">&gt;</span></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-result/index.html">Result</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/index.html">List</a><span class="token operator">&lt;</span><a href="index.html">T</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">Updates multiple entities in the data source using the specified driver context.</p></div></div></div>
                 </div>
               </div>
             </div>
