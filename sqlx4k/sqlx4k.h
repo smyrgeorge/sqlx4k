@@ -46,59 +46,6 @@ typedef struct Sqlx4kResult {
   struct Sqlx4kRow *rows;
 } Sqlx4kResult;
 
+void auto_generated_for_struct_Ptr(struct Ptr);
+void auto_generated_for_struct_Sqlx4kResult(struct Sqlx4kResult);
 void sqlx4k_free_result(struct Sqlx4kResult *ptr);
-
-Sqlx4kResult *sqlx4k_of(const char *url,
-                        const char *username,
-                        const char *password,
-                        int min_connections,
-                        int max_connections,
-                        int acquire_timeout_milis,
-                        int idle_timeout_milis,
-                        int max_lifetime_milis);
-
-int sqlx4k_pool_size(void *rt);
-
-int sqlx4k_pool_idle_size(void *rt);
-
-void sqlx4k_close(void *rt, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
-
-void sqlx4k_query(void *rt, const char *sql, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
-
-void sqlx4k_fetch_all(void *rt, const char *sql, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
-
-void sqlx4k_cn_acquire(void *rt, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
-
-void sqlx4k_cn_release(void *rt, void *cn, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
-
-void sqlx4k_cn_query(void *rt,
-                     void *cn,
-                     const char *sql,
-                     void *callback,
-                     void (*fun)(Ptr, Sqlx4kResult*));
-
-void sqlx4k_cn_fetch_all(void *rt,
-                         void *cn,
-                         const char *sql,
-                         void *callback,
-                         void (*fun)(Ptr, Sqlx4kResult*));
-
-void sqlx4k_cn_tx_begin(void *rt, void *cn, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
-
-void sqlx4k_tx_begin(void *rt, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
-
-void sqlx4k_tx_commit(void *rt, void *tx, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
-
-void sqlx4k_tx_rollback(void *rt, void *tx, void *callback, void (*fun)(Ptr, Sqlx4kResult*));
-
-void sqlx4k_tx_query(void *rt,
-                     void *tx,
-                     const char *sql,
-                     void *callback,
-                     void (*fun)(Ptr, Sqlx4kResult*));
-
-void sqlx4k_tx_fetch_all(void *rt,
-                         void *tx,
-                         const char *sql,
-                         void *callback,
-                         void (*fun)(Ptr, Sqlx4kResult*));
