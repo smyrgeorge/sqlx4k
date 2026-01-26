@@ -1,5 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.multiplatform
 
+import java.io.File
+import java.lang.System.getenv
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -11,8 +13,6 @@ import org.gradle.process.ExecOperations
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
-import java.io.File
-import java.lang.System.getenv
 
 @Suppress("unused")
 class MultiplatformLibConventions : Plugin<Project> {
@@ -110,11 +110,6 @@ class MultiplatformLibConventions : Plugin<Project> {
 
         compilations["main"].cinterops {
             create("ffi") {
-
-                if (project.name == "sqlx4k") {
-                    definitionFile.set(file("src/nativeInterop/cinterop/sqlx4k.def"))
-                    return@create
-                }
 
                 if (target == "x86_64-pc-windows-gnu") {
                     definitionFile.set(file("src/nativeInterop/cinterop/sqlx4k-mingwX64.def"))

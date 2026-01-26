@@ -1,3 +1,0 @@
-package = sqlx4k
-headers = sqlx4k.h
-compilerOpts = -I./
