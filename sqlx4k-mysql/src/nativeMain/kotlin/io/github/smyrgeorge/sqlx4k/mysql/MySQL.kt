@@ -3,22 +3,14 @@ package io.github.smyrgeorge.sqlx4k.mysql
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Dialect
-import io.github.smyrgeorge.sqlx4k.DriverNativeUtils
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
-import io.github.smyrgeorge.sqlx4k.impl.extensions.rowsAffectedOrError
-import io.github.smyrgeorge.sqlx4k.impl.extensions.rtOrError
-import io.github.smyrgeorge.sqlx4k.impl.extensions.sqlx
-import io.github.smyrgeorge.sqlx4k.impl.extensions.throwIfError
-import io.github.smyrgeorge.sqlx4k.impl.extensions.toResultSet
-import io.github.smyrgeorge.sqlx4k.impl.extensions.use
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
-import kotlin.time.Duration
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -40,6 +32,7 @@ import sqlx4k.mysql.sqlx4k_mysql_tx_commit
 import sqlx4k.mysql.sqlx4k_mysql_tx_fetch_all
 import sqlx4k.mysql.sqlx4k_mysql_tx_query
 import sqlx4k.mysql.sqlx4k_mysql_tx_rollback
+import kotlin.time.Duration
 
 /**
  * The `MySQL` class provides a driver implementation for interacting with a MySQL database.
@@ -132,30 +125,30 @@ class MySQL(
     )
 
     override suspend fun close(): Result<Unit> = runCatching {
-        sqlx { c -> sqlx4k_mysql_close(rt, c, DriverNativeUtils.fn) }.throwIfError()
+        sqlx { c -> sqlx4k_mysql_close(rt, c, fn) }.throwIfError()
     }
 
     override fun poolSize(): Int = sqlx4k_mysql_pool_size(rt)
     override fun poolIdleSize(): Int = sqlx4k_mysql_pool_idle_size(rt)
 
     override suspend fun acquire(): Result<Connection> = runCatching {
-        sqlx { c -> sqlx4k_mysql_cn_acquire(rt, c, DriverNativeUtils.fn) }.use {
+        sqlx { c -> sqlx4k_mysql_cn_acquire(rt, c, fn) }.use {
             it.throwIfError()
             SqlxConnection(rt, it.cn!!, encoders)
         }
     }
 
     override suspend fun execute(sql: String): Result<Long> = runCatching {
-        sqlx { c -> sqlx4k_mysql_query(rt, sql, c, DriverNativeUtils.fn) }.rowsAffectedOrError()
+        sqlx { c -> sqlx4k_mysql_query(rt, sql, c, fn) }.rowsAffectedOrError()
     }
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> {
-        val res = sqlx { c -> sqlx4k_mysql_fetch_all(rt, sql, c, DriverNativeUtils.fn) }
+        val res = sqlx { c -> sqlx4k_mysql_fetch_all(rt, sql, c, fn) }
         return res.use { it.toResultSet() }.toResult()
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
-        sqlx { c -> sqlx4k_mysql_tx_begin(rt, c, DriverNativeUtils.fn) }.use {
+        sqlx { c -> sqlx4k_mysql_tx_begin(rt, c, fn) }.use {
             it.throwIfError()
             SqlxTransaction(rt, it.tx!!, encoders)
         }
@@ -182,7 +175,7 @@ class MySQL(
                     setTransactionIsolationLevel(default, false)
                 }
 
-                sqlx { c -> sqlx4k_mysql_cn_release(rt, cn, c, DriverNativeUtils.fn) }.throwIfError()
+                sqlx { c -> sqlx4k_mysql_cn_release(rt, cn, c, fn) }.throwIfError()
             }
         }
 
@@ -197,7 +190,7 @@ class MySQL(
 
         private suspend fun execute(sql: String, lock: Boolean): Result<Long> {
             suspend fun doExecute(sql: String): Result<Long> = runCatching {
-                sqlx { c -> sqlx4k_mysql_cn_query(rt, cn, sql, c, DriverNativeUtils.fn) }.use {
+                sqlx { c -> sqlx4k_mysql_cn_query(rt, cn, sql, c, fn) }.use {
                     it.throwIfError()
                     it.rows_affected.toLong()
                 }
@@ -218,7 +211,7 @@ class MySQL(
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
-                sqlx { c -> sqlx4k_mysql_cn_fetch_all(rt, cn, sql, c, DriverNativeUtils.fn) }
+                sqlx { c -> sqlx4k_mysql_cn_fetch_all(rt, cn, sql, c, fn) }
                     .use { it.toResultSet() }
                     .toResult()
             }
@@ -227,7 +220,7 @@ class MySQL(
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
                 assertIsOpen()
-                sqlx { c -> sqlx4k_mysql_cn_tx_begin(rt, cn, c, DriverNativeUtils.fn) }.use {
+                sqlx { c -> sqlx4k_mysql_cn_tx_begin(rt, cn, c, fn) }.use {
                     it.throwIfError()
                     SqlxTransaction(rt, it.tx!!, encoders)
                 }
@@ -253,7 +246,7 @@ class MySQL(
                 if (commited) return@withLock
                 assertIsOpen()
                 _status = Transaction.Status.Closed
-                sqlx { c -> sqlx4k_mysql_tx_commit(rt, tx, c, DriverNativeUtils.fn) }.throwIfError()
+                sqlx { c -> sqlx4k_mysql_tx_commit(rt, tx, c, fn) }.throwIfError()
                 _commited = true
             }
         }
@@ -263,7 +256,7 @@ class MySQL(
                 if (rollbacked) return@withLock
                 assertIsOpen()
                 _status = Transaction.Status.Closed
-                sqlx { c -> sqlx4k_mysql_tx_rollback(rt, tx, c, DriverNativeUtils.fn) }.throwIfError()
+                sqlx { c -> sqlx4k_mysql_tx_rollback(rt, tx, c, fn) }.throwIfError()
                 _rollbacked = true
             }
         }
@@ -271,7 +264,7 @@ class MySQL(
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
                 assertIsOpen()
-                sqlx { c -> sqlx4k_mysql_tx_query(rt, tx, sql, c, DriverNativeUtils.fn) }.use {
+                sqlx { c -> sqlx4k_mysql_tx_query(rt, tx, sql, c, fn) }.use {
                     tx = it.tx!!
                     it.throwIfError()
                     it.rows_affected.toLong()
@@ -282,7 +275,7 @@ class MySQL(
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
-                sqlx { c -> sqlx4k_mysql_tx_fetch_all(rt, tx, sql, c, DriverNativeUtils.fn) }.use {
+                sqlx { c -> sqlx4k_mysql_tx_fetch_all(rt, tx, sql, c, fn) }.use {
                     tx = it.tx!!
                     it.toResultSet()
                 }.toResult()

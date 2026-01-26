@@ -3,27 +3,14 @@ package io.github.smyrgeorge.sqlx4k.postgres
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Dialect
-import io.github.smyrgeorge.sqlx4k.DriverNativeUtils
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
-import io.github.smyrgeorge.sqlx4k.impl.extensions.rowsAffectedOrError
-import io.github.smyrgeorge.sqlx4k.impl.extensions.rtOrError
-import io.github.smyrgeorge.sqlx4k.impl.extensions.sqlx
-import io.github.smyrgeorge.sqlx4k.impl.extensions.throwIfError
-import io.github.smyrgeorge.sqlx4k.impl.extensions.toResultSet
-import io.github.smyrgeorge.sqlx4k.impl.extensions.use
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
-import kotlin.concurrent.atomics.AtomicInt
-import kotlin.concurrent.atomics.ExperimentalAtomicApi
-import kotlin.concurrent.atomics.incrementAndFetch
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.EmptyCoroutineContext
-import kotlin.time.Duration
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -34,24 +21,30 @@ import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import sqlx4k.Sqlx4kResult
-import sqlx4k.postresql.sqlx4k_postgresql_close
-import sqlx4k.postresql.sqlx4k_postgresql_cn_acquire
-import sqlx4k.postresql.sqlx4k_postgresql_cn_fetch_all
-import sqlx4k.postresql.sqlx4k_postgresql_cn_query
-import sqlx4k.postresql.sqlx4k_postgresql_cn_release
-import sqlx4k.postresql.sqlx4k_postgresql_cn_tx_begin
-import sqlx4k.postresql.sqlx4k_postgresql_fetch_all
-import sqlx4k.postresql.sqlx4k_postgresql_listen
-import sqlx4k.postresql.sqlx4k_postgresql_of
-import sqlx4k.postresql.sqlx4k_postgresql_pool_idle_size
-import sqlx4k.postresql.sqlx4k_postgresql_pool_size
-import sqlx4k.postresql.sqlx4k_postgresql_query
-import sqlx4k.postresql.sqlx4k_postgresql_tx_begin
-import sqlx4k.postresql.sqlx4k_postgresql_tx_commit
-import sqlx4k.postresql.sqlx4k_postgresql_tx_fetch_all
-import sqlx4k.postresql.sqlx4k_postgresql_tx_query
-import sqlx4k.postresql.sqlx4k_postgresql_tx_rollback
+import sqlx4k.postgresql.Sqlx4kResult
+import sqlx4k.postgresql.sqlx4k_postgresql_close
+import sqlx4k.postgresql.sqlx4k_postgresql_cn_acquire
+import sqlx4k.postgresql.sqlx4k_postgresql_cn_fetch_all
+import sqlx4k.postgresql.sqlx4k_postgresql_cn_query
+import sqlx4k.postgresql.sqlx4k_postgresql_cn_release
+import sqlx4k.postgresql.sqlx4k_postgresql_cn_tx_begin
+import sqlx4k.postgresql.sqlx4k_postgresql_fetch_all
+import sqlx4k.postgresql.sqlx4k_postgresql_listen
+import sqlx4k.postgresql.sqlx4k_postgresql_of
+import sqlx4k.postgresql.sqlx4k_postgresql_pool_idle_size
+import sqlx4k.postgresql.sqlx4k_postgresql_pool_size
+import sqlx4k.postgresql.sqlx4k_postgresql_query
+import sqlx4k.postgresql.sqlx4k_postgresql_tx_begin
+import sqlx4k.postgresql.sqlx4k_postgresql_tx_commit
+import sqlx4k.postgresql.sqlx4k_postgresql_tx_fetch_all
+import sqlx4k.postgresql.sqlx4k_postgresql_tx_query
+import sqlx4k.postgresql.sqlx4k_postgresql_tx_rollback
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.concurrent.atomics.incrementAndFetch
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.time.Duration
 
 /**
  * PostgreSQL class provides mechanisms to interact with a PostgreSQL database.
@@ -147,30 +140,30 @@ class PostgreSQL(
     )
 
     override suspend fun close(): Result<Unit> = runCatching {
-        sqlx { c -> sqlx4k_postgresql_close(rt, c, DriverNativeUtils.fn) }.throwIfError()
+        sqlx { c -> sqlx4k_postgresql_close(rt, c, fn) }.throwIfError()
     }
 
     override fun poolSize(): Int = sqlx4k_postgresql_pool_size(rt)
     override fun poolIdleSize(): Int = sqlx4k_postgresql_pool_idle_size(rt)
 
     override suspend fun acquire(): Result<Connection> = runCatching {
-        sqlx { c -> sqlx4k_postgresql_cn_acquire(rt, c, DriverNativeUtils.fn) }.use {
+        sqlx { c -> sqlx4k_postgresql_cn_acquire(rt, c, fn) }.use {
             it.throwIfError()
             SqlxConnection(rt, it.cn!!, encoders)
         }
     }
 
     override suspend fun execute(sql: String): Result<Long> = runCatching {
-        sqlx { c -> sqlx4k_postgresql_query(rt, sql, c, DriverNativeUtils.fn) }.rowsAffectedOrError()
+        sqlx { c -> sqlx4k_postgresql_query(rt, sql, c, fn) }.rowsAffectedOrError()
     }
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> {
-        val res = sqlx { c -> sqlx4k_postgresql_fetch_all(rt, sql, c, DriverNativeUtils.fn) }
+        val res = sqlx { c -> sqlx4k_postgresql_fetch_all(rt, sql, c, fn) }
         return res.use { it.toResultSet() }.toResult()
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
-        sqlx { c -> sqlx4k_postgresql_tx_begin(rt, c, DriverNativeUtils.fn) }.use {
+        sqlx { c -> sqlx4k_postgresql_tx_begin(rt, c, fn) }.use {
             it.throwIfError()
             SqlxTransaction(rt, it.tx!!, encoders)
         }
@@ -225,7 +218,7 @@ class PostgreSQL(
                 notify_id = channelId,
                 notify = notify,
                 callback = c,
-                `fun` = DriverNativeUtils.fn
+                `fun` = fn
             )
         }.throwIfError()
     }
@@ -270,7 +263,7 @@ class PostgreSQL(
                     setTransactionIsolationLevel(default, false)
                 }
 
-                sqlx { c -> sqlx4k_postgresql_cn_release(rt, cn, c, DriverNativeUtils.fn) }.throwIfError()
+                sqlx { c -> sqlx4k_postgresql_cn_release(rt, cn, c, fn) }.throwIfError()
             }
         }
 
@@ -285,7 +278,7 @@ class PostgreSQL(
 
         private suspend fun execute(sql: String, lock: Boolean): Result<Long> {
             suspend fun doExecute(sql: String): Result<Long> = runCatching {
-                sqlx { c -> sqlx4k_postgresql_cn_query(rt, cn, sql, c, DriverNativeUtils.fn) }.use {
+                sqlx { c -> sqlx4k_postgresql_cn_query(rt, cn, sql, c, fn) }.use {
                     it.throwIfError()
                     it.rows_affected.toLong()
                 }
@@ -306,7 +299,7 @@ class PostgreSQL(
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
-                sqlx { c -> sqlx4k_postgresql_cn_fetch_all(rt, cn, sql, c, DriverNativeUtils.fn) }
+                sqlx { c -> sqlx4k_postgresql_cn_fetch_all(rt, cn, sql, c, fn) }
                     .use { it.toResultSet() }
                     .toResult()
             }
@@ -315,7 +308,7 @@ class PostgreSQL(
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
                 assertIsOpen()
-                sqlx { c -> sqlx4k_postgresql_cn_tx_begin(rt, cn, c, DriverNativeUtils.fn) }.use {
+                sqlx { c -> sqlx4k_postgresql_cn_tx_begin(rt, cn, c, fn) }.use {
                     it.throwIfError()
                     SqlxTransaction(rt, it.tx!!, encoders)
                 }
@@ -341,7 +334,7 @@ class PostgreSQL(
                 if (commited) return@withLock
                 assertIsOpen()
                 _status = Transaction.Status.Closed
-                sqlx { c -> sqlx4k_postgresql_tx_commit(rt, tx, c, DriverNativeUtils.fn) }.throwIfError()
+                sqlx { c -> sqlx4k_postgresql_tx_commit(rt, tx, c, fn) }.throwIfError()
                 _commited = true
             }
         }
@@ -351,7 +344,7 @@ class PostgreSQL(
                 if (rollbacked) return@withLock
                 assertIsOpen()
                 _status = Transaction.Status.Closed
-                sqlx { c -> sqlx4k_postgresql_tx_rollback(rt, tx, c, DriverNativeUtils.fn) }.throwIfError()
+                sqlx { c -> sqlx4k_postgresql_tx_rollback(rt, tx, c, fn) }.throwIfError()
                 _rollbacked = true
             }
         }
@@ -359,7 +352,7 @@ class PostgreSQL(
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             mutex.withLock {
                 assertIsOpen()
-                sqlx { c -> sqlx4k_postgresql_tx_query(rt, tx, sql, c, DriverNativeUtils.fn) }.use {
+                sqlx { c -> sqlx4k_postgresql_tx_query(rt, tx, sql, c, fn) }.use {
                     tx = it.tx!!
                     it.throwIfError()
                     it.rows_affected.toLong()
@@ -370,7 +363,7 @@ class PostgreSQL(
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
-                sqlx { c -> sqlx4k_postgresql_tx_fetch_all(rt, tx, sql, c, DriverNativeUtils.fn) }.use {
+                sqlx { c -> sqlx4k_postgresql_tx_fetch_all(rt, tx, sql, c, fn) }.use {
                     tx = it.tx!!
                     it.toResultSet()
                 }.toResult()

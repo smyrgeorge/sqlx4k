@@ -1,4 +1,4 @@
-package = sqlx4k.postresql
+package = sqlx4k.postgresql
 headers = sqlx4k_postgres.h
 compilerOpts = -I./src/rust/target
 staticLibraries = libsqlx4k_postgres.a

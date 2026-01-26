@@ -1,19 +1,26 @@
 @file:OptIn(ExperimentalForeignApi::class)
 
-package io.github.smyrgeorge.sqlx4k.impl.extensions
+package io.github.smyrgeorge.sqlx4k.postgres
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
+import kotlinx.cinterop.CValue
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.StableRef
+import kotlinx.cinterop.asStableRef
 import kotlinx.cinterop.get
 import kotlinx.cinterop.pointed
+import kotlinx.cinterop.staticCFunction
 import kotlinx.cinterop.toKString
-import sqlx4k.Sqlx4kResult
-import sqlx4k.Sqlx4kSchema
-import sqlx4k.sqlx4k_free_result
+import kotlinx.cinterop.useContents
+import sqlx4k.postgresql.Ptr
+import sqlx4k.postgresql.Sqlx4kResult
+import sqlx4k.postgresql.Sqlx4kSchema
+import sqlx4k.postgresql.sqlx4k_free_result
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
 private fun Sqlx4kResult.isError(): Boolean = error >= 0
@@ -27,14 +34,6 @@ fun Sqlx4kResult.throwIfError() {
     if (isError()) toError().raise()
 }
 
-/**
- * Converts a Sqlx4kSchema to ResultSet.Metadata.
- *
- * Creates metadata information for a result set by extracting column definitions
- * from the schema.
- *
- * @return ResultSet.Metadata containing column information
- */
 private fun Sqlx4kSchema.toMetadata(): ResultSet.Metadata {
     val columns = List(size) { colIndex ->
         val column = requireNotNull(columns) { "Schema columns cannot be null" }[colIndex]
@@ -49,11 +48,6 @@ private fun Sqlx4kSchema.toMetadata(): ResultSet.Metadata {
     return ResultSet.Metadata(columns)
 }
 
-/**
- * Converts a Sqlx4kResult to ResultSet.
- *
- * @return A ResultSet containing structured data from the Sqlx4kResult
- */
 fun Sqlx4kResult.toResultSet(): ResultSet {
     // Process rows
     val rows = List(size) { rowIndex ->
@@ -84,18 +78,6 @@ fun Sqlx4kResult.toResultSet(): ResultSet {
     return ResultSet(rows, error, metadata)
 }
 
-/**
- * Safely executes an operation with a Sqlx4kResult pointer and ensures proper resource cleanup.
- *
- * This inline function provides a scope for working with potentially nullable Sqlx4kResult
- * pointers while guaranteeing that the associated resources are properly released after use,
- * regardless of whether the operation succeeds or fails.
- *
- * @param T The return type of the operation
- * @param block The operation to perform with the dereferenced Sqlx4kResult
- * @return The result of the operation
- * @throws IllegalStateException If the pointer is null or cannot be dereferenced
- */
 inline fun <T> CPointer<Sqlx4kResult>?.use(block: (Sqlx4kResult) -> T): T {
     try {
         return this?.pointed?.let(block)
@@ -116,19 +98,6 @@ fun CPointer<Sqlx4kResult>?.rowsAffectedOrError(): Long = use {
     it.rows_affected.toLong()
 }
 
-/**
- * Executes an SQLx operation asynchronously using Kotlin coroutines.
- *
- * This function transforms a callback-based SQLx operation into a suspending function,
- * allowing for more readable asynchronous code. It creates a stable reference to the
- * continuation and passes its pointer to the callback function, which is expected to
- * resume the continuation when the operation completes.
- *
- * @param operation A function that takes a pointer to the continuation and initiates
- *                  the SQLx operation. This function should eventually resume the continuation
- *                  with the result pointer.
- * @return The SQLx result pointer, or null if the operation did not produce a result
- */
 suspend inline fun sqlx(
     crossinline operation: (continuationPtr: CPointer<out CPointed>) -> Unit
 ): CPointer<Sqlx4kResult>? = suspendCoroutine { continuation ->
@@ -141,4 +110,10 @@ suspend inline fun sqlx(
     // Execute the operation with the continuation pointer
     // The operation is responsible for resuming the continuation
     operation(continuationPtr)
+}
+
+val fn = staticCFunction<CValue<Ptr>, CPointer<Sqlx4kResult>?, Unit> { c, r ->
+    val ref = c.useContents { ptr }!!.asStableRef<Continuation<CPointer<Sqlx4kResult>?>>()
+    ref.get().resume(r)
+    ref.dispose()
 }
