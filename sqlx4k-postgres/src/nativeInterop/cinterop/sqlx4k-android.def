@@ -1,0 +1,6 @@
+package = sqlx4k.postgresql
+headers = sqlx4k_postgres.h
+compilerOpts = -I./src/rust/target
+staticLibraries = libsqlx4k_postgres.a
+libraryPaths.android_arm64 = ./src/rust/target/aarch64-linux-android/release
+libraryPaths.android_x64 = ./src/rust/target/x86_64-linux-android/release
