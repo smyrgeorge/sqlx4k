@@ -1,8 +1,10 @@
 package = sqlx4k.sqlite
 headers = sqlx4k_sqlite.h
 compilerOpts = -I./src/rust/target
+staticLibraries = libsqlx4k_sqlite.a
+libraryPaths = ./src/rust/target/x86_64-pc-windows-gnu/release
 # The following was found with: export RUSTFLAGS="--print=native-static-libs"
 # https://github.com/HowardHinnant/date/issues/272
-linkerOpts = ./sqlx4k-sqlite/src/rust/target/x86_64-pc-windows-gnu/release/sqlx4k_sqlite.dll -lntdll
+linkerOpts = -lntdll
 # linkerOpts = -lole32 -lkernel32 -ladvapi32 -lntdll -luserenv -lws2_32 -ldbghelp
 # linkerOpts = -lwindows.0.52.0 -lkernel32 -ladvapi32 -lntdll -luserenv -lws2_32 -ldbghelp

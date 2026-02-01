@@ -113,8 +113,6 @@ class MultiplatformLibConventions : Plugin<Project> {
 
                 if (target == "x86_64-pc-windows-gnu") {
                     definitionFile.set(file("src/nativeInterop/cinterop/sqlx4k-mingwX64.def"))
-                } else if (target.contains("android")) {
-                    definitionFile.set(file("src/nativeInterop/cinterop/sqlx4k-android.def"))
                 } else {
                     definitionFile.set(file("src/nativeInterop/cinterop/sqlx4k.def"))
                 }

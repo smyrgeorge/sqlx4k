@@ -1,5 +1,0 @@
-package = sqlx4k.sqlite
-headers = sqlx4k_sqlite.h
-compilerOpts = -I./src/rust/target
-linkerOpts.android_arm64 = ./sqlx4k-sqlite/src/rust/target/aarch64-linux-android/release/libsqlx4k_sqlite.so
-linkerOpts.android_x64 = ./sqlx4k-sqlite/src/rust/target/x86_64-linux-android/release/libsqlx4k_sqlite.so
