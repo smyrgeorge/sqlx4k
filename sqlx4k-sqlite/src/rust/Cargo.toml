@@ -14,8 +14,6 @@ panic = "abort"
 codegen-units = 1
 
 [dependencies]
-# Link dynamically to avoid duplicate symbols when using multiple dialects
-sqlx4k = { path = "../../../sqlx4k/src/rust" }
 # https://crates.io/crates/once_cell
 once_cell = { version = "1.21.3" }
 # https://crates.io/crates/tokio

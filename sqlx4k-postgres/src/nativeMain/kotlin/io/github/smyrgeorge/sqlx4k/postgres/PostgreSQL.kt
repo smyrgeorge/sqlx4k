@@ -11,6 +11,12 @@ import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.concurrent.atomics.incrementAndFetch
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.time.Duration
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -21,7 +27,7 @@ import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import sqlx4k.postgresql.Sqlx4kResult
+import sqlx4k.postgresql.Sqlx4kPostgresResult
 import sqlx4k.postgresql.sqlx4k_postgresql_close
 import sqlx4k.postgresql.sqlx4k_postgresql_cn_acquire
 import sqlx4k.postgresql.sqlx4k_postgresql_cn_fetch_all
@@ -39,12 +45,6 @@ import sqlx4k.postgresql.sqlx4k_postgresql_tx_commit
 import sqlx4k.postgresql.sqlx4k_postgresql_tx_fetch_all
 import sqlx4k.postgresql.sqlx4k_postgresql_tx_query
 import sqlx4k.postgresql.sqlx4k_postgresql_tx_rollback
-import kotlin.concurrent.atomics.AtomicInt
-import kotlin.concurrent.atomics.ExperimentalAtomicApi
-import kotlin.concurrent.atomics.incrementAndFetch
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.EmptyCoroutineContext
-import kotlin.time.Duration
 
 /**
  * PostgreSQL class provides mechanisms to interact with a PostgreSQL database.
@@ -380,7 +380,7 @@ class PostgreSQL(
         private val listenerId = AtomicInt(0)
 
         private val channels: MutableMap<Int, Channel<Notification>> = mutableMapOf()
-        private val notify = staticCFunction<Int, CPointer<Sqlx4kResult>?, Unit> { c, r ->
+        private val notify = staticCFunction<Int, CPointer<Sqlx4kPostgresResult>?, Unit> { c, r ->
             fun ResultSet.toNotification(): Notification {
                 require(rows.size == 1) { "Expected exactly one row, got ${rows.size}" }
                 val row: ResultSet.Row = rows[0]

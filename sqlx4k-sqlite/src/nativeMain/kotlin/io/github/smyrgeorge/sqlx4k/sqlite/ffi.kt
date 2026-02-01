@@ -15,26 +15,26 @@ import kotlinx.cinterop.pointed
 import kotlinx.cinterop.staticCFunction
 import kotlinx.cinterop.toKString
 import kotlinx.cinterop.useContents
-import sqlx4k.sqlite.Ptr
-import sqlx4k.sqlite.Sqlx4kResult
-import sqlx4k.sqlite.Sqlx4kSchema
-import sqlx4k.sqlite.sqlx4k_free_result
+import sqlx4k.sqlite.Sqlx4kSqlitePtr
+import sqlx4k.sqlite.Sqlx4kSqliteResult
+import sqlx4k.sqlite.Sqlx4kSqliteSchema
+import sqlx4k.sqlite.sqlx4k_sqlite_free_result
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
-private fun Sqlx4kResult.isError(): Boolean = error >= 0
-private fun Sqlx4kResult.toError(): SQLError {
+private fun Sqlx4kSqliteResult.isError(): Boolean = error >= 0
+private fun Sqlx4kSqliteResult.toError(): SQLError {
     val code = SQLError.Code.entries[error]
     val message = error_message?.toKString()
     return SQLError(code, message)
 }
 
-fun Sqlx4kResult.throwIfError() {
+fun Sqlx4kSqliteResult.throwIfError() {
     if (isError()) toError().raise()
 }
 
-private fun Sqlx4kSchema.toMetadata(): ResultSet.Metadata {
+private fun Sqlx4kSqliteSchema.toMetadata(): ResultSet.Metadata {
     val columns = List(size) { colIndex ->
         val column = requireNotNull(columns) { "Schema columns cannot be null" }[colIndex]
 
@@ -48,7 +48,7 @@ private fun Sqlx4kSchema.toMetadata(): ResultSet.Metadata {
     return ResultSet.Metadata(columns)
 }
 
-fun Sqlx4kResult.toResultSet(): ResultSet {
+fun Sqlx4kSqliteResult.toResultSet(): ResultSet {
     // Process rows
     val rows = List(size) { rowIndex ->
         val row = requireNotNull(rows) { "Rows cannot be null" }[rowIndex]
@@ -78,29 +78,29 @@ fun Sqlx4kResult.toResultSet(): ResultSet {
     return ResultSet(rows, error, metadata)
 }
 
-inline fun <T> CPointer<Sqlx4kResult>?.use(block: (Sqlx4kResult) -> T): T {
+inline fun <T> CPointer<Sqlx4kSqliteResult>?.use(block: (Sqlx4kSqliteResult) -> T): T {
     try {
         return this?.pointed?.let(block)
-            ?: throw IllegalStateException("Invalid Sqlx4kResult pointer: cannot dereference null pointer")
+            ?: throw IllegalStateException("Invalid Sqlx4kSqliteResult pointer: cannot dereference null pointer")
     } finally {
-        sqlx4k_free_result(this)
+        sqlx4k_sqlite_free_result(this)
     }
 }
 
-fun CPointer<Sqlx4kResult>?.throwIfError(): Unit = use { it.throwIfError() }
-fun CPointer<Sqlx4kResult>?.rtOrError(): CPointer<out CPointed> = use {
+fun CPointer<Sqlx4kSqliteResult>?.throwIfError(): Unit = use { it.throwIfError() }
+fun CPointer<Sqlx4kSqliteResult>?.rtOrError(): CPointer<out CPointed> = use {
     it.throwIfError()
     it.rt ?: SQLError(SQLError.Code.Pool, "Unexpected behaviour while creating the pool.").raise()
 }
 
-fun CPointer<Sqlx4kResult>?.rowsAffectedOrError(): Long = use {
+fun CPointer<Sqlx4kSqliteResult>?.rowsAffectedOrError(): Long = use {
     it.throwIfError()
     it.rows_affected.toLong()
 }
 
 suspend inline fun sqlx(
     crossinline operation: (continuationPtr: CPointer<out CPointed>) -> Unit
-): CPointer<Sqlx4kResult>? = suspendCoroutine { continuation ->
+): CPointer<Sqlx4kSqliteResult>? = suspendCoroutine { continuation ->
     // Create a stable reference to the continuation that won't be garbage collected
     val stableRef = StableRef.create(continuation)
 
@@ -112,8 +112,8 @@ suspend inline fun sqlx(
     operation(continuationPtr)
 }
 
-val fn = staticCFunction<CValue<Ptr>, CPointer<Sqlx4kResult>?, Unit> { c, r ->
-    val ref = c.useContents { ptr }!!.asStableRef<Continuation<CPointer<Sqlx4kResult>?>>()
+val fn = staticCFunction<CValue<Sqlx4kSqlitePtr>, CPointer<Sqlx4kSqliteResult>?, Unit> { c, r ->
+    val ref = c.useContents { ptr }!!.asStableRef<Continuation<CPointer<Sqlx4kSqliteResult>?>>()
     ref.get().resume(r)
     ref.dispose()
 }
