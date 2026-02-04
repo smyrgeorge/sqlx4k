@@ -1184,6 +1184,12 @@ class RepositoryProcessor(
 
         fun collectFromType(type: KSType) {
             val declaration = type.declaration
+
+            // Skip type parameters (e.g., R in <R> aroundQuery(...))
+            if (declaration !is KSClassDeclaration) {
+                return
+            }
+
             val qualifiedName = declaration.qualifiedName?.asString() ?: return
 
             // Skip types that don't need importing
