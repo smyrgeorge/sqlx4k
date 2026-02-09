@@ -1,6 +1,6 @@
 [versions]
 # https://plugins.gradle.org/plugin/org.jetbrains.kotlin.jvm
-kotlin = "2.3.0"
+kotlin = "2.3.10"
 # https://github.com/Kotlin/kotlinx-io
 kotlinx-io = "0.8.2"
 # https://github.com/Kotlin/kotlinx-datetime
