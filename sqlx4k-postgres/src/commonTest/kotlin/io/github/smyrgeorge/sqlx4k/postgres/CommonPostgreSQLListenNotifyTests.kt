@@ -1,3 +1,5 @@
+@file:Suppress("SqlNoDataSourceInspection", "SqlDialectInspection")
+
 package io.github.smyrgeorge.sqlx4k.postgres
 
 import assertk.assertThat
@@ -5,15 +7,14 @@ import assertk.assertions.containsExactlyInAnyOrder
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFailure
 import assertk.assertions.isTrue
+import kotlin.random.Random
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
-import kotlin.random.Random
 
-@Suppress("SqlNoDataSourceInspection")
 class CommonPostgreSQLListenNotifyTests(
     private val db: IPostgresSQL
 ) {

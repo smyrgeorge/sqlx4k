@@ -24,7 +24,11 @@ class PooledTransaction(
         try {
             transaction.commit().getOrThrow()
         } finally {
-            connection.close()
+            // connection.close() is internally wrapped in runCatching, so it never throws.
+            // We call getOrThrow() and re-wrap with runCatching to make the intent explicit
+            // and to guard against future implementations that might throw, ensuring that a
+            // close failure never suppresses the original transaction exception.
+            runCatching { connection.close().getOrThrow() }
         }
     }
 
@@ -32,7 +36,7 @@ class PooledTransaction(
         try {
             transaction.rollback().getOrThrow()
         } finally {
-            connection.close()
+            runCatching { connection.close().getOrThrow() }
         }
     }
 }

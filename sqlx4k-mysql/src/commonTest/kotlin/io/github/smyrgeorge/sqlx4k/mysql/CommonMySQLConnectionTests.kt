@@ -1,3 +1,5 @@
+@file:Suppress("SqlNoDataSourceInspection", "SqlDialectInspection")
+
 package io.github.smyrgeorge.sqlx4k.mysql
 
 import assertk.assertThat
@@ -9,10 +11,9 @@ import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
-import kotlinx.coroutines.runBlocking
 import kotlin.random.Random
+import kotlinx.coroutines.runBlocking
 
-@Suppress("SqlNoDataSourceInspection")
 class CommonMySQLConnectionTests(
     private val db: IMySQL
 ) {

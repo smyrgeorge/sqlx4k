@@ -7,11 +7,25 @@ import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.logging.Logger
-import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.sync.Semaphore
-import kotlin.concurrent.atomics.*
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.concurrent.atomics.decrementAndFetch
+import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 
 /**
  * Represents an implementation of a connection pool that manages a pool of connections and provides
@@ -119,14 +133,20 @@ class ConnectionPoolImpl(
 
             // 2) If we can create a new one without blocking, do it
             if (semaphore.tryAcquire()) {
+                // semaphoreOwned tracks whether WE must release the semaphore on failure.
+                // Once PooledConnection is fully constructed and acquire() is about to be
+                // called, the PooledConnection takes ownership: closeInternal() → doClose()
+                // will release the semaphore. Releasing it again in the catch would cause a
+                // double-release and an IllegalStateException from the Semaphore.
+                var semaphoreOwned = true
                 try {
                     val newConnection = connectionFactory()
                     val pooled = PooledConnection(newConnection, this)
                     totalConnections.incrementAndFetch()
+                    semaphoreOwned = false // PooledConnection now owns the semaphore lifecycle
                     return pooled.acquire()
                 } catch (e: Exception) {
-                    // Release semaphore if connection creation failed
-                    semaphore.release()
+                    if (semaphoreOwned) semaphore.release()
                     throw e
                 }
             }
@@ -179,8 +199,10 @@ class ConnectionPoolImpl(
             idleCount.decrementAndFetch()
             pooled.closeInternal()
         }
-        // Ensure idleCount cannot go negative due to races; clamp to 0
-        idleCount.update { if (it < 0) 0 else it }
+        // Reset idleCount to 0 unconditionally: after draining the channel no idle
+        // connections remain, and the pool is permanently closed so the value only
+        // matters for any final poolIdleSize() call.
+        idleCount.store(0)
         scope.cancel()
     }
 

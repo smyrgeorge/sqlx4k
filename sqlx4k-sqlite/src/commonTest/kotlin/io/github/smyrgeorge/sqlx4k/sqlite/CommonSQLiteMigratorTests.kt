@@ -1,3 +1,5 @@
+@file:Suppress("SqlNoDataSourceInspection", "SqlDialectInspection")
+
 package io.github.smyrgeorge.sqlx4k.sqlite
 
 import assertk.assertAll
@@ -8,14 +10,13 @@ import assertk.assertions.isFailure
 import assertk.assertions.isSuccess
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
+import kotlin.math.absoluteValue
+import kotlin.random.Random
 import kotlinx.coroutines.runBlocking
 import kotlinx.io.Buffer
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
-import kotlin.math.absoluteValue
-import kotlin.random.Random
 
-@Suppress("SqlNoDataSourceInspection")
 class CommonSQLiteMigratorTests(
     private val db: ISQLite
 ) {

@@ -1,3 +1,5 @@
+@file:Suppress("SqlNoDataSourceInspection", "SqlDialectInspection")
+
 package io.github.smyrgeorge.sqlx4k.postgres
 
 import assertk.assertThat
@@ -8,10 +10,9 @@ import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
-import kotlinx.coroutines.runBlocking
 import kotlin.random.Random
+import kotlinx.coroutines.runBlocking
 
-@Suppress("SqlNoDataSourceInspection")
 class CommonPostgreSQLConnectionTests(
     private val db: IPostgresSQL
 ) {
@@ -163,21 +164,22 @@ class CommonPostgreSQLConnectionTests(
         assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsClosed)
     }
 
-    fun `connection isolation level should be reset to default after connection is closed`(db: IPostgresSQL) = runBlocking {
-        val cn: Connection = db.acquire().getOrThrow()
-        assertThat(cn.transactionIsolationLevel).isEqualTo(null)
+    fun `connection isolation level should be reset to default after connection is closed`(db: IPostgresSQL) =
+        runBlocking {
+            val cn: Connection = db.acquire().getOrThrow()
+            assertThat(cn.transactionIsolationLevel).isEqualTo(null)
 
-        cn.setTransactionIsolationLevel(IsolationLevel.Serializable).getOrThrow()
-        assertThat(cn.transactionIsolationLevel).isEqualTo(IsolationLevel.Serializable)
+            cn.setTransactionIsolationLevel(IsolationLevel.Serializable).getOrThrow()
+            assertThat(cn.transactionIsolationLevel).isEqualTo(IsolationLevel.Serializable)
 
-        cn.close().getOrThrow()
-        assertThat(cn.transactionIsolationLevel).isEqualTo(IPostgresSQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL)
+            cn.close().getOrThrow()
+            assertThat(cn.transactionIsolationLevel).isEqualTo(IPostgresSQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL)
 
-        val cn2: Connection = db.acquire().getOrThrow()
-        assertThat(cn2.transactionIsolationLevel).isEqualTo(null)
-        assertThat(getCurrentIsolationLevel(cn2)).isEqualTo("read committed")
-        cn2.close().getOrThrow()
-    }
+            val cn2: Connection = db.acquire().getOrThrow()
+            assertThat(cn2.transactionIsolationLevel).isEqualTo(null)
+            assertThat(getCurrentIsolationLevel(cn2)).isEqualTo("read committed")
+            cn2.close().getOrThrow()
+        }
 
     // Helper function to get current isolation level from database
     private suspend fun getCurrentIsolationLevel(cn: Connection): String {

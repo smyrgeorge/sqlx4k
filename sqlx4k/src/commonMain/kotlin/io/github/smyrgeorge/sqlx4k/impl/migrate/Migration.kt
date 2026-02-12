@@ -4,13 +4,13 @@ package io.github.smyrgeorge.sqlx4k.impl.migrate
 
 import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.RowMapper as Sqlx4kRowMapper
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInstant
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
-import io.github.smyrgeorge.sqlx4k.impl.types.NoQuotingString
+import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.IdentifierString
 import kotlin.time.Instant
-import io.github.smyrgeorge.sqlx4k.RowMapper as Sqlx4kRowMapper
 
 /**
  * Represents a migration in a database system with associated metadata.
@@ -40,16 +40,15 @@ data class Migration(
     internal fun insert(table: String): Statement {
         // language=SQL
         val sql = """
-            INSERT INTO ? (version, name, installed_on, checksum, execution_time)
+            INSERT INTO ${IdentifierString(table)} (version, name, installed_on, checksum, execution_time)
             VALUES (?, ?, ?, ?, ?)
         """.trimIndent()
         return Statement.create(sql)
-            .bind(0, NoQuotingString(table))
-            .bind(1, version)
-            .bind(2, name)
-            .bind(3, installedOn)
-            .bind(4, checksum)
-            .bind(5, executionTime)
+            .bind(0, version)
+            .bind(1, name)
+            .bind(2, installedOn)
+            .bind(3, checksum)
+            .bind(4, executionTime)
     }
 
     /**
@@ -98,8 +97,8 @@ data class Migration(
             return when (dialect) {
                 Dialect.PostgreSQL, Dialect.MySQL -> {
                     // language=SQL
-                    val sql = "CREATE SCHEMA IF NOT EXISTS ?;"
-                    Statement.create(sql).bind(0, NoQuotingString(schema))
+                    val sql = "CREATE SCHEMA IF NOT EXISTS ${IdentifierString(schema)};"
+                    Statement.create(sql)
                 }
 
                 Dialect.SQLite -> error("SQLite does not support schemas.")
@@ -170,7 +169,7 @@ data class Migration(
                 Dialect.MySQL ->
                     // language=SQL
                     """
-                        CREATE TABLE IF NOT EXISTS ?
+                        CREATE TABLE IF NOT EXISTS ${IdentifierString(table)}
                         (
                             version        BIGINT      NOT NULL PRIMARY KEY,
                             name           TEXT        NOT NULL,
@@ -184,7 +183,7 @@ data class Migration(
                 Dialect.PostgreSQL ->
                     // language=SQL
                     """
-                        CREATE TABLE IF NOT EXISTS ?
+                        CREATE TABLE IF NOT EXISTS ${IdentifierString(table)}
                         (
                             version        BIGINT    NOT NULL PRIMARY KEY,
                             name           TEXT      NOT NULL,
@@ -198,7 +197,7 @@ data class Migration(
                 Dialect.SQLite ->
                     // language=SQL
                     """
-                        CREATE TABLE IF NOT EXISTS ?
+                        CREATE TABLE IF NOT EXISTS ${IdentifierString(table)}
                         (
                             version        INTEGER  NOT NULL PRIMARY KEY,
                             name           TEXT     NOT NULL,
@@ -209,7 +208,7 @@ data class Migration(
                         );
                     """.trimIndent()
             }
-            return Statement.create(sql).bind(0, NoQuotingString(table))
+            return Statement.create(sql)
         }
 
         /**
@@ -221,8 +220,8 @@ data class Migration(
         internal fun selectAll(table: String): Statement {
             require(table.isNotBlank()) { "Table name cannot be blank." }
             // language=SQL
-            val sql = "SELECT * FROM ? ORDER BY version;"
-            return Statement.create(sql).bind(0, NoQuotingString(table))
+            val sql = "SELECT * FROM ${IdentifierString(table)} ORDER BY version;"
+            return Statement.create(sql)
         }
     }
 }

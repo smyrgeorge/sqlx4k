@@ -86,4 +86,82 @@ class StatementSqlContextsTests {
         }
         assertThat(ex.code).isEqualTo(SQLError.Code.PositionalParameterValueNotSupplied)
     }
+
+    @Test
+    fun `dollar-sign followed by digits is not treated as a dollar tag`() {
+        // $1$ should NOT be recognized as a dollar-quoted string delimiter.
+        // PostgreSQL requires dollar tag identifiers to start with a letter or underscore.
+        val sql = "select $1 as a, $2 as b"
+        val rendered = ExtendedStatement(sql)
+            .bind(0, 10)
+            .bind(1, 20)
+            .render()
+        assertThat(rendered).isEqualTo("select 10 as a, 20 as b")
+    }
+
+    @Test
+    fun `dollar-sign with digit-starting tag does not swallow SQL`() {
+        // If $1$ were mistakenly treated as a dollar tag, the scanner would enter
+        // dollar-quoted mode and swallow everything until the next $1$.
+        val sql = "select $1, $2 from t"
+        val rendered = ExtendedStatement(sql)
+            .bind(0, "a")
+            .bind(1, "b")
+            .render()
+        assertThat(rendered).isEqualTo("select 'a', 'b' from t")
+    }
+
+    @Test
+    fun `named dollar-quoted tags still work`() {
+        val sql = $$"""select $fn$ body :name $fn$ as txt, :name as nm"""
+        val rendered = Statement.create(sql)
+            .bind("name", "v")
+            .render()
+        assertThat(rendered).all {
+            contains($$"$fn$ body :name $fn$")
+            contains("'v' as nm")
+        }
+    }
+
+    @Test
+    fun `nested block comments hide placeholders`() {
+        val sql = """
+            /* outer /* inner :param */ still comment ? */ select ? as val
+        """.trimIndent()
+        val rendered = Statement.create(sql)
+            .bind(0, 42)
+            .render()
+        assertThat(rendered).all {
+            contains("/* outer /* inner :param */ still comment ? */")
+            contains("select 42 as val")
+        }
+    }
+
+    @Test
+    fun `deeply nested block comments`() {
+        val sql = """
+            /* l1 /* l2 /* l3 :deep */ l2 ? */ l1 $1 */ select :x as v
+        """.trimIndent()
+        val rendered = Statement.create(sql)
+            .bind("x", "ok")
+            .render()
+        assertThat(rendered).all {
+            contains("/* l1 /* l2 /* l3 :deep */ l2 ? */ l1 $1 */")
+            contains("select 'ok' as v")
+        }
+    }
+
+    @Test
+    fun `nested block comments with extended statement`() {
+        val sql = """
+            /* outer /* $1 */ still comment */ select $1 as val
+        """.trimIndent()
+        val rendered = ExtendedStatement(sql)
+            .bind(0, 99)
+            .render()
+        assertThat(rendered).all {
+            contains("/* outer /* $1 */ still comment */")
+            contains("select 99 as val")
+        }
+    }
 }

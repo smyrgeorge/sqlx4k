@@ -1,3 +1,6 @@
+@file:OptIn(ExperimentalUuidApi::class)
+@file:Suppress("SqlSourceToSinkFlow", "DuplicatedCode")
+
 package io.github.smyrgeorge.sqlx4k.mysql
 
 import io.asyncer.r2dbc.mysql.MySqlConnectionConfiguration
@@ -9,16 +12,33 @@ import io.asyncer.r2dbc.mysql.codec.CodecContext
 import io.asyncer.r2dbc.mysql.codec.CodecRegistry
 import io.asyncer.r2dbc.mysql.constant.SslMode
 import io.asyncer.r2dbc.mysql.extension.CodecRegistrar
-import io.github.smyrgeorge.sqlx4k.*
+import io.github.smyrgeorge.sqlx4k.Connection
+import io.github.smyrgeorge.sqlx4k.ConnectionPool
+import io.github.smyrgeorge.sqlx4k.Dialect
+import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.RowMapper
+import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufAllocator
+import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
 import io.r2dbc.pool.ConnectionPoolConfiguration
+import io.r2dbc.spi.Connection as NativeR2dbcConnection
 import io.r2dbc.spi.ConnectionFactoryOptions
+import io.r2dbc.spi.Result as NativeR2dbcResultSet
 import io.r2dbc.spi.Row
+import kotlin.jvm.optionals.getOrElse
+import kotlin.time.Duration
+import kotlin.time.Instant
+import kotlin.time.toJavaDuration
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.asFlow
@@ -28,16 +48,18 @@ import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toJavaLocalDate
+import kotlinx.datetime.toJavaLocalDateTime
+import kotlinx.datetime.toJavaLocalTime
+import kotlinx.datetime.toLocalDateTime
 import org.reactivestreams.Publisher
 import reactor.core.publisher.Mono
 import reactor.pool.PoolAcquireTimeoutException
 import reactor.pool.PoolShutdownException
-import kotlin.jvm.optionals.getOrElse
-import kotlin.time.Duration
-import kotlin.time.toJavaDuration
-import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
-import io.r2dbc.spi.Connection as NativeR2dbcConnection
-import io.r2dbc.spi.Result as NativeR2dbcResultSet
 
 /**
  * The `MySQL` class provides a driver implementation for interacting with a MySQL database.
@@ -138,7 +160,6 @@ class MySQL(
     }
 
     override suspend fun execute(sql: String) = runCatching {
-        @Suppress("SqlSourceToSinkFlow")
         with(pool.acquire()) {
             val res = try {
                 createStatement(sql).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
@@ -152,7 +173,6 @@ class MySQL(
     }
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
-        @Suppress("SqlSourceToSinkFlow")
         with(pool.acquire()) {
             try {
                 createStatement(sql).execute().awaitLast().toResultSet()
@@ -162,6 +182,35 @@ class MySQL(
                 close().toMono().awaitSingleOrNull()
             }
         }
+    }
+
+    override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+        with(pool.acquire()) {
+            val res = try {
+                createStatement(statement, encoders).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
+            } catch (e: Exception) {
+                SQLError(SQLError.Code.Database, e.message, e).raise()
+            } finally {
+                close().toMono().awaitSingleOrNull()
+            }
+            res
+        }
+    }
+
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
+        with(pool.acquire()) {
+            try {
+                createStatement(statement, encoders).execute().awaitLast().toResultSet()
+            } catch (e: Exception) {
+                SQLError(SQLError.Code.Database, e.message, e).raise()
+            } finally {
+                close().toMono().awaitSingleOrNull()
+            }
+        }
+    }
+
+    override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> = runCatching {
+        fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
@@ -242,18 +291,44 @@ class MySQL(
 
         override suspend fun execute(sql: String): Result<Long> = execute(sql, true)
 
-        @Suppress("DuplicatedCode")
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
                 try {
-                    @Suppress("SqlSourceToSinkFlow")
                     connection.createStatement(sql).execute().awaitLast().toResultSet().toResult()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message).raise()
                 }
             }
         }
+
+        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+            mutex.withLock {
+                assertIsOpen()
+                try {
+                    connection.createStatement(statement, encoders).execute().awaitLast().rowsUpdated.toMono()
+                        .awaitSingleOrNull() ?: 0
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                }
+            }
+        }
+
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
+            return mutex.withLock {
+                assertIsOpen()
+                try {
+                    connection.createStatement(statement, encoders).execute().awaitLast().toResultSet().toResult()
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                }
+            }
+        }
+
+        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
+            runCatching {
+                fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
+            }
 
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
@@ -317,7 +392,6 @@ class MySQL(
             mutex.withLock {
                 assertIsOpen()
                 try {
-                    @Suppress("SqlSourceToSinkFlow")
                     connection.createStatement(sql).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
@@ -325,24 +399,81 @@ class MySQL(
             }
         }
 
-        @Suppress("DuplicatedCode")
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
                 try {
-                    @Suppress("SqlSourceToSinkFlow")
                     connection.createStatement(sql).execute().awaitLast().toResultSet().toResult()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
                 }
             }
         }
+
+        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+            mutex.withLock {
+                assertIsOpen()
+                try {
+                    connection.createStatement(statement, encoders).execute().awaitLast().rowsUpdated.toMono()
+                        .awaitSingleOrNull() ?: 0
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                }
+            }
+        }
+
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
+            return mutex.withLock {
+                assertIsOpen()
+                try {
+                    connection.createStatement(statement, encoders).execute().awaitLast().toResultSet().toResult()
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                }
+            }
+        }
+
+        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
+            runCatching {
+                fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
+            }
     }
 
     companion object {
         private fun <T> Publisher<T>.toMono(): Mono<T> {
             if (this is Mono<T>) return this
             error("Publisher is not a Mono: ${this::class.qualifiedName}")
+        }
+
+        private fun NativeR2dbcConnection.createStatement(
+            statement: Statement,
+            encoders: ValueEncoderRegistry
+        ): io.r2dbc.spi.Statement {
+            fun Any?.toR2dbc(): Any? = when (this) {
+                null -> this
+                is Char -> toString()
+                // MySQL DATETIME is timezone-agnostic; convert to UTC LocalDateTime to
+                // avoid session-timezone shifts when the driver binds java.time.Instant.
+                is Instant -> toLocalDateTime(TimeZone.UTC).toJavaLocalDateTime()
+                is LocalDate -> toJavaLocalDate()
+                is LocalTime -> toJavaLocalTime()
+                is LocalDateTime -> toJavaLocalDateTime()
+                // MySQL has no native UUID type; pass as string.
+                // Also handle java.util.UUID since Kotlin's Uuid value class may be stored
+                // as its underlying type when boxed as Any?.
+                is Uuid -> toString()
+                is java.util.UUID -> toString()
+                else -> this
+            }
+
+            val query = statement.renderNativeQuery(Dialect.MySQL, encoders)
+            val stmt = createStatement(query.sql)
+            query.values.forEachIndexed { index, value ->
+                val converted = value?.toR2dbc()
+                if (converted == null) stmt.bindNull(index, Any::class.java)
+                else stmt.bind(index, converted)
+            }
+            return stmt
         }
 
         private fun connectionFactory(url: String, username: String, password: String): MySqlConnectionFactory {

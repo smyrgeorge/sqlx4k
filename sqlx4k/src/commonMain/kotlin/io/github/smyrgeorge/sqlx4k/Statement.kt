@@ -8,6 +8,7 @@ import io.github.smyrgeorge.sqlx4k.impl.statement.SimpleStatement
  * complete SQL query.
  */
 interface Statement {
+    val sql: String
 
     /**
      * A set containing the names of all named parameters extracted from the SQL statement.
@@ -17,9 +18,38 @@ interface Statement {
     val extractedNamedParameters: Set<String>
 
     /**
+     * Stores the mapping of named parameters to their corresponding bound values in the SQL statement.
+     *
+     * This mutable map is used to associate named parameters (keys) with the values (values) to be
+     * injected into the SQL query during rendering. Named parameters are placeholders in the form
+     * `:name` within the SQL statement. The associated values can be of any type or nullable.
+     *
+     * The map ensures that all named parameters used in the SQL statement are explicitly bound
+     * with their corresponding values prior to rendering or execution of the query.
+     */
+    val namedParametersValues: MutableMap<String, Any?>
+
+    /**
      * The count of positional parameter placeholders ('?') extracted from the SQL query.
      */
     val extractedPositionalParameters: Int
+
+    /**
+     * Represents an array that holds the bound values for positional parameters in a SQL statement.
+     *
+     * This property is used to store the values that are assigned to positional placeholders in
+     * an SQL statement. The positional placeholders are usually denoted by `?` in the SQL query.
+     * Each index in this array corresponds to the zero-based index of the positional parameter
+     * in the SQL statement.
+     *
+     * Positional parameter binding allows for dynamic substitution of values into the SQL query
+     * at runtime. The values in this array are used when rendering or executing the statement
+     * to replace the placeholders with their respective bound values.
+     *
+     * `null` values in the array indicate that no value has been bound to the corresponding
+     * positional parameter.
+     */
+    val positionalParametersValues: Array<Any?>
 
     /**
      * Binds a value to a positional parameter in the statement based on the given index.
@@ -51,6 +81,32 @@ interface Statement {
      * parameters substituted by their bound values.
      */
     fun render(encoders: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY): String
+
+    /**
+     * Renders the SQL statement with all bound parameters and converts it into a `Query` object.
+     *
+     * This method processes the SQL statement by resolving positional and named parameter placeholders
+     * with their respective bound values. The result is a `Query` object that encapsulates the final
+     * SQL string and the list of parameter values to be used for execution.
+     *
+     * @return A `Query` object containing the rendered SQL statement and the corresponding parameter values.
+     */
+    fun renderNativeQuery(dialect: Dialect, encoders: ValueEncoderRegistry): NativeQuery
+
+    /**
+     * Represents a query to be executed against a database.
+     *
+     * A `Query` consists of an SQL statement and the associated parameter values
+     * intended to be bound to the placeholders in the statement.
+     * It is typically used to encapsulate the information required for executing
+     * parameterized queries in a structured and reusable manner.
+     *
+     * @property sql The SQL statement to be executed.
+     * @property dialect The SQL dialect used for rendering the query.
+     * @property values A list of parameter values to bind to placeholders in the SQL statement.
+     * The values can include null entries to represent unset parameters.
+     */
+    data class NativeQuery(val sql: String, val dialect: Dialect, val values: List<Any?>)
 
     companion object {
         /**

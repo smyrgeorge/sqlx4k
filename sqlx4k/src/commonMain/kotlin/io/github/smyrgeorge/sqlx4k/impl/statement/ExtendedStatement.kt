@@ -1,8 +1,11 @@
 package io.github.smyrgeorge.sqlx4k.impl.statement
 
+import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.extensions.encodeValue
+import io.github.smyrgeorge.sqlx4k.impl.extensions.resolveNativeValue
 
 /**
  * The `ExtendedStatement` class provides an implementation that extends the functionality
@@ -13,7 +16,7 @@ import io.github.smyrgeorge.sqlx4k.impl.extensions.encodeValue
  *
  * @param sql The SQL query string containing positional PostgreSQL-style parameters.
  */
-class ExtendedStatement(private val sql: String) : AbstractStatement(sql) {
+class ExtendedStatement(sql: String) : AbstractStatement(sql) {
 
     /**
      * A list of positional PostgreSQL-style parameter indices extracted from the SQL statement.
@@ -52,6 +55,29 @@ class ExtendedStatement(private val sql: String) : AbstractStatement(sql) {
         }
         pgParametersValues[index] = value
         return this
+    }
+
+    /**
+     * Renders a native SQL query by resolving positional parameters and encoding their values
+     * using the specified encoder registry for the given SQL dialect.
+     *
+     * @param dialect The `Dialect` instance representing the SQL dialect used for rendering the query.
+     * @param encoders The `ValueEncoderRegistry` used to resolve and encode values for positional parameters.
+     * @return A `Statement.NativeQuery` instance containing the rendered SQL query and its encoded parameter values.
+     * @throws SQLError if a value for a positional parameter index is not supplied.
+     */
+    override fun renderNativeQuery(dialect: Dialect, encoders: ValueEncoderRegistry): Statement.NativeQuery {
+        if (pgParameters.isEmpty()) return Statement.NativeQuery(sql, dialect, emptyList())
+        val values = List(pgParameters.size) { index ->
+            if (index !in pgParametersValues) {
+                SQLError(
+                    code = SQLError.Code.PositionalParameterValueNotSupplied,
+                    message = "Value for positional parameter index '$index' was not supplied."
+                ).raise()
+            }
+            pgParametersValues[index].resolveNativeValue(encoders)
+        }
+        return Statement.NativeQuery(sql, dialect, values)
     }
 
     /**

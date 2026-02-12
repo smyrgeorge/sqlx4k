@@ -1,3 +1,5 @@
+@file:Suppress("SqlNoDataSourceInspection", "SqlDialectInspection")
+
 package io.github.smyrgeorge.sqlx4k.postgres
 
 import assertk.assertAll
@@ -18,18 +20,22 @@ import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalTime
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asShort
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asUuid
-import io.github.smyrgeorge.sqlx4k.postgres.extensions.*
+import io.github.smyrgeorge.sqlx4k.postgres.extensions.asBooleanArray
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asByteArray
-import kotlinx.coroutines.runBlocking
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalDateTime
-import kotlinx.datetime.LocalTime
+import io.github.smyrgeorge.sqlx4k.postgres.extensions.asDoubleArray
+import io.github.smyrgeorge.sqlx4k.postgres.extensions.asFloatArray
+import io.github.smyrgeorge.sqlx4k.postgres.extensions.asIntArray
+import io.github.smyrgeorge.sqlx4k.postgres.extensions.asLongArray
+import io.github.smyrgeorge.sqlx4k.postgres.extensions.asShortArray
 import kotlin.random.Random
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 
-@Suppress("SqlNoDataSourceInspection")
 class CommonPostgreSQLTests(
     private val db: IPostgresSQL
 ) {

@@ -2,15 +2,19 @@
 
 package io.github.smyrgeorge.sqlx4k.impl.extensions
 
+import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
-import io.github.smyrgeorge.sqlx4k.impl.types.DoubleQuotingString
-import io.github.smyrgeorge.sqlx4k.impl.types.NoQuotingString
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
-import kotlinx.datetime.*
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * Converts the value of the receiver to a string representation suitable for database operations.
@@ -37,29 +41,12 @@ internal fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
             "'${replace("'", "''")}'"
         }
 
-        is DoubleQuotingString -> {
-            // Escape double quotes by doubling them (SQL standard for quoted identifiers)
-            // https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
-            "\"${value.replace("\"", "\"\"")}\""
-        }
-
-        // IMPORTANT:
-        // [NoQuotingString] is marked as internal, thus cannot be used outside this module
-        is NoQuotingString -> {
-            // Fast path: if no single quote present, avoid replace allocation
-            if (value.indexOf('\'') < 0) return "$this"
-            // https://stackoverflow.com/questions/12316953/insert-text-with-single-quotes-in-postgresql
-            // https://stackoverflow.com/questions/9596652/how-to-escape-apostrophe-a-single-quote-in-mysql
-            // https://stackoverflow.com/questions/603572/escape-single-quote-character-for-use-in-an-sqlite-query
-            value.replace("'", "''")
-        }
-
         is Char -> "'${if (this == '\'') "''" else this}'"
-        is Boolean, is Number -> toString()
+        is Boolean, is Byte, is Short, is Int, is Long, is Float, is Double -> toString()
         is Instant -> "'${toTimestampString()}'"
         is LocalDate, is LocalTime, is LocalDateTime -> "'${this}'"
         is Uuid -> "'${this}'"
-        is Enum<*> -> "'${this.name}'"
+        is Enum<*> -> "'${name}'"
         is Iterable<*> -> encodeTuple(encoders)
         is BooleanArray -> asIterable().encodeTuple(encoders)
         is ShortArray -> asIterable().encodeTuple(encoders)
@@ -76,19 +63,7 @@ internal fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
                     code = SQLError.Code.MissingValueConverter,
                     message = "Could not encode value of type ${this::class.simpleName}"
                 ).raise()
-            val encoded = encoder.encode(this)
-
-            // Security validation: custom encoders must not return wrapper types that bypass escaping
-            if (encoded is NoQuotingString || encoded is DoubleQuotingString) {
-                SQLError(
-                    code = SQLError.Code.UnsafeStringContent,
-                    message = "Custom encoder for type ${this::class.simpleName} returned an unsafe wrapper type " +
-                            "(NoQuotingString or DoubleQuotingString). Custom encoders must return regular String " +
-                            "values or safe primitive types to prevent SQL injection vulnerabilities."
-                ).raise()
-            }
-
-            encoded.encodeValue(encoders)
+            encoder.encode(this).encodeValue(encoders)
         }
     }
 }
@@ -101,7 +76,6 @@ private fun Iterable<*>.encodeTuple(encoders: ValueEncoderRegistry, wrapInParent
     if (wrapInParenthesis) joinToString(", ", "(", ")") { it.encodeValue(encoders) }
     else joinToString(", ") { it.encodeValue(encoders) }
 
-
 /**
  * Converts the `Instant` to a string representation of a timestamp with microsecond precision.
  *
@@ -113,7 +87,7 @@ private fun Iterable<*>.encodeTuple(encoders: ValueEncoderRegistry, wrapInParent
  *                 Defaults to `TimeZone.UTC` if not specified.
  * @return a `String` representing the timestamp in the specified format.
  */
-fun Instant.toTimestampString(timeZone: TimeZone = TimeZone.UTC): String {
+internal fun Instant.toTimestampString(timeZone: TimeZone = TimeZone.UTC): String {
     val instant = this
     val ldt = instant.toLocalDateTime(timeZone)
 
@@ -129,5 +103,96 @@ fun Instant.toTimestampString(timeZone: TimeZone = TimeZone.UTC): String {
         append(ldt.minute.toString().padStart(2, '0')); append(':')
         append(ldt.second.toString().padStart(2, '0')); append('.')
         append(microsStr)
+    }
+}
+
+/**
+ * Resolves a native value from the given object, using the specified encoders to handle
+ * custom-encoded types. The method identifies and processes known types directly or delegates
+ * encoding to a corresponding `ValueEncoder`, if available.
+ *
+ * @param encoders The registry of `ValueEncoder` instances used to encode custom types.
+ * @return The resolved native value, suitable for use in database operations. If the input is
+ * null, null is returned. If the input is a recognized type, it is returned as-is. For
+ * unrecognized types, the value is passed through a compatible `ValueEncoder`, if available.
+ */
+internal fun Any?.resolveNativeValue(encoders: ValueEncoderRegistry): Any? {
+    return when (this) {
+        null -> null
+        is String, is Char, is Boolean, is Byte, is Short, is Int, is Long, is Float, is Double -> this
+        is Instant, is LocalDate, is LocalTime, is LocalDateTime -> this
+        is Uuid -> this
+        is Enum<*> -> name
+        else -> {
+            val encoder = encoders.get(this::class)
+            if (encoder != null) {
+                encoder.encode(this).resolveNativeValue(encoders)
+            } else {
+                // Pass through: the driver handles known types like
+                // Instant, LocalDate, Uuid, etc.
+                this
+            }
+        }
+    }
+}
+
+/**
+ * Appends a native value to a `StringBuilder` and maintains a list of resolved values
+ * and a counter for placeholders, based on the specified SQL dialect and value encoders.
+ *
+ * This method is responsible for resolving the input value and appending appropriate
+ * SQL syntax to the `StringBuilder`. It supports iterable structures, arrays, primitive array types,
+ * and single values. For iterable structures and arrays, it optionally wraps the output in parentheses.
+ * It uses a placeholder format specific to the provided SQL dialect.
+ *
+ * @param value The value to be resolved and appended. This can be a single value, an iterable, or an array.
+ * @param sb The `StringBuilder` to which the SQL syntax and placeholders are appended.
+ * @param values A mutable list where resolved native values are stored.
+ * @param counter An array representing the counter for placeholder numbers. The first element is incremented.
+ * @param dialect The SQL `Dialect` to determine the placeholder formatting (e.g., `$` for PostgreSQL, `?` for MySQL).
+ * @param encoders The `ValueEncoderRegistry` used to resolve custom-encoded values.
+ */
+internal fun appendNativeValue(
+    value: Any?,
+    sb: StringBuilder,
+    values: MutableList<Any?>,
+    counter: IntArray,
+    dialect: Dialect,
+    encoders: ValueEncoderRegistry
+) {
+    fun appendPlaceholder() {
+        counter[0]++
+        when (dialect) {
+            Dialect.PostgreSQL -> sb.append('$').append(counter[0])
+            Dialect.MySQL, Dialect.SQLite -> sb.append('?')
+        }
+    }
+
+    fun appendExpanded(iterable: Iterable<*>, wrap: Boolean) {
+        if (wrap) sb.append('(')
+        var first = true
+        for (element in iterable) {
+            if (!first) sb.append(", ")
+            first = false
+            values.add(element.resolveNativeValue(encoders))
+            appendPlaceholder()
+        }
+        if (wrap) sb.append(')')
+    }
+
+    when (value) {
+        is NoWrappingTuple -> appendExpanded(value.value, wrap = false)
+        is Iterable<*> -> appendExpanded(value, wrap = true)
+        is BooleanArray -> appendExpanded(value.asIterable(), wrap = true)
+        is ShortArray -> appendExpanded(value.asIterable(), wrap = true)
+        is IntArray -> appendExpanded(value.asIterable(), wrap = true)
+        is LongArray -> appendExpanded(value.asIterable(), wrap = true)
+        is FloatArray -> appendExpanded(value.asIterable(), wrap = true)
+        is DoubleArray -> appendExpanded(value.asIterable(), wrap = true)
+        is Array<*> -> appendExpanded(value.asIterable(), wrap = true)
+        else -> {
+            values.add(value.resolveNativeValue(encoders))
+            appendPlaceholder()
+        }
     }
 }

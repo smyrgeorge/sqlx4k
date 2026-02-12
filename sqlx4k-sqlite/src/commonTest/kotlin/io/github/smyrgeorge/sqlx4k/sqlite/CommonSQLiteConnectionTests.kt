@@ -1,3 +1,5 @@
+@file:Suppress("SqlNoDataSourceInspection", "SqlDialectInspection")
+
 package io.github.smyrgeorge.sqlx4k.sqlite
 
 import assertk.assertThat
@@ -7,10 +9,9 @@ import assertk.assertions.isSuccess
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
-import kotlinx.coroutines.runBlocking
 import kotlin.random.Random
+import kotlinx.coroutines.runBlocking
 
-@Suppress("SqlNoDataSourceInspection")
 class CommonSQLiteConnectionTests(
     private val db: ISQLite
 ) {

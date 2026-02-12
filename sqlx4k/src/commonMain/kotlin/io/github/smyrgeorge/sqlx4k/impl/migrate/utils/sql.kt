@@ -1,132 +1,57 @@
 package io.github.smyrgeorge.sqlx4k.impl.migrate.utils
 
-@Suppress("DuplicatedCode")
+import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.impl.extensions.scanSql
+import kotlin.jvm.JvmInline
+
 fun splitSqlStatements(sql: String): List<String> {
     val result = mutableListOf<String>()
-    val sb = StringBuilder()
-    var i = 0
-    var inSingle = false
-    var inDouble = false
-    var inLineComment = false
-    var inBlockComment = false
-    var dollarTag: String? = null
-
-    fun at(i: Int) = if (i < sql.length) sql[i] else '\u0000'
-
-    while (i < sql.length) {
-        val c = sql[i]
-        val n = at(i + 1)
-
-        if (inLineComment) {
-            if (c == '\n') {
-                inLineComment = false
-                sb.append(c)
-            } else {
-                sb.append(c)
-            }
-            i++
-            continue
-        }
-        if (inBlockComment) {
-            if (c == '*' && n == '/') {
-                sb.append("*/")
-                i += 2
-                inBlockComment = false
-            } else {
-                sb.append(c)
-                i++
-            }
-            continue
-        }
-        if (dollarTag != null) {
-            sb.append(c)
-            // Look for closing tag
-            if (c == '$' && sql.startsWith(dollarTag, i)) {
-                // append the rest of tag
-                for (k in 1 until dollarTag.length) sb.append(sql[i + k])
-                i += dollarTag.length
-                dollarTag = null
-            } else {
-                i++
-            }
-            continue
-        }
-        if (inSingle) {
-            sb.append(c)
-            if (c == '\'') {
-                if (n == '\'') {
-                    sb.append(n); i += 2
-                } else {
-                    i++; inSingle = false
-                }
-            } else {
-                i++
-            }
-            continue
-        }
-        if (inDouble) {
-            sb.append(c)
-            if (c == '"') {
-                if (n == '"') {
-                    sb.append(n); i += 2
-                } else {
-                    i++; inDouble = false
-                }
-            } else {
-                i++
-            }
-            continue
-        }
-
-        // Outside of strings/comments
-        if (c == '-' && n == '-') {
-            sb.append("--"); i += 2; inLineComment = true; continue
-        }
-        if (c == '/' && n == '*') {
-            sb.append("/*"); i += 2; inBlockComment = true; continue
-        }
-        if (c == '\'') {
-            sb.append(c); i++; inSingle = true; continue
-        }
-        if (c == '"') {
-            sb.append(c); i++; inDouble = true; continue
-        }
-
-        if (c == '$') {
-            // detect $tag$ ... $tag$
-            val tag = readDollarTag(sql, i)
-            if (tag != null) {
-                dollarTag = tag
-                sb.append(tag)
-                i += tag.length
-                continue
-            }
-        }
-
+    val remainder = sql.scanSql { i, c, sb ->
         if (c == ';') {
-            // end of statement
             val stmt = sb.toString().trim()
             if (stmt.isNotEmpty()) result.add(stmt)
             sb.setLength(0)
-            i++
-            continue
-        }
-
-        sb.append(c)
-        i++
+            i + 1
+        } else null
     }
-    val tail = sb.toString().trim()
+    val tail = remainder.trim()
     if (tail.isNotEmpty()) result.add(tail)
     return result
 }
 
-private fun readDollarTag(sql: String, start: Int): String? {
-    // Expect $...$
-    if (start >= sql.length || sql[start] != '$') return null
-    var i = start + 1
-    while (i < sql.length && sql[i].isLetterOrDigit()) i++
-    if (i < sql.length && sql[i] == '$') {
-        return sql.substring(start, i + 1) // includes both $ signs
+/**
+ * Represents a string that is used as an identifier in SQL operations.
+ *
+ * This type is designed to provide a layer of security by validating strings
+ * used in SQL statements to ensure they don't contain unsafe characters that could
+ * lead to SQL injection vulnerabilities.
+ *
+ * Validation rules are applied during instantiation, and an error is raised
+ * if the string contains characters such as semicolons, newlines, or SQL comment markers.
+ *
+ * Validation is performed by the `validate` function to enforce restrictions on
+ * potentially dangerous characters in SQL contexts.
+ */
+@JvmInline
+internal value class IdentifierString(val value: String) {
+    init {
+        validate(value)
     }
-    return null
+
+    override fun toString(): String = value
+
+    companion object {
+        private fun validate(value: String) {
+            // Security validation: reject potentially dangerous characters
+            // to prevent SQL injection through unquoted strings
+            if (value.contains(';') || value.contains('\n') || value.contains('\r') ||
+                value.contains("--") || value.contains("/*") || value.contains("*/")
+            ) {
+                SQLError(
+                    code = SQLError.Code.UnsafeStringContent,
+                    message = "IdentifierString contains unsafe SQL characters (semicolons, newlines, or comment markers). This type should only be used for trusted SQL keywords and operators."
+                ).raise()
+            }
+        }
+    }
 }

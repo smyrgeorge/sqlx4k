@@ -1,13 +1,36 @@
+@file:OptIn(ExperimentalUuidApi::class)
+@file:Suppress("SqlSourceToSinkFlow", "DuplicatedCode")
+
 package io.github.smyrgeorge.sqlx4k.postgres
 
-import io.github.smyrgeorge.sqlx4k.*
+import io.github.smyrgeorge.sqlx4k.Connection
+import io.github.smyrgeorge.sqlx4k.Dialect
+import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.RowMapper
+import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
-import io.github.smyrgeorge.sqlx4k.impl.types.DoubleQuotingString
+import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
+import io.r2dbc.postgresql.api.Notification as NativeR2dbcNotification
+import io.r2dbc.spi.Connection as NativeR2dbcConnection
+import io.r2dbc.spi.Result as NativeR2dbcResultSet
 import io.r2dbc.spi.Row
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.jvm.optionals.getOrElse
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
+import kotlin.time.toJavaInstant
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
+import kotlin.uuid.toJavaUuid
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
@@ -18,19 +41,16 @@ import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.toJavaLocalDate
+import kotlinx.datetime.toJavaLocalDateTime
+import kotlinx.datetime.toJavaLocalTime
 import org.reactivestreams.Publisher
 import reactor.core.publisher.Mono
 import reactor.pool.PoolAcquireTimeoutException
 import reactor.pool.PoolShutdownException
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.EmptyCoroutineContext
-import kotlin.jvm.optionals.getOrElse
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
-import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
-import io.r2dbc.postgresql.api.Notification as NativeR2dbcNotification
-import io.r2dbc.spi.Connection as NativeR2dbcConnection
-import io.r2dbc.spi.Result as NativeR2dbcResultSet
 
 class PostgreSQLImpl(
     private val pool: NativeR2dbcConnectionPool,
@@ -107,7 +127,6 @@ class PostgreSQLImpl(
     }
 
     override suspend fun execute(sql: String): Result<Long> = runCatching {
-        @Suppress("SqlSourceToSinkFlow")
         with(pool.acquire()) {
             val res = try {
                 createStatement(sql).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
@@ -121,7 +140,6 @@ class PostgreSQLImpl(
     }
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
-        @Suppress("SqlSourceToSinkFlow")
         with(pool.acquire()) {
             try {
                 createStatement(sql).execute().awaitLast().toResultSet()
@@ -131,6 +149,35 @@ class PostgreSQLImpl(
                 close().toMono().awaitSingleOrNull()
             }
         }
+    }
+
+    override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+        with(pool.acquire()) {
+            val res = try {
+                createStatement(statement, encoders).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
+            } catch (e: Exception) {
+                SQLError(SQLError.Code.Database, e.message, e).raise()
+            } finally {
+                close().toMono().awaitSingleOrNull()
+            }
+            res
+        }
+    }
+
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
+        with(pool.acquire()) {
+            try {
+                createStatement(statement, encoders).execute().awaitLast().toResultSet()
+            } catch (e: Exception) {
+                SQLError(SQLError.Code.Database, e.message, e).raise()
+            } finally {
+                close().toMono().awaitSingleOrNull()
+            }
+        }
+    }
+
+    override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> = runCatching {
+        fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
@@ -186,7 +233,7 @@ class PostgreSQLImpl(
         channels.forEach { validateChannelName(it) }
 
         val sql = channels.joinToString(separator = "\n") {
-            Statement.create("LISTEN ?;").bind(0, DoubleQuotingString(it)).render(encoders)
+            Statement.create("LISTEN ${DoubleQuotingString(it)};").render(encoders)
         }
 
         PgChannelScope.launch {
@@ -197,7 +244,6 @@ class PostgreSQLImpl(
             while (true) {
                 try {
                     val con = connectionFactory.create().awaitSingle()
-                    @Suppress("SqlSourceToSinkFlow")
                     con.createStatement(sql)
                         .execute()
                         .flatMap { it.rowsUpdated }
@@ -298,18 +344,44 @@ class PostgreSQLImpl(
 
         override suspend fun execute(sql: String): Result<Long> = execute(sql, true)
 
-        @Suppress("DuplicatedCode")
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
                 try {
-                    @Suppress("SqlSourceToSinkFlow")
                     connection.createStatement(sql).execute().awaitLast().toResultSet().toResult()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
                 }
             }
         }
+
+        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+            mutex.withLock {
+                assertIsOpen()
+                try {
+                    connection.createStatement(statement, encoders).execute().awaitLast().rowsUpdated.toMono()
+                        .awaitSingleOrNull() ?: 0
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                }
+            }
+        }
+
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
+            return mutex.withLock {
+                assertIsOpen()
+                try {
+                    connection.createStatement(statement, encoders).execute().awaitLast().toResultSet().toResult()
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                }
+            }
+        }
+
+        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
+            runCatching {
+                fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
+            }
 
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
@@ -373,7 +445,6 @@ class PostgreSQLImpl(
             mutex.withLock {
                 assertIsOpen()
                 try {
-                    @Suppress("SqlSourceToSinkFlow")
                     connection.createStatement(sql).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
@@ -381,24 +452,74 @@ class PostgreSQLImpl(
             }
         }
 
-        @Suppress("DuplicatedCode")
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
                 try {
-                    @Suppress("SqlSourceToSinkFlow")
                     connection.createStatement(sql).execute().awaitLast().toResultSet().toResult()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
                 }
             }
         }
+
+        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+            mutex.withLock {
+                assertIsOpen()
+                try {
+                    connection.createStatement(statement, encoders).execute().awaitLast().rowsUpdated.toMono()
+                        .awaitSingleOrNull() ?: 0
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                }
+            }
+        }
+
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
+            return mutex.withLock {
+                assertIsOpen()
+                try {
+                    connection.createStatement(statement, encoders).execute().awaitLast().toResultSet().toResult()
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                }
+            }
+        }
+
+        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
+            runCatching {
+                fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
+            }
     }
 
     companion object {
         private object PgChannelScope : CoroutineScope {
             override val coroutineContext: CoroutineContext
                 get() = EmptyCoroutineContext
+        }
+
+        private fun NativeR2dbcConnection.createStatement(
+            statement: Statement,
+            encoders: ValueEncoderRegistry
+        ): io.r2dbc.spi.Statement {
+            fun Any?.toR2dbc(): Any? = when (this) {
+                null -> this
+                is Instant -> toJavaInstant()
+                is LocalDate -> toJavaLocalDate()
+                is LocalTime -> toJavaLocalTime()
+                is LocalDateTime -> toJavaLocalDateTime()
+                is Uuid -> toJavaUuid()
+                else -> this
+            }
+
+            val query = statement.renderNativeQuery(Dialect.PostgreSQL, encoders)
+            val stmt = createStatement(query.sql)
+            query.values.forEachIndexed { index, value ->
+                val converted = value?.toR2dbc()
+                if (converted == null) stmt.bindNull(index, Any::class.java)
+                else stmt.bind(index, converted)
+            }
+            return stmt
         }
 
         private fun <T> Publisher<T>.toMono(): Mono<T> {

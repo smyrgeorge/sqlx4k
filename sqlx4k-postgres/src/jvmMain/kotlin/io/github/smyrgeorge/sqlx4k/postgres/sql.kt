@@ -1,36 +1,25 @@
-package io.github.smyrgeorge.sqlx4k.impl.types
+package io.github.smyrgeorge.sqlx4k.postgres
 
 import io.github.smyrgeorge.sqlx4k.SQLError
-import kotlin.jvm.JvmInline
 
 /**
- * A wrapper class for representing a string value that applies double quotes for SQL identifiers.
+ * A value class that wraps a string and represents it as a double-quoted SQL identifier.
  *
- * This class is useful for SQL identifiers (table names, column names) that need to be
- * quoted with double quotation marks. Double quotes within the value are automatically
- * escaped by doubling them (SQL standard).
+ * This class ensures that the given string is a valid and safe SQL identifier by performing
+ * validation during initialization. The string is then represented as a double-quoted value
+ * to prevent SQL injection or invalid identifier usage.
  *
- * ⚠️ **SECURITY**: This class includes built-in validation to prevent SQL injection attacks.
- * The identifier must:
- * - Not be empty or exceed 128 characters
- * - Start with a letter (a-z, A-Z) or underscore (_)
- * - Contain only letters, digits, underscores, or dots (for schema.table notation)
- * - Invalid identifiers will throw an [io.github.smyrgeorge.sqlx4k.SQLError] with code [io.github.smyrgeorge.sqlx4k.SQLError.Code.InvalidIdentifier]
- *
- * Example: `DoubleQuotingString("user")` → `"user"`
- * Schema-qualified: `DoubleQuotingString("public.users")` → `"public"."users"`
- * Escaping: `DoubleQuotingString("my\"table")` → `"my""table"`
- *
- * @property value The string value to be wrapped with double quotes.
+ * @property value The underlying string value of the SQL identifier.
+ * @throws SQLError if the provided string does not meet the validation rules for safe SQL identifiers.
  */
 @JvmInline
-value class DoubleQuotingString(val value: String) {
+internal value class DoubleQuotingString(val value: String) {
 
     init {
         validate(value)
     }
 
-    override fun toString(): String = value
+    override fun toString(): String = "\"$value\""
 
     companion object {
         /**
@@ -89,8 +78,7 @@ value class DoubleQuotingString(val value: String) {
                     if (!ch.isLetterOrDigit() && ch != '_') {
                         SQLError(
                             code = SQLError.Code.InvalidIdentifier,
-                            message = "SQL identifier '$segment' contains invalid character '$ch'. Only letters, " +
-                                    "digits, and underscores are allowed."
+                            message = """SQL identifier '$segment' contains invalid character '$ch'. Only letters, digits, and underscores are allowed."""
                         ).raise()
                     }
                 }

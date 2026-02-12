@@ -194,7 +194,7 @@ class PgmqClient(
         suspend fun enableNotifyInsert(queue: String, throttleNotifyInterval: Duration): Result<Unit> {
             // language=PostgreSQL
             val sql = "SELECT pgmq.enable_notify_insert(queue_name := ?, throttle_interval_ms := ?)"
-            val statement = Statement.create(sql).bind(0, queue).bind(1, throttleNotifyInterval.inWholeMilliseconds)
+            val statement = Statement.create(sql).bind(0, queue).bind(1, throttleNotifyInterval.inWholeMilliseconds.toInt())
             return tx.fetchAll(statement, UnitRowMapper).toSingleUnit()
         }
 
@@ -311,7 +311,7 @@ class PgmqClient(
             .bind(0, queue)
             .bind(1, message)
             .bind(2, headers.toJsonString())
-            .bind(3, delay.inWholeSeconds)
+            .bind(3, delay.inWholeSeconds.toInt())
         return db.fetchAll(statement, LongRowMapper).toSingleLong() // returns the message-id.
     }
 
@@ -357,7 +357,7 @@ class PgmqClient(
             .bind(0, queue)
             .bind(1, NoWrappingTuple(messages))
             .bind(2, headers.toJsonString())
-            .bind(3, delay.inWholeSeconds)
+            .bind(3, delay.inWholeSeconds.toInt())
         return db.fetchAll(statement, LongRowMapper) // returns the message-ids.
     }
 
@@ -411,7 +411,7 @@ class PgmqClient(
         val statement = Statement.create(sql)
             .bind(0, queue)
             .bind(1, quantity)
-            .bind(2, vt.inWholeSeconds)
+            .bind(2, vt.inWholeSeconds.toInt())
         return db.fetchAll(statement, MessageRowMapper)
     }
 
@@ -546,7 +546,7 @@ class PgmqClient(
     suspend fun setVt(queue: String, id: Long, vt: Duration): Result<Long> {
         // language=PostgreSQL
         val sql = "SELECT msg_id FROM pgmq.set_vt(queue_name := ?, msg_id := ?, vt := ?)"
-        val statement = Statement.create(sql).bind(0, queue).bind(1, id).bind(2, vt.inWholeSeconds)
+        val statement = Statement.create(sql).bind(0, queue).bind(1, id).bind(2, vt.inWholeSeconds.toInt())
         return db.fetchAll(statement, LongRowMapper).toSingleLong()
     }
 

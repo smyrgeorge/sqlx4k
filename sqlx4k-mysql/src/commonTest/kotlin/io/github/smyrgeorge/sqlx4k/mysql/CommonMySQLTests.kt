@@ -1,3 +1,5 @@
+@file:Suppress("SqlNoDataSourceInspection", "SqlDialectInspection")
+
 package io.github.smyrgeorge.sqlx4k.mysql
 
 import assertk.assertAll
@@ -6,17 +8,28 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isNull
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.Statement
-import io.github.smyrgeorge.sqlx4k.impl.extensions.*
-import kotlinx.coroutines.runBlocking
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalDateTime
-import kotlinx.datetime.LocalTime
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asBoolean
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asByteArray
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asChar
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asDouble
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asFloat
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asInstant
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalDate
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalDateTime
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalTime
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asShort
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asUuid
 import kotlin.random.Random
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 
-@Suppress("SqlNoDataSourceInspection")
 class CommonMySQLTests(
     private val db: IMySQL
 ) {
