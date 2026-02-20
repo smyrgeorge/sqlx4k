@@ -26,22 +26,22 @@ abstract class AbstractStatement(
     override val sql: String
 ) : Statement {
     /**
-     * Holds the extracted parameters from the SQL statement as a pair of named parameter names
-     * and the count of positional parameters. Computed once during construction via single-pass scanning.
-     */
-    private val extractedParameters: Pair<Set<String>, Int> = extractParameters()
-
-    /**
      * A set containing the names of all named parameters extracted from the SQL statement.
      * It is populated using a parser that skips over string literals, comments, and
      * PostgreSQL dollar-quoted strings.
      */
-    final override val extractedNamedParameters: Set<String> = extractedParameters.first
+    final override val extractedNamedParameters: Set<String>
 
     /**
      * The count of positional parameter placeholders ('?') extracted from the SQL query.
      */
-    final override val extractedPositionalParameters: Int = extractedParameters.second
+    final override val extractedPositionalParameters: Int
+
+    init {
+        val (named, positional) = extractParameters()
+        extractedNamedParameters = named
+        extractedPositionalParameters = positional
+    }
 
     /**
      * A mutable map that holds the values bound to named parameters in an SQL statement.
@@ -55,7 +55,7 @@ abstract class AbstractStatement(
      * in an error during rendering.
      */
     override val namedParametersValues: MutableMap<String, Any?> =
-        HashMap((extractedNamedParameters.size / 0.75f + 1).toInt())
+        HashMap(extractedNamedParameters.size * 4 / 3 + 1)
 
     /**
      * An array storing the values bound to positional parameters in a SQL statement.
@@ -168,7 +168,7 @@ abstract class AbstractStatement(
 
         val renderedSql = sql.renderWithScanner { i, c, sb ->
             // Handle positional '?'
-            if (c == '?') {
+            if (c == '?' && extractedPositionalParameters > 0) {
                 val value = getPositionalValue(nextPositionalIndex)
                 appendNativeValue(value, sb, values, counter, dialect, encoders)
                 nextPositionalIndex++
