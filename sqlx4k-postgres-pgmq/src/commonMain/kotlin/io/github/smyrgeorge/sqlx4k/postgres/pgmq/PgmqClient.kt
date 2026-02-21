@@ -352,11 +352,12 @@ class PgmqClient(
         delay: Duration = 0.seconds
     ): Result<List<Long>> {
         // language=PostgreSQL
-        val sql = "SELECT pgmq.send_batch(queue_name := ?, msgs := ARRAY[?]::jsonb[], headers := ?, delay := ?)"
+        // headers must be jsonb[] with one entry per message — replicate the shared headers map for each
+        val sql = "SELECT pgmq.send_batch(queue_name := ?, msgs := ARRAY[?]::jsonb[], headers := ARRAY[?]::jsonb[], delay := ?)"
         val statement = Statement.create(sql)
             .bind(0, queue)
             .bind(1, NoWrappingTuple(messages))
-            .bind(2, headers.toJsonString())
+            .bind(2, NoWrappingTuple(messages.map { headers.toJsonString() }))
             .bind(3, delay.inWholeSeconds.toInt())
         return db.fetchAll(statement, LongRowMapper) // returns the message-ids.
     }
