@@ -363,6 +363,32 @@ class CommonPostgreSQLPreparedStatementTests(
         }
     }
 
+    // ---- Collection expansion: Set with custom types ----
+    fun `set expansion with custom types`() = runBlocking {
+        val table = newTable()
+        try {
+            db.execute(
+                "create table $table(id serial primary key, label text not null)"
+            ).getOrThrow()
+
+            for (label in listOf("alpha", "beta", "gamma", "delta")) {
+                db.execute(
+                    Statement.create("insert into $table(label) values (?)").bind(0, label)
+                ).getOrThrow()
+            }
+
+            // Named :tags with Set<Tag> — each Tag resolved through TagEncoder
+            val select = Statement.create(
+                "select label from $table where label in :tags order by label"
+            ).bind("tags", setOf(Tag("alpha"), Tag("gamma")))
+            val rows = db.fetchAll(select).getOrThrow()
+            val labels = rows.map { it.get(0).asString() }
+            assertThat(labels).isEqualTo(listOf("alpha", "gamma"))
+        } finally {
+            runCatching { db.execute("drop table if exists $table") }
+        }
+    }
+
     // ---- Collection expansion: IntArray ----
     fun `intArray expansion with IN clause`() = runBlocking {
         val table = newTable()
@@ -388,6 +414,31 @@ class CommonPostgreSQLPreparedStatementTests(
         }
     }
 
+    // ---- Collection expansion: LongArray ----
+    fun `longArray expansion with IN clause`() = runBlocking {
+        val table = newTable()
+        try {
+            db.execute(
+                "create table $table(id serial primary key, v int8 not null)"
+            ).getOrThrow()
+
+            for (v in listOf(10L, 20L, 30L, 40L, 50L)) {
+                db.execute(
+                    Statement.create("insert into $table(v) values (?)").bind(0, v)
+                ).getOrThrow()
+            }
+
+            val select = Statement.create(
+                "select v from $table where v in ? order by v"
+            ).bind(0, longArrayOf(20L, 40L))
+            val rows = db.fetchAll(select).getOrThrow()
+            val values = rows.map { it.get(0).asLong() }
+            assertThat(values).isEqualTo(listOf(20L, 40L))
+        } finally {
+            runCatching { db.execute("drop table if exists $table") }
+        }
+    }
+
     // ---- Collection expansion: NoWrappingTuple with ARRAY[] ----
     fun `noWrappingTuple expansion with ARRAY syntax`() = runBlocking {
         // NoWrappingTuple expands without parentheses: $1, $2, ...
@@ -395,6 +446,17 @@ class CommonPostgreSQLPreparedStatementTests(
         val select = Statement.create(
             "select ARRAY[?]::int[] as arr"
         ).bind(0, NoWrappingTuple(listOf(10, 20, 30)))
+        val row = db.fetchAll(select).getOrThrow().first()
+        assertThat(row.get(0).asString()).isEqualTo("{10,20,30}")
+    }
+
+    // ---- Collection expansion: NoWrappingTuple with custom types ----
+    fun `noWrappingTuple expansion with custom types`() = runBlocking {
+        // Each element resolved through MoneyEncoder (Money → Int) before expanding
+        // Uses int4[] to stay compatible with the r2dbc array codec (text[] has dimension mismatch issues)
+        val select = Statement.create(
+            "select ARRAY[?]::int4[] as arr"
+        ).bind(0, NoWrappingTuple(listOf(Money(10, "USD"), Money(20, "EUR"), Money(30, "GBP"))))
         val row = db.fetchAll(select).getOrThrow().first()
         assertThat(row.get(0).asString()).isEqualTo("{10,20,30}")
     }
@@ -624,6 +686,13 @@ class CommonPostgreSQLPreparedStatementTests(
             .bind(0, 'Z')
         val row = db.fetchAll(select).getOrThrow().first()
         assertThat(row.get(0).asString()).isEqualTo("Z")
+    }
+
+    fun `byte as parameter`() = runBlocking {
+        val select = Statement.create("select ?::int2 as b")
+            .bind(0, 5.toByte())
+        val row = db.fetchAll(select).getOrThrow().first()
+        assertThat(row.get(0).asShort()).isEqualTo(5.toShort())
     }
 
     // ---- Multiple rows with multiple params ----
