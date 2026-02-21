@@ -53,6 +53,12 @@ class NativeSQLitePreparedStatementTests {
     fun `intArray expansion with IN clause`() = runner.`intArray expansion with IN clause`()
 
     @Test
+    fun `longArray expansion with IN clause`() = runner.`longArray expansion with IN clause`()
+
+    @Test
+    fun `set expansion with custom types`() = runner.`set expansion with custom types`()
+
+    @Test
     fun `collection expansion mixed with scalar params`() =
         runner.`collection expansion mixed with scalar params`()
 
@@ -80,6 +86,9 @@ class NativeSQLitePreparedStatementTests {
 
     @Test
     fun `char as parameter`() = runner.`char as parameter`()
+
+    @Test
+    fun `byte as parameter`() = runner.`byte as parameter`()
 
     @Test
     fun `batch insert and filtered select with multiple params`() =
