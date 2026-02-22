@@ -2,7 +2,7 @@
 <html class="no-js" lang="en">
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" charset="UTF-8">
-    <title>toString</title>
+    <title>positionalParametersValues</title>
 <link href="../../../images/logo-icon.svg" rel="icon" type="image/svg"><script>var pathToRoot = "../../../";</script>
     <script>document.documentElement.classList.replace("no-js", "js");</script>
     <script>const storage = localStorage.getItem("dokka-dark-mode")
@@ -39,7 +39,7 @@
             </a>        <button class="navigation-controls--btn navigation-controls--btn_toc ui-kit_mobile-only" id="toc-toggle" type="button">Toggle table of contents
         </button>
         <div class="navigation-controls--break ui-kit_mobile-only"></div>
-        <div class="library-version" id="library-version">1.5.20
+        <div class="library-version" id="library-version">1.6.0
         </div>
         <div class="navigation-controls">
         <ul class="filter-section filter-section_loading" id="filter-section" aria-label="Target filter">
@@ -90,12 +90,12 @@
         </nav>
         <div id="resizer" class="resizer" data-item-type="BAR"></div>
         <div id="main" data-item-type="SECTION" role="main">
-<div class="main-content" data-page-type="member" id="content" pageids="sqlx4k::io.github.smyrgeorge.sqlx4k.impl.types/DoubleQuotingString/toString/#/PointingToDeclaration//272526764">
-  <div class="breadcrumbs"><a href="../../index.html">sqlx4k</a><span class="delimiter">/</span><a href="../index.html">io.github.smyrgeorge.sqlx4k.impl.types</a><span class="delimiter">/</span><a href="index.html">DoubleQuotingString</a><span class="delimiter">/</span><span class="current">toString</span></div>
+<div class="main-content" data-page-type="member" id="content" pageids="sqlx4k::io.github.smyrgeorge.sqlx4k/Statement/positionalParametersValues/#/PointingToDeclaration//272526764">
+  <div class="breadcrumbs"><a href="../../index.html">sqlx4k</a><span class="delimiter">/</span><a href="../index.html">io.github.smyrgeorge.sqlx4k</a><span class="delimiter">/</span><a href="index.html">Statement</a><span class="delimiter">/</span><span class="current">positionalParametersValues</span></div>
   <div class="cover ">
-    <h1 class="cover"><span>to</span><wbr><span><span>String</span></span></h1>
+    <h1 class="cover"><span>positional</span><wbr><span>Parameters</span><wbr><span><span>Values</span></span></h1>
   </div>
-  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">override </span><span class="token keyword">fun </span><a href="to-string.html"><span class="token function">toString</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="source-link-wrapper"><span class="source-link" data-element-type="source-link">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/impl/types/DoubleQuotingString.kt#L33">source</a>)</span></span></div></div></div>
+  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">val </span><a href="positional-parameters-values.html">positionalParametersValues</a><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-array/index.html">Array</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-any/index.html">Any</a><span class="token operator">?</span><span class="token operator">&gt;</span><span class="source-link-wrapper"><span class="source-link" data-element-type="source-link">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/Statement.kt#L53">source</a>)</span></span></div><p class="paragraph">Represents an array that holds the bound values for positional parameters in a SQL statement.</p><p class="paragraph">This property is used to store the values that are assigned to positional placeholders in an SQL statement. The positional placeholders are usually denoted by <code class="lang-kotlin">?</code> in the SQL query. Each index in this array corresponds to the zero-based index of the positional parameter in the SQL statement.</p><p class="paragraph">Positional parameter binding allows for dynamic substitution of values into the SQL query at runtime. The values in this array are used when rendering or executing the statement to replace the placeholders with their respective bound values.</p><p class="paragraph"><code class="lang-kotlin">null</code> values in the array indicate that no value has been bound to the corresponding positional parameter.</p></div></div>
 </div>
     <div class="footer">
         <div class="footer--container">

@@ -39,7 +39,7 @@
             </a>        <button class="navigation-controls--btn navigation-controls--btn_toc ui-kit_mobile-only" id="toc-toggle" type="button">Toggle table of contents
         </button>
         <div class="navigation-controls--break ui-kit_mobile-only"></div>
-        <div class="library-version" id="library-version">1.5.20
+        <div class="library-version" id="library-version">1.6.0
         </div>
         <div class="navigation-controls">
         <ul class="filter-section filter-section_loading" id="filter-section" aria-label="Target filter">
@@ -94,7 +94,7 @@
   <div class="breadcrumbs"><a href="../../index.html">sqlx4k</a><span class="delimiter">/</span><a href="../index.html">io.github.smyrgeorge.sqlx4k.impl.statement</a><span class="delimiter">/</span><span class="current">AbstractStatement</span></div>
   <div class="cover ">
     <h1 class="cover"><span>Abstract</span><wbr><span><span>Statement</span></span></h1>
-    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">class </span><a href="index.html">AbstractStatement</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">sql<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span> : <a href="../../io.github.smyrgeorge.sqlx4k/-statement/index.html">Statement</a><span class="source-link-wrapper"><span class="source-link" data-element-type="source-link">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/impl/statement/AbstractStatement.kt#L20">source</a>)</span></span></div><p class="paragraph">Represents an abstract implementation of a SQL statement that supports binding of positional and named parameters, along with rendering the statement into a complete and executable SQL string.</p><p class="paragraph">This class provides foundational methods for handling parameterized SQL statements, including binding values to parameters, encoding values using a registry, and rendering the final SQL string. It also includes utility methods for parsing and processing SQL strings to extract or replace placeholders and handle specific SQL constructs such as comments, quotes, and dollar-quoted strings.</p><h4 class="tableheader">Inheritors</h4><div class="table"><div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><a href="../-extended-statement/index.html">ExtendedStatement</a></div></span></div><div></div></div></div><div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><a href="../-simple-statement/index.html">SimpleStatement</a></div></span></div><div></div></div></div></div></div></div>
+    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">abstract </span><span class="token keyword">class </span><a href="index.html">AbstractStatement</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword">val </span>sql<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></span></span><span class="token punctuation">)</span> : <a href="../../io.github.smyrgeorge.sqlx4k/-statement/index.html">Statement</a><span class="source-link-wrapper"><span class="source-link" data-element-type="source-link">(<a href="https://github.com/smyrgeorge/sqlx4k/tree/main/sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/impl/statement/AbstractStatement.kt#L27">source</a>)</span></span></div><p class="paragraph">Represents an abstract implementation of a SQL statement that supports binding of positional and named parameters, along with rendering the statement into a complete and executable SQL string.</p><p class="paragraph">This class provides foundational methods for handling parameterized SQL statements, including binding values to parameters, encoding values using a registry, and rendering the final SQL string. It also includes utility methods for parsing and processing SQL strings to extract or replace placeholders and handle specific SQL constructs such as comments, quotes, and dollar-quoted strings.</p><h4 class="tableheader">Inheritors</h4><div class="table"><div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><a href="../-extended-statement/index.html">ExtendedStatement</a></div></span></div><div></div></div></div><div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><a href="../-simple-statement/index.html">SimpleStatement</a></div></span></div><div></div></div></div></div></div></div>
   </div>
   <div class="tabbedcontent">
     <div class="tabs-section" tabs-section="tabs-section"><button class="section-tab" data-active="" data-togglable="CONSTRUCTOR,TYPE,PROPERTY,FUNCTION">Members</button></div>
@@ -169,6 +169,51 @@
               </div>
             </div>
           </div>
+<a data-name="-1611803500%2FProperties%2F272526764" anchor-label="namedParametersValues" id="-1611803500%2FProperties%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="named-parameters-values.html"><span>named</span><wbr><span>Parameters</span><wbr><span><span>Values</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1611803500%2FProperties%2F272526764"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">override </span><span class="token keyword">val </span><a href="named-parameters-values.html">namedParametersValues</a><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-mutable-map/index.html">MutableMap</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-any/index.html">Any</a><span class="token operator">?</span><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">A mutable map that holds the values bound to named parameters in an SQL statement.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="721037345%2FProperties%2F272526764" anchor-label="positionalParametersValues" id="721037345%2FProperties%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="positional-parameters-values.html"><span>positional</span><wbr><span>Parameters</span><wbr><span><span>Values</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="721037345%2FProperties%2F272526764"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">override </span><span class="token keyword">val </span><a href="positional-parameters-values.html">positionalParametersValues</a><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-array/index.html">Array</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-any/index.html">Any</a><span class="token operator">?</span><span class="token operator">&gt;</span></div><div class="brief "><p class="paragraph">An array storing the values bound to positional parameters in a SQL statement.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-16060693%2FProperties%2F272526764" anchor-label="sql" id="-16060693%2FProperties%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="sql.html"><span><span>sql</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-16060693%2FProperties%2F272526764"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">override </span><span class="token keyword">val </span><a href="sql.html">sql</a><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <div data-togglable="FUNCTION">
@@ -188,6 +233,21 @@
               </div>
             </div>
           </div>
+<a data-name="453542122%2FFunctions%2F272526764" anchor-label="bindNull" id="453542122%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="bind-null.html"><span>bind</span><wbr><span><span>Null</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="453542122%2FFunctions%2F272526764"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">override </span><span class="token keyword">fun </span><a href="bind-null.html"><span class="token function">bindNull</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">index<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-int/index.html">Int</a><span class="token punctuation">, </span></span><span class="parameter ">type<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.reflect/-k-class/index.html">KClass</a><span class="token operator">&lt;</span><span class="token operator">*</span><span class="token operator">&gt;</span></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="index.html">AbstractStatement</a></div><div class="brief "><p class="paragraph">Binds a typed null to a positional parameter.</p></div><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">override </span><span class="token keyword">fun </span><a href="bind-null.html"><span class="token function">bindNull</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">parameter<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">type<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.reflect/-k-class/index.html">KClass</a><span class="token operator">&lt;</span><span class="token operator">*</span><span class="token operator">&gt;</span></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="index.html">AbstractStatement</a></div><div class="brief "><p class="paragraph">Binds a typed null to a named parameter.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
 <a data-name="-524465%2FFunctions%2F272526764" anchor-label="render" id="-524465%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
           <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
             <div class="main-subrow keyValue ">
@@ -199,6 +259,21 @@
               <div>
                 <div class="title">
                   <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">override </span><span class="token keyword">fun </span><a href="render.html"><span class="token function">render</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">encoders<span class="token operator">: </span><a href="../../io.github.smyrgeorge.sqlx4k/-value-encoder-registry/index.html">ValueEncoderRegistry</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a></div><div class="brief "><p class="paragraph">Renders the SQL statement by replacing positional and named parameter placeholders with their corresponding bound values using the provided encoder registry.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="1895912465%2FFunctions%2F272526764" anchor-label="renderNativeQuery" id="1895912465%2FFunctions%2F272526764" data-filterable-set=":sqlx4k/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k/commonMain" data-filterable-set=":sqlx4k/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="render-native-query.html"><span>render</span><wbr><span>Native</span><wbr><span><span>Query</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1895912465%2FFunctions%2F272526764"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k/commonMain"><div class="symbol monospace"><span class="token keyword">open </span><span class="token keyword">override </span><span class="token keyword">fun </span><a href="render-native-query.html"><span class="token function">renderNativeQuery</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">dialect<span class="token operator">: </span><a href="../../io.github.smyrgeorge.sqlx4k/-dialect/index.html">Dialect</a><span class="token punctuation">, </span></span><span class="parameter ">encoders<span class="token operator">: </span><a href="../../io.github.smyrgeorge.sqlx4k/-value-encoder-registry/index.html">ValueEncoderRegistry</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="../../io.github.smyrgeorge.sqlx4k/-statement/-native-query/index.html">Statement.NativeQuery</a></div><div class="brief "><p class="paragraph">Renders the SQL statement for native prepared-statement execution by replacing <code class="lang-kotlin">?</code> and <code class="lang-kotlin">:name</code> placeholders with dialect-appropriate positional parameters and collecting raw values in order.</p></div></div></div>
                 </div>
               </div>
             </div>
