@@ -336,11 +336,7 @@ class PostgreSQLImpl(
                 }
             }
 
-            return try {
-                if (lock) doExecuteWithLock(sql) else doExecute(sql)
-            } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message, e).raise()
-            }
+            return if (lock) doExecuteWithLock(sql) else doExecute(sql)
         }
 
         override suspend fun execute(sql: String): Result<Long> = execute(sql, true)
