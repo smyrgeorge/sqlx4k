@@ -7,11 +7,11 @@ import assertk.assertions.isNotEqualTo
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.pool.util.FakeConnection
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 
 class ConnectionPoolExpirationTests {
 

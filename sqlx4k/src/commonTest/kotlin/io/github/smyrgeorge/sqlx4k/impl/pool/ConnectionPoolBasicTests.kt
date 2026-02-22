@@ -8,9 +8,9 @@ import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.pool.util.FakeConnection
-import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.time.Duration
+import kotlinx.coroutines.runBlocking
 
 class ConnectionPoolBasicTests {
     // Simple incremental id to distinguish FakeConnection instances
