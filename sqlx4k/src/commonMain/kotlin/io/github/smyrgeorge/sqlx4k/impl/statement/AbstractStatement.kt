@@ -176,7 +176,7 @@ abstract class AbstractStatement(
             }
 
             // Handle named ':name'
-            if (c == ':') {
+            if (c == ':' && extractedNamedParameters.isNotEmpty()) {
                 // Skip PostgreSQL type casts '::'
                 if (i + 1 < length && this[i + 1] == ':') {
                     sb.append("::")
