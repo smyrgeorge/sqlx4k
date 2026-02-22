@@ -2,15 +2,15 @@ package io.github.smyrgeorge.sqlx4k.postgres
 
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
+import io.r2dbc.pool.ConnectionPool as R2dbcConnectionPool
 import io.r2dbc.pool.ConnectionPoolConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
 import io.r2dbc.postgresql.PostgresqlConnectionFactoryProvider
 import io.r2dbc.spi.ConnectionFactoryOptions
+import kotlin.time.toJavaDuration
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.runBlocking
-import kotlin.time.toJavaDuration
-import io.r2dbc.pool.ConnectionPool as R2dbcConnectionPool
 
 /**
  * PostgreSQL class provides mechanisms to interact with a PostgreSQL database.
@@ -38,11 +38,9 @@ class PostgreSQL(
     password: String,
     options: ConnectionPool.Options = ConnectionPool.Options(),
     override val encoders: ValueEncoderRegistry = ValueEncoderRegistry()
-) : IPostgresSQL by PostgreSQLImpl(
-    connectionPool(options, connectionFactory(url, username, password)),
-    connectionFactory(url, username, password),
-    encoders
-) {
+) : IPostgresSQL by (with(connectionFactory(url, username, password)) {
+    PostgreSQLImpl(connectionPool(options, this), this, encoders)
+}) {
     companion object {
         private fun connectionFactory(url: String, username: String, password: String): PostgresqlConnectionFactory {
             val url = if (!url.startsWith("r2dbc:")) "r2dbc:$url" else url
