@@ -38,8 +38,10 @@ interface QueryExecutor {
      * @param statement the SQL statement to be executed.
      * @return a result containing the number of affected rows.
      */
-    suspend fun execute(statement: Statement): Result<Long> =
-        execute(statement.render(encoders))
+    suspend fun execute(statement: Statement): Result<Long> {
+        val sql = runCatching { statement.render(encoders) }.getOrElse { return Result.failure(it) }
+        return execute(sql)
+    }
 
     /**
      * Fetches all results of the given SQL query asynchronously.
@@ -55,8 +57,10 @@ interface QueryExecutor {
      * @param statement The SQL statement to be executed.
      * @return A result containing the retrieved result set.
      */
-    suspend fun fetchAll(statement: Statement): Result<ResultSet> =
-        fetchAll(statement.render(encoders))
+    suspend fun fetchAll(statement: Statement): Result<ResultSet> {
+        val sql = runCatching { statement.render(encoders) }.getOrElse { return Result.failure(it) }
+        return fetchAll(sql)
+    }
 
     /**
      * Fetches all results of the given SQL query and maps each row using the provided RowMapper.
@@ -78,8 +82,10 @@ interface QueryExecutor {
      * @param rowMapper The RowMapper to use for converting rows in the result set to instances of type T.
      * @return A Result containing a list of instances of type T mapped from the query result set.
      */
-    suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-        fetchAll(statement.render(encoders), rowMapper)
+    suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> {
+        val sql = runCatching { statement.render(encoders) }.getOrElse { return Result.failure(it) }
+        return fetchAll(sql, rowMapper)
+    }
 
     /**
      * Represents a transactional interface providing methods for handling transactions.

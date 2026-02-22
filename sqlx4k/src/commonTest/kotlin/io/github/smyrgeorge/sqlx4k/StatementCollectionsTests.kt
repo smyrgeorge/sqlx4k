@@ -4,8 +4,10 @@ import assertk.all
 import assertk.assertThat
 import assertk.assertions.contains
 import assertk.assertions.doesNotContain
+import assertk.assertions.isEqualTo
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
 
 class StatementCollectionsTests {
 
@@ -35,11 +37,10 @@ class StatementCollectionsTests {
     fun `Bind empty list to parameter`() {
         val sql = "select * from sqlx4k where id IN ?"
         val emptyList = emptyList<Int>()
-        val res = Statement.create(sql)
-            .bind(0, emptyList)
-            .render()
-
-        assertThat(res).contains("id IN ()")
+        val error = assertFailsWith<SQLError> {
+            Statement.create(sql).bind(0, emptyList).render()
+        }
+        assertThat(error.code).isEqualTo(SQLError.Code.EmptyCollection)
     }
 
     @Test
@@ -248,18 +249,13 @@ class StatementCollectionsTests {
     }
 
     @Test
-    fun `Empty collection with SQL injection in query is properly handled`() {
-        // This tests that even if the collection is empty, the SQL is still properly formed
-        // and doesn't allow for injection in the surrounding query
-        val sql = "SELECT * FROM users WHERE username IN ? -- ' OR '1'='1"
+    fun `Empty collection raises error`() {
+        val sql = "SELECT * FROM users WHERE username IN ?"
         val emptyList = emptyList<String>()
-
-        val res = Statement.create(sql)
-            .bind(0, emptyList)
-            .render()
-
-        // The comment and attempted injection should be preserved as-is
-        assertThat(res).contains("username IN () -- ' OR '1'='1")
+        val error = assertFailsWith<SQLError> {
+            Statement.create(sql).bind(0, emptyList).render()
+        }
+        assertThat(error.code).isEqualTo(SQLError.Code.EmptyCollection)
     }
 
     @Test

@@ -72,9 +72,14 @@ internal fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
  * Helper to encode a collection/array of values as a SQL tuple like (a, b, c).
  * Uses encodeValue for each element; nulls become null without quotes.
  */
-private fun Iterable<*>.encodeTuple(encoders: ValueEncoderRegistry, wrapInParenthesis: Boolean = true): String =
-    if (wrapInParenthesis) joinToString(", ", "(", ")") { it.encodeValue(encoders) }
+private fun Iterable<*>.encodeTuple(encoders: ValueEncoderRegistry, wrapInParenthesis: Boolean = true): String {
+    if (!iterator().hasNext()) SQLError(
+        code = SQLError.Code.EmptyCollection,
+        message = "Cannot expand an empty collection as a SQL parameter"
+    ).raise()
+    return if (wrapInParenthesis) joinToString(", ", "(", ")") { it.encodeValue(encoders) }
     else joinToString(", ") { it.encodeValue(encoders) }
+}
 
 /**
  * Converts the `Instant` to a string representation of a timestamp with microsecond precision.
@@ -169,9 +174,15 @@ internal fun appendNativeValue(
     }
 
     fun appendExpanded(iterable: Iterable<*>, wrap: Boolean) {
+        val iter = iterable.iterator()
+        if (!iter.hasNext()) SQLError(
+            code = SQLError.Code.EmptyCollection,
+            message = "Cannot expand an empty collection as a SQL parameter"
+        ).raise()
         if (wrap) sb.append('(')
         var first = true
-        for (element in iterable) {
+        while (iter.hasNext()) {
+            val element = iter.next()
             if (!first) sb.append(", ")
             first = false
             values.add(element.resolveNativeValue(encoders))

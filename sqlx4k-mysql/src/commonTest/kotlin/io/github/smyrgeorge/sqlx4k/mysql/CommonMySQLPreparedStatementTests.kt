@@ -446,19 +446,15 @@ class CommonMySQLPreparedStatementTests(
         val table = newTable()
         try {
             db.execute(
-                "create table $table(id int auto_increment primary key, amount int not null, currency text not null)"
+                "create table $table(id int auto_increment primary key, amount int not null)"
             ).getOrThrow()
 
-            val insert = Statement.create(
-                "insert into $table(amount, currency) values (?, ?)"
-            )
+            val insert = Statement.create("insert into $table(amount) values (?)")
                 .bind(0, Money(42, "USD"))
-                .bind(1, "ignored") // currency comes from Money encoder
             db.execute(insert).getOrThrow()
 
-            val select = Statement.create(
-                "select amount from $table where amount = ?"
-            ).bind(0, Money(42, "USD"))
+            val select = Statement.create("select amount from $table where amount = ?")
+                .bind(0, Money(42, "USD"))
             val row = db.fetchAll(select).getOrThrow().first()
             assertThat(row.get(0).asInt()).isEqualTo(42)
         } finally {
@@ -618,6 +614,14 @@ class CommonMySQLPreparedStatementTests(
             .bind(0, 5.toByte())
         val row = db.fetchAll(select).getOrThrow().first()
         assertThat(row.get(0).asShort()).isEqualTo(5.toShort())
+    }
+
+    // ---- Empty collection guard ----
+    fun `empty collection raises error`() = runBlocking {
+        val select = Statement.create("select 1 where 1 in ?")
+            .bind(0, emptyList<Int>())
+        val result = db.fetchAll(select)
+        assertThat(result.isFailure).isTrue()
     }
 
     // ---- Multiple rows with multiple params ----

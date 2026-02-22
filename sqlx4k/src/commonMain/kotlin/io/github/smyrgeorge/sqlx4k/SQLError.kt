@@ -62,6 +62,7 @@ class SQLError(
         NamedParameterValueNotSupplied,
         InvalidIdentifier,
         UnsafeStringContent,
+        EmptyCollection,
         UnknownError,
     }
 }

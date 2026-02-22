@@ -92,6 +92,9 @@ class JvmMySQLPreparedStatementTests {
     fun `byte as parameter`() = runner.`byte as parameter`()
 
     @Test
+    fun `empty collection raises error`() = runner.`empty collection raises error`()
+
+    @Test
     fun `batch insert and filtered select with multiple params`() =
         runner.`batch insert and filtered select with multiple params`()
 }
