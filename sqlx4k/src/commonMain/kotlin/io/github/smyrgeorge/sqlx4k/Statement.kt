@@ -1,6 +1,7 @@
 package io.github.smyrgeorge.sqlx4k
 
 import io.github.smyrgeorge.sqlx4k.impl.statement.SimpleStatement
+import kotlin.reflect.KClass
 
 /**
  * Represents a statement that allows binding of positional and named parameters.
@@ -61,6 +62,20 @@ interface Statement {
     fun bind(index: Int, value: Any?): Statement
 
     /**
+     * Binds a typed null value to a positional parameter in the statement.
+     *
+     * This method is used to explicitly bind a `null` value to a positional parameter
+     * while specifying the intended SQL type. It is particularly useful when interacting
+     * with strongly-typed SQL columns where the type information is required to correctly
+     * handle the `null` value (e.g., `uuid`, `timestamptz`, typed arrays).
+     *
+     * @param index The zero-based index of the positional parameter to bind the null value to.
+     * @param type The Kotlin class corresponding to the intended SQL type of the parameter.
+     * @return The current `Statement` instance to allow for method chaining.
+     */
+    fun bindNull(index: Int, type: KClass<*>): Statement
+
+    /**
      * Binds a value to a named parameter in the statement.
      *
      * @param parameter The name of the parameter to bind the value to.
@@ -68,6 +83,21 @@ interface Statement {
      * @return The current `Statement` instance to allow for method chaining.
      */
     fun bind(parameter: String, value: Any?): Statement
+
+    /**
+     * Binds a typed null value to a named parameter in the statement.
+     *
+     * This method is used to explicitly bind a `null` value to a named parameter
+     * while specifying the intended SQL type. It is beneficial in cases where
+     * the type information is required to properly handle the `null` value,
+     * such as in the case of strongly-typed SQL columns (e.g., `uuid`, `timestamptz`,
+     * typed arrays).
+     *
+     * @param parameter The name of the parameter to bind the null value to.
+     * @param type The Kotlin class representing the intended SQL type of the parameter.
+     * @return The current `Statement` instance to allow for method chaining.
+     */
+    fun bindNull(parameter: String, type: KClass<*>): Statement
 
     /**
      * Renders the SQL statement by replacing placeholders for positional and named parameters

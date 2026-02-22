@@ -3,7 +3,9 @@ package io.github.smyrgeorge.sqlx4k.impl.statement
 import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
+import kotlin.reflect.KClass
 import io.github.smyrgeorge.sqlx4k.impl.extensions.appendNativeValue
 import io.github.smyrgeorge.sqlx4k.impl.extensions.encodeValue
 import io.github.smyrgeorge.sqlx4k.impl.extensions.isIdentPart
@@ -105,6 +107,44 @@ abstract class AbstractStatement(
             ).raise()
         }
         namedParametersValues[parameter] = value ?: NULL_VALUE
+        return this
+    }
+
+    /**
+     * Binds a typed null to a positional parameter.
+     *
+     * @param index The zero-based index of the positional parameter.
+     * @param type  The Kotlin class of the intended SQL type.
+     * @return The current [Statement] instance to allow for method chaining.
+     * @throws SQLError if the given index is out of bounds.
+     */
+    override fun bindNull(index: Int, type: KClass<*>): AbstractStatement {
+        if (index !in 0..<extractedPositionalParameters) {
+            SQLError(
+                code = SQLError.Code.PositionalParameterOutOfBounds,
+                message = "Index '$index' out of bounds."
+            ).raise()
+        }
+        positionalParametersValues[index] = TypedNull(type)
+        return this
+    }
+
+    /**
+     * Binds a typed null to a named parameter.
+     *
+     * @param parameter The name of the parameter.
+     * @param type      The Kotlin class of the intended SQL type.
+     * @return The current [Statement] instance to allow for method chaining.
+     * @throws SQLError if the specified named parameter is not found.
+     */
+    override fun bindNull(parameter: String, type: KClass<*>): AbstractStatement {
+        if (parameter !in extractedNamedParameters) {
+            SQLError(
+                code = SQLError.Code.NamedParameterNotFound,
+                message = "Parameter '$parameter' not found."
+            ).raise()
+        }
+        namedParametersValues[parameter] = TypedNull(type)
         return this
     }
 

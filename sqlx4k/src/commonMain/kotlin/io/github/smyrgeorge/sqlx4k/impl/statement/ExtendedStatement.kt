@@ -3,9 +3,11 @@ package io.github.smyrgeorge.sqlx4k.impl.statement
 import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.extensions.encodeValue
 import io.github.smyrgeorge.sqlx4k.impl.extensions.resolveNativeValue
+import kotlin.reflect.KClass
 
 /**
  * The `ExtendedStatement` class provides an implementation that extends the functionality
@@ -54,6 +56,17 @@ class ExtendedStatement(sql: String) : AbstractStatement(sql) {
             ).raise()
         }
         pgParametersValues[index] = value
+        return this
+    }
+
+    override fun bindNull(index: Int, type: KClass<*>): ExtendedStatement {
+        if (index < 0 || index >= pgParameters.size) {
+            SQLError(
+                code = SQLError.Code.PositionalParameterOutOfBounds,
+                message = "Index '$index' out of bounds."
+            ).raise()
+        }
+        pgParametersValues[index] = TypedNull(type)
         return this
     }
 

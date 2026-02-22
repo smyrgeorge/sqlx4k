@@ -10,9 +10,11 @@ import assertk.assertions.isNull
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asBoolean
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asBooleanOrNull
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asDouble
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asFloat
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInstant
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asInstantOrNull
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalDate
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalDateTime
@@ -20,6 +22,7 @@ import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalTime
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asShort
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asUuid
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asUuidOrNull
 import io.github.smyrgeorge.sqlx4k.impl.statement.ExtendedStatement
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
 import kotlin.random.Random
@@ -141,34 +144,82 @@ class CommonPostgreSQLPreparedStatementTests(
         val table = newTable()
         try {
             db.execute(
-                "create table $table(id serial primary key, v_text text, v_int4 int4)"
+                """
+                create table $table(
+                    id serial primary key,
+                    v_text text,
+                    v_int4 int4,
+                    v_bool bool,
+                    v_uuid uuid,
+                    v_tstz timestamptz
+                )
+                """.trimIndent()
             ).getOrThrow()
 
-            // Positional null
+            // Positional null — text column
             val insertPos = Statement.create("insert into $table(v_text, v_int4) values (?, ?)")
                 .bind(0, null)
                 .bind(1, 1)
             db.execute(insertPos).getOrThrow()
 
-            // Named null
+            // Named null — int4 column
             val insertNamed = Statement.create("insert into $table(v_text, v_int4) values (:text, :int4)")
                 .bind("text", "present")
                 .bind("int4", null)
             db.execute(insertNamed).getOrThrow()
 
-            // Verify positional null
+            // Positional null — uuid column (most likely to break with Any::class.java)
+            val insertUuid = Statement.create("insert into $table(v_int4, v_uuid) values (?, ?)")
+                .bind(0, 3)
+                .bind(1, null)
+            db.execute(insertUuid).getOrThrow()
+
+            // Named null — bool column
+            val insertBool = Statement.create("insert into $table(v_int4, v_bool) values (:id, :flag)")
+                .bind("id", 4)
+                .bind("flag", null)
+            db.execute(insertBool).getOrThrow()
+
+            // Positional null — timestamptz column
+            val insertTstz = Statement.create("insert into $table(v_int4, v_tstz) values (?, ?)")
+                .bind(0, 5)
+                .bind(1, null)
+            db.execute(insertTstz).getOrThrow()
+
+            // Verify positional null (text)
             val row1 = db.fetchAll(
                 Statement.create("select v_text, v_int4 from $table where v_int4 = ?").bind(0, 1)
             ).getOrThrow().first()
             assertThat(row1.get(0).asStringOrNull()).isNull()
             assertThat(row1.get(1).asInt()).isEqualTo(1)
 
-            // Verify named null
+            // Verify named null (int4)
             val row2 = db.fetchAll(
                 Statement.create("select v_text, v_int4 from $table where v_text = :t").bind("t", "present")
             ).getOrThrow().first()
             assertThat(row2.get(0).asString()).isEqualTo("present")
             assertThat(row2.get(1).asStringOrNull()).isNull()
+
+            // Verify positional null (uuid)
+            val row3 = db.fetchAll(
+                Statement.create("select v_int4, v_uuid from $table where v_int4 = ?").bind(0, 3)
+            ).getOrThrow().first()
+            assertThat(row3.get(0).asInt()).isEqualTo(3)
+            assertThat(row3.get(1).asUuidOrNull()).isNull()
+
+            // Verify named null (bool)
+            val row4 = db.fetchAll(
+                Statement.create("select v_int4, v_bool from $table where v_int4 = ?").bind(0, 4)
+            ).getOrThrow().first()
+            assertThat(row4.get(0).asInt()).isEqualTo(4)
+            assertThat(row4.get(1).asBooleanOrNull()).isNull()
+
+            // Verify positional null (timestamptz)
+            val row5 = db.fetchAll(
+                Statement.create("select v_int4, v_tstz from $table where v_int4 = ?").bind(0, 5)
+            ).getOrThrow().first()
+            assertThat(row5.get(0).asInt()).isEqualTo(5)
+            assertThat(row5.get(1).asInstantOrNull()).isNull()
         } finally {
             runCatching { db.execute("drop table if exists $table") }
         }

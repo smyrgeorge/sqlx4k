@@ -19,6 +19,7 @@ import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.github.smyrgeorge.sqlx4k.impl.pool.ConnectionPoolImpl
 import io.github.smyrgeorge.sqlx4k.impl.pool.PooledConnection
 import io.github.smyrgeorge.sqlx4k.impl.pool.PooledTransaction
+import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import java.sql.Connection as NativeJdbcConnection
 import java.sql.DriverManager
 import java.sql.ResultSet as NativeJdbcResultSet
@@ -428,7 +429,11 @@ class SQLite(
             val query = statement.renderNativeQuery(Dialect.SQLite, encoders)
             val stmt = prepareStatement(query.sql)
             query.values.forEachIndexed { index, value ->
-                stmt.setObject(index + 1, value?.toJdbc())
+                when (value) {
+                    is TypedNull -> stmt.setNull(index + 1, java.sql.Types.NULL)
+                    null -> stmt.setNull(index + 1, java.sql.Types.NULL)
+                    else -> stmt.setObject(index + 1, value.toJdbc())
+                }
             }
             return stmt
         }

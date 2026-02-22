@@ -25,6 +25,7 @@ import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
+import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufAllocator
 import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
@@ -449,8 +450,7 @@ class MySQL(
             statement: Statement,
             encoders: ValueEncoderRegistry
         ): io.r2dbc.spi.Statement {
-            fun Any?.toR2dbc(): Any? = when (this) {
-                null -> this
+            fun Any.toR2dbc(): Any = when (this) {
                 is Char -> toString()
                 // MySQL DATETIME is timezone-agnostic; convert to UTC LocalDateTime to
                 // avoid session-timezone shifts when the driver binds java.time.Instant.
@@ -469,9 +469,11 @@ class MySQL(
             val query = statement.renderNativeQuery(Dialect.MySQL, encoders)
             val stmt = createStatement(query.sql)
             query.values.forEachIndexed { index, value ->
-                val converted = value?.toR2dbc()
-                if (converted == null) stmt.bindNull(index, Any::class.java)
-                else stmt.bind(index, converted)
+                when (value) {
+                    is TypedNull -> stmt.bindNull(index, value.type.java)
+                    null -> stmt.bindNull(index, Any::class.java)
+                    else -> stmt.bind(index, value.toR2dbc())
+                }
             }
             return stmt
         }

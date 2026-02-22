@@ -15,6 +15,7 @@ import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
+import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
 import io.r2dbc.postgresql.api.Notification as NativeR2dbcNotification
@@ -502,8 +503,7 @@ class PostgreSQLImpl(
             statement: Statement,
             encoders: ValueEncoderRegistry
         ): io.r2dbc.spi.Statement {
-            fun Any?.toR2dbc(): Any? = when (this) {
-                null -> this
+            fun Any.toR2dbc(): Any = when (this) {
                 is Instant -> toJavaInstant()
                 is LocalDate -> toJavaLocalDate()
                 is LocalTime -> toJavaLocalTime()
@@ -515,9 +515,11 @@ class PostgreSQLImpl(
             val query = statement.renderNativeQuery(Dialect.PostgreSQL, encoders)
             val stmt = createStatement(query.sql)
             query.values.forEachIndexed { index, value ->
-                val converted = value?.toR2dbc()
-                if (converted == null) stmt.bindNull(index, Any::class.java)
-                else stmt.bind(index, converted)
+                when (value) {
+                    is TypedNull -> stmt.bindNull(index, value.type.java)
+                    null -> stmt.bindNull(index, Any::class.java)
+                    else -> stmt.bind(index, value.toR2dbc())
+                }
             }
             return stmt
         }

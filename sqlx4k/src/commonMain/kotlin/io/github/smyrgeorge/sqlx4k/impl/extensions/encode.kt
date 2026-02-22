@@ -4,6 +4,7 @@ package io.github.smyrgeorge.sqlx4k.impl.extensions
 
 import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
 import kotlin.time.Instant
@@ -32,6 +33,7 @@ import kotlinx.datetime.toLocalDateTime
 internal fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
     return when (this) {
         null -> "null"
+        is TypedNull -> "null"
         is String -> {
             // Fast path: if no single quote present, avoid replace allocation
             if (indexOf('\'') < 0) return "'${this}'"
@@ -124,6 +126,7 @@ internal fun Instant.toTimestampString(timeZone: TimeZone = TimeZone.UTC): Strin
 internal fun Any?.resolveNativeValue(encoders: ValueEncoderRegistry): Any? {
     return when (this) {
         null -> null
+        is TypedNull -> this
         is String, is Char, is Boolean, is Byte, is Short, is Int, is Long, is Float, is Double -> this
         is Instant, is LocalDate, is LocalTime, is LocalDateTime -> this
         is Uuid -> this
