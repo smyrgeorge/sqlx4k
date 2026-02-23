@@ -18,7 +18,7 @@ assertk = "0.28.1"
 # https://github.com/google/ksp/releases
 ksp = "2.3.5"
 # https://plugins.gradle.org/plugin/org.springframework.boot
-spring-boot = "4.0.2"
+spring-boot = "4.0.3"
 # https://plugins.gradle.org/plugin/io.spring.dependency-management
 spring-depedency-management = "1.1.7"
 # https://github.com/r2dbc/r2dbc-pool
