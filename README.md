@@ -14,6 +14,7 @@
 ![](https://img.shields.io/static/v1?label=&message=Windows&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=iOS&color=blue)
 ![](https://img.shields.io/static/v1?label=&message=Android&color=blue)
+[![libs.tech recommends](https://libs.tech/project/814605898/badge.svg)](https://libs.tech/project/814605898/sqlx4k)
 
 A coroutine-first SQL toolkit with compile-time query validations for Kotlin Multiplatform. PostgreSQL, MySQL/MariaDB,
 and SQLite supported.
