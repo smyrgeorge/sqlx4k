@@ -836,6 +836,7 @@ SQLDelight integration for type-safe SQL queries with sqlx4k.
 ## Supported Targets
 
 - jvm
+- iosX64
 - iosArm64
 - iosSimulatorArm64
 - androidNativeX64
@@ -878,6 +879,7 @@ Check here: https://rustup.rs/
 Also, make sure that you have installed all the necessary targets (only if you want to build for all targets):
 
 ```shell
+rustup target add x86_64-apple-ios
 rustup target add aarch64-apple-ios
 rustup target add aarch64-apple-ios-sim
 rustup target add x86_64-linux-android

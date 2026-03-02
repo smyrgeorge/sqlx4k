@@ -24,6 +24,7 @@ class MultiplatformConventions : Plugin<Project> {
                         }
                     }
                 },
+                Pair("iosX64") { iosX64() },
                 Pair("iosArm64") { iosArm64() },
                 Pair("iosSimulatorArm64") { iosSimulatorArm64() },
                 if (project.name != "sqlx4k-arrow") Pair("androidNativeArm64") { androidNativeArm64() } else null,
