@@ -14,7 +14,7 @@ import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSValueArgument
 import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.validate
-import io.github.smyrgeorge.sqlx4k.processor.TypeNames.BUILT_IN_TYPES
+import io.github.smyrgeorge.sqlx4k.processor.TypeNames.PRIMITIVE_TYPES
 import io.github.smyrgeorge.sqlx4k.processor.TypeNames.builtInDecoder
 import io.github.smyrgeorge.sqlx4k.processor.TypeNames.postgresArrayDecoder
 import java.io.OutputStream
@@ -966,7 +966,7 @@ class TableProcessor(
         return classDecl.qualifiedName?.asString()
     }
 
-    private fun isBuiltInType(typeQualifiedName: String): Boolean = typeQualifiedName in BUILT_IN_TYPES
+    private fun isPrimitiveType(typeQualifiedName: String): Boolean = typeQualifiedName in PRIMITIVE_TYPES
 
     /**
      * Validates the compatibility between a property type and its associated @Converter encoder type.
@@ -986,11 +986,11 @@ class TableProcessor(
         val propTypeQualifiedName = propType.declaration.qualifiedName?.asString()
             ?: error("No type name found for property ${prop.simpleName()}")
 
-        // Check that the property is not a built-in type
+        // Check that the property is not a primitive type
         val baseTypeName = propTypeQualifiedName.removeSuffix("?")
-        if (isBuiltInType(baseTypeName)) {
+        if (isPrimitiveType(baseTypeName)) {
             error(
-                "@Converter cannot be used on built-in type '$propTypeQualifiedName'. " +
+                "@Converter cannot be used on primitive type '$propTypeQualifiedName'. " +
                         "Property: ${prop.simpleName()} in ${prop.parentDeclaration?.simpleName?.asString()}"
             )
         }

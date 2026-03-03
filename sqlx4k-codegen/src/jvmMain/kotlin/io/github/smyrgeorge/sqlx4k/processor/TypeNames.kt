@@ -74,9 +74,11 @@ object TypeNames {
     val KOTLIN_INT = Int::class.qualifiedName!!
 
     /**
-     * Set of built-in types that have native decoder support and should not use @Converter.
+     * Set of primitive types that have native decoder support and should not use @Converter.
+     * Date/time types (Instant, LocalDate, etc.) are excluded to allow @Converter usage
+     * for databases that don't have native support (e.g., SQLite mapping Instant to Long).
      */
-    val BUILT_IN_TYPES = setOf(
+    val PRIMITIVE_TYPES = setOf(
         "kotlin.String",
         "kotlin.Char",
         "kotlin.Int",
@@ -88,19 +90,6 @@ object TypeNames {
         "kotlin.Float",
         "kotlin.Double",
         "kotlin.Boolean",
-        "kotlin.uuid.Uuid",
-        "kotlinx.datetime.LocalDate",
-        "kotlinx.datetime.LocalTime",
-        "kotlinx.datetime.LocalDateTime",
-        "kotlin.time.Instant",
-        "kotlin.ByteArray",
-        // Array types (Postgres only)
-        "kotlin.BooleanArray",
-        "kotlin.ShortArray",
-        "kotlin.IntArray",
-        "kotlin.LongArray",
-        "kotlin.FloatArray",
-        "kotlin.DoubleArray"
     )
 
     fun builtInDecoder(typeQualifiedName: String, nullSuffix: String): String? =
