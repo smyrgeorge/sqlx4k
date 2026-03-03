@@ -2,6 +2,7 @@ rootProject.name = "sqlx4k"
 
 pluginManagement {
     repositories {
+        google()
         mavenCentral()
         gradlePluginPortal()
     }

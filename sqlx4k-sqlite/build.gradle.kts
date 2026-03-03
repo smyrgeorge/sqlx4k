@@ -2,9 +2,15 @@ plugins {
     id("io.github.smyrgeorge.sqlx4k.multiplatform.lib")
     id("io.github.smyrgeorge.sqlx4k.publish")
     id("io.github.smyrgeorge.sqlx4k.dokka")
+    alias(libs.plugins.android)
 }
 
 kotlin {
+    android {
+        namespace = "io.github.smyrgeorge.sqlx4k.sqlite"
+        compileSdk = 36
+        minSdk = 26
+    }
     sourceSets {
         configureEach {
             languageSettings.progressiveMode = true

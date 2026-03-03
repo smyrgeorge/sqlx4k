@@ -8,6 +8,7 @@ plugins {
 }
 
 repositories {
+    google()
     mavenCentral()
 }
 
@@ -16,6 +17,7 @@ subprojects {
     version = rootProject.version
 
     repositories {
+        google()
         mavenCentral()
     }
 }

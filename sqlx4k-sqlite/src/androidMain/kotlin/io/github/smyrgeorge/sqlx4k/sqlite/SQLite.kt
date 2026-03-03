@@ -3,6 +3,9 @@
 
 package io.github.smyrgeorge.sqlx4k.sqlite
 
+import android.content.Context
+import android.database.Cursor
+import android.database.sqlite.SQLiteDatabase
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Dialect
@@ -20,15 +23,15 @@ import io.github.smyrgeorge.sqlx4k.impl.pool.ConnectionPoolImpl
 import io.github.smyrgeorge.sqlx4k.impl.pool.PooledConnection
 import io.github.smyrgeorge.sqlx4k.impl.pool.PooledTransaction
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
-import java.sql.Connection as NativeJdbcConnection
-import java.sql.DriverManager
-import java.sql.ResultSet as NativeJdbcResultSet
+import java.util.concurrent.Executors
 import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -36,33 +39,33 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toJavaLocalDate
-import kotlinx.datetime.toJavaLocalTime
 import kotlinx.datetime.toLocalDateTime
 
 /**
- * SQLite class provides mechanisms to interact with a SQLite database on the JVM platform.
+ * SQLite class provides mechanisms to interact with a SQLite database on the Android platform.
  * It implements `Driver`, `Driver.Pool`, and `Driver.Transactional` interfaces,
  * offering functionalities such as connection pooling, executing queries,
  * fetching data, and handling transactions.
  *
  * The URL format for SQLite can be one of the following:
- * - `jdbc:sqlite::memory:` - Creates an in-memory database
- * - `jdbc:sqlite:database.db` - Creates/opens a database file
- * - `jdbc:sqlite:/path/to/database.db` - Uses absolute path
+ * - `sqlite::memory:` - Creates an in-memory database
+ * - `sqlite:database.db` - Creates/opens a database file
+ * - `sqlite:/path/to/database.db` - Uses absolute path
  *
- * If the URL does not start with "jdbc:sqlite:", it will be automatically prefixed.
+ * If the URL does not start with "sqlite:", it will be automatically prefixed.
  *
+ * @param context The Android Context to use for database operations.
  * @param url The URL of the SQLite database to connect to.
  * @param options Optional pool configuration, defaulting to `ConnectionPool.Options`.
  * @param encoders Optional registry of value encoders to use for encoding query parameters.
  */
 class SQLite(
+    private val context: Context,
     url: String,
     options: ConnectionPool.Options = ConnectionPool.Options(),
     override val encoders: ValueEncoderRegistry = ValueEncoderRegistry()
 ) : ISQLite {
-    private val pool: ConnectionPoolImpl = createConnectionPool(url, options, encoders)
+    private val pool: ConnectionPoolImpl = createConnectionPool(context, url, options, encoders)
 
     override suspend fun migrate(
         path: String,
@@ -185,8 +188,8 @@ class SQLite(
         }
     }
 
-    class JdbcConnection(
-        private val connection: NativeJdbcConnection,
+    class AndroidConnection(
+        private val db: SQLiteDatabase,
         override val encoders: ValueEncoderRegistry
     ) : Connection {
         private val mutex = Mutex()
@@ -194,13 +197,20 @@ class SQLite(
         override val status: Connection.Status get() = _status
         override val transactionIsolationLevel: IsolationLevel? = null
 
+        // Android's SQLiteDatabase.beginTransaction() stores its session in a ThreadLocal.
+        // All operations on this connection must run on the same thread to keep transaction
+        // state consistent across coroutine suspend points.
+        private val executor = Executors.newSingleThreadExecutor()
+        private val dispatcher: CoroutineDispatcher = executor.asCoroutineDispatcher()
+
         override suspend fun close(): Result<Unit> = runCatching {
             mutex.withLock {
                 if (status == Connection.Status.Closed) return@withLock
                 _status = Connection.Status.Closed
-                withContext(Dispatchers.IO) {
-                    connection.close()
+                withContext(dispatcher) {
+                    db.close()
                 }
+                executor.shutdown()
             }
         }
 
@@ -213,10 +223,10 @@ class SQLite(
             mutex.withLock {
                 assertIsOpen()
                 try {
-                    withContext(Dispatchers.IO) {
-                        connection.createStatement().use { statement ->
-                            statement.executeUpdate(sql).toLong()
-                        }
+                    withContext(dispatcher) {
+                        db.execSQL(sql)
+                        // execSQL returns void; return -1 as "unknown affected rows"
+                        -1L
                     }
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message).raise()
@@ -228,10 +238,8 @@ class SQLite(
             return mutex.withLock {
                 assertIsOpen()
                 try {
-                    withContext(Dispatchers.IO) {
-                        connection.createStatement().use { stmt ->
-                            stmt.executeQuery(sql).toResultSet()
-                        }
+                    withContext(dispatcher) {
+                        db.rawQuery(sql, null).use { it.toResultSet() }
                     }.toResult()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message).raise()
@@ -243,10 +251,11 @@ class SQLite(
             mutex.withLock {
                 assertIsOpen()
                 try {
-                    withContext(Dispatchers.IO) {
-                        connection.prepareStatement(statement, encoders).use { stmt ->
-                            stmt.executeUpdate().toLong()
-                        }
+                    withContext(dispatcher) {
+                        val query = statement.renderNativeQuery(Dialect.SQLite, encoders)
+                        val args = query.values.map { it.toAndroidValue() }.toTypedArray()
+                        db.execSQL(query.sql, args)
+                        -1L
                     }
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
@@ -258,10 +267,10 @@ class SQLite(
             return mutex.withLock {
                 assertIsOpen()
                 try {
-                    withContext(Dispatchers.IO) {
-                        connection.prepareStatement(statement, encoders).use { stmt ->
-                            stmt.executeQuery().toResultSet()
-                        }
+                    withContext(dispatcher) {
+                        val query = statement.renderNativeQuery(Dialect.SQLite, encoders)
+                        val args = query.values.map { it.toAndroidValue()?.toString() }.toTypedArray()
+                        db.rawQuery(query.sql, args).use { it.toResultSet() }
                     }.toResult()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
@@ -277,22 +286,28 @@ class SQLite(
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
                 assertIsOpen()
-                withContext(Dispatchers.IO) {
+                // Begin the transaction on the connection's dedicated thread, then hand
+                // the same dispatcher to AndroidTransaction so commit/rollback also run
+                // on that thread (Android SQLiteDatabase sessions are thread-local).
+                withContext(dispatcher) {
                     try {
-                        connection.autoCommit = false
+                        db.beginTransactionNonExclusive()
+                        AndroidTransaction(db, false, encoders, dispatcher)
                     } catch (e: Exception) {
                         SQLError(SQLError.Code.Database, e.message, e).raise()
                     }
-                    JdbcTransaction(connection, false, encoders)
                 }
             }
         }
     }
 
-    class JdbcTransaction(
-        private var connection: NativeJdbcConnection,
+    class AndroidTransaction(
+        private val db: SQLiteDatabase,
         private val closeConnectionAfterTx: Boolean,
-        override val encoders: ValueEncoderRegistry
+        override val encoders: ValueEncoderRegistry,
+        // Must be the same dispatcher used by the owning AndroidConnection so that
+        // beginTransaction/setTransactionSuccessful/endTransaction all run on the same thread.
+        private val dispatcher: CoroutineDispatcher
     ) : Transaction {
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open
@@ -307,15 +322,19 @@ class SQLite(
                 if (commited) return@withLock
                 assertIsOpen()
                 _status = Transaction.Status.Closed
-                withContext(Dispatchers.IO) {
+                withContext(dispatcher) {
                     try {
-                        connection.commit()
-                        connection.autoCommit = true
+                        db.setTransactionSuccessful()
                         _commited = true
                     } catch (e: Exception) {
                         SQLError(SQLError.Code.Database, e.message, e).raise()
                     } finally {
-                        if (closeConnectionAfterTx) connection.close()
+                        try {
+                            db.endTransaction()
+                            if (closeConnectionAfterTx) db.close()
+                        } catch (_: Exception) {
+                            // Ignore exceptions in finally block
+                        }
                     }
                 }
             }
@@ -326,15 +345,19 @@ class SQLite(
                 if (rollbacked) return@withLock
                 assertIsOpen()
                 _status = Transaction.Status.Closed
-                withContext(Dispatchers.IO) {
+                withContext(dispatcher) {
                     try {
-                        connection.rollback()
-                        connection.autoCommit = true
+                        // Do NOT call setTransactionSuccessful() — endTransaction() will roll back.
                         _rollbacked = true
                     } catch (e: Exception) {
                         SQLError(SQLError.Code.Database, e.message, e).raise()
                     } finally {
-                        if (closeConnectionAfterTx) connection.close()
+                        try {
+                            db.endTransaction()
+                            if (closeConnectionAfterTx) db.close()
+                        } catch (_: Exception) {
+                            // Ignore exceptions in finally block
+                        }
                     }
                 }
             }
@@ -344,10 +367,9 @@ class SQLite(
             mutex.withLock {
                 assertIsOpen()
                 try {
-                    withContext(Dispatchers.IO) {
-                        connection.createStatement().use { statement ->
-                            statement.executeUpdate(sql).toLong()
-                        }
+                    withContext(dispatcher) {
+                        db.execSQL(sql)
+                        -1L
                     }
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message).raise()
@@ -359,10 +381,8 @@ class SQLite(
             return mutex.withLock {
                 assertIsOpen()
                 try {
-                    withContext(Dispatchers.IO) {
-                        connection.createStatement().use { stmt ->
-                            stmt.executeQuery(sql).toResultSet()
-                        }
+                    withContext(dispatcher) {
+                        db.rawQuery(sql, null).use { it.toResultSet() }
                     }.toResult()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message).raise()
@@ -374,10 +394,11 @@ class SQLite(
             mutex.withLock {
                 assertIsOpen()
                 try {
-                    withContext(Dispatchers.IO) {
-                        connection.prepareStatement(statement, encoders).use { stmt ->
-                            stmt.executeUpdate().toLong()
-                        }
+                    withContext(dispatcher) {
+                        val query = statement.renderNativeQuery(Dialect.SQLite, encoders)
+                        val args = query.values.map { it.toAndroidValue() }.toTypedArray()
+                        db.execSQL(query.sql, args)
+                        -1L
                     }
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
@@ -389,10 +410,10 @@ class SQLite(
             return mutex.withLock {
                 assertIsOpen()
                 try {
-                    withContext(Dispatchers.IO) {
-                        connection.prepareStatement(statement, encoders).use { stmt ->
-                            stmt.executeQuery().toResultSet()
-                        }
+                    withContext(dispatcher) {
+                        val query = statement.renderNativeQuery(Dialect.SQLite, encoders)
+                        val args = query.values.map { it.toAndroidValue()?.toString() }.toTypedArray()
+                        db.rawQuery(query.sql, args).use { it.toResultSet() }
                     }.toResult()
                 } catch (e: Exception) {
                     SQLError(SQLError.Code.Database, e.message, e).raise()
@@ -407,75 +428,91 @@ class SQLite(
     }
 
     companion object {
-        private fun NativeJdbcConnection.prepareStatement(
-            statement: Statement,
-            encoders: ValueEncoderRegistry
-        ): java.sql.PreparedStatement {
-            @OptIn(ExperimentalTime::class)
-            fun Any?.toJdbc(): Any? = when (this) {
-                null -> null
-                is TypedNull -> null
-                is Char -> toString()
-                // SQLite stores dates/times as text. The shared decoder uses a space-separated
-                // format ("yyyy-MM-dd HH:mm:ss"), so we must produce that format here.
-                is Instant -> toLocalDateTime(TimeZone.UTC).toString().replace('T', ' ')
-                is LocalDate -> toJavaLocalDate()
-                is LocalTime -> toJavaLocalTime()
-                is LocalDateTime -> toString().replace('T', ' ')
-                // SQLite has no native UUID type; store as string.
-                // Also handle java.util.UUID in case Kotlin's Uuid value class is stored as its underlying type.
-                is Uuid -> toString()
-                is java.util.UUID -> toString()
-                else -> this
-            }
-
-            val query = statement.renderNativeQuery(Dialect.SQLite, encoders)
-            val stmt = prepareStatement(query.sql)
-            query.values.forEachIndexed { index, value ->
-                when (value) {
-                    is TypedNull -> stmt.setNull(index + 1, java.sql.Types.NULL)
-                    null -> stmt.setNull(index + 1, java.sql.Types.NULL)
-                    else -> stmt.setObject(index + 1, value.toJdbc())
-                }
-            }
-            return stmt
+        @OptIn(ExperimentalTime::class)
+        private fun Any?.toAndroidValue(): Any? = when (this) {
+            null -> null
+            is TypedNull -> null
+            is Char -> toString()
+            is Boolean -> if (this) 1L else 0L
+            is Int -> toLong()
+            is Long -> this
+            is Float -> toDouble()
+            is Double -> this
+            // SQLite stores dates/times as text. The shared decoder uses a space-separated
+            // format ("yyyy-MM-dd HH:mm:ss"), so we must produce that format here.
+            is Instant -> toLocalDateTime(TimeZone.UTC).toString().replace('T', ' ')
+            is LocalDate -> toString()
+            is LocalTime -> toString()
+            is LocalDateTime -> toString().replace('T', ' ')
+            // SQLite has no native UUID type; store as string.
+            is Uuid -> toString()
+            is java.util.UUID -> toString()
+            else -> toString()
         }
 
-        private fun NativeJdbcResultSet.toResultSet(): ResultSet {
+        private fun Cursor.toResultSet(): ResultSet {
             fun toRow(): ResultSet.Row {
-                val metaData = this.metaData
-                val columns = (1..metaData.columnCount).map { i ->
-                    val type = metaData.getColumnTypeName(i)
+                val columns = (0 until columnCount).map { i ->
+                    val type = getType(i).toTypeName()
                     ResultSet.Row.Column(
-                        ordinal = i - 1,
-                        name = metaData.getColumnName(i),
-                        type = metaData.getColumnTypeName(i),
-                        value = if (type == "BLOB") getString(i).toByteArray().toHexString() else getString(i)
+                        ordinal = i,
+                        name = getColumnName(i),
+                        type = type,
+                        value = when (type) {
+                            "BLOB" -> getBlob(i)?.let { bytes ->
+                                bytes.joinToString("") { "%02x".format(it) }
+                            }
+
+                            else -> when (getType(i)) {
+                                Cursor.FIELD_TYPE_NULL -> null
+                                Cursor.FIELD_TYPE_INTEGER -> getLong(i).toString()
+                                Cursor.FIELD_TYPE_FLOAT -> getDouble(i).toString()
+                                Cursor.FIELD_TYPE_STRING -> getString(i)
+                                Cursor.FIELD_TYPE_BLOB -> getBlob(i)?.let { bytes ->
+                                    bytes.joinToString("") { "%02x".format(it) }
+                                }
+
+                                else -> getString(i)
+                            }
+                        }
                     )
                 }
                 return ResultSet.Row(columns)
             }
 
             val rows = mutableListOf<ResultSet.Row>()
-            while (next()) {
-                rows.add(toRow())
+            if (moveToFirst()) {
+                do {
+                    rows.add(toRow())
+                } while (moveToNext())
             }
             val meta = if (rows.isEmpty()) ResultSet.Metadata(emptyList())
             else rows.first().toMetadata()
             return ResultSet(rows, null, meta)
         }
 
+        private fun Int.toTypeName(): String = when (this) {
+            Cursor.FIELD_TYPE_NULL -> "NULL"
+            Cursor.FIELD_TYPE_INTEGER -> "INTEGER"
+            Cursor.FIELD_TYPE_FLOAT -> "REAL"
+            Cursor.FIELD_TYPE_STRING -> "TEXT"
+            Cursor.FIELD_TYPE_BLOB -> "BLOB"
+            else -> "UNKNOWN"
+        }
+
         private fun createConnectionPool(
+            context: Context,
             url: String,
             options: ConnectionPool.Options,
             encoders: ValueEncoderRegistry
         ): ConnectionPoolImpl {
-            // Ensure the URL has the proper JDBC prefix
-            val jdbcUrl = "jdbc:sqlite:${url.removePrefix("jdbc:").removePrefix("sqlite:").removePrefix("//")}"
+            // Parse the URL to extract database name
+            val dbUrl = url.removePrefix("sqlite:").removePrefix("//")
+            val isInMemory = dbUrl.equals(":memory:", ignoreCase = true) ||
+                    dbUrl.isBlank() ||
+                    dbUrl.contains(":memory:", ignoreCase = true)
 
-            // Validate in-memory database configuration
             // In-memory SQLite databases are isolated per connection, so pool size must be 1
-            val isInMemory = jdbcUrl.contains(":memory:", ignoreCase = true)
             if (isInMemory && options.maxConnections > 1) {
                 throw IllegalArgumentException(
                     "SQLite in-memory databases cannot be used with connection pools larger than 1. " +
@@ -484,18 +521,19 @@ class SQLite(
                 )
             }
 
-            // Connection factory that creates JDBC connections
+            // Connection factory that creates Android SQLite connections
             val connectionFactory: suspend () -> Connection = {
                 withContext(Dispatchers.IO) {
-                    val connection = DriverManager.getConnection(jdbcUrl)
-                    connection.autoCommit = true
-                    JdbcConnection(connection, encoders).apply {
-                        // Enable WAL mode for file-based databases to improve concurrency
-                        // In-memory databases don't support WAL mode
-                        if (!isInMemory) {
-                            execute("PRAGMA journal_mode=WAL").getOrThrow()
+                    val db = if (isInMemory) {
+                        SQLiteDatabase.create(null)
+                    } else {
+                        // Use Context to open/create the database, then enable WAL for
+                        // better read concurrency (matches the JVM implementation behaviour).
+                        context.openOrCreateDatabase(dbUrl, Context.MODE_PRIVATE, null).also {
+                            it.enableWriteAheadLogging()
                         }
                     }
+                    AndroidConnection(db, encoders)
                 }
             }
 
