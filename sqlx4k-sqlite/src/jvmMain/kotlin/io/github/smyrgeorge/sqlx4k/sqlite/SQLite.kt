@@ -414,7 +414,6 @@ class SQLite(
             @OptIn(ExperimentalTime::class)
             fun Any?.toJdbc(): Any? = when (this) {
                 null -> null
-                is TypedNull -> null
                 is Char -> toString()
                 // SQLite stores dates/times as text. The shared decoder uses a space-separated
                 // format ("yyyy-MM-dd HH:mm:ss"), so we must produce that format here.

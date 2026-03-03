@@ -508,11 +508,10 @@ class SQLite(
         ): ConnectionPoolImpl {
             // Parse the URL to extract database name
             val dbUrl = url.removePrefix("sqlite:").removePrefix("//")
-            val isInMemory = dbUrl.equals(":memory:", ignoreCase = true) ||
-                    dbUrl.isBlank() ||
-                    dbUrl.contains(":memory:", ignoreCase = true)
 
+            // Validate in-memory database configuration
             // In-memory SQLite databases are isolated per connection, so pool size must be 1
+            val isInMemory = dbUrl.equals(":memory:", ignoreCase = true)
             if (isInMemory && options.maxConnections > 1) {
                 throw IllegalArgumentException(
                     "SQLite in-memory databases cannot be used with connection pools larger than 1. " +
