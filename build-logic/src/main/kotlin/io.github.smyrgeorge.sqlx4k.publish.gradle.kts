@@ -1,0 +1,64 @@
+import com.vanniktech.maven.publish.KotlinMultiplatform
+import com.vanniktech.maven.publish.MavenPublishBaseExtension
+import com.vanniktech.maven.publish.SourcesJar
+
+plugins {
+    id("com.vanniktech.maven.publish")
+}
+
+val descriptions: Map<String, String> = mapOf(
+    "sqlx4k" to "A high-performance Kotlin Multiplatform database driver for PostgreSQL, MySQL/MariaDB, and SQLite.",
+    "sqlx4k-arrow" to "A high-performance Kotlin Multiplatform database driver for PostgreSQL, MySQL, and SQLite.",
+    "sqlx4k-codegen" to "A high-performance Kotlin Multiplatform database driver for PostgreSQL, MySQL/MariaDB, and SQLite.",
+    "sqlx4k-mysql" to "A high-performance Kotlin Multiplatform database driver for MySQL/MariaDB.",
+    "sqlx4k-postgres" to "A high-performance Kotlin Multiplatform database driver for PostgreSQL.",
+    "sqlx4k-postgres-pgmq" to "A PGMQ client using PostgreSQL as a message queue.",
+    "sqlx4k-sqlite" to "A high-performance Kotlin Multiplatform database driver for SQLite.",
+)
+
+extensions.configure<MavenPublishBaseExtension> {
+    configure(
+        KotlinMultiplatform(
+            sourcesJar = SourcesJar.Sources()
+        )
+    )
+    coordinates(
+        groupId = project.group as String,
+        artifactId = project.name,
+        version = project.version as String
+    )
+
+    pom {
+        name.set(project.name)
+        description.set(descriptions[project.name] ?: error("Missing description for $project.name"))
+        url.set("https://github.com/smyrgeorge/sqlx4k")
+
+        licenses {
+            license {
+                name.set("MIT License")
+                url.set("https://github.com/smyrgeorge/sqlx4k/blob/main/LICENSE")
+            }
+        }
+
+        developers {
+            developer {
+                id.set("smyrgeorge")
+                name.set("Yorgos S.")
+                email.set("smyrgeorge@gmail.com")
+                url.set("https://smyrgeorge.github.io/")
+            }
+        }
+
+        scm {
+            url.set("https://github.com/smyrgeorge/sqlx4k")
+            connection.set("scm:git:https://github.com/smyrgeorge/sqlx4k.git")
+            developerConnection.set("scm:git:git@github.com:smyrgeorge/sqlx4k.git")
+        }
+    }
+
+    // Configure publishing to Maven Central
+    publishToMavenCentral()
+
+    // Enable GPG signing for all publications
+    signAllPublications()
+}
