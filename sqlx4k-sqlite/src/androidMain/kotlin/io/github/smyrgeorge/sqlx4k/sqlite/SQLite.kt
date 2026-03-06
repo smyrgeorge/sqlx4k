@@ -22,24 +22,15 @@ import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.github.smyrgeorge.sqlx4k.impl.pool.ConnectionPoolImpl
 import io.github.smyrgeorge.sqlx4k.impl.pool.PooledConnection
 import io.github.smyrgeorge.sqlx4k.impl.pool.PooledTransaction
-import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import java.util.concurrent.Executors
 import kotlin.time.Duration
-import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalDateTime
-import kotlinx.datetime.LocalTime
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
 
 /**
  * SQLite class provides mechanisms to interact with a SQLite database on the Android platform.
@@ -247,42 +238,6 @@ class SQLite(
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
-            mutex.withLock {
-                assertIsOpen()
-                try {
-                    withContext(dispatcher) {
-                        val query = statement.renderNativeQuery(Dialect.SQLite, encoders)
-                        val args = query.values.map { it.toAndroidValue() }.toTypedArray()
-                        db.execSQL(query.sql, args)
-                        -1L
-                    }
-                } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
-                }
-            }
-        }
-
-        override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
-            return mutex.withLock {
-                assertIsOpen()
-                try {
-                    withContext(dispatcher) {
-                        val query = statement.renderNativeQuery(Dialect.SQLite, encoders)
-                        val args = query.values.map { it.toAndroidValue()?.toString() }.toTypedArray()
-                        db.rawQuery(query.sql, args).use { it.toResultSet() }
-                    }.toResult()
-                } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
-                }
-            }
-        }
-
-        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-            runCatching {
-                fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
-            }
-
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
                 assertIsOpen()
@@ -389,92 +344,26 @@ class SQLite(
                 }
             }
         }
-
-        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
-            mutex.withLock {
-                assertIsOpen()
-                try {
-                    withContext(dispatcher) {
-                        val query = statement.renderNativeQuery(Dialect.SQLite, encoders)
-                        val args = query.values.map { it.toAndroidValue() }.toTypedArray()
-                        db.execSQL(query.sql, args)
-                        -1L
-                    }
-                } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
-                }
-            }
-        }
-
-        override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
-            return mutex.withLock {
-                assertIsOpen()
-                try {
-                    withContext(dispatcher) {
-                        val query = statement.renderNativeQuery(Dialect.SQLite, encoders)
-                        val args = query.values.map { it.toAndroidValue()?.toString() }.toTypedArray()
-                        db.rawQuery(query.sql, args).use { it.toResultSet() }
-                    }.toResult()
-                } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
-                }
-            }
-        }
-
-        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-            runCatching {
-                fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
-            }
     }
 
     companion object {
-        @OptIn(ExperimentalTime::class)
-        private fun Any?.toAndroidValue(): Any? = when (this) {
-            null -> null
-            is TypedNull -> null
-            is Char -> toString()
-            is Boolean -> if (this) 1L else 0L
-            is Int -> toLong()
-            is Long -> this
-            is Float -> toDouble()
-            is Double -> this
-            // SQLite stores dates/times as text. The shared decoder uses a space-separated
-            // format ("yyyy-MM-dd HH:mm:ss"), so we must produce that format here.
-            is Instant -> toLocalDateTime(TimeZone.UTC).toString().replace('T', ' ')
-            is LocalDate -> toString()
-            is LocalTime -> toString()
-            is LocalDateTime -> toString().replace('T', ' ')
-            // SQLite has no native UUID type; store as string.
-            is Uuid -> toString()
-            is java.util.UUID -> toString()
-            else -> toString()
-        }
-
         private fun Cursor.toResultSet(): ResultSet {
             fun toRow(): ResultSet.Row {
                 val columns = (0 until columnCount).map { i ->
                     val type = getType(i).toTypeName()
+                    val value = when (getType(i)) {
+                        Cursor.FIELD_TYPE_NULL -> null
+                        Cursor.FIELD_TYPE_INTEGER -> if (isNull(i)) null else getLong(i).toString()
+                        Cursor.FIELD_TYPE_FLOAT -> if (isNull(i)) null else getDouble(i).toString()
+                        Cursor.FIELD_TYPE_STRING -> if (isNull(i)) null else getString(i)
+                        Cursor.FIELD_TYPE_BLOB -> if (isNull(i)) null else getString(i).toByteArray().toHexString()
+                        else -> if (isNull(i)) null else getString(i)
+                    }
                     ResultSet.Row.Column(
                         ordinal = i,
                         name = getColumnName(i),
                         type = type,
-                        value = when (type) {
-                            "BLOB" -> getBlob(i)?.let { bytes ->
-                                bytes.joinToString("") { "%02x".format(it) }
-                            }
-
-                            else -> when (getType(i)) {
-                                Cursor.FIELD_TYPE_NULL -> null
-                                Cursor.FIELD_TYPE_INTEGER -> getLong(i).toString()
-                                Cursor.FIELD_TYPE_FLOAT -> getDouble(i).toString()
-                                Cursor.FIELD_TYPE_STRING -> getString(i)
-                                Cursor.FIELD_TYPE_BLOB -> getBlob(i)?.let { bytes ->
-                                    bytes.joinToString("") { "%02x".format(it) }
-                                }
-
-                                else -> getString(i)
-                            }
-                        }
+                        value = if (value == "null") null else value,
                     )
                 }
                 return ResultSet.Row(columns)
@@ -486,8 +375,7 @@ class SQLite(
                     rows.add(toRow())
                 } while (moveToNext())
             }
-            val meta = if (rows.isEmpty()) ResultSet.Metadata(emptyList())
-            else rows.first().toMetadata()
+            val meta = if (rows.isEmpty()) ResultSet.Metadata(emptyList()) else rows.first().toMetadata()
             return ResultSet(rows, null, meta)
         }
 
