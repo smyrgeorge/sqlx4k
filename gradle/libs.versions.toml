@@ -43,7 +43,7 @@ arrow = "2.2.1.1"
 # https://mvnrepository.com/artifact/org.jetbrains/annotations/26.0.2
 jetbrains = "26.1.0"
 # https://developer.android.com/studio/releases/gradle-plugin
-android-gradle-plugin = "9.0.1"
+android-gradle-plugin = "9.1.0"
 
 [libraries]
 gradle-kotlin-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
