@@ -20,7 +20,6 @@ extensions.configure<KotlinMultiplatformExtension> {
                 }
             }
         },
-        Pair("iosX64") { iosX64() },
         Pair("iosArm64") { iosArm64() },
         Pair("iosSimulatorArm64") { iosSimulatorArm64() },
         Pair("androidNativeArm64") { androidNativeArm64() },

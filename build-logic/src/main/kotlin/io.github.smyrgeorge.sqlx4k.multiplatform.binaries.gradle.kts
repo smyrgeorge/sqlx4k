@@ -21,7 +21,6 @@ extensions.configure<KotlinMultiplatformExtension> {
                 }
             }
         },
-        Pair("iosX64") { iosX64 { binaries { executable() } } },
         Pair("iosArm64") { iosArm64 { binaries { executable() } } },
         Pair("iosSimulatorArm64") { iosSimulatorArm64 { binaries { executable() } } },
         Pair("androidNativeArm64") { androidNativeArm64 { binaries { executable() } } },

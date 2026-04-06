@@ -64,7 +64,6 @@ object Utils {
             when (it) {
                 "all" -> listOf(
                     "jvm",
-                    "iosX64",
                     "iosArm64",
                     "iosSimulatorArm64",
                     "androidNativeX64",

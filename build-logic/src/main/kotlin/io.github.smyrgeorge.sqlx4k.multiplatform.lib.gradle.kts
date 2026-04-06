@@ -43,7 +43,6 @@ extensions.configure<KotlinMultiplatformExtension> {
                 }
             }
         },
-        Pair("iosX64") { iosX64 { rust("x86_64-apple-ios") } },
         Pair("iosArm64") { iosArm64 { rust("aarch64-apple-ios") } },
         Pair("iosSimulatorArm64") { iosSimulatorArm64 { rust("aarch64-apple-ios-sim") } },
         Pair("androidNativeArm64") { androidNativeArm64 { rust("aarch64-linux-android") } },
