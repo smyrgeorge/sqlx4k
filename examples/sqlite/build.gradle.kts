@@ -62,7 +62,6 @@ fun targetsOf(project: Project): List<String> {
                 "AndroidNativeX64",
                 "AndroidNativeArm64",
                 "MacosArm64",
-                "MacosX64",
                 "LinuxArm64",
                 "LinuxX64",
                 "MingwX64"

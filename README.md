@@ -16,7 +16,7 @@
 ![](https://img.shields.io/static/v1?label=&message=Android&color=blue)
 
 A coroutine-first SQL toolkit with compile-time query validations for Kotlin Multiplatform. PostgreSQL, MySQL/MariaDB,
-and SQLite supported.
+and SQLite are supported.
 
 ---
 
@@ -546,7 +546,7 @@ val result: Result<List<User>> = userRepository.batchUpdate(db, updatedUsers)
 - **SQLite**: Full support for both batch operations using multi-row `INSERT ... RETURNING` and
   `WITH ... UPDATE ... FROM ... RETURNING` syntax (CTE-based approach).
 - **MySQL**: Neither batch operation is supported because MySQL lacks `RETURNING` clause support.
-- **Generic**: Generates code for both operations but actual support depends on the underlying database.
+- **Generic**: Generates code for both operations, but actual support depends on the underlying database.
 
 > [!NOTE]
 > For unsupported operations, the generated repository methods throw `UnsupportedOperationException` at runtime.
@@ -842,7 +842,6 @@ SQLDelight integration for type-safe SQL queries with sqlx4k.
 - androidNativeX64
 - androidNativeArm64
 - macosArm64
-- macosX64
 - linuxArm64
 - linuxX64
 - mingwX64
@@ -901,7 +900,7 @@ Then, run the build.
 You can also build for specific targets.
 
 ```shell
-./gradlew build -Ptargets=macosArm64,macosX64
+./gradlew build -Ptargets=macosArm64
 ```
 
 To build for all available targets, run:
@@ -948,7 +947,7 @@ For full runnable apps, see the modules under:
 ### macOS (using 'leaks' tool)
 
 Check for memory leaks with the `leaks` tool.
-First sign you binary:
+First, sign the binary:
 
 ```shell
 codesign -s - -v -f --entitlements =(echo -n '<?xml version="1.0" encoding="UTF-8"?>

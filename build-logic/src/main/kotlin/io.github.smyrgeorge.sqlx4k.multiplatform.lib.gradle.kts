@@ -1,5 +1,4 @@
 import io.github.smyrgeorge.sqlx4k.multiplatform.Utils
-import java.lang.System.getenv
 import org.gradle.kotlin.dsl.support.serviceOf
 import org.gradle.nativeplatform.platform.internal.ArchitectureInternal
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
@@ -7,6 +6,7 @@ import org.gradle.nativeplatform.platform.internal.DefaultOperatingSystem
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
+import java.lang.System.getenv
 
 val os: DefaultOperatingSystem = DefaultNativePlatform.getCurrentOperatingSystem()
 val arch: ArchitectureInternal = DefaultNativePlatform.getCurrentArchitecture()
@@ -49,7 +49,6 @@ extensions.configure<KotlinMultiplatformExtension> {
         Pair("androidNativeArm64") { androidNativeArm64 { rust("aarch64-linux-android") } },
         Pair("androidNativeX64") { androidNativeX64 { rust("x86_64-linux-android") } },
         Pair("macosArm64") { macosArm64 { rust("aarch64-apple-darwin") } },
-        Pair("macosX64") { macosX64 { rust("x86_64-apple-darwin") } },
         Pair("linuxArm64") { linuxArm64 { rust("aarch64-unknown-linux-gnu") } },
         Pair("linuxX64") { linuxX64 { rust("x86_64-unknown-linux-gnu") } },
         Pair("mingwX64") { mingwX64 { rust("x86_64-pc-windows-gnu") } },
