@@ -39,6 +39,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toJavaLocalDate
 import kotlinx.datetime.toJavaLocalTime
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.number
 
 /**
  * SQLite class provides mechanisms to interact with a SQLite database on the JVM platform.
@@ -417,7 +418,23 @@ class SQLite(
                 is Char -> toString()
                 // SQLite stores dates/times as text. The shared decoder uses a space-separated
                 // format ("yyyy-MM-dd HH:mm:ss"), so we must produce that format here.
-                is Instant -> toLocalDateTime(TimeZone.UTC).toString().replace('T', ' ')
+                // Canonical `YYYY-MM-DD HH:MM:SS.uuuuuu` (always with seconds + microseconds),
+                // matching how the common `encodeValue` renders Instant values. Using
+                // `LocalDateTime.toString()` here would drop trailing zeros (e.g. seconds=0),
+                // which breaks round-trip parsing through `asInstant`.
+                is Instant -> {
+                    val ldt = toLocalDateTime(TimeZone.UTC)
+                    val micros = nanosecondsOfSecond / 1_000
+                    buildString(26) {
+                        append(ldt.year.toString().padStart(4, '0')); append('-')
+                        append(ldt.month.number.toString().padStart(2, '0')); append('-')
+                        append(ldt.day.toString().padStart(2, '0')); append(' ')
+                        append(ldt.hour.toString().padStart(2, '0')); append(':')
+                        append(ldt.minute.toString().padStart(2, '0')); append(':')
+                        append(ldt.second.toString().padStart(2, '0')); append('.')
+                        append(micros.toString().padStart(6, '0'))
+                    }
+                }
                 is LocalDate -> toJavaLocalDate()
                 is LocalTime -> toJavaLocalTime()
                 is LocalDateTime -> toString().replace('T', ' ')

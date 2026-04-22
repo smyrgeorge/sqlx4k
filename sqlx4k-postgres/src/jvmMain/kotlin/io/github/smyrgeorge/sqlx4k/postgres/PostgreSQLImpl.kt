@@ -48,6 +48,7 @@ import kotlinx.datetime.LocalTime
 import kotlinx.datetime.toJavaLocalDate
 import kotlinx.datetime.toJavaLocalDateTime
 import kotlinx.datetime.toJavaLocalTime
+import kotlin.reflect.KClass
 import org.reactivestreams.Publisher
 import reactor.core.publisher.Mono
 import reactor.pool.PoolAcquireTimeoutException
@@ -508,11 +509,22 @@ class PostgreSQLImpl(
                 else -> this
             }
 
+            // Kotlin stdlib / kotlinx-datetime types must be mapped to their java.time equivalents,
+            // so r2dbc (which only understands java.time.*) can resolve the SQL type for bindNull.
+            fun KClass<*>.toR2dbcType(): Class<*> = when (this) {
+                Instant::class -> Class.forName("java.time.Instant")
+                LocalDate::class -> Class.forName("java.time.LocalDate")
+                LocalTime::class -> Class.forName("java.time.LocalTime")
+                LocalDateTime::class -> Class.forName("java.time.LocalDateTime")
+                Uuid::class -> Class.forName("java.util.UUID")
+                else -> this.java
+            }
+
             val query = statement.renderNativeQuery(Dialect.PostgreSQL, encoders)
             val stmt = createStatement(query.sql)
             query.values.forEachIndexed { index, value ->
                 when (value) {
-                    is TypedNull -> stmt.bindNull(index, value.type.java)
+                    is TypedNull -> stmt.bindNull(index, value.type.toR2dbcType())
                     null -> stmt.bindNull(index, Any::class.java)
                     else -> stmt.bind(index, value.toR2dbc())
                 }
