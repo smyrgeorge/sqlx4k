@@ -40,4 +40,4 @@ jobs:
           key: rust-lib-cache-apple
 
       - name: Gradle Build
-        run: ./gradlew build -x test -x jvmTest -x macosArm64Test
+        run: ./gradlew build -x test -x jvmTest -x macosArm64Test -x testAndroid -x testAndroidHostTest

@@ -50,8 +50,8 @@ fun ResultSet.Row.Column.asLocalDateTime(): LocalDateTime = LocalDateTime.parse(
 fun ResultSet.Row.Column.asLocalDateTimeOrNull(): LocalDateTime? = asStringOrNull()?.let { LocalDateTime.parse(it, localDateTimeFormatter) }
 fun ResultSet.Row.Column.asInstant(): Instant = asString().asInstant()
 fun ResultSet.Row.Column.asInstantOrNull(): Instant? = asStringOrNull()?.asInstant()
-fun ResultSet.Row.Column.asByteArray(): ByteArray = asString().removePrefix("\\x").hexToByteArray()
-fun ResultSet.Row.Column.asByteArrayOrNull(): ByteArray? = asStringOrNull()?.removePrefix("\\x")?.hexToByteArray()
+fun ResultSet.Row.Column.asByteArray(): ByteArray = bytes ?: asString().removePrefix("\\x").hexToByteArray()
+fun ResultSet.Row.Column.asByteArrayOrNull(): ByteArray? = bytes ?: asStringOrNull()?.removePrefix("\\x")?.hexToByteArray()
 //@formatter:on
 
 private fun String.asChar(): Char {

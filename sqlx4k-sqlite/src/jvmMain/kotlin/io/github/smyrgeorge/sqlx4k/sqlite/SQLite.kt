@@ -445,12 +445,24 @@ class SQLite(
                 val metaData = this.metaData
                 val columns = (1..metaData.columnCount).map { i ->
                     val type = metaData.getColumnTypeName(i)
-                    ResultSet.Row.Column(
-                        ordinal = i - 1,
-                        name = metaData.getColumnName(i),
-                        type = metaData.getColumnTypeName(i),
-                        value = if (type == "BLOB") getString(i).toByteArray().toHexString() else getString(i)
-                    )
+                    if (type == "BLOB") {
+                        val raw = getBytes(i)
+                        ResultSet.Row.Column(
+                            ordinal = i - 1,
+                            name = metaData.getColumnName(i),
+                            type = type,
+                            value = null,
+                            bytes = if (wasNull()) null else raw
+                        )
+                    } else {
+                        val raw = getString(i)
+                        ResultSet.Row.Column(
+                            ordinal = i - 1,
+                            name = metaData.getColumnName(i),
+                            type = type,
+                            value = if (wasNull()) null else raw
+                        )
+                    }
                 }
                 return ResultSet.Row(columns)
             }

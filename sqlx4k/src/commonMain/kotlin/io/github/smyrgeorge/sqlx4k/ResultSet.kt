@@ -131,23 +131,30 @@ class ResultSet(
          * @property ordinal The zero-based ordinal position of the column in the table schema.
          * @property name The name of the column.
          * @property type The type of the column as a string representation.
-         * @property value The value of the column, or null if the value is not present.
+         * @property value The textual representation of the column value, or null if the column is
+         * NULL or if the driver chose to surface the value only as raw bytes via [bytes].
+         * @property bytes Optional raw-bytes representation of a binary column (e.g. a SQLite BLOB).
+         * Drivers that can read binary columns directly into a `ByteArray` should populate this field
+         * and leave [value] as null to skip the hex-encode/decode round-trip. Drivers that only surface
+         * text leave this field as null and put the hex-encoded form in [value]; consumers see identical
+         * behavior either way via [io.github.smyrgeorge.sqlx4k.impl.extensions.asByteArray].
          */
         data class Column(
             val ordinal: Int,
             val name: String,
             val type: String,
-            private val value: String?
+            private val value: String?,
+            internal val bytes: ByteArray? = null
         ) {
             /**
              * Checks if the column's value is null.
              *
-             * This method determines whether the value of the column is absent, returning true
-             * if the value is null and false otherwise.
+             * A column is null only when neither the textual [value] nor the raw [bytes]
+             * representation is present.
              *
              * @return True if the column value is null; false if the column has a non-null value.
              */
-            fun isNull(): Boolean = value == null
+            fun isNull(): Boolean = value == null && bytes == null
 
             /**
              * Converts the column value to a String.
@@ -166,6 +173,27 @@ class ResultSet(
              * @return The string representation of the column value, or null if the value is not present.
              */
             fun asStringOrNull(): String? = value
+
+            override fun equals(other: Any?): Boolean {
+                if (this === other) return true
+                if (other == null || this::class != other::class) return false
+
+                other as Column
+
+                if (ordinal != other.ordinal) return false
+                if (name != other.name) return false
+                if (type != other.type) return false
+                if (value != other.value) return false
+                return true
+            }
+
+            override fun hashCode(): Int {
+                var result = ordinal
+                result = 31 * result + name.hashCode()
+                result = 31 * result + type.hashCode()
+                result = 31 * result + (value?.hashCode() ?: 0)
+                return result
+            }
         }
     }
 

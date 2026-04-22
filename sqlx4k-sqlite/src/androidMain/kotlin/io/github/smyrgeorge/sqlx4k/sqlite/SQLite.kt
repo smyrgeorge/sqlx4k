@@ -56,6 +56,13 @@ class SQLite(
     options: ConnectionPool.Options = ConnectionPool.Options(),
     override val encoders: ValueEncoderRegistry = ValueEncoderRegistry()
 ) : ISQLite {
+    init {
+        // Register the SQLite-specific BLOB encoder unless the caller has overridden it.
+        if (encoders.getTyped(ByteArray::class) == null) {
+            encoders.register(ByteArrayEncoder)
+        }
+    }
+
     private val pool: ConnectionPoolImpl = createConnectionPool(context, url, options, encoders)
 
     override suspend fun migrate(
@@ -351,12 +358,20 @@ class SQLite(
             fun toRow(): ResultSet.Row {
                 val columns = (0 until columnCount).map { i ->
                     val type = getType(i).toTypeName()
+                    if (getType(i) == Cursor.FIELD_TYPE_BLOB) {
+                        return@map ResultSet.Row.Column(
+                            ordinal = i,
+                            name = getColumnName(i),
+                            type = type,
+                            value = null,
+                            bytes = if (isNull(i)) null else getBlob(i),
+                        )
+                    }
                     val value = when (getType(i)) {
                         Cursor.FIELD_TYPE_NULL -> null
                         Cursor.FIELD_TYPE_INTEGER -> if (isNull(i)) null else getLong(i).toString()
                         Cursor.FIELD_TYPE_FLOAT -> if (isNull(i)) null else getDouble(i).toString()
                         Cursor.FIELD_TYPE_STRING -> if (isNull(i)) null else getString(i)
-                        Cursor.FIELD_TYPE_BLOB -> if (isNull(i)) null else getString(i).toByteArray().toHexString()
                         else -> if (isNull(i)) null else getString(i)
                     }
                     ResultSet.Row.Column(

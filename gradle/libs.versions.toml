@@ -44,6 +44,10 @@ arrow = "2.2.2.1"
 jetbrains = "26.1.0"
 # https://developer.android.com/studio/releases/gradle-plugin
 android-gradle-plugin = "9.1.1"
+# https://github.com/robolectric/robolectric
+robolectric = "4.16.1"
+# https://developer.android.com/jetpack/androidx/releases/test
+androidx-test-core = "1.7.0"
 
 [libraries]
 gradle-kotlin-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
@@ -68,6 +72,9 @@ log4k-slf4j = { module = "io.github.smyrgeorge:log4k-slf4j", version.ref = "log4
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
 arrow-core = { module = "io.arrow-kt:arrow-core", version.ref = "arrow" }
 jetbrains-annotations = { module = "org.jetbrains:annotations", version.ref = "jetbrains" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+androidx-test-core = { module = "androidx.test:core", version.ref = "androidx-test-core" }
+androidx-test-core-ktx = { module = "androidx.test:core-ktx", version.ref = "androidx-test-core" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

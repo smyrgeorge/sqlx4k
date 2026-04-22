@@ -10,6 +10,7 @@ kotlin {
         namespace = "io.github.smyrgeorge.sqlx4k.sqlite"
         compileSdk = 36
         minSdk = 26
+        withHostTestBuilder {}
     }
     sourceSets {
         configureEach {
@@ -30,6 +31,15 @@ kotlin {
         jvmMain {
             dependencies {
                 implementation(libs.sqlite.jdbc)
+            }
+        }
+        named("androidHostTest") {
+            dependencies {
+                implementation(libs.kotlin.test)
+                implementation(libs.assertk)
+                implementation(libs.robolectric)
+                implementation(libs.androidx.test.core)
+                implementation(libs.androidx.test.core.ktx)
             }
         }
     }

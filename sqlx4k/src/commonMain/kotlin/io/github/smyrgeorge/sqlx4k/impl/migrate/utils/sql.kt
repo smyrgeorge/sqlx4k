@@ -20,7 +20,7 @@ fun splitSqlStatements(sql: String): List<String> {
 }
 
 /**
- * Represents a string that is used as an identifier in SQL operations.
+ * Represents a string used as an identifier in SQL operations.
  *
  * This type is designed to provide a layer of security by validating strings
  * used in SQL statements to ensure they don't contain unsafe characters that could

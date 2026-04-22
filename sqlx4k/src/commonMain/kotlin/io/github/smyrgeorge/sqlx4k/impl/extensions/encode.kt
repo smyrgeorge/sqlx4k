@@ -7,6 +7,7 @@ import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
+import io.github.smyrgeorge.sqlx4k.impl.types.SqlRawLiteral
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -49,6 +50,7 @@ internal fun Any?.encodeValue(encoders: ValueEncoderRegistry): String {
         is LocalDate, is LocalTime, is LocalDateTime -> "'${this}'"
         is Uuid -> "'${this}'"
         is Enum<*> -> "'${name}'"
+        is SqlRawLiteral -> sql
         is Iterable<*> -> encodeTuple(encoders)
         is BooleanArray -> asIterable().encodeTuple(encoders)
         is ShortArray -> asIterable().encodeTuple(encoders)
