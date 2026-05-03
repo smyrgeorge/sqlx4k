@@ -1221,11 +1221,15 @@ fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mut c_char {
         "UUID[]" => format_pg_array(row.get_unchecked::<Vec<uuid::Uuid>, _>(ordinal).iter()),
         "TIMESTAMP[]" => {
             let v: Vec<chrono::NaiveDateTime> = row.get_unchecked(ordinal);
-            format_pg_array_fmt(v.iter(), |dt| dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string())
+            format_pg_array_fmt(v.iter(), |dt| {
+                dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string()
+            })
         }
         "TIMESTAMPTZ[]" => {
             let v: Vec<chrono::DateTime<chrono::Utc>> = row.get_unchecked(ordinal);
-            format_pg_array_fmt(v.iter(), |dt| dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string())
+            format_pg_array_fmt(v.iter(), |dt| {
+                dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string()
+            })
         }
         "BYTEA[]" => {
             // Each element gets the bytea text form (`\xHH..`) so a downstream
