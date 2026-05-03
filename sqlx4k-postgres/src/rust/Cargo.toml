@@ -22,7 +22,11 @@ tokio = { version = "1.49.0", features = ["rt-multi-thread"] }
 sqlx = { version = "0.8.6", features = [
     "runtime-tokio", # Use the tokio runtime without enabling a TLS backend.
     "postgres",      # Add support for the Postgres database server.
+    "chrono",        # Decode DATE/TIME/TIMESTAMP[TZ] into chrono types.
+    "uuid",          # Decode UUID into uuid::Uuid.
 ] }
+# https://crates.io/crates/hex
+hex = "0.4.3"
 
 [build-dependencies]
 # https://crates.io/crates/cbindgen

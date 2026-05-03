@@ -6,6 +6,7 @@ import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.types.SqlRawLiteral
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
+import kotlin.reflect.KClass
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
@@ -22,10 +23,19 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import sqlx4k.postgresql.PARAM_BLOB
-import sqlx4k.postgresql.PARAM_INT
+import sqlx4k.postgresql.PARAM_BOOL
+import sqlx4k.postgresql.PARAM_DATE
+import sqlx4k.postgresql.PARAM_FLOAT4
+import sqlx4k.postgresql.PARAM_FLOAT8
+import sqlx4k.postgresql.PARAM_INT2
+import sqlx4k.postgresql.PARAM_INT4
+import sqlx4k.postgresql.PARAM_INT8
 import sqlx4k.postgresql.PARAM_NULL
-import sqlx4k.postgresql.PARAM_REAL
 import sqlx4k.postgresql.PARAM_TEXT
+import sqlx4k.postgresql.PARAM_TIME
+import sqlx4k.postgresql.PARAM_TIMESTAMP
+import sqlx4k.postgresql.PARAM_TIMESTAMPTZ
+import sqlx4k.postgresql.PARAM_UUID
 import sqlx4k.postgresql.Sqlx4kPostgresParam
 
 /**
@@ -49,40 +59,50 @@ internal fun MemScope.allocParams(
 
 private fun MemScope.bindParam(p: Sqlx4kPostgresParam, value: Any?) {
     when (value) {
-        null -> p.kind = PARAM_NULL
-        is TypedNull -> p.kind = PARAM_NULL
+        null -> {
+            // Untyped null: Rust falls back to a TEXT-typed null which postgres
+            // implicit-casts into many target types more permissively than a
+            // non-null TEXT expression would allow.
+            p.kind = PARAM_NULL
+            p.null_type = PARAM_NULL
+        }
+        is TypedNull -> {
+            p.kind = PARAM_NULL
+            p.null_type = nullTypeFor(value.type)
+        }
         is Boolean -> {
-            p.kind = PARAM_INT
+            p.kind = PARAM_BOOL
             p.i64_val = if (value) 1L else 0L
         }
 
         is Byte -> {
-            p.kind = PARAM_INT
+            // Postgres has no `int1`; smallint (int2) is the smallest integer.
+            p.kind = PARAM_INT2
             p.i64_val = value.toLong()
         }
 
         is Short -> {
-            p.kind = PARAM_INT
+            p.kind = PARAM_INT2
             p.i64_val = value.toLong()
         }
 
         is Int -> {
-            p.kind = PARAM_INT
+            p.kind = PARAM_INT4
             p.i64_val = value.toLong()
         }
 
         is Long -> {
-            p.kind = PARAM_INT
+            p.kind = PARAM_INT8
             p.i64_val = value
         }
 
         is Float -> {
-            p.kind = PARAM_REAL
+            p.kind = PARAM_FLOAT4
             p.f64_val = value.toDouble()
         }
 
         is Double -> {
-            p.kind = PARAM_REAL
+            p.kind = PARAM_FLOAT8
             p.f64_val = value
         }
 
@@ -108,27 +128,29 @@ private fun MemScope.bindParam(p: Sqlx4kPostgresParam, value: Any?) {
         }
 
         is Instant -> {
-            p.kind = PARAM_TEXT
+            // The Kotlin Instant is a UTC moment; the Rust side parses this as
+            // `DateTime<Utc>` and binds as TIMESTAMPTZ.
+            p.kind = PARAM_TIMESTAMPTZ
             p.text = value.toTimestampString().cstr.ptr
         }
 
         is LocalDate -> {
-            p.kind = PARAM_TEXT
+            p.kind = PARAM_DATE
             p.text = value.toString().cstr.ptr
         }
 
         is LocalTime -> {
-            p.kind = PARAM_TEXT
+            p.kind = PARAM_TIME
             p.text = value.toString().cstr.ptr
         }
 
         is LocalDateTime -> {
-            p.kind = PARAM_TEXT
+            p.kind = PARAM_TIMESTAMP
             p.text = value.toString().replace('T', ' ').cstr.ptr
         }
 
         is Uuid -> {
-            p.kind = PARAM_TEXT
+            p.kind = PARAM_UUID
             p.text = value.toString().cstr.ptr
         }
 
@@ -142,4 +164,23 @@ private fun MemScope.bindParam(p: Sqlx4kPostgresParam, value: Any?) {
             message = "Cannot bind value of type ${value::class.simpleName} as a PostgreSQL parameter"
         ).raise()
     }
+}
+
+private fun nullTypeFor(type: KClass<*>): Int = when (type) {
+    Boolean::class -> PARAM_BOOL
+    Byte::class, Short::class -> PARAM_INT2
+    Int::class -> PARAM_INT4
+    Long::class -> PARAM_INT8
+    Float::class -> PARAM_FLOAT4
+    Double::class -> PARAM_FLOAT8
+    String::class, Char::class -> PARAM_TEXT
+    ByteArray::class -> PARAM_BLOB
+    LocalDate::class -> PARAM_DATE
+    LocalTime::class -> PARAM_TIME
+    LocalDateTime::class -> PARAM_TIMESTAMP
+    Instant::class -> PARAM_TIMESTAMPTZ
+    Uuid::class -> PARAM_UUID
+    // Fall back to the "untyped" sentinel; Rust binds None::<String> which
+    // postgres can implicit-cast into many target types.
+    else -> PARAM_NULL
 }

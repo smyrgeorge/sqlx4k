@@ -1,9 +1,17 @@
+use sqlx::encode::IsNull;
+use sqlx::error::BoxDynError;
 use sqlx::pool::PoolConnection;
+use sqlx::postgres::types::Oid;
 use sqlx::postgres::{
-    PgConnectOptions, PgListener, PgNotification, PgPool, PgPoolOptions, PgRow, PgTypeInfo,
-    PgValueRef,
+    PgArgumentBuffer, PgConnectOptions, PgListener, PgNotification, PgPool, PgPoolOptions, PgRow,
+    PgTypeInfo, PgValueRef,
 };
-use sqlx::{Acquire, Column, Error, Executor, Postgres, Row, Transaction, TypeInfo, ValueRef};
+// Re-export sqlx's chrono/uuid feature shims so we don't need direct dependencies
+// on those crates — sqlx already pulls them in when the matching features are on.
+use sqlx::types::{chrono, uuid};
+use sqlx::{
+    Acquire, Column, Encode, Error, Executor, Postgres, Row, Transaction, Type, TypeInfo, ValueRef,
+};
 use std::{
     ffi::{c_char, c_int, c_ulonglong, c_void, CStr, CString},
     ptr::null_mut,
@@ -114,17 +122,36 @@ pub struct Sqlx4kPostgresColumn {
 // Prepared statement parameter binding
 // ----------------------------------------------------------------------------
 
+// Value kinds. The non-NULL kinds also identify the postgres type to bind for
+// `TypedNull` via the `null_type` field on the param struct.
+//
+// Postgres extended-protocol bind is strict about parameter types — bigint
+// (`int8`) won't implicit-cast into `int4`/`int2`, and `bool` won't accept any
+// integer kind. So we keep separate kinds per Rust scalar width instead of
+// folding everything into INT/REAL.
 pub const PARAM_NULL: c_int = 0;
-pub const PARAM_INT: c_int = 1;
-pub const PARAM_REAL: c_int = 2;
-pub const PARAM_TEXT: c_int = 3;
-pub const PARAM_BLOB: c_int = 4;
+pub const PARAM_BOOL: c_int = 1;
+pub const PARAM_INT2: c_int = 2;
+pub const PARAM_INT4: c_int = 3;
+pub const PARAM_INT8: c_int = 4;
+pub const PARAM_FLOAT4: c_int = 5;
+pub const PARAM_FLOAT8: c_int = 6;
+pub const PARAM_TEXT: c_int = 7;
+pub const PARAM_BLOB: c_int = 8;
+pub const PARAM_DATE: c_int = 9;
+pub const PARAM_TIME: c_int = 10;
+pub const PARAM_TIMESTAMP: c_int = 11;
+pub const PARAM_TIMESTAMPTZ: c_int = 12;
+pub const PARAM_UUID: c_int = 13;
 
-/// FFI representation of a single bound parameter. Only the field
-/// matching `kind` is read; the rest are ignored.
+/// FFI representation of a single bound parameter. Only the field matching `kind`
+/// is read for the value; for `kind == PARAM_NULL`, `null_type` carries the
+/// intended postgres type (one of the other PARAM_* kinds, or `PARAM_NULL` for
+/// "untyped" — which falls back to a TEXT-typed null).
 #[repr(C)]
 pub struct Sqlx4kPostgresParam {
     pub kind: c_int,
+    pub null_type: c_int,
     pub i64_val: i64,
     pub f64_val: f64,
     pub text: *const c_char,
@@ -132,17 +159,52 @@ pub struct Sqlx4kPostgresParam {
     pub blob_len: c_int,
 }
 
-enum OwnedParam {
-    Null,
-    Int(i64),
-    Real(f64),
-    Text(String),
-    Blob(Vec<u8>),
+/// A NULL value with `Oid(0)` (unknown) so that postgres infers the parameter
+/// type from the surrounding query context. This is the only safe default for
+/// `bind(idx, null)` (untyped null) — binding `None::<String>` would lock the
+/// parameter to TEXT and have postgres reject most non-text columns at execute.
+struct UntypedNull;
+
+impl Type<Postgres> for UntypedNull {
+    fn type_info() -> PgTypeInfo {
+        PgTypeInfo::with_oid(Oid(0))
+    }
 }
 
-/// Reads `count` params from a C array and copies their data into owned
-/// Rust values, so the resulting Vec can be moved into an async block
-/// without referencing the caller's memory.
+impl Encode<'_, Postgres> for UntypedNull {
+    fn encode_by_ref(&self, _buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+        Ok(IsNull::Yes)
+    }
+}
+
+enum OwnedParam {
+    /// `null_type` matches one of the PARAM_* kinds (or PARAM_NULL when untyped).
+    Null(c_int),
+    Bool(bool),
+    Int2(i16),
+    Int4(i32),
+    Int8(i64),
+    Float4(f32),
+    Float8(f64),
+    Text(String),
+    Blob(Vec<u8>),
+    Date(chrono::NaiveDate),
+    Time(chrono::NaiveTime),
+    Timestamp(chrono::NaiveDateTime),
+    TimestampTz(chrono::DateTime<chrono::Utc>),
+    Uuid(uuid::Uuid),
+}
+
+fn read_text(p: &Sqlx4kPostgresParam) -> String {
+    unsafe { CStr::from_ptr(p.text) }
+        .to_str()
+        .expect("Invalid UTF-8 in TEXT-shaped parameter")
+        .to_owned()
+}
+
+/// Reads `count` params from a C array and copies their data into owned Rust
+/// values, so the resulting Vec can be moved into an async block without
+/// referencing the caller's memory.
 fn read_params(params: *const Sqlx4kPostgresParam, count: c_int) -> Vec<OwnedParam> {
     if params.is_null() || count <= 0 {
         return Vec::new();
@@ -151,16 +213,14 @@ fn read_params(params: *const Sqlx4kPostgresParam, count: c_int) -> Vec<OwnedPar
     slice
         .iter()
         .map(|p| match p.kind {
-            PARAM_NULL => OwnedParam::Null,
-            PARAM_INT => OwnedParam::Int(p.i64_val),
-            PARAM_REAL => OwnedParam::Real(p.f64_val),
-            PARAM_TEXT => {
-                let s = unsafe { CStr::from_ptr(p.text) }
-                    .to_str()
-                    .expect("Invalid UTF-8 in TEXT parameter")
-                    .to_owned();
-                OwnedParam::Text(s)
-            }
+            PARAM_NULL => OwnedParam::Null(p.null_type),
+            PARAM_BOOL => OwnedParam::Bool(p.i64_val != 0),
+            PARAM_INT2 => OwnedParam::Int2(p.i64_val as i16),
+            PARAM_INT4 => OwnedParam::Int4(p.i64_val as i32),
+            PARAM_INT8 => OwnedParam::Int8(p.i64_val),
+            PARAM_FLOAT4 => OwnedParam::Float4(p.f64_val as f32),
+            PARAM_FLOAT8 => OwnedParam::Float8(p.f64_val),
+            PARAM_TEXT => OwnedParam::Text(read_text(p)),
             PARAM_BLOB => {
                 let len = p.blob_len.max(0) as usize;
                 let bytes = if len == 0 || p.blob.is_null() {
@@ -169,6 +229,41 @@ fn read_params(params: *const Sqlx4kPostgresParam, count: c_int) -> Vec<OwnedPar
                     unsafe { slice::from_raw_parts(p.blob, len) }.to_vec()
                 };
                 OwnedParam::Blob(bytes)
+            }
+            PARAM_DATE => {
+                let s = read_text(p);
+                let d = chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d")
+                    .unwrap_or_else(|e| panic!("Invalid DATE '{}': {}", s, e));
+                OwnedParam::Date(d)
+            }
+            PARAM_TIME => {
+                let s = read_text(p);
+                let t = chrono::NaiveTime::parse_from_str(&s, "%H:%M:%S%.f")
+                    .or_else(|_| chrono::NaiveTime::parse_from_str(&s, "%H:%M:%S"))
+                    .unwrap_or_else(|e| panic!("Invalid TIME '{}': {}", s, e));
+                OwnedParam::Time(t)
+            }
+            PARAM_TIMESTAMP => {
+                let s = read_text(p);
+                let dt = chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S%.f")
+                    .or_else(|_| chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S"))
+                    .unwrap_or_else(|e| panic!("Invalid TIMESTAMP '{}': {}", s, e));
+                OwnedParam::Timestamp(dt)
+            }
+            PARAM_TIMESTAMPTZ => {
+                // Kotlin emits UTC `yyyy-MM-dd HH:mm:ss.uuuuuu` (no offset suffix).
+                // Treat it as UTC.
+                let s = read_text(p);
+                let naive = chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S%.f")
+                    .or_else(|_| chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S"))
+                    .unwrap_or_else(|e| panic!("Invalid TIMESTAMPTZ '{}': {}", s, e));
+                OwnedParam::TimestampTz(naive.and_utc())
+            }
+            PARAM_UUID => {
+                let s = read_text(p);
+                let u = uuid::Uuid::parse_str(&s)
+                    .unwrap_or_else(|e| panic!("Invalid UUID '{}': {}", s, e));
+                OwnedParam::Uuid(u)
             }
             other => panic!("Unknown Sqlx4kPostgresParam kind: {}", other),
         })
@@ -181,11 +276,37 @@ fn bind_params<'q>(
 ) -> sqlx::query::Query<'q, Postgres, sqlx::postgres::PgArguments> {
     for p in params {
         q = match p {
-            OwnedParam::Null => q.bind(None::<i64>),
-            OwnedParam::Int(v) => q.bind(v),
-            OwnedParam::Real(v) => q.bind(v),
+            OwnedParam::Null(t) => match t {
+                PARAM_BOOL => q.bind(None::<bool>),
+                PARAM_INT2 => q.bind(None::<i16>),
+                PARAM_INT4 => q.bind(None::<i32>),
+                PARAM_INT8 => q.bind(None::<i64>),
+                PARAM_FLOAT4 => q.bind(None::<f32>),
+                PARAM_FLOAT8 => q.bind(None::<f64>),
+                PARAM_BLOB => q.bind(None::<Vec<u8>>),
+                PARAM_DATE => q.bind(None::<chrono::NaiveDate>),
+                PARAM_TIME => q.bind(None::<chrono::NaiveTime>),
+                PARAM_TIMESTAMP => q.bind(None::<chrono::NaiveDateTime>),
+                PARAM_TIMESTAMPTZ => q.bind(None::<chrono::DateTime<chrono::Utc>>),
+                PARAM_UUID => q.bind(None::<uuid::Uuid>),
+                // Untyped or unknown: bind a NULL with `Oid(0)` so postgres
+                // infers the type from the surrounding query context (e.g. the
+                // target column in an `INSERT ... VALUES (?, ?)`).
+                _ => q.bind(UntypedNull),
+            },
+            OwnedParam::Bool(v) => q.bind(v),
+            OwnedParam::Int2(v) => q.bind(v),
+            OwnedParam::Int4(v) => q.bind(v),
+            OwnedParam::Int8(v) => q.bind(v),
+            OwnedParam::Float4(v) => q.bind(v),
+            OwnedParam::Float8(v) => q.bind(v),
             OwnedParam::Text(s) => q.bind(s),
             OwnedParam::Blob(b) => q.bind(b),
+            OwnedParam::Date(d) => q.bind(d),
+            OwnedParam::Time(t) => q.bind(t),
+            OwnedParam::Timestamp(dt) => q.bind(dt),
+            OwnedParam::TimestampTz(dt) => q.bind(dt),
+            OwnedParam::Uuid(u) => q.bind(u),
         };
     }
     q
@@ -1018,6 +1139,132 @@ fn sqlx4k_postgresql_schema_of(row: &PgRow) -> Sqlx4kPostgresSchema {
     }
 }
 
+/// Decodes a single Postgres column value into a heap-allocated C string.
+///
+/// `row.get_unchecked::<&str>` only works reliably when the result is in **text**
+/// format (the simple-query protocol used by `pool.execute(sql)`). The `_with_params`
+/// path goes through sqlx's prepared/extended protocol, which returns column values
+/// in **binary** format — `&str` decode then either fails on non-UTF8 bytes or
+/// silently produces strings full of control characters / embedded NULs that crash
+/// `CString::new`. Decode by type so both protocols round-trip identically through
+/// the existing Kotlin `as*` extensions, which expect text-shaped values.
+fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mut c_char {
+    let type_name: String = {
+        let value_ref = row.try_get_raw(ordinal).unwrap();
+        if value_ref.is_null() {
+            return null_mut();
+        }
+        value_ref.type_info().name().to_string()
+    };
+
+    let s: String = match type_name.as_str() {
+        "INT2" => row.get_unchecked::<i16, _>(ordinal).to_string(),
+        "INT4" => row.get_unchecked::<i32, _>(ordinal).to_string(),
+        "INT8" => row.get_unchecked::<i64, _>(ordinal).to_string(),
+        "FLOAT4" => row.get_unchecked::<f32, _>(ordinal).to_string(),
+        "FLOAT8" => row.get_unchecked::<f64, _>(ordinal).to_string(),
+        "BOOL" => row.get_unchecked::<bool, _>(ordinal).to_string(),
+        "BYTEA" => {
+            // Match the bytea text-input format `\xHH..` so the existing
+            // `asByteArray()` decoder (which strips `\x` and parses hex) round-trips.
+            // Use `Vec<u8>` not `&[u8]` — sqlx-rs only supports `&[u8]` decode in
+            // the prepared-statement protocol, while simple-query results require
+            // an owned buffer.
+            let bytes: Vec<u8> = row.get_unchecked(ordinal);
+            format!("\\x{}", hex::encode(bytes))
+        }
+        "UUID" => row.get_unchecked::<uuid::Uuid, _>(ordinal).to_string(),
+        "DATE" => row
+            .get_unchecked::<chrono::NaiveDate, _>(ordinal)
+            .to_string(),
+        "TIME" => row
+            .get_unchecked::<chrono::NaiveTime, _>(ordinal)
+            .to_string(),
+        "TIMESTAMP" => {
+            let dt: chrono::NaiveDateTime = row.get_unchecked(ordinal);
+            dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string()
+        }
+        "TIMESTAMPTZ" => {
+            let dt: chrono::DateTime<chrono::Utc> = row.get_unchecked(ordinal);
+            dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string()
+        }
+        // Array types — render with postgres' `{a,b,c}` text form so the existing
+        // `asString()` path round-trips. Element formatting mirrors `T::to_string()`,
+        // so this only handles arrays of element types we can decode here.
+        "BOOL[]" => {
+            // Postgres' canonical text encoding for bool arrays is `{t,f}` and
+            // sqlx4k's `asBooleanArray()` parses that form (via `asBoolean`).
+            let v: Vec<bool> = row.get_unchecked(ordinal);
+            let mut s = String::from("{");
+            let mut first = true;
+            for b in v {
+                if !first {
+                    s.push(',');
+                }
+                first = false;
+                s.push(if b { 't' } else { 'f' });
+            }
+            s.push('}');
+            s
+        }
+        "INT2[]" => format_pg_array(row.get_unchecked::<Vec<i16>, _>(ordinal).iter()),
+        "INT4[]" => format_pg_array(row.get_unchecked::<Vec<i32>, _>(ordinal).iter()),
+        "INT8[]" => format_pg_array(row.get_unchecked::<Vec<i64>, _>(ordinal).iter()),
+        "FLOAT4[]" => format_pg_array(row.get_unchecked::<Vec<f32>, _>(ordinal).iter()),
+        "FLOAT8[]" => format_pg_array(row.get_unchecked::<Vec<f64>, _>(ordinal).iter()),
+        // Text-like array types — output `{a,b,c}` without per-element quoting so
+        // the existing naive `asStringArray()` parser (split on `,`) round-trips.
+        // Limitation: elements containing commas will be split incorrectly.
+        "TEXT[]" | "VARCHAR[]" | "BPCHAR[]" | "NAME[]" => {
+            format_pg_array(row.get_unchecked::<Vec<String>, _>(ordinal).iter())
+        }
+        "UUID[]" => format_pg_array(row.get_unchecked::<Vec<uuid::Uuid>, _>(ordinal).iter()),
+        "TIMESTAMP[]" => {
+            let v: Vec<chrono::NaiveDateTime> = row.get_unchecked(ordinal);
+            format_pg_array_fmt(v.iter(), |dt| dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string())
+        }
+        "TIMESTAMPTZ[]" => {
+            let v: Vec<chrono::DateTime<chrono::Utc>> = row.get_unchecked(ordinal);
+            format_pg_array_fmt(v.iter(), |dt| dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string())
+        }
+        "BYTEA[]" => {
+            // Each element gets the bytea text form (`\xHH..`) so a downstream
+            // `asStringArray().map { it.asByteArray() }` round-trips per element.
+            let v: Vec<Vec<u8>> = row.get_unchecked(ordinal);
+            format_pg_array_fmt(v.iter(), |b| format!("\\x{}", hex::encode(b)))
+        }
+        // TEXT/VARCHAR/CHAR/NAME/JSON/JSONB and anything else (including NUMERIC,
+        // which we don't depend on bigdecimal/rust_decimal for) fall through to
+        // `&str`. In the simple-query / text protocol every value arrives as text;
+        // in extended/prepared mode this works for text-typed columns. Callers
+        // wanting binary-only types via prepared statements can register a custom
+        // row decoder or expose them through cast-to-text in SQL.
+        _ => row.get_unchecked::<&str, _>(ordinal).to_string(),
+    };
+    CString::new(s).unwrap().into_raw()
+}
+
+fn format_pg_array<'a, T: 'a + ToString, I: Iterator<Item = &'a T>>(iter: I) -> String {
+    format_pg_array_fmt(iter, |v| v.to_string())
+}
+
+fn format_pg_array_fmt<'a, T: 'a, I: Iterator<Item = &'a T>, F: FnMut(&'a T) -> String>(
+    iter: I,
+    mut format_one: F,
+) -> String {
+    let mut s = String::from("{");
+    let mut first = true;
+    for v in iter {
+        if !first {
+            s.push(',');
+        }
+        first = false;
+        s.push_str(&format_one(v));
+    }
+    s.push('}');
+    s
+}
+
 fn sqlx4k_postgresql_row_of(row: &PgRow) -> Sqlx4kPostgresRow {
     let columns = row.columns();
     if columns.is_empty() {
@@ -1026,16 +1273,9 @@ fn sqlx4k_postgresql_row_of(row: &PgRow) -> Sqlx4kPostgresRow {
         let columns: Vec<Sqlx4kPostgresColumn> = row
             .columns()
             .iter()
-            .map(|c| {
-                let value: Option<&str> = row.get_unchecked(c.ordinal());
-                Sqlx4kPostgresColumn {
-                    ordinal: c.ordinal() as c_int,
-                    value: if value.is_none() {
-                        null_mut()
-                    } else {
-                        CString::new(value.unwrap()).unwrap().into_raw()
-                    },
-                }
+            .map(|c| Sqlx4kPostgresColumn {
+                ordinal: c.ordinal() as c_int,
+                value: decode_postgresql_column_value(row, c.ordinal()),
             })
             .collect();
 
