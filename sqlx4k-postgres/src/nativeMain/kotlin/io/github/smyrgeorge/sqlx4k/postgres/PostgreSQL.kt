@@ -20,6 +20,7 @@ import kotlin.time.Duration
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.staticCFunction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
@@ -31,19 +32,25 @@ import sqlx4k.postgresql.Sqlx4kPostgresResult
 import sqlx4k.postgresql.sqlx4k_postgresql_close
 import sqlx4k.postgresql.sqlx4k_postgresql_cn_acquire
 import sqlx4k.postgresql.sqlx4k_postgresql_cn_fetch_all
+import sqlx4k.postgresql.sqlx4k_postgresql_cn_fetch_all_with_params
 import sqlx4k.postgresql.sqlx4k_postgresql_cn_query
+import sqlx4k.postgresql.sqlx4k_postgresql_cn_query_with_params
 import sqlx4k.postgresql.sqlx4k_postgresql_cn_release
 import sqlx4k.postgresql.sqlx4k_postgresql_cn_tx_begin
 import sqlx4k.postgresql.sqlx4k_postgresql_fetch_all
+import sqlx4k.postgresql.sqlx4k_postgresql_fetch_all_with_params
 import sqlx4k.postgresql.sqlx4k_postgresql_listen
 import sqlx4k.postgresql.sqlx4k_postgresql_of
 import sqlx4k.postgresql.sqlx4k_postgresql_pool_idle_size
 import sqlx4k.postgresql.sqlx4k_postgresql_pool_size
 import sqlx4k.postgresql.sqlx4k_postgresql_query
+import sqlx4k.postgresql.sqlx4k_postgresql_query_with_params
 import sqlx4k.postgresql.sqlx4k_postgresql_tx_begin
 import sqlx4k.postgresql.sqlx4k_postgresql_tx_commit
 import sqlx4k.postgresql.sqlx4k_postgresql_tx_fetch_all
+import sqlx4k.postgresql.sqlx4k_postgresql_tx_fetch_all_with_params
 import sqlx4k.postgresql.sqlx4k_postgresql_tx_query
+import sqlx4k.postgresql.sqlx4k_postgresql_tx_query_with_params
 import sqlx4k.postgresql.sqlx4k_postgresql_tx_rollback
 
 /**
@@ -164,9 +171,30 @@ class PostgreSQL(
         sqlx { c -> sqlx4k_postgresql_query(rt, sql, c, fn) }.rowsAffectedOrError()
     }
 
+    override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+        val nq = statement.renderNativeQuery(Dialect.PostgreSQL, encoders)
+        memScoped {
+            val (paramsPtr, paramsLen) = allocParams(nq.values)
+            sqlx { c -> sqlx4k_postgresql_query_with_params(rt, nq.sql, paramsPtr, paramsLen, c, fn) }
+                .rowsAffectedOrError()
+        }
+    }
+
     override suspend fun fetchAll(sql: String): Result<ResultSet> {
         val res = sqlx { c -> sqlx4k_postgresql_fetch_all(rt, sql, c, fn) }
         return res.use { it.toResultSet() }.toResult()
+    }
+
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
+        val nq = runCatching { statement.renderNativeQuery(Dialect.PostgreSQL, encoders) }
+            .getOrElse { return Result.failure(it) }
+        return memScoped {
+            val (paramsPtr, paramsLen) = allocParams(nq.values)
+            val res = sqlx { c ->
+                sqlx4k_postgresql_fetch_all_with_params(rt, nq.sql, paramsPtr, paramsLen, c, fn)
+            }
+            res.use { it.toResultSet() }.toResult()
+        }
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
@@ -303,12 +331,42 @@ class PostgreSQL(
 
         override suspend fun execute(sql: String): Result<Long> = execute(sql, true)
 
+        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+            val nq = statement.renderNativeQuery(Dialect.PostgreSQL, encoders)
+            mutex.withLock {
+                assertIsOpen()
+                memScoped {
+                    val (paramsPtr, paramsLen) = allocParams(nq.values)
+                    sqlx { c ->
+                        sqlx4k_postgresql_cn_query_with_params(rt, cn, nq.sql, paramsPtr, paramsLen, c, fn)
+                    }.use {
+                        it.throwIfError()
+                        it.rows_affected.toLong()
+                    }
+                }
+            }
+        }
+
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
                 sqlx { c -> sqlx4k_postgresql_cn_fetch_all(rt, cn, sql, c, fn) }
                     .use { it.toResultSet() }
                     .toResult()
+            }
+        }
+
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
+            val nq = runCatching { statement.renderNativeQuery(Dialect.PostgreSQL, encoders) }
+                .getOrElse { return Result.failure(it) }
+            return mutex.withLock {
+                assertIsOpen()
+                memScoped {
+                    val (paramsPtr, paramsLen) = allocParams(nq.values)
+                    sqlx { c ->
+                        sqlx4k_postgresql_cn_fetch_all_with_params(rt, cn, nq.sql, paramsPtr, paramsLen, c, fn)
+                    }.use { it.toResultSet() }.toResult()
+                }
             }
         }
 
@@ -367,6 +425,23 @@ class PostgreSQL(
             }
         }
 
+        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+            val nq = statement.renderNativeQuery(Dialect.PostgreSQL, encoders)
+            mutex.withLock {
+                assertIsOpen()
+                memScoped {
+                    val (paramsPtr, paramsLen) = allocParams(nq.values)
+                    sqlx { c ->
+                        sqlx4k_postgresql_tx_query_with_params(rt, tx, nq.sql, paramsPtr, paramsLen, c, fn)
+                    }.use {
+                        tx = it.tx!!
+                        it.throwIfError()
+                        it.rows_affected.toLong()
+                    }
+                }
+            }
+        }
+
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
@@ -374,6 +449,23 @@ class PostgreSQL(
                     tx = it.tx!!
                     it.toResultSet()
                 }.toResult()
+            }
+        }
+
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
+            val nq = runCatching { statement.renderNativeQuery(Dialect.PostgreSQL, encoders) }
+                .getOrElse { return Result.failure(it) }
+            return mutex.withLock {
+                assertIsOpen()
+                memScoped {
+                    val (paramsPtr, paramsLen) = allocParams(nq.values)
+                    sqlx { c ->
+                        sqlx4k_postgresql_tx_fetch_all_with_params(rt, tx, nq.sql, paramsPtr, paramsLen, c, fn)
+                    }.use {
+                        tx = it.tx!!
+                        it.toResultSet()
+                    }.toResult()
+                }
             }
         }
     }
