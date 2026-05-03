@@ -74,13 +74,6 @@ class SQLite(
         max_lifetime_milis = options.maxLifetime?.inWholeMilliseconds?.toInt() ?: -1,
     ).rtOrError()
 
-    init {
-        // Register the SQLite-specific BLOB encoder unless the caller has overridden it.
-        if (encoders.getTyped(ByteArray::class) == null) {
-            encoders.register(ByteArrayEncoder)
-        }
-    }
-
     override suspend fun migrate(
         path: String,
         table: String,
