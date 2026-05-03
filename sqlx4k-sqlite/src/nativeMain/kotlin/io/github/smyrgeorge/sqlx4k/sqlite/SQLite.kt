@@ -11,28 +11,35 @@ import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
+import kotlin.time.Duration
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.memScoped
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import sqlx4k.sqlite.sqlx4k_sqlite_close
 import sqlx4k.sqlite.sqlx4k_sqlite_cn_acquire
 import sqlx4k.sqlite.sqlx4k_sqlite_cn_fetch_all
+import sqlx4k.sqlite.sqlx4k_sqlite_cn_fetch_all_with_params
 import sqlx4k.sqlite.sqlx4k_sqlite_cn_query
+import sqlx4k.sqlite.sqlx4k_sqlite_cn_query_with_params
 import sqlx4k.sqlite.sqlx4k_sqlite_cn_release
 import sqlx4k.sqlite.sqlx4k_sqlite_cn_tx_begin
 import sqlx4k.sqlite.sqlx4k_sqlite_fetch_all
+import sqlx4k.sqlite.sqlx4k_sqlite_fetch_all_with_params
 import sqlx4k.sqlite.sqlx4k_sqlite_of
 import sqlx4k.sqlite.sqlx4k_sqlite_pool_idle_size
 import sqlx4k.sqlite.sqlx4k_sqlite_pool_size
 import sqlx4k.sqlite.sqlx4k_sqlite_query
+import sqlx4k.sqlite.sqlx4k_sqlite_query_with_params
 import sqlx4k.sqlite.sqlx4k_sqlite_tx_begin
 import sqlx4k.sqlite.sqlx4k_sqlite_tx_commit
 import sqlx4k.sqlite.sqlx4k_sqlite_tx_fetch_all
+import sqlx4k.sqlite.sqlx4k_sqlite_tx_fetch_all_with_params
 import sqlx4k.sqlite.sqlx4k_sqlite_tx_query
+import sqlx4k.sqlite.sqlx4k_sqlite_tx_query_with_params
 import sqlx4k.sqlite.sqlx4k_sqlite_tx_rollback
-import kotlin.time.Duration
 
 /**
  * A database driver for SQLite, implemented with connection pooling and transactional support.
@@ -146,9 +153,30 @@ class SQLite(
         sqlx { c -> sqlx4k_sqlite_query(rt, sql, c, fn) }.rowsAffectedOrError()
     }
 
+    override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+        val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
+        memScoped {
+            val (paramsPtr, paramsLen) = allocParams(nq.values)
+            sqlx { c -> sqlx4k_sqlite_query_with_params(rt, nq.sql, paramsPtr, paramsLen, c, fn) }
+                .rowsAffectedOrError()
+        }
+    }
+
     override suspend fun fetchAll(sql: String): Result<ResultSet> {
         val res = sqlx { c -> sqlx4k_sqlite_fetch_all(rt, sql, c, fn) }
         return res.use { it.toResultSet() }.toResult()
+    }
+
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
+        val nq = runCatching { statement.renderNativeQuery(Dialect.SQLite, encoders) }
+            .getOrElse { return Result.failure(it) }
+        return memScoped {
+            val (paramsPtr, paramsLen) = allocParams(nq.values)
+            val res = sqlx { c ->
+                sqlx4k_sqlite_fetch_all_with_params(rt, nq.sql, paramsPtr, paramsLen, c, fn)
+            }
+            res.use { it.toResultSet() }.toResult()
+        }
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
@@ -191,12 +219,42 @@ class SQLite(
             }
         }
 
+        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+            val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
+            mutex.withLock {
+                assertIsOpen()
+                memScoped {
+                    val (paramsPtr, paramsLen) = allocParams(nq.values)
+                    sqlx { c ->
+                        sqlx4k_sqlite_cn_query_with_params(rt, cn, nq.sql, paramsPtr, paramsLen, c, fn)
+                    }.use {
+                        it.throwIfError()
+                        it.rows_affected.toLong()
+                    }
+                }
+            }
+        }
+
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
                 sqlx { c -> sqlx4k_sqlite_cn_fetch_all(rt, cn, sql, c, fn) }
                     .use { it.toResultSet() }
                     .toResult()
+            }
+        }
+
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
+            val nq = runCatching { statement.renderNativeQuery(Dialect.SQLite, encoders) }
+                .getOrElse { return Result.failure(it) }
+            return mutex.withLock {
+                assertIsOpen()
+                memScoped {
+                    val (paramsPtr, paramsLen) = allocParams(nq.values)
+                    sqlx { c ->
+                        sqlx4k_sqlite_cn_fetch_all_with_params(rt, cn, nq.sql, paramsPtr, paramsLen, c, fn)
+                    }.use { it.toResultSet() }.toResult()
+                }
             }
         }
 
@@ -255,6 +313,23 @@ class SQLite(
             }
         }
 
+        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+            val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
+            mutex.withLock {
+                assertIsOpen()
+                memScoped {
+                    val (paramsPtr, paramsLen) = allocParams(nq.values)
+                    sqlx { c ->
+                        sqlx4k_sqlite_tx_query_with_params(rt, tx, nq.sql, paramsPtr, paramsLen, c, fn)
+                    }.use {
+                        tx = it.tx!!
+                        it.throwIfError()
+                        it.rows_affected.toLong()
+                    }
+                }
+            }
+        }
+
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
@@ -262,6 +337,23 @@ class SQLite(
                     tx = it.tx!!
                     it.toResultSet()
                 }.toResult()
+            }
+        }
+
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
+            val nq = runCatching { statement.renderNativeQuery(Dialect.SQLite, encoders) }
+                .getOrElse { return Result.failure(it) }
+            return mutex.withLock {
+                assertIsOpen()
+                memScoped {
+                    val (paramsPtr, paramsLen) = allocParams(nq.values)
+                    sqlx { c ->
+                        sqlx4k_sqlite_tx_fetch_all_with_params(rt, tx, nq.sql, paramsPtr, paramsLen, c, fn)
+                    }.use {
+                        tx = it.tx!!
+                        it.toResultSet()
+                    }.toResult()
+                }
             }
         }
     }

@@ -13,6 +13,7 @@ import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
+import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
@@ -35,11 +36,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
-import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toJavaLocalDate
 import kotlinx.datetime.toJavaLocalTime
-import kotlinx.datetime.toLocalDateTime
-import kotlinx.datetime.number
 
 /**
  * SQLite class provides mechanisms to interact with a SQLite database on the JVM platform.
@@ -416,25 +414,10 @@ class SQLite(
             fun Any?.toJdbc(): Any? = when (this) {
                 null -> null
                 is Char -> toString()
-                // SQLite stores dates/times as text. The shared decoder uses a space-separated
-                // format ("yyyy-MM-dd HH:mm:ss"), so we must produce that format here.
-                // Canonical `YYYY-MM-DD HH:MM:SS.uuuuuu` (always with seconds + microseconds),
-                // matching how the common `encodeValue` renders Instant values. Using
-                // `LocalDateTime.toString()` here would drop trailing zeros (e.g. seconds=0),
-                // which breaks round-trip parsing through `asInstant`.
-                is Instant -> {
-                    val ldt = toLocalDateTime(TimeZone.UTC)
-                    val micros = nanosecondsOfSecond / 1_000
-                    buildString(26) {
-                        append(ldt.year.toString().padStart(4, '0')); append('-')
-                        append(ldt.month.number.toString().padStart(2, '0')); append('-')
-                        append(ldt.day.toString().padStart(2, '0')); append(' ')
-                        append(ldt.hour.toString().padStart(2, '0')); append(':')
-                        append(ldt.minute.toString().padStart(2, '0')); append(':')
-                        append(ldt.second.toString().padStart(2, '0')); append('.')
-                        append(micros.toString().padStart(6, '0'))
-                    }
-                }
+                // SQLite stores dates/times as text in `yyyy-MM-dd HH:mm:ss.uuuuuu` format,
+                // matching how the common `encodeValue` renders Instant values so that
+                // round-trip parsing through `asInstant` is consistent.
+                is Instant -> toTimestampString()
                 is LocalDate -> toJavaLocalDate()
                 is LocalTime -> toJavaLocalTime()
                 is LocalDateTime -> toString().replace('T', ' ')

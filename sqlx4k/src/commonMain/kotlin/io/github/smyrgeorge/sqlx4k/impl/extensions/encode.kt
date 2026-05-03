@@ -4,10 +4,10 @@ package io.github.smyrgeorge.sqlx4k.impl.extensions
 
 import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.SQLError
-import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
 import io.github.smyrgeorge.sqlx4k.impl.types.SqlRawLiteral
+import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -96,7 +96,7 @@ private fun Iterable<*>.encodeTuple(encoders: ValueEncoderRegistry, wrapInParent
  *                 Defaults to `TimeZone.UTC` if not specified.
  * @return a `String` representing the timestamp in the specified format.
  */
-internal fun Instant.toTimestampString(timeZone: TimeZone = TimeZone.UTC): String {
+fun Instant.toTimestampString(timeZone: TimeZone = TimeZone.UTC): String {
     val instant = this
     val ldt = instant.toLocalDateTime(timeZone)
 
@@ -130,6 +130,7 @@ internal fun Any?.resolveNativeValue(encoders: ValueEncoderRegistry): Any? {
         null -> null
         is TypedNull -> this
         is String, is Char, is Boolean, is Byte, is Short, is Int, is Long, is Float, is Double -> this
+        is ByteArray -> this
         is Instant, is LocalDate, is LocalTime, is LocalDateTime -> this
         is Uuid -> this
         is Enum<*> -> name
