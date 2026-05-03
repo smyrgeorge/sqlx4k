@@ -1,11 +1,13 @@
-@file:OptIn(ExperimentalUuidApi::class)
+@file:OptIn(ExperimentalTime::class, ExperimentalUuidApi::class)
 @file:Suppress("SqlSourceToSinkFlow", "DuplicatedCode")
 
 package io.github.smyrgeorge.sqlx4k.sqlite
 
 import android.content.Context
 import android.database.Cursor
+import android.database.sqlite.SQLiteCursor
 import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteProgram
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Dialect
@@ -16,21 +18,30 @@ import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
+import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.github.smyrgeorge.sqlx4k.impl.pool.ConnectionPoolImpl
 import io.github.smyrgeorge.sqlx4k.impl.pool.PooledConnection
 import io.github.smyrgeorge.sqlx4k.impl.pool.PooledTransaction
+import io.github.smyrgeorge.sqlx4k.impl.types.SqlRawLiteral
+import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import java.util.concurrent.Executors
 import kotlin.time.Duration
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 
 /**
  * SQLite class provides mechanisms to interact with a SQLite database on the Android platform.
@@ -56,13 +67,6 @@ class SQLite(
     options: ConnectionPool.Options = ConnectionPool.Options(),
     override val encoders: ValueEncoderRegistry = ValueEncoderRegistry()
 ) : ISQLite {
-    init {
-        // Register the SQLite-specific BLOB encoder unless the caller has overridden it.
-        if (encoders.getTyped(ByteArray::class) == null) {
-            encoders.register(ByteArrayEncoder)
-        }
-    }
-
     private val pool: ConnectionPoolImpl = createConnectionPool(context, url, options, encoders)
 
     override suspend fun migrate(
@@ -232,6 +236,23 @@ class SQLite(
             }
         }
 
+        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+            val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
+            mutex.withLock {
+                assertIsOpen()
+                try {
+                    withContext(dispatcher) {
+                        db.compileStatement(nq.sql).use { stmt ->
+                            stmt.bindAll(nq.values)
+                            stmt.executeUpdateDelete().toLong()
+                        }
+                    }
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                }
+            }
+        }
+
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
@@ -244,6 +265,36 @@ class SQLite(
                 }
             }
         }
+
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
+            val nq = runCatching { statement.renderNativeQuery(Dialect.SQLite, encoders) }
+                .getOrElse { return Result.failure(it) }
+            return mutex.withLock {
+                assertIsOpen()
+                try {
+                    withContext(dispatcher) {
+                        // `rawQueryWithFactory` is the only public API that lets us bind
+                        // typed parameters (long / double / blob / string / null) to a
+                        // SELECT — `rawQuery` would force every arg through `bindString`.
+                        val factory = SQLiteDatabase.CursorFactory { _, driver, editTable, query ->
+                            query.bindAll(nq.values)
+                            SQLiteCursor(driver, editTable, query)
+                        }
+                        // editTable is documented as a hint for the cursor (only used
+                        // by Android's CursorAdapter / undo support); empty string
+                        // satisfies the non-null Kotlin signature without consequence.
+                        db.rawQueryWithFactory(factory, nq.sql, null, "").use { it.toResultSet() }
+                    }.toResult()
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                }
+            }
+        }
+
+        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
+            runCatching {
+                fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
+            }
 
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
@@ -339,6 +390,23 @@ class SQLite(
             }
         }
 
+        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+            val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
+            mutex.withLock {
+                assertIsOpen()
+                try {
+                    withContext(dispatcher) {
+                        db.compileStatement(nq.sql).use { stmt ->
+                            stmt.bindAll(nq.values)
+                            stmt.executeUpdateDelete().toLong()
+                        }
+                    }
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                }
+            }
+        }
+
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
@@ -351,9 +419,77 @@ class SQLite(
                 }
             }
         }
+
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
+            val nq = runCatching { statement.renderNativeQuery(Dialect.SQLite, encoders) }
+                .getOrElse { return Result.failure(it) }
+            return mutex.withLock {
+                assertIsOpen()
+                try {
+                    withContext(dispatcher) {
+                        val factory = SQLiteDatabase.CursorFactory { _, driver, editTable, query ->
+                            query.bindAll(nq.values)
+                            SQLiteCursor(driver, editTable, query)
+                        }
+                        // editTable is documented as a hint for the cursor (only used
+                        // by Android's CursorAdapter / undo support); empty string
+                        // satisfies the non-null Kotlin signature without consequence.
+                        db.rawQueryWithFactory(factory, nq.sql, null, "").use { it.toResultSet() }
+                    }.toResult()
+                } catch (e: Exception) {
+                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                }
+            }
+        }
+
+        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
+            runCatching {
+                fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
+            }
     }
 
     companion object {
+        /**
+         * Binds the supplied positional values onto an Android [SQLiteProgram]
+         * (`SQLiteStatement` for `compileStatement(sql)` or `SQLiteQuery` from a
+         * cursor factory). Mirrors the JVM `setObject` mapping — Char / Instant /
+         * `LocalDate*` / `Uuid` are folded down to text, ByteArray to BLOB,
+         * primitives to LONG / DOUBLE.
+         */
+        private fun SQLiteProgram.bindAll(values: List<Any?>) {
+            values.forEachIndexed { i, value ->
+                val index = i + 1
+                when (value) {
+                    null -> bindNull(index)
+                    is TypedNull -> bindNull(index)
+                    is Boolean -> bindLong(index, if (value) 1L else 0L)
+                    is Byte -> bindLong(index, value.toLong())
+                    is Short -> bindLong(index, value.toLong())
+                    is Int -> bindLong(index, value.toLong())
+                    is Long -> bindLong(index, value)
+                    is Float -> bindDouble(index, value.toDouble())
+                    is Double -> bindDouble(index, value)
+                    is String -> bindString(index, value)
+                    is Char -> bindString(index, value.toString())
+                    is ByteArray -> bindBlob(index, value)
+                    // SQLite stores dates/times as text; match the canonical
+                    // `yyyy-MM-dd HH:mm:ss.uuuuuu` shape so round-trips through
+                    // the existing `asInstant()` / `asLocalDate*()` decoders work.
+                    is Instant -> bindString(index, value.toTimestampString())
+                    is LocalDate -> bindString(index, value.toString())
+                    is LocalTime -> bindString(index, value.toString())
+                    is LocalDateTime -> bindString(index, value.toString().replace('T', ' '))
+                    is Uuid -> bindString(index, value.toString())
+                    is java.util.UUID -> bindString(index, value.toString())
+                    is SqlRawLiteral -> bindString(index, value.sql)
+                    else -> SQLError(
+                        code = SQLError.Code.MissingValueConverter,
+                        message = "Cannot bind value of type ${value::class.simpleName} as a SQLite parameter"
+                    ).raise()
+                }
+            }
+        }
+
         private fun Cursor.toResultSet(): ResultSet {
             fun toRow(): ResultSet.Row {
                 val columns = (0 until columnCount).map { i ->
