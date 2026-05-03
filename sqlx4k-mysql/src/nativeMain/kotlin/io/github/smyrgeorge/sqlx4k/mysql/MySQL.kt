@@ -11,28 +11,35 @@ import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
+import kotlin.time.Duration
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.memScoped
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import sqlx4k.mysql.sqlx4k_mysql_close
 import sqlx4k.mysql.sqlx4k_mysql_cn_acquire
 import sqlx4k.mysql.sqlx4k_mysql_cn_fetch_all
+import sqlx4k.mysql.sqlx4k_mysql_cn_fetch_all_with_params
 import sqlx4k.mysql.sqlx4k_mysql_cn_query
+import sqlx4k.mysql.sqlx4k_mysql_cn_query_with_params
 import sqlx4k.mysql.sqlx4k_mysql_cn_release
 import sqlx4k.mysql.sqlx4k_mysql_cn_tx_begin
 import sqlx4k.mysql.sqlx4k_mysql_fetch_all
+import sqlx4k.mysql.sqlx4k_mysql_fetch_all_with_params
 import sqlx4k.mysql.sqlx4k_mysql_of
 import sqlx4k.mysql.sqlx4k_mysql_pool_idle_size
 import sqlx4k.mysql.sqlx4k_mysql_pool_size
 import sqlx4k.mysql.sqlx4k_mysql_query
+import sqlx4k.mysql.sqlx4k_mysql_query_with_params
 import sqlx4k.mysql.sqlx4k_mysql_tx_begin
 import sqlx4k.mysql.sqlx4k_mysql_tx_commit
 import sqlx4k.mysql.sqlx4k_mysql_tx_fetch_all
+import sqlx4k.mysql.sqlx4k_mysql_tx_fetch_all_with_params
 import sqlx4k.mysql.sqlx4k_mysql_tx_query
+import sqlx4k.mysql.sqlx4k_mysql_tx_query_with_params
 import sqlx4k.mysql.sqlx4k_mysql_tx_rollback
-import kotlin.time.Duration
 
 /**
  * The `MySQL` class provides a driver implementation for interacting with a MySQL database.
@@ -69,13 +76,6 @@ class MySQL(
         idle_timeout_milis = options.idleTimeout?.inWholeMilliseconds?.toInt() ?: -1,
         max_lifetime_milis = options.maxLifetime?.inWholeMilliseconds?.toInt() ?: -1,
     ).rtOrError()
-
-    init {
-        // Register the MySQL-specific binary encoder unless the caller has overridden it.
-        if (encoders.getTyped(ByteArray::class) == null) {
-            encoders.register(ByteArrayEncoder)
-        }
-    }
 
     override suspend fun migrate(
         path: String,
@@ -149,9 +149,30 @@ class MySQL(
         sqlx { c -> sqlx4k_mysql_query(rt, sql, c, fn) }.rowsAffectedOrError()
     }
 
+    override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+        val nq = statement.renderNativeQuery(Dialect.MySQL, encoders)
+        memScoped {
+            val (paramsPtr, paramsLen) = allocParams(nq.values)
+            sqlx { c -> sqlx4k_mysql_query_with_params(rt, nq.sql, paramsPtr, paramsLen, c, fn) }
+                .rowsAffectedOrError()
+        }
+    }
+
     override suspend fun fetchAll(sql: String): Result<ResultSet> {
         val res = sqlx { c -> sqlx4k_mysql_fetch_all(rt, sql, c, fn) }
         return res.use { it.toResultSet() }.toResult()
+    }
+
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
+        val nq = runCatching { statement.renderNativeQuery(Dialect.MySQL, encoders) }
+            .getOrElse { return Result.failure(it) }
+        return memScoped {
+            val (paramsPtr, paramsLen) = allocParams(nq.values)
+            val res = sqlx { c ->
+                sqlx4k_mysql_fetch_all_with_params(rt, nq.sql, paramsPtr, paramsLen, c, fn)
+            }
+            res.use { it.toResultSet() }.toResult()
+        }
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
@@ -215,12 +236,42 @@ class MySQL(
 
         override suspend fun execute(sql: String): Result<Long> = execute(sql, true)
 
+        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+            val nq = statement.renderNativeQuery(Dialect.MySQL, encoders)
+            mutex.withLock {
+                assertIsOpen()
+                memScoped {
+                    val (paramsPtr, paramsLen) = allocParams(nq.values)
+                    sqlx { c ->
+                        sqlx4k_mysql_cn_query_with_params(rt, cn, nq.sql, paramsPtr, paramsLen, c, fn)
+                    }.use {
+                        it.throwIfError()
+                        it.rows_affected.toLong()
+                    }
+                }
+            }
+        }
+
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
                 sqlx { c -> sqlx4k_mysql_cn_fetch_all(rt, cn, sql, c, fn) }
                     .use { it.toResultSet() }
                     .toResult()
+            }
+        }
+
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
+            val nq = runCatching { statement.renderNativeQuery(Dialect.MySQL, encoders) }
+                .getOrElse { return Result.failure(it) }
+            return mutex.withLock {
+                assertIsOpen()
+                memScoped {
+                    val (paramsPtr, paramsLen) = allocParams(nq.values)
+                    sqlx { c ->
+                        sqlx4k_mysql_cn_fetch_all_with_params(rt, cn, nq.sql, paramsPtr, paramsLen, c, fn)
+                    }.use { it.toResultSet() }.toResult()
+                }
             }
         }
 
@@ -279,6 +330,23 @@ class MySQL(
             }
         }
 
+        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+            val nq = statement.renderNativeQuery(Dialect.MySQL, encoders)
+            mutex.withLock {
+                assertIsOpen()
+                memScoped {
+                    val (paramsPtr, paramsLen) = allocParams(nq.values)
+                    sqlx { c ->
+                        sqlx4k_mysql_tx_query_with_params(rt, tx, nq.sql, paramsPtr, paramsLen, c, fn)
+                    }.use {
+                        tx = it.tx!!
+                        it.throwIfError()
+                        it.rows_affected.toLong()
+                    }
+                }
+            }
+        }
+
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
                 assertIsOpen()
@@ -286,6 +354,23 @@ class MySQL(
                     tx = it.tx!!
                     it.toResultSet()
                 }.toResult()
+            }
+        }
+
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
+            val nq = runCatching { statement.renderNativeQuery(Dialect.MySQL, encoders) }
+                .getOrElse { return Result.failure(it) }
+            return mutex.withLock {
+                assertIsOpen()
+                memScoped {
+                    val (paramsPtr, paramsLen) = allocParams(nq.values)
+                    sqlx { c ->
+                        sqlx4k_mysql_tx_fetch_all_with_params(rt, tx, nq.sql, paramsPtr, paramsLen, c, fn)
+                    }.use {
+                        tx = it.tx!!
+                        it.toResultSet()
+                    }.toResult()
+                }
             }
         }
     }
