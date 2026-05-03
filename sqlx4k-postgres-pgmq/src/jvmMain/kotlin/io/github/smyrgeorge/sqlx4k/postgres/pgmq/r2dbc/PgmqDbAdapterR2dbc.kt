@@ -1,6 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq.r2dbc
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.postgres.Notification
@@ -29,5 +30,7 @@ class PgmqDbAdapterR2dbc(
     override suspend fun listen(channel: String, f: suspend (Notification) -> Unit) = adapter.listen(channel, f)
     override suspend fun begin(): Result<Transaction> = adapter.begin()
     override suspend fun execute(sql: String): Result<Long> = adapter.execute(sql)
+    override suspend fun execute(statement: Statement): Result<Long> = adapter.execute(statement)
     override suspend fun fetchAll(sql: String): Result<ResultSet> = adapter.fetchAll(sql)
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> = adapter.fetchAll(statement)
 }

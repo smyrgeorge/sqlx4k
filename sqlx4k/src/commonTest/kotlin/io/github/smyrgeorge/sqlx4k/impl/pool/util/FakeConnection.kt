@@ -2,6 +2,7 @@ package io.github.smyrgeorge.sqlx4k.impl.pool.util
 
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 
@@ -36,8 +37,12 @@ class FakeConnection(val id: Long) : Connection {
         return if (sql == "id") Result.success(id) else Result.success(++executes)
     }
 
+    override suspend fun execute(statement: Statement): Result<Long> = execute(statement.render(encoders))
+
     override suspend fun fetchAll(sql: String): Result<ResultSet> =
         Result.success(ResultSet(emptyList(), null, ResultSet.Metadata(emptyList())))
+
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> = fetchAll(statement.render(encoders))
 
     override suspend fun setTransactionIsolationLevel(level: Transaction.IsolationLevel): Result<Unit> {
         transactionIsolationLevel = level

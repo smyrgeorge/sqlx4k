@@ -1,6 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.postgres.IPostgresSQL
@@ -12,5 +13,7 @@ class PgmqDbAdapterImpl(private val pg: IPostgresSQL) : PgmqDbAdapter {
     override suspend fun listen(channel: String, f: suspend (Notification) -> Unit) = pg.listen(channel, f)
     override suspend fun begin(): Result<Transaction> = pg.begin()
     override suspend fun execute(sql: String): Result<Long> = pg.execute(sql)
+    override suspend fun execute(statement: Statement): Result<Long> = pg.execute(statement)
     override suspend fun fetchAll(sql: String): Result<ResultSet> = pg.fetchAll(sql)
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> = pg.fetchAll(statement)
 }

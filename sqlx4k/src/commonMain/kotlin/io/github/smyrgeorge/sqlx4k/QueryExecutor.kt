@@ -3,8 +3,8 @@ package io.github.smyrgeorge.sqlx4k
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
-import org.intellij.lang.annotations.Language
 import kotlin.time.Duration
+import org.intellij.lang.annotations.Language
 
 /**
  * Represents an interface for executing SQL statements and managing their results.
@@ -38,10 +38,7 @@ interface QueryExecutor {
      * @param statement the SQL statement to be executed.
      * @return a result containing the number of affected rows.
      */
-    suspend fun execute(statement: Statement): Result<Long> {
-        val sql = runCatching { statement.render(encoders) }.getOrElse { return Result.failure(it) }
-        return execute(sql)
-    }
+    suspend fun execute(statement: Statement): Result<Long>
 
     /**
      * Fetches all results of the given SQL query asynchronously.
@@ -57,10 +54,7 @@ interface QueryExecutor {
      * @param statement The SQL statement to be executed.
      * @return A result containing the retrieved result set.
      */
-    suspend fun fetchAll(statement: Statement): Result<ResultSet> {
-        val sql = runCatching { statement.render(encoders) }.getOrElse { return Result.failure(it) }
-        return fetchAll(sql)
-    }
+    suspend fun fetchAll(statement: Statement): Result<ResultSet>
 
     /**
      * Fetches all results of the given SQL query and maps each row using the provided RowMapper.
