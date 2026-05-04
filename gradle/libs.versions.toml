@@ -25,7 +25,7 @@ spring-depedency-management = "1.1.7"
 r2dbc-pool = "1.0.2.RELEASE"
 # https://github.com/asyncer-io/r2dbc-mysql
 # https://mvnrepository.com/artifact/io.asyncer/r2dbc-mysql
-r2dbc-mysql = "1.4.1"
+r2dbc-mysql = "1.4.2"
 # https://github.com/pgjdbc/r2dbc-postgresql
 r2dbc-postgresql = "1.1.1.RELEASE"
 # https://central.sonatype.com/artifact/com.github.jsqlparser/jsqlparser
