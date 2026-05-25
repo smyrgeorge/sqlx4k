@@ -3,7 +3,9 @@ use sqlx::pool::PoolConnection;
 use sqlx::sqlite::{
     SqliteConnectOptions, SqlitePool, SqlitePoolOptions, SqliteRow, SqliteTypeInfo, SqliteValueRef,
 };
-use sqlx::{Acquire, Column, Error, Executor, Row, Sqlite, Transaction, TypeInfo, ValueRef};
+use sqlx::{
+    Acquire, AssertSqlSafe, Column, Error, Executor, Row, Sqlite, Transaction, TypeInfo, ValueRef,
+};
 use std::{
     ffi::{c_char, c_int, c_ulonglong, c_void, CStr, CString},
     ptr::null_mut,
@@ -176,9 +178,9 @@ fn read_params(params: *const Sqlx4kSqliteParam, count: c_int) -> Vec<OwnedParam
 }
 
 fn bind_params<'q>(
-    mut q: sqlx::query::Query<'q, Sqlite, sqlx::sqlite::SqliteArguments<'q>>,
+    mut q: sqlx::query::Query<'q, Sqlite, sqlx::sqlite::SqliteArguments>,
     params: Vec<OwnedParam>,
-) -> sqlx::query::Query<'q, Sqlite, sqlx::sqlite::SqliteArguments<'q>> {
+) -> sqlx::query::Query<'q, Sqlite, sqlx::sqlite::SqliteArguments> {
     for p in params {
         q = match p {
             OwnedParam::Null => q.bind(None::<i64>),
@@ -298,8 +300,8 @@ struct Sqlx4kSqlite {
 }
 
 impl Sqlx4kSqlite {
-    async fn query(&self, sql: &str) -> *mut Sqlx4kSqliteResult {
-        let result = self.pool.execute(sql).await;
+    async fn query(&self, sql: String) -> *mut Sqlx4kSqliteResult {
+        let result = self.pool.execute(AssertSqlSafe(sql)).await;
         let result = match result {
             Ok(res) => Sqlx4kSqliteResult {
                 rows_affected: res.rows_affected(),
@@ -310,8 +312,8 @@ impl Sqlx4kSqlite {
         result.leak()
     }
 
-    async fn fetch_all(&self, sql: &str) -> *mut Sqlx4kSqliteResult {
-        let result = self.pool.fetch_all(sql).await;
+    async fn fetch_all(&self, sql: String) -> *mut Sqlx4kSqliteResult {
+        let result = self.pool.fetch_all(AssertSqlSafe(sql)).await;
         sqlx4k_sqlite_result_of(result).leak()
     }
 
@@ -345,9 +347,9 @@ impl Sqlx4kSqlite {
         Sqlx4kSqliteResult::default().leak()
     }
 
-    async fn cn_query(&self, cn: Sqlx4kSqlitePtr, sql: &str) -> *mut Sqlx4kSqliteResult {
+    async fn cn_query(&self, cn: Sqlx4kSqlitePtr, sql: String) -> *mut Sqlx4kSqliteResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<Sqlite>) };
-        let result = cn.execute(sql).await;
+        let result = cn.execute(AssertSqlSafe(sql)).await;
         let result = match result {
             Ok(res) => Sqlx4kSqliteResult {
                 rows_affected: res.rows_affected(),
@@ -358,9 +360,9 @@ impl Sqlx4kSqlite {
         result.leak()
     }
 
-    async fn cn_fetch_all(&self, cn: Sqlx4kSqlitePtr, sql: &str) -> *mut Sqlx4kSqliteResult {
+    async fn cn_fetch_all(&self, cn: Sqlx4kSqlitePtr, sql: String) -> *mut Sqlx4kSqliteResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<Sqlite>) };
-        let result = cn.fetch_all(sql).await;
+        let result = cn.fetch_all(AssertSqlSafe(sql)).await;
         sqlx4k_sqlite_result_of(result).leak()
     }
 
@@ -420,9 +422,9 @@ impl Sqlx4kSqlite {
         result.leak()
     }
 
-    async fn tx_query(&self, tx: Sqlx4kSqlitePtr, sql: &str) -> *mut Sqlx4kSqliteResult {
+    async fn tx_query(&self, tx: Sqlx4kSqlitePtr, sql: String) -> *mut Sqlx4kSqliteResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Sqlite>) };
-        let result = tx.execute(sql).await;
+        let result = tx.execute(AssertSqlSafe(sql)).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
         let result = match result {
@@ -439,9 +441,9 @@ impl Sqlx4kSqlite {
         result.leak()
     }
 
-    async fn tx_fetch_all(&self, tx: Sqlx4kSqlitePtr, sql: &str) -> *mut Sqlx4kSqliteResult {
+    async fn tx_fetch_all(&self, tx: Sqlx4kSqlitePtr, sql: String) -> *mut Sqlx4kSqliteResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Sqlite>) };
-        let result = tx.fetch_all(sql).await;
+        let result = tx.fetch_all(AssertSqlSafe(sql)).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
         let result = sqlx4k_sqlite_result_of(result);
@@ -459,10 +461,10 @@ impl Sqlx4kSqlite {
 
     async fn query_with_params(
         &self,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kSqliteResult {
-        let q = bind_params(sqlx::query::<Sqlite>(sql), params);
+        let q = bind_params(sqlx::query::<Sqlite>(AssertSqlSafe(sql)), params);
         let result = q.execute(&self.pool).await;
         let result = match result {
             Ok(res) => Sqlx4kSqliteResult {
@@ -476,10 +478,10 @@ impl Sqlx4kSqlite {
 
     async fn fetch_all_with_params(
         &self,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kSqliteResult {
-        let q = bind_params(sqlx::query::<Sqlite>(sql), params);
+        let q = bind_params(sqlx::query::<Sqlite>(AssertSqlSafe(sql)), params);
         let result = q.fetch_all(&self.pool).await;
         sqlx4k_sqlite_result_of(result).leak()
     }
@@ -487,11 +489,11 @@ impl Sqlx4kSqlite {
     async fn cn_query_with_params(
         &self,
         cn: Sqlx4kSqlitePtr,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kSqliteResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<Sqlite>) };
-        let q = bind_params(sqlx::query::<Sqlite>(sql), params);
+        let q = bind_params(sqlx::query::<Sqlite>(AssertSqlSafe(sql)), params);
         let result = q.execute(&mut **cn).await;
         let result = match result {
             Ok(res) => Sqlx4kSqliteResult {
@@ -506,11 +508,11 @@ impl Sqlx4kSqlite {
     async fn cn_fetch_all_with_params(
         &self,
         cn: Sqlx4kSqlitePtr,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kSqliteResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<Sqlite>) };
-        let q = bind_params(sqlx::query::<Sqlite>(sql), params);
+        let q = bind_params(sqlx::query::<Sqlite>(AssertSqlSafe(sql)), params);
         let result = q.fetch_all(&mut **cn).await;
         sqlx4k_sqlite_result_of(result).leak()
     }
@@ -518,11 +520,11 @@ impl Sqlx4kSqlite {
     async fn tx_query_with_params(
         &self,
         tx: Sqlx4kSqlitePtr,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kSqliteResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Sqlite>) };
-        let q = bind_params(sqlx::query::<Sqlite>(sql), params);
+        let q = bind_params(sqlx::query::<Sqlite>(AssertSqlSafe(sql)), params);
         let result = q.execute(&mut *tx).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
@@ -543,11 +545,11 @@ impl Sqlx4kSqlite {
     async fn tx_fetch_all_with_params(
         &self,
         tx: Sqlx4kSqlitePtr,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kSqliteResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Sqlite>) };
-        let q = bind_params(sqlx::query::<Sqlite>(sql), params);
+        let q = bind_params(sqlx::query::<Sqlite>(AssertSqlSafe(sql)), params);
         let result = q.fetch_all(&mut *tx).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
@@ -677,7 +679,7 @@ pub extern "C" fn sqlx4k_sqlite_query(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
     runtime.spawn(async move {
-        let result = sqlx4k.query(&sql).await;
+        let result = sqlx4k.query(sql).await;
         fun(callback, result)
     });
 }
@@ -694,7 +696,7 @@ pub extern "C" fn sqlx4k_sqlite_fetch_all(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
     runtime.spawn(async move {
-        let result = sqlx4k.fetch_all(&sql).await;
+        let result = sqlx4k.fetch_all(sql).await;
         fun(callback, result)
     });
 }
@@ -745,7 +747,7 @@ pub extern "C" fn sqlx4k_sqlite_cn_query(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
     runtime.spawn(async move {
-        let result = sqlx4k.cn_query(cn, &sql).await;
+        let result = sqlx4k.cn_query(cn, sql).await;
         fun(callback, result)
     });
 }
@@ -764,7 +766,7 @@ pub extern "C" fn sqlx4k_sqlite_cn_fetch_all(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
     runtime.spawn(async move {
-        let result = sqlx4k.cn_fetch_all(cn, &sql).await;
+        let result = sqlx4k.cn_fetch_all(cn, sql).await;
         fun(callback, result)
     });
 }
@@ -849,7 +851,7 @@ pub extern "C" fn sqlx4k_sqlite_tx_query(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
     runtime.spawn(async move {
-        let result = sqlx4k.tx_query(tx, &sql).await;
+        let result = sqlx4k.tx_query(tx, sql).await;
         fun(callback, result)
     });
 }
@@ -868,7 +870,7 @@ pub extern "C" fn sqlx4k_sqlite_tx_fetch_all(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
     runtime.spawn(async move {
-        let result = sqlx4k.tx_fetch_all(tx, &sql).await;
+        let result = sqlx4k.tx_fetch_all(tx, sql).await;
         fun(callback, result)
     });
 }
@@ -1003,7 +1005,7 @@ pub extern "C" fn sqlx4k_sqlite_query_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
     runtime.spawn(async move {
-        let result = sqlx4k.query_with_params(&sql, owned).await;
+        let result = sqlx4k.query_with_params(sql, owned).await;
         fun(callback, result)
     });
 }
@@ -1023,7 +1025,7 @@ pub extern "C" fn sqlx4k_sqlite_fetch_all_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
     runtime.spawn(async move {
-        let result = sqlx4k.fetch_all_with_params(&sql, owned).await;
+        let result = sqlx4k.fetch_all_with_params(sql, owned).await;
         fun(callback, result)
     });
 }
@@ -1045,7 +1047,7 @@ pub extern "C" fn sqlx4k_sqlite_cn_query_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
     runtime.spawn(async move {
-        let result = sqlx4k.cn_query_with_params(cn, &sql, owned).await;
+        let result = sqlx4k.cn_query_with_params(cn, sql, owned).await;
         fun(callback, result)
     });
 }
@@ -1067,7 +1069,7 @@ pub extern "C" fn sqlx4k_sqlite_cn_fetch_all_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
     runtime.spawn(async move {
-        let result = sqlx4k.cn_fetch_all_with_params(cn, &sql, owned).await;
+        let result = sqlx4k.cn_fetch_all_with_params(cn, sql, owned).await;
         fun(callback, result)
     });
 }
@@ -1089,7 +1091,7 @@ pub extern "C" fn sqlx4k_sqlite_tx_query_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
     runtime.spawn(async move {
-        let result = sqlx4k.tx_query_with_params(tx, &sql, owned).await;
+        let result = sqlx4k.tx_query_with_params(tx, sql, owned).await;
         fun(callback, result)
     });
 }
@@ -1111,7 +1113,7 @@ pub extern "C" fn sqlx4k_sqlite_tx_fetch_all_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
     runtime.spawn(async move {
-        let result = sqlx4k.tx_fetch_all_with_params(tx, &sql, owned).await;
+        let result = sqlx4k.tx_fetch_all_with_params(tx, sql, owned).await;
         fun(callback, result)
     });
 }

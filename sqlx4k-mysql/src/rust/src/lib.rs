@@ -5,7 +5,9 @@ use sqlx::pool::PoolConnection;
 // Re-export sqlx's chrono feature shim so we don't need a direct dependency on
 // the chrono crate — sqlx already pulls it in when the matching feature is on.
 use sqlx::types::chrono;
-use sqlx::{Acquire, Column, Error, Executor, MySql, Row, Transaction, TypeInfo, ValueRef};
+use sqlx::{
+    Acquire, AssertSqlSafe, Column, Error, Executor, MySql, Row, Transaction, TypeInfo, ValueRef,
+};
 use std::{
     ffi::{c_char, c_int, c_ulonglong, c_void, CStr, CString},
     ptr::null_mut,
@@ -297,8 +299,8 @@ struct Sqlx4kMySql {
 }
 
 impl Sqlx4kMySql {
-    async fn query(&self, sql: &str) -> *mut Sqlx4kMysqlResult {
-        let result = self.pool.execute(sql).await;
+    async fn query(&self, sql: String) -> *mut Sqlx4kMysqlResult {
+        let result = self.pool.execute(AssertSqlSafe(sql)).await;
         let result = match result {
             Ok(res) => Sqlx4kMysqlResult {
                 rows_affected: res.rows_affected(),
@@ -309,8 +311,8 @@ impl Sqlx4kMySql {
         result.leak()
     }
 
-    async fn fetch_all(&self, sql: &str) -> *mut Sqlx4kMysqlResult {
-        let result = self.pool.fetch_all(sql).await;
+    async fn fetch_all(&self, sql: String) -> *mut Sqlx4kMysqlResult {
+        let result = self.pool.fetch_all(AssertSqlSafe(sql)).await;
         sqlx4k_mysql_result_of(result).leak()
     }
 
@@ -344,9 +346,9 @@ impl Sqlx4kMySql {
         Sqlx4kMysqlResult::default().leak()
     }
 
-    async fn cn_query(&self, cn: Sqlx4kMysqlPtr, sql: &str) -> *mut Sqlx4kMysqlResult {
+    async fn cn_query(&self, cn: Sqlx4kMysqlPtr, sql: String) -> *mut Sqlx4kMysqlResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<MySql>) };
-        let result = cn.execute(sql).await;
+        let result = cn.execute(AssertSqlSafe(sql)).await;
         let result = match result {
             Ok(res) => Sqlx4kMysqlResult {
                 rows_affected: res.rows_affected(),
@@ -357,9 +359,9 @@ impl Sqlx4kMySql {
         result.leak()
     }
 
-    async fn cn_fetch_all(&self, cn: Sqlx4kMysqlPtr, sql: &str) -> *mut Sqlx4kMysqlResult {
+    async fn cn_fetch_all(&self, cn: Sqlx4kMysqlPtr, sql: String) -> *mut Sqlx4kMysqlResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<MySql>) };
-        let result = cn.fetch_all(sql).await;
+        let result = cn.fetch_all(AssertSqlSafe(sql)).await;
         sqlx4k_mysql_result_of(result).leak()
     }
 
@@ -419,9 +421,9 @@ impl Sqlx4kMySql {
         result.leak()
     }
 
-    async fn tx_query(&self, tx: Sqlx4kMysqlPtr, sql: &str) -> *mut Sqlx4kMysqlResult {
+    async fn tx_query(&self, tx: Sqlx4kMysqlPtr, sql: String) -> *mut Sqlx4kMysqlResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, MySql>) };
-        let result = tx.execute(sql).await;
+        let result = tx.execute(AssertSqlSafe(sql)).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
         let result = match result {
@@ -438,9 +440,9 @@ impl Sqlx4kMySql {
         result.leak()
     }
 
-    async fn tx_fetch_all(&self, tx: Sqlx4kMysqlPtr, sql: &str) -> *mut Sqlx4kMysqlResult {
+    async fn tx_fetch_all(&self, tx: Sqlx4kMysqlPtr, sql: String) -> *mut Sqlx4kMysqlResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, MySql>) };
-        let result = tx.fetch_all(sql).await;
+        let result = tx.fetch_all(AssertSqlSafe(sql)).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
         let result = sqlx4k_mysql_result_of(result);
@@ -458,10 +460,10 @@ impl Sqlx4kMySql {
 
     async fn query_with_params(
         &self,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kMysqlResult {
-        let q = bind_params(sqlx::query::<MySql>(sql), params);
+        let q = bind_params(sqlx::query::<MySql>(AssertSqlSafe(sql)), params);
         let result = q.execute(&self.pool).await;
         let result = match result {
             Ok(res) => Sqlx4kMysqlResult {
@@ -475,10 +477,10 @@ impl Sqlx4kMySql {
 
     async fn fetch_all_with_params(
         &self,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kMysqlResult {
-        let q = bind_params(sqlx::query::<MySql>(sql), params);
+        let q = bind_params(sqlx::query::<MySql>(AssertSqlSafe(sql)), params);
         let result = q.fetch_all(&self.pool).await;
         sqlx4k_mysql_result_of(result).leak()
     }
@@ -486,11 +488,11 @@ impl Sqlx4kMySql {
     async fn cn_query_with_params(
         &self,
         cn: Sqlx4kMysqlPtr,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kMysqlResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<MySql>) };
-        let q = bind_params(sqlx::query::<MySql>(sql), params);
+        let q = bind_params(sqlx::query::<MySql>(AssertSqlSafe(sql)), params);
         let result = q.execute(&mut **cn).await;
         let result = match result {
             Ok(res) => Sqlx4kMysqlResult {
@@ -505,11 +507,11 @@ impl Sqlx4kMySql {
     async fn cn_fetch_all_with_params(
         &self,
         cn: Sqlx4kMysqlPtr,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kMysqlResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<MySql>) };
-        let q = bind_params(sqlx::query::<MySql>(sql), params);
+        let q = bind_params(sqlx::query::<MySql>(AssertSqlSafe(sql)), params);
         let result = q.fetch_all(&mut **cn).await;
         sqlx4k_mysql_result_of(result).leak()
     }
@@ -517,11 +519,11 @@ impl Sqlx4kMySql {
     async fn tx_query_with_params(
         &self,
         tx: Sqlx4kMysqlPtr,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kMysqlResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, MySql>) };
-        let q = bind_params(sqlx::query::<MySql>(sql), params);
+        let q = bind_params(sqlx::query::<MySql>(AssertSqlSafe(sql)), params);
         let result = q.execute(&mut *tx).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
@@ -542,11 +544,11 @@ impl Sqlx4kMySql {
     async fn tx_fetch_all_with_params(
         &self,
         tx: Sqlx4kMysqlPtr,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kMysqlResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, MySql>) };
-        let q = bind_params(sqlx::query::<MySql>(sql), params);
+        let q = bind_params(sqlx::query::<MySql>(AssertSqlSafe(sql)), params);
         let result = q.fetch_all(&mut *tx).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
@@ -670,7 +672,7 @@ pub extern "C" fn sqlx4k_mysql_query(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
     runtime.spawn(async move {
-        let result = sqlx4k.query(&sql).await;
+        let result = sqlx4k.query(sql).await;
         fun(callback, result)
     });
 }
@@ -687,7 +689,7 @@ pub extern "C" fn sqlx4k_mysql_fetch_all(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
     runtime.spawn(async move {
-        let result = sqlx4k.fetch_all(&sql).await;
+        let result = sqlx4k.fetch_all(sql).await;
         fun(callback, result)
     });
 }
@@ -738,7 +740,7 @@ pub extern "C" fn sqlx4k_mysql_cn_query(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
     runtime.spawn(async move {
-        let result = sqlx4k.cn_query(cn, &sql).await;
+        let result = sqlx4k.cn_query(cn, sql).await;
         fun(callback, result)
     });
 }
@@ -757,7 +759,7 @@ pub extern "C" fn sqlx4k_mysql_cn_fetch_all(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
     runtime.spawn(async move {
-        let result = sqlx4k.cn_fetch_all(cn, &sql).await;
+        let result = sqlx4k.cn_fetch_all(cn, sql).await;
         fun(callback, result)
     });
 }
@@ -842,7 +844,7 @@ pub extern "C" fn sqlx4k_mysql_tx_query(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
     runtime.spawn(async move {
-        let result = sqlx4k.tx_query(tx, &sql).await;
+        let result = sqlx4k.tx_query(tx, sql).await;
         fun(callback, result)
     });
 }
@@ -861,7 +863,7 @@ pub extern "C" fn sqlx4k_mysql_tx_fetch_all(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
     runtime.spawn(async move {
-        let result = sqlx4k.tx_fetch_all(tx, &sql).await;
+        let result = sqlx4k.tx_fetch_all(tx, sql).await;
         fun(callback, result)
     });
 }
@@ -1030,7 +1032,7 @@ pub extern "C" fn sqlx4k_mysql_query_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
     runtime.spawn(async move {
-        let result = sqlx4k.query_with_params(&sql, owned).await;
+        let result = sqlx4k.query_with_params(sql, owned).await;
         fun(callback, result)
     });
 }
@@ -1050,7 +1052,7 @@ pub extern "C" fn sqlx4k_mysql_fetch_all_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
     runtime.spawn(async move {
-        let result = sqlx4k.fetch_all_with_params(&sql, owned).await;
+        let result = sqlx4k.fetch_all_with_params(sql, owned).await;
         fun(callback, result)
     });
 }
@@ -1072,7 +1074,7 @@ pub extern "C" fn sqlx4k_mysql_cn_query_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
     runtime.spawn(async move {
-        let result = sqlx4k.cn_query_with_params(cn, &sql, owned).await;
+        let result = sqlx4k.cn_query_with_params(cn, sql, owned).await;
         fun(callback, result)
     });
 }
@@ -1094,7 +1096,7 @@ pub extern "C" fn sqlx4k_mysql_cn_fetch_all_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
     runtime.spawn(async move {
-        let result = sqlx4k.cn_fetch_all_with_params(cn, &sql, owned).await;
+        let result = sqlx4k.cn_fetch_all_with_params(cn, sql, owned).await;
         fun(callback, result)
     });
 }
@@ -1116,7 +1118,7 @@ pub extern "C" fn sqlx4k_mysql_tx_query_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
     runtime.spawn(async move {
-        let result = sqlx4k.tx_query_with_params(tx, &sql, owned).await;
+        let result = sqlx4k.tx_query_with_params(tx, sql, owned).await;
         fun(callback, result)
     });
 }
@@ -1138,7 +1140,7 @@ pub extern "C" fn sqlx4k_mysql_tx_fetch_all_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
     runtime.spawn(async move {
-        let result = sqlx4k.tx_fetch_all_with_params(tx, &sql, owned).await;
+        let result = sqlx4k.tx_fetch_all_with_params(tx, sql, owned).await;
         fun(callback, result)
     });
 }

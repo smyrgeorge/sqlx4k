@@ -19,9 +19,10 @@ once_cell = { version = "1.21.3" }
 # https://crates.io/crates/tokio
 tokio = { version = "1.49.0", features = ["rt-multi-thread"] }
 # https://crates.io/crates/sqlx
-sqlx = { version = "0.8.6", features = [
+sqlx = { version = "0.9.0", features = [
     "runtime-tokio", # Use the tokio runtime without enabling a TLS backend.
-    "mysql",         # Add support for the Postgres database server.
+    "mysql",         # Add support for the MySQL database server.
+    "mysql-rsa",     # Enable RSA auth backend (required for caching_sha2_password over non-TLS).
     "chrono",        # Decode DATE/TIME/DATETIME/TIMESTAMP into chrono types.
 ] }
 # https://crates.io/crates/hex

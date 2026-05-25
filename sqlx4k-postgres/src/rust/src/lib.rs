@@ -10,7 +10,8 @@ use sqlx::postgres::{
 // on those crates — sqlx already pulls them in when the matching features are on.
 use sqlx::types::{chrono, uuid};
 use sqlx::{
-    Acquire, Column, Encode, Error, Executor, Postgres, Row, Transaction, Type, TypeInfo, ValueRef,
+    Acquire, AssertSqlSafe, Column, Encode, Error, Executor, Postgres, Row, Transaction, Type,
+    TypeInfo, ValueRef,
 };
 use std::{
     ffi::{c_char, c_int, c_ulonglong, c_void, CStr, CString},
@@ -421,8 +422,8 @@ struct Sqlx4kPostgreSql {
 }
 
 impl Sqlx4kPostgreSql {
-    async fn query(&self, sql: &str) -> *mut Sqlx4kPostgresResult {
-        let result = self.pool.execute(sql).await;
+    async fn query(&self, sql: String) -> *mut Sqlx4kPostgresResult {
+        let result = self.pool.execute(AssertSqlSafe(sql)).await;
         let result = match result {
             Ok(res) => Sqlx4kPostgresResult {
                 rows_affected: res.rows_affected(),
@@ -433,8 +434,8 @@ impl Sqlx4kPostgreSql {
         result.leak()
     }
 
-    async fn fetch_all(&self, sql: &str) -> *mut Sqlx4kPostgresResult {
-        let result = self.pool.fetch_all(sql).await;
+    async fn fetch_all(&self, sql: String) -> *mut Sqlx4kPostgresResult {
+        let result = self.pool.fetch_all(AssertSqlSafe(sql)).await;
         sqlx4k_postgresql_result_of(result).leak()
     }
 
@@ -468,9 +469,9 @@ impl Sqlx4kPostgreSql {
         Sqlx4kPostgresResult::default().leak()
     }
 
-    async fn cn_query(&self, cn: Sqlx4kPostgresPtr, sql: &str) -> *mut Sqlx4kPostgresResult {
+    async fn cn_query(&self, cn: Sqlx4kPostgresPtr, sql: String) -> *mut Sqlx4kPostgresResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<Postgres>) };
-        let result = cn.execute(sql).await;
+        let result = cn.execute(AssertSqlSafe(sql)).await;
         let result = match result {
             Ok(res) => Sqlx4kPostgresResult {
                 rows_affected: res.rows_affected(),
@@ -481,9 +482,9 @@ impl Sqlx4kPostgreSql {
         result.leak()
     }
 
-    async fn cn_fetch_all(&self, cn: Sqlx4kPostgresPtr, sql: &str) -> *mut Sqlx4kPostgresResult {
+    async fn cn_fetch_all(&self, cn: Sqlx4kPostgresPtr, sql: String) -> *mut Sqlx4kPostgresResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<Postgres>) };
-        let result = cn.fetch_all(sql).await;
+        let result = cn.fetch_all(AssertSqlSafe(sql)).await;
         sqlx4k_postgresql_result_of(result).leak()
     }
 
@@ -543,9 +544,9 @@ impl Sqlx4kPostgreSql {
         result.leak()
     }
 
-    async fn tx_query(&self, tx: Sqlx4kPostgresPtr, sql: &str) -> *mut Sqlx4kPostgresResult {
+    async fn tx_query(&self, tx: Sqlx4kPostgresPtr, sql: String) -> *mut Sqlx4kPostgresResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Postgres>) };
-        let result = tx.execute(sql).await;
+        let result = tx.execute(AssertSqlSafe(sql)).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
         let result = match result {
@@ -562,9 +563,9 @@ impl Sqlx4kPostgreSql {
         result.leak()
     }
 
-    async fn tx_fetch_all(&self, tx: Sqlx4kPostgresPtr, sql: &str) -> *mut Sqlx4kPostgresResult {
+    async fn tx_fetch_all(&self, tx: Sqlx4kPostgresPtr, sql: String) -> *mut Sqlx4kPostgresResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Postgres>) };
-        let result = tx.fetch_all(sql).await;
+        let result = tx.fetch_all(AssertSqlSafe(sql)).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
         let result = sqlx4k_postgresql_result_of(result);
@@ -582,10 +583,10 @@ impl Sqlx4kPostgreSql {
 
     async fn query_with_params(
         &self,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kPostgresResult {
-        let q = bind_params(sqlx::query::<Postgres>(sql), params);
+        let q = bind_params(sqlx::query::<Postgres>(AssertSqlSafe(sql)), params);
         let result = q.execute(&self.pool).await;
         let result = match result {
             Ok(res) => Sqlx4kPostgresResult {
@@ -599,10 +600,10 @@ impl Sqlx4kPostgreSql {
 
     async fn fetch_all_with_params(
         &self,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kPostgresResult {
-        let q = bind_params(sqlx::query::<Postgres>(sql), params);
+        let q = bind_params(sqlx::query::<Postgres>(AssertSqlSafe(sql)), params);
         let result = q.fetch_all(&self.pool).await;
         sqlx4k_postgresql_result_of(result).leak()
     }
@@ -610,11 +611,11 @@ impl Sqlx4kPostgreSql {
     async fn cn_query_with_params(
         &self,
         cn: Sqlx4kPostgresPtr,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kPostgresResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<Postgres>) };
-        let q = bind_params(sqlx::query::<Postgres>(sql), params);
+        let q = bind_params(sqlx::query::<Postgres>(AssertSqlSafe(sql)), params);
         let result = q.execute(&mut **cn).await;
         let result = match result {
             Ok(res) => Sqlx4kPostgresResult {
@@ -629,11 +630,11 @@ impl Sqlx4kPostgreSql {
     async fn cn_fetch_all_with_params(
         &self,
         cn: Sqlx4kPostgresPtr,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kPostgresResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<Postgres>) };
-        let q = bind_params(sqlx::query::<Postgres>(sql), params);
+        let q = bind_params(sqlx::query::<Postgres>(AssertSqlSafe(sql)), params);
         let result = q.fetch_all(&mut **cn).await;
         sqlx4k_postgresql_result_of(result).leak()
     }
@@ -641,11 +642,11 @@ impl Sqlx4kPostgreSql {
     async fn tx_query_with_params(
         &self,
         tx: Sqlx4kPostgresPtr,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kPostgresResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Postgres>) };
-        let q = bind_params(sqlx::query::<Postgres>(sql), params);
+        let q = bind_params(sqlx::query::<Postgres>(AssertSqlSafe(sql)), params);
         let result = q.execute(&mut *tx).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
@@ -666,11 +667,11 @@ impl Sqlx4kPostgreSql {
     async fn tx_fetch_all_with_params(
         &self,
         tx: Sqlx4kPostgresPtr,
-        sql: &str,
+        sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kPostgresResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Postgres>) };
-        let q = bind_params(sqlx::query::<Postgres>(sql), params);
+        let q = bind_params(sqlx::query::<Postgres>(AssertSqlSafe(sql)), params);
         let result = q.fetch_all(&mut *tx).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
@@ -797,7 +798,7 @@ pub extern "C" fn sqlx4k_postgresql_query(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
-        let result = sqlx4k.query(&sql).await;
+        let result = sqlx4k.query(sql).await;
         fun(callback, result)
     });
 }
@@ -814,7 +815,7 @@ pub extern "C" fn sqlx4k_postgresql_fetch_all(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
-        let result = sqlx4k.fetch_all(&sql).await;
+        let result = sqlx4k.fetch_all(sql).await;
         fun(callback, result)
     });
 }
@@ -865,7 +866,7 @@ pub extern "C" fn sqlx4k_postgresql_cn_query(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
-        let result = sqlx4k.cn_query(cn, &sql).await;
+        let result = sqlx4k.cn_query(cn, sql).await;
         fun(callback, result)
     });
 }
@@ -884,7 +885,7 @@ pub extern "C" fn sqlx4k_postgresql_cn_fetch_all(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
-        let result = sqlx4k.cn_fetch_all(cn, &sql).await;
+        let result = sqlx4k.cn_fetch_all(cn, sql).await;
         fun(callback, result)
     });
 }
@@ -969,7 +970,7 @@ pub extern "C" fn sqlx4k_postgresql_tx_query(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
-        let result = sqlx4k.tx_query(tx, &sql).await;
+        let result = sqlx4k.tx_query(tx, sql).await;
         fun(callback, result)
     });
 }
@@ -988,7 +989,7 @@ pub extern "C" fn sqlx4k_postgresql_tx_fetch_all(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
-        let result = sqlx4k.tx_fetch_all(tx, &sql).await;
+        let result = sqlx4k.tx_fetch_all(tx, sql).await;
         fun(callback, result)
     });
 }
@@ -1314,7 +1315,7 @@ pub extern "C" fn sqlx4k_postgresql_query_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
-        let result = sqlx4k.query_with_params(&sql, owned).await;
+        let result = sqlx4k.query_with_params(sql, owned).await;
         fun(callback, result)
     });
 }
@@ -1334,7 +1335,7 @@ pub extern "C" fn sqlx4k_postgresql_fetch_all_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
-        let result = sqlx4k.fetch_all_with_params(&sql, owned).await;
+        let result = sqlx4k.fetch_all_with_params(sql, owned).await;
         fun(callback, result)
     });
 }
@@ -1356,7 +1357,7 @@ pub extern "C" fn sqlx4k_postgresql_cn_query_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
-        let result = sqlx4k.cn_query_with_params(cn, &sql, owned).await;
+        let result = sqlx4k.cn_query_with_params(cn, sql, owned).await;
         fun(callback, result)
     });
 }
@@ -1378,7 +1379,7 @@ pub extern "C" fn sqlx4k_postgresql_cn_fetch_all_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
-        let result = sqlx4k.cn_fetch_all_with_params(cn, &sql, owned).await;
+        let result = sqlx4k.cn_fetch_all_with_params(cn, sql, owned).await;
         fun(callback, result)
     });
 }
@@ -1400,7 +1401,7 @@ pub extern "C" fn sqlx4k_postgresql_tx_query_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
-        let result = sqlx4k.tx_query_with_params(tx, &sql, owned).await;
+        let result = sqlx4k.tx_query_with_params(tx, sql, owned).await;
         fun(callback, result)
     });
 }
@@ -1422,7 +1423,7 @@ pub extern "C" fn sqlx4k_postgresql_tx_fetch_all_with_params(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
-        let result = sqlx4k.tx_fetch_all_with_params(tx, &sql, owned).await;
+        let result = sqlx4k.tx_fetch_all_with_params(tx, sql, owned).await;
         fun(callback, result)
     });
 }
