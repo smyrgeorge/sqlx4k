@@ -1,0 +1,24 @@
+package = sqlx4k.sqlite.cipher
+headers = sqlx4k_sqlite_cipher.h
+compilerOpts = -I./src/rust/target
+staticLibraries = libsqlx4k_sqlite_cipher.a
+libraryPaths.ios_x64 = ./src/rust/target/x86_64-apple-ios/release
+libraryPaths.ios_arm64 = ./src/rust/target/aarch64-apple-ios/release
+libraryPaths.ios_simulator_arm64 = ./src/rust/target/aarch64-apple-ios-sim/release
+libraryPaths.android_arm64 = ./src/rust/target/aarch64-linux-android/release
+libraryPaths.android_x64 = ./src/rust/target/x86_64-linux-android/release
+libraryPaths.macos_arm64 = ./src/rust/target/aarch64-apple-darwin/release
+libraryPaths.macos_x64 = ./src/rust/target/x86_64-apple-darwin/release
+libraryPaths.linux_arm64 = ./src/rust/target/aarch64-unknown-linux-gnu/release
+libraryPaths.linux_x64 = ./src/rust/target/x86_64-unknown-linux-gnu/release
+# SQLCipher statically links OpenSSL. On Linux its C dependencies (dlopen, pthreads, math) live in
+# separate libraries — unlike macOS/iOS where they're part of libSystem — so the Kotlin/Native
+# linker must be told about them explicitly. (Android/bionic keeps these in libc, so no opts there.)
+# If a link still fails, get the exact list with:
+#   cd src/rust && RUSTFLAGS="--print=native-static-libs" cargo build --release --target x86_64-unknown-linux-gnu
+#
+# Note: SQLCipher's sqlite3.c references the glibc `fcntl64` symbol (large-file support) which
+# Kotlin/Native's older bundled Linux sysroot doesn't export; that symbol is provided by the
+# Linux-only Rust shim in src/compat.rs (forwarding to `fcntl`).
+linkerOpts.linux_x64 = -ldl -lpthread -lm
+linkerOpts.linux_arm64 = -ldl -lpthread -lm

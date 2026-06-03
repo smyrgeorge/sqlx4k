@@ -1,0 +1,44 @@
+[package]
+name = "sqlx4k_sqlite_cipher"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+# staticlib -> linked into Kotlin/Native targets via cinterop (FFI).
+# cdylib    -> loaded at runtime by the JVM and Android via JNI.
+crate-type = ["staticlib", "cdylib"]
+
+[profile.release]
+opt-level = 3
+strip = true
+lto = true
+# Unwinding across the `extern "C"` FFI boundary is undefined behaviour, so we abort.
+# All recoverable database errors are returned as result values, never panics.
+panic = "abort"
+codegen-units = 1
+
+[dependencies]
+# https://crates.io/crates/tokio
+tokio = { version = "1.52.3", features = ["rt-multi-thread"] }
+# https://crates.io/crates/sqlx
+sqlx = { version = "0.9.0", features = [
+    "runtime-tokio", # Use the tokio runtime without enabling a TLS backend.
+    "sqlite",        # Add support for the SQLite database server.
+] }
+# https://crates.io/crates/hex
+hex = "0.4.3"
+# https://crates.io/crates/libsqlite3-sys
+# Direct dependency pinned to the exact version sqlx 0.9 resolves to so Cargo's feature
+# unification turns the bundled SQLite build into a bundled SQLCipher build. The vendored
+# OpenSSL feature compiles OpenSSL from source, producing self-contained, cross-compilable
+# artifacts for every target (iOS/Android/desktop/Windows) — no per-target system OpenSSL.
+libsqlite3-sys = { version = "0.30.1", features = ["bundled-sqlcipher-vendored-openssl"] }
+
+# https://crates.io/crates/jni
+# Only needed for the JNI (JVM/Android) path. iOS uses the FFI/cinterop path exclusively.
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+jni = { version = "0.21.1" }
+
+[build-dependencies]
+# https://crates.io/crates/cbindgen
+cbindgen = "0.29.2"

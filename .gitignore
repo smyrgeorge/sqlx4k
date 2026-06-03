@@ -3,6 +3,9 @@ test.db-shm
 test.db-wal
 test.db-journal
 
+# Generated Android native libraries — built from Rust by the buildRustAndroid (cargo-ndk) task.
+**/src/androidMain/jniLibs/
+
 # Created by https://www.toptal.com/developers/gitignore/api/java,rust,macos,maven,gradle,kotlin,eclipse,windows,intellij,visualstudiocode
 # Edit at https://www.toptal.com/developers/gitignore?templates=java,rust,macos,maven,gradle,kotlin,eclipse,windows,intellij,visualstudiocode
 

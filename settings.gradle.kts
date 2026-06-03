@@ -17,6 +17,7 @@ include("sqlx4k-mysql")
 include("sqlx4k-postgres")
 include("sqlx4k-postgres-pgmq")
 include("sqlx4k-sqlite")
+include("sqlx4k-sqlite-cipher")
 
 include("dokka")
 include("examples:mysql")

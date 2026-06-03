@@ -14,6 +14,7 @@ val descriptions: Map<String, String> = mapOf(
     "sqlx4k-postgres" to "A high-performance Kotlin Multiplatform database driver for PostgreSQL.",
     "sqlx4k-postgres-pgmq" to "A PGMQ client using PostgreSQL as a message queue.",
     "sqlx4k-sqlite" to "A high-performance Kotlin Multiplatform database driver for SQLite.",
+    "sqlx4k-sqlite-cipher" to "A high-performance Kotlin Multiplatform database driver for SQLite with encryption.",
 )
 
 extensions.configure<MavenPublishBaseExtension> {

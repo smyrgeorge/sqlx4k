@@ -88,6 +88,8 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 - ![MariaDB](https://img.shields.io/badge/MariaDB-003545?logo=mariadb&logoColor=white)
 - ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?logo=postgresql&logoColor=white)
 - ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
+- ![SQLCipher](https://img.shields.io/badge/SQLCipher-003B57?logo=sqlite&logoColor=white) (encrypted SQLite —
+  `sqlx4k-sqlite-cipher`)
 
 ### Async-io
 
@@ -172,6 +174,21 @@ val db = MySQL(
  */
 val db = SQLite(
     url = "sqlite://test.db", // If the `test.db` file is not found, a new db will be created.
+    options = options
+)
+
+/**
+ * Encrypted SQLite via SQLCipher (the `sqlx4k-sqlite-cipher` module). Same URL forms as SQLite,
+ * but every target — native (FFI) and JVM/Android (JNI) — is backed by the same Rust `sqlx` +
+ * SQLCipher core. The `password` is applied as the SQLCipher `PRAGMA key`, and the database file
+ * is created encrypted on first use.
+ *
+ * In a multiplatform setup use the `sqliteCipher(...)` function instead; on Android it additionally
+ * takes a `Context` (to resolve a relative database filename into the app's private storage).
+ */
+val db = SQLiteCipher(
+    url = "sqlite://test.db", // If not found, a new (encrypted) db will be created.
+    password = "a-strong-passphrase",
     options = options
 )
 ```
@@ -976,6 +993,10 @@ sqlx4k stands on the shoulders of excellent open-source projects:
             - https://github.com/asyncer-io/r2dbc-mysql
         - SQLite: rsqlite-jdbc
             - https://github.com/xerial/sqlite-jdbc
+    - Encrypted SQLite — `sqlx4k-sqlite-cipher` (the same sqlx (Rust) core on every target, via FFI on
+      native and JNI on JVM/Android):
+        - SQLCipher — encrypted SQLite
+            - https://www.zetetic.net/sqlcipher/
 
 - Build-time tooling
     - JSqlParser — used by the code generator to parse @Query SQL at build time for syntax validation.
