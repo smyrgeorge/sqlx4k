@@ -6,6 +6,9 @@ plugins {
 }
 
 kotlin {
+    compilerOptions {
+        freeCompilerArgs.add("-Xcontext-parameters")
+    }
     sourceSets {
         configureEach {
             languageSettings.progressiveMode = true
@@ -21,7 +24,6 @@ kotlin {
             }
         }
         jvmTest {
-            languageSettings.enableLanguageFeature("ContextParameters")
             dependencies {
                 implementation(project(":sqlx4k"))
                 implementation(libs.kotlin.test)

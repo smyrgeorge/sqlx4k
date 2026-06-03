@@ -1,4 +1,5 @@
 import io.github.smyrgeorge.sqlx4k.multiplatform.Utils
+import java.lang.System.getenv
 import org.gradle.kotlin.dsl.support.serviceOf
 import org.gradle.nativeplatform.platform.internal.ArchitectureInternal
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
@@ -6,7 +7,6 @@ import org.gradle.nativeplatform.platform.internal.DefaultOperatingSystem
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
-import java.lang.System.getenv
 
 val os: DefaultOperatingSystem = DefaultNativePlatform.getCurrentOperatingSystem()
 val arch: ArchitectureInternal = DefaultNativePlatform.getCurrentArchitecture()
@@ -72,14 +72,33 @@ fun KotlinNativeTarget.rust(target: String) {
 
     compilations["main"].cinterops {
         create("ffi") {
-
-            if (target == "x86_64-pc-windows-gnu") {
-                definitionFile.set(file("src/nativeInterop/cinterop/sqlx4k-mingwX64.def"))
+            val defFile = if (target == "x86_64-pc-windows-gnu") {
+                file("src/nativeInterop/cinterop/sqlx4k-mingwX64.def")
             } else {
-                definitionFile.set(file("src/nativeInterop/cinterop/sqlx4k.def"))
+                file("src/nativeInterop/cinterop/sqlx4k.def")
             }
+            definitionFile.set(defFile)
+
+            // Rust sources whose changes should trigger a rebuild — everything under src/rust except
+            // the cargo `target/` output directory (to avoid input/output overlap).
+            val rustSources = project.fileTree(file("src/rust")) {
+                include("Cargo.toml", "Cargo.lock", "build.rs", "cbindgen.toml")
+                include("src/**")
+            }
+            // The static library cinterop links, read from the def's `staticLibraries = lib<crate>.a`.
+            // Declaring it as the task output lets Gradle mark the task UP-TO-DATE and skip cargo when
+            // the sources are unchanged, instead of re-running cargo on every build.
+            val staticLib = defFile.readLines()
+                .firstOrNull { it.trimStart().startsWith("staticLibraries") }
+                ?.substringAfter('=')?.trim()
+                ?: error("No `staticLibraries` entry in ${defFile.name}")
 
             val cargoTask = tasks.register("cargo-$target") {
+                group = "rust"
+                description = "Builds the Rust crate's static library ($staticLib) for $target, " +
+                        "linked by the Kotlin/Native cinterop."
+                inputs.files(rustSources).withPathSensitivity(PathSensitivity.RELATIVE)
+                outputs.file(file("src/rust/target/$target/release/$staticLib"))
                 val exec = project.serviceOf<ExecOperations>()
                 doLast {
                     exec.exec {

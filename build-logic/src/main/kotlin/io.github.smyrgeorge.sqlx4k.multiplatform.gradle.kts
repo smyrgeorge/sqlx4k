@@ -1,10 +1,12 @@
 import io.github.smyrgeorge.sqlx4k.multiplatform.Utils
+import org.gradle.nativeplatform.platform.internal.ArchitectureInternal
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
+import org.gradle.nativeplatform.platform.internal.DefaultOperatingSystem
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
-val os = DefaultNativePlatform.getCurrentOperatingSystem()
-val arch = DefaultNativePlatform.getCurrentArchitecture()
+val os: DefaultOperatingSystem = DefaultNativePlatform.getCurrentOperatingSystem()
+val arch: ArchitectureInternal = DefaultNativePlatform.getCurrentArchitecture()
 
 plugins {
     id("org.jetbrains.kotlin.multiplatform")

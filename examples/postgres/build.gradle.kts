@@ -8,10 +8,10 @@ plugins {
 }
 
 kotlin {
+    compilerOptions {
+        freeCompilerArgs.add("-Xcontext-parameters")
+    }
     sourceSets {
-        all {
-            languageSettings.enableLanguageFeature("ContextParameters")
-        }
         commonMain {
             dependencies {
                 implementation(project(":sqlx4k-postgres-pgmq"))
