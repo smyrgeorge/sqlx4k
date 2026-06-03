@@ -34,11 +34,12 @@ pub extern "C" fn sqlx4k_sqlite_cipher_of(
     max_lifetime_milis: c_int,
 ) -> *mut Sqlx4kSqliteCipherResult {
     let url = c_chars_to_str(url);
-    let password = if password.is_null() {
-        ""
-    } else {
-        c_chars_to_str(password)
-    };
+    // Reject a null password instead of silently falling back to an empty one (which would open an
+    // unencrypted database). The key must be provided explicitly at the FFI boundary.
+    if password.is_null() {
+        panic!("password must not be null");
+    }
+    let password = c_chars_to_str(password);
     open(
         url,
         password,

@@ -588,7 +588,22 @@ pub extern "C" fn sqlx4k_sqlite_of(
     };
 
     // Create the db pool options.
-    let pool = SqlitePoolOptions::new().max_connections(max_connections as u32);
+    //
+    // Enable WAL via `after_connect` (which runs once the connection is fully established) rather
+    // than the built-in `journal_mode` option, keeping this identical to the encrypted
+    // `sqlx4k-sqlite-cipher` driver. There the built-in option can't be used — it runs before
+    // `PRAGMA key` and silently fails on the still-encrypted file — so both drivers set WAL the same
+    // way. WAL is sqlx's default anyway, and this is a no-op for in-memory databases ("memory").
+    let pool = SqlitePoolOptions::new()
+        .max_connections(max_connections as u32)
+        .after_connect(|conn, _meta| {
+            Box::pin(async move {
+                sqlx::query("PRAGMA journal_mode = WAL;")
+                    .execute(&mut *conn)
+                    .await?;
+                Ok(())
+            })
+        });
 
     let pool = if min_connections > 0 {
         pool.min_connections(min_connections as u32)

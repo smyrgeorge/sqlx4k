@@ -620,7 +620,22 @@ pub fn open(
     };
 
     // Create the db pool options.
-    let pool = SqlitePoolOptions::new().max_connections(max_connections as u32);
+    //
+    // WAL must be enabled *after* `PRAGMA key`: sqlx applies its built-in `journal_mode` before our
+    // custom `key` pragma, so on an encrypted database that switch runs on the still-encrypted file
+    // and silently leaves the connection in rollback-journal ("delete") mode. `after_connect` runs
+    // once the connection is fully established (key applied), so the WAL switch takes effect. This
+    // is a no-op for in-memory databases (they ignore WAL and report "memory").
+    let pool = SqlitePoolOptions::new()
+        .max_connections(max_connections as u32)
+        .after_connect(|conn, _meta| {
+            Box::pin(async move {
+                sqlx::query("PRAGMA journal_mode = WAL;")
+                    .execute(&mut *conn)
+                    .await?;
+                Ok(())
+            })
+        });
 
     let pool = if min_connections > 0 {
         pool.min_connections(min_connections as u32)

@@ -2,6 +2,10 @@ test.db
 test.db-shm
 test.db-wal
 test.db-journal
+test-cipher.db
+test-cipher.db-shm
+test-cipher.db-wal
+test-ciphers.db-journal
 
 # Generated Android native libraries — built from Rust by the buildRustAndroid (cargo-ndk) task.
 **/src/androidMain/jniLibs/
