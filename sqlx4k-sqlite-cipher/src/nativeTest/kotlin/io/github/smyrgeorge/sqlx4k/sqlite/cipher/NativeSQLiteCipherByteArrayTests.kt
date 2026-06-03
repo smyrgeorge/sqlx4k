@@ -8,7 +8,7 @@ class NativeSQLiteCipherByteArrayTests {
     private val options = ConnectionPool.Options.builder().maxConnections(10).build()
 
     private val db = sqliteCipher(
-        url = "sqlite://test.db".also { resetDatabaseFile(it) },
+        url = "sqlite://test.db",
         password = "test-passphrase",
         options = options
     )

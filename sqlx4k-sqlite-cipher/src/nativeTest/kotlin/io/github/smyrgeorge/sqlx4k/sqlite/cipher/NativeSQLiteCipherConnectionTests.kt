@@ -10,7 +10,7 @@ class NativeSQLiteCipherConnectionTests {
         .build()
 
     private val db = SQLiteCipher(
-        url = "sqlite://test.db".also { resetDatabaseFile(it) },
+        url = "sqlite://test.db",
         password = "test-passphrase",
         options = options
     )
