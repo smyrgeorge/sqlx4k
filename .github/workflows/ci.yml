@@ -33,11 +33,12 @@ jobs:
         uses: actions/cache@v5
         with:
           path: |
-            /home/runner/.konan
+            ~/.konan
             sqlx4k-mysql/src/rust/target
             sqlx4k-postgres/src/rust/target
             sqlx4k-sqlite/src/rust/target
-          key: rust-lib-cache-apple
+            sqlx4k-sqlite-cipher/src/rust/target
+          key: rust-lib-cache-apple-v2
 
       - name: Gradle Build
         run: ./gradlew build -x test -x jvmTest -x macosArm64Test -x testAndroid -x testAndroidHostTest

@@ -1,6 +1,5 @@
 import io.github.smyrgeorge.sqlx4k.multiplatform.Utils
 import java.lang.System.getenv
-import org.gradle.kotlin.dsl.support.serviceOf
 import org.gradle.nativeplatform.platform.internal.ArchitectureInternal
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
 import org.gradle.nativeplatform.platform.internal.DefaultOperatingSystem
@@ -93,24 +92,19 @@ fun KotlinNativeTarget.rust(target: String) {
                 ?.substringAfter('=')?.trim()
                 ?: error("No `staticLibraries` entry in ${defFile.name}")
 
-            val cargoTask = tasks.register("cargo-$target") {
+            val cargoTask = tasks.register<Exec>("cargo-$target") {
                 group = "rust"
                 description = "Builds the Rust crate's static library ($staticLib) for $target, " +
                         "linked by the Kotlin/Native cinterop."
                 inputs.files(rustSources).withPathSensitivity(PathSensitivity.RELATIVE)
                 outputs.file(file("src/rust/target/$target/release/$staticLib"))
-                val exec = project.serviceOf<ExecOperations>()
-                doLast {
-                    exec.exec {
-                        executable = cargo
-                        args(
-                            "build",
-                            "--manifest-path", file("src/rust/Cargo.toml").absolutePath,
-                            "--target=$target",
-                            "--release"
-                        )
-                    }
-                }
+                commandLine(
+                    cargo,
+                    "build",
+                    "--manifest-path", file("src/rust/Cargo.toml").absolutePath,
+                    "--target=$target",
+                    "--release"
+                )
             }
             tasks.getByName(interopProcessingTaskName) { dependsOn(cargoTask) }
         }

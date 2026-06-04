@@ -1,3 +1,4 @@
+import io.github.smyrgeorge.sqlx4k.multiplatform.Utils
 import io.github.smyrgeorge.sqlx4k.rust.RustJniExtension
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
@@ -40,28 +41,47 @@ afterEvaluate {
         include("src/**")
     }
 
+    // The JNI fan-out follows the selected Kotlin targets (`-Ptargets`, via Utils.targetsOf): the
+    // default (build host only) stays light and needs no Android/cross toolchains, while
+    // `-Ptargets=all` produces the full Android + multi-host JVM build. No separate flag is needed,
+    // and the consuming module declares no target lists.
+    val selectedTargets = Utils.targetsOf(project)
+
     // ── Android (cargo-ndk → jniLibs) ───────────────────────────────────────────────────────────
-    val ndkCommand = buildList {
-        add(cargo); add("ndk")
-        rustJni.androidAbis.forEach { add("-t"); add(it) }
-        add("-o"); add(jniLibsDir.asFile.absolutePath)
-        add("build"); add("--release")
+    // ABIs are derived from the selected androidNative targets. When none are selected (e.g. the
+    // default build) the task is neither created nor wired, so no Android NDK / cargo-ndk is needed:
+    // the AAR still assembles (without the `.so`), and the JVM/Robolectric host tests load the host
+    // library built by `buildRustJvm` instead.
+    val androidAbis = selectedTargets.mapNotNull {
+        when (it) {
+            "androidNativeArm64" -> "arm64-v8a"
+            "androidNativeX64" -> "x86_64"
+            else -> null
+        }
     }
-    val buildRustAndroid = tasks.register<Exec>("buildRustAndroid") {
-        group = "rust"
-        description = "Builds the Rust crate's Android JNI libraries (.so per ABI) via cargo-ndk into src/androidMain/jniLibs."
-        workingDir(rustDir)
-        inputs.files(rustSources).withPathSensitivity(PathSensitivity.RELATIVE)
-        outputs.dir(jniLibsDir)
-        commandLine(*ndkCommand.toTypedArray())
+    if (androidAbis.isNotEmpty()) {
+        val ndkCommand = buildList {
+            add(cargo); add("ndk")
+            androidAbis.forEach { add("-t"); add(it) }
+            add("-o"); add(jniLibsDir.asFile.absolutePath)
+            add("build"); add("--release")
+        }
+        val buildRustAndroid = tasks.register<Exec>("buildRustAndroid") {
+            group = "rust"
+            description = "Builds the Rust crate's Android JNI libraries (.so per ABI) via cargo-ndk into src/androidMain/jniLibs."
+            workingDir(rustDir)
+            inputs.files(rustSources).withPathSensitivity(PathSensitivity.RELATIVE)
+            outputs.dir(jniLibsDir)
+            commandLine(*ndkCommand.toTypedArray())
+        }
+        // Wire before any task that merges JNI libraries into the AAR.
+        tasks.matching {
+            it.name.contains("JniLib", ignoreCase = true) || it.name.contains("MergeJni", ignoreCase = true)
+        }.configureEach { dependsOn(buildRustAndroid) }
     }
-    // Wire before any task that merges JNI libraries into the APK/AAR.
-    tasks.matching {
-        it.name.contains("JniLib", ignoreCase = true) || it.name.contains("MergeJni", ignoreCase = true)
-    }.configureEach { dependsOn(buildRustAndroid) }
 
     // ── JVM / desktop hosts (cargo → JVM resources) ─────────────────────────────────────────────
-    // Detect the build host, used when `jvmHostTargets` is empty (the local-dev default).
+    // Detect the build host; it is always bundled into the JVM jar (so jvmTest can load it).
     val hostOs = System.getProperty("os.name").lowercase()
     val hostArch = System.getProperty("os.arch").lowercase()
     val isMacHost = hostOs.contains("mac") || hostOs.contains("darwin")
@@ -98,9 +118,18 @@ afterEvaluate {
         return libFile to resourceName
     }
 
-    // Targets bundled into the JVM jar. Empty config → just the build host (no cross-toolchains
-    // needed for local dev); a full list → a portable fat jar.
-    val jvmTargets = rustJni.jvmHostTargets.ifEmpty { listOf(hostTarget) }
+    // Desktop hosts bundled into the JVM jar, derived from the selected native targets, plus the
+    // build host (always — so jvmTest/Robolectric can load a matching library). The default build
+    // yields just the host; `-Ptargets=all` yields the portable fat jar.
+    val jvmTargets = (selectedTargets.mapNotNull {
+        when (it) {
+            "macosArm64" -> "aarch64-apple-darwin"
+            "linuxArm64" -> "aarch64-unknown-linux-gnu"
+            "linuxX64" -> "x86_64-unknown-linux-gnu"
+            "mingwX64" -> "x86_64-pc-windows-gnu"
+            else -> null
+        }
+    } + hostTarget).distinct()
 
     val buildJvmTasks = jvmTargets.map { triple ->
         val (libFile, _) = jvmLibInfo(triple)
@@ -114,9 +143,12 @@ afterEvaluate {
         }
     }
 
-    val copyNativeLibJvm = tasks.register<Copy>("copyNativeLibJvm") {
+    // `Sync` (not `Copy`) so the resource dir mirrors exactly the currently-selected targets: a
+    // library for a target that is no longer built (e.g. after dropping a host from `-Ptargets`) is
+    // removed instead of lingering and being bundled into the jar.
+    val copyNativeLibJvm = tasks.register<Sync>("copyNativeLibJvm") {
         group = "rust"
-        description = "Copies the built JVM/desktop native libraries into the JVM resources (jar packaging + host tests)."
+        description = "Syncs the built JVM/desktop native libraries into the JVM resources (jar packaging + host tests)."
         into(generatedResources)
         dependsOn(buildJvmTasks)
         jvmTargets.forEach { triple ->
