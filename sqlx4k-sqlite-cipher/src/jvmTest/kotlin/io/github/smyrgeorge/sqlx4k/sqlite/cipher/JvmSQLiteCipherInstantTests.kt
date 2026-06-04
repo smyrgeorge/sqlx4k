@@ -10,7 +10,7 @@ class JvmSQLiteCipherInstantTests {
         .build()
 
     private val db = SQLiteCipher(
-        url = "test.db",
+        url = "test-cipher.db",
         password = "test-passphrase",
         options = options
     )

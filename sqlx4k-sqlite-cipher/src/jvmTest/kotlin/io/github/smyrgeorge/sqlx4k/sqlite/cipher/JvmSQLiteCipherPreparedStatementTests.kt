@@ -15,7 +15,7 @@ class JvmSQLiteCipherPreparedStatementTests {
         .register<Tag>(TagEncoder)
 
     private val db = sqliteCipher(
-        url = "test.db",
+        url = "test-cipher.db",
         password = "test-passphrase",
         options = options,
         encoders = encoders

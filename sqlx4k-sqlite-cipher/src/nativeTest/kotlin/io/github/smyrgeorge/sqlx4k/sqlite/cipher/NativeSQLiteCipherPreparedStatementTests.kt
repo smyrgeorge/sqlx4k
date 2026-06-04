@@ -15,7 +15,7 @@ class NativeSQLiteCipherPreparedStatementTests {
         .register<Tag>(TagEncoder)
 
     private val db = sqliteCipher(
-        url = "sqlite://test.db",
+        url = "sqlite://test-cipher.db",
         password = "test-passphrase",
         options = options,
         encoders = encoders
