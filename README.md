@@ -56,6 +56,7 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 - [Custom Value Converters](#custom-value-converters)
 - [Transactions and coroutine TransactionContext](#transactions) · [TransactionContext (coroutines)](#transactioncontext-coroutines)
 - [Code generation: CRUD and @Repository implementations](#code-generation-crud-and-repository-implementations)
+    - [Controlling INSERT/UPDATE with @Column](#controlling-insertupdate-with-column)
     - [Auto-Generated RowMapper](#auto-generated-rowmapper)
     - [Batch Operations](#batch-operations)
     - [Property-Level Converters](#property-level-converters-converter)
@@ -481,6 +482,43 @@ val record = Sqlx4k(id = 1, test = "test")
 val res: Sqlx4k = Sqlx4kRepositoryImpl.insert(db, record).getOrThrow()
 // Execute a generated query.
 val res: List<Sqlx4k> = Sqlx4kRepositoryImpl.selectAll(db).getOrThrow()
+```
+
+##### Controlling INSERT/UPDATE with `@Column`
+
+You can use the `@Column` annotation to control how a property participates in the generated `INSERT` and `UPDATE`
+statements. This is useful for database-generated or read-only columns that should be excluded from write operations but
+still retrieved afterwards (via the `RETURNING` clause).
+
+| Property         | Effect on Statement                    | Effect on `RETURNING`                     |
+|------------------|----------------------------------------|-------------------------------------------|
+| `insert = false` | Excluded from the INSERT's column list | Included in the INSERT's RETURNING clause |
+| `update = false` | Excluded from the UPDATE's SET clause  | Included in the UPDATE's RETURNING clause |
+
+```kotlin
+@Table("articles")
+data class Article(
+    @Id
+    val id: Long,
+    val title: String,
+    val content: String,
+    // Set only on INSERT by a DB default, never modified afterwards.
+    @Column(insert = false, update = false)
+    val createdAt: LocalDateTime,
+    // Auto-updated by a DB trigger on every write.
+    @Column(insert = false, update = false)
+    val updatedAt: LocalDateTime
+)
+
+@Table("comments")
+data class Comment(
+    @Id
+    val id: Long,
+    val content: String,
+    // Set on INSERT but never updated.
+    @Column(update = false)
+    val createdAt: LocalDateTime
+)
 ```
 
 For more details, take a look at the [examples](./examples).
