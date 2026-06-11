@@ -5,9 +5,6 @@ plugins {
 }
 
 kotlin {
-    compilerOptions {
-        freeCompilerArgs.add("-Xcontext-parameters")
-    }
     sourceSets {
         configureEach {
             languageSettings.progressiveMode = true
