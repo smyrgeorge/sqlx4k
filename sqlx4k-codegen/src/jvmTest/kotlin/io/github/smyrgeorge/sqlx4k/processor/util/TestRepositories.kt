@@ -25,6 +25,9 @@ interface UserCrudRepository : CrudRepository<User> {
     @Query("SELECT * FROM users WHERE name = :name")
     suspend fun findAllByName(context: QueryExecutor, name: String): Result<List<User>>
 
+    @Query("SELECT * FROM users WHERE email IS NOT NULL")
+    suspend fun findAllByEmailNotNull(context: QueryExecutor): Result<List<User>>
+
     @Query("SELECT count(*) FROM users")
     suspend fun countAll(context: QueryExecutor): Result<Long>
 
@@ -59,6 +62,10 @@ interface UserContextCrudRepository : ContextCrudRepository<User> {
     @Query("SELECT * FROM users WHERE name = :name")
     context(context: QueryExecutor)
     suspend fun findAllByName(name: String): Result<List<User>>
+
+    @Query("SELECT * FROM users WHERE email IS NOT NULL")
+    context(context: QueryExecutor)
+    suspend fun findAllByEmailNotNull(): Result<List<User>>
 
     @Query("SELECT count(*) FROM users")
     context(context: QueryExecutor)

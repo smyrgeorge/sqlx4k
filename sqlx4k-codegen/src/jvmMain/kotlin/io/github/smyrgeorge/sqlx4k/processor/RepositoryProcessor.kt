@@ -429,12 +429,14 @@ class RepositoryProcessor(
         val params = fn.parameters
         val nonContextCount = if (useContextParameters) params.size else params.size - 1
         when (prefix) {
-            Prefix.FIND_ALL, Prefix.DELETE_ALL, Prefix.COUNT_ALL -> if (nonContextCount != 0) error("Method '$name' must not have parameters other than context")
-            Prefix.FIND_ALL_BY, Prefix.FIND_ONE_BY, Prefix.DELETE_BY, Prefix.COUNT_BY -> if (nonContextCount < 1) error(
-                "Method '$name' must have more than one argument (at least one besides context)"
-            )
-
-            Prefix.EXECUTE -> {}
+            Prefix.FIND_ALL, Prefix.DELETE_ALL, Prefix.COUNT_ALL -> {
+                if (nonContextCount != 0) error("Method '$name' must not have parameters other than context")
+            }
+            Prefix.FIND_ALL_BY, Prefix.FIND_ONE_BY, Prefix.DELETE_BY, Prefix.COUNT_BY, Prefix.EXECUTE -> {
+                // *By methods may have zero parameters when the WHERE clause is self-contained
+                // (e.g. "WHERE x IS NOT NULL"); validateParameters checks the parameters
+                // against the named parameters of the SQL statement.
+            }
         }
     }
 
@@ -1051,8 +1053,8 @@ class RepositoryProcessor(
             if (!useContextParameters) {
                 file += "     * @param context The query executor (database connection or transaction)\n"
             }
-            file += "     * @param entities The collection of $domainSimpleName entities\n"
-            file += "     * @throws UnsupportedOperationException Always thrown as this operation is not supported\n"
+            file += "     * @param entities The collection of $domainSimpleName entities that would be inserted\n"
+            file += "     * @throws UnsupportedOperationException Always thrown, since batch insert is not supported for MySQL\n"
             file += "     */\n"
             if (useContextParameters) {
                 file += "    context(context: QueryExecutor)\n"
@@ -1141,8 +1143,8 @@ class RepositoryProcessor(
             if (!useContextParameters) {
                 file += "     * @param context The query executor (database connection or transaction)\n"
             }
-            file += "     * @param entities The collection of $domainSimpleName entities\n"
-            file += "     * @throws UnsupportedOperationException Always thrown as this operation is not supported\n"
+            file += "     * @param entities The collection of $domainSimpleName entities that would be updated\n"
+            file += "     * @throws UnsupportedOperationException Always thrown, since batch update is not supported for MySQL\n"
             file += "     */\n"
             if (useContextParameters) {
                 file += "    context(context: QueryExecutor)\n"

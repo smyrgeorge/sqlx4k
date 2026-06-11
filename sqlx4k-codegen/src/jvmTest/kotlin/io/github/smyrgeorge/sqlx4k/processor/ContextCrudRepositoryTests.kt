@@ -388,6 +388,34 @@ class ContextCrudRepositoryTests {
         assertThat(sql!!).contains("'TestName'")
     }
 
+    // ==================== findAllByEmailNotNull Tests ====================
+
+    @Test
+    fun `findAllBy without parameters returns filtered list`() = runTest {
+        mockExecutor.setFetchAllRows(
+            userRow(1, "Alice", "alice@example.com"),
+            userRow(2, "Bob", "bob@example.com")
+        )
+
+        val result = with(mockExecutor) {
+            repository.findAllByEmailNotNull()
+        }
+
+        assertThat(result).isSuccess()
+        assertThat(result.getOrNull()?.size).isEqualTo(2)
+    }
+
+    @Test
+    fun `findAllBy without parameters executes query as-is`() = runTest {
+        mockExecutor.setFetchAllRows()
+
+        with(mockExecutor) {
+            repository.findAllByEmailNotNull()
+        }
+
+        assertThat(mockExecutor.hasExecuted("email IS NOT NULL")).isTrue()
+    }
+
     // ==================== countAll Tests ====================
 
     @Test
