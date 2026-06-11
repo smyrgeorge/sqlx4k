@@ -57,6 +57,7 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 - [Transactions and coroutine TransactionContext](#transactions) · [TransactionContext (coroutines)](#transactioncontext-coroutines)
 - [Code generation: CRUD and @Repository implementations](#code-generation-crud-and-repository-implementations)
     - [Controlling INSERT/UPDATE with @Column](#controlling-insertupdate-with-column)
+    - [Excluding properties with @Transient](#excluding-properties-with-transient)
     - [Auto-Generated RowMapper](#auto-generated-rowmapper)
     - [Batch Operations](#batch-operations)
     - [Property-Level Converters](#property-level-converters-converter)
@@ -522,6 +523,33 @@ data class Comment(
 ```
 
 For more details, take a look at the [examples](./examples).
+
+##### Excluding properties with `@Transient`
+
+Use the `@Transient` annotation for derived, computed, or cached properties that have **no corresponding database
+column**. Unlike `@Column(insert = false, update = false)` — which still maps the property from query results — a
+`@Transient` property is treated as if it were not a column at all. It is excluded from `INSERT`/`UPDATE` statements,
+from the `RETURNING` clause, and is **not** read by the generated `RowMapper`.
+
+If the annotated property is a primary-constructor parameter, it **must declare a default value** (the generated
+`RowMapper` omits it and relies on the default). Properties declared in the class body (e.g. `by lazy` or computed
+`get()`) need no default.
+
+```kotlin
+@Table("accounts")
+data class Account(
+    @Id
+    val id: Long,
+    val email: String,
+    // Transient constructor parameter — requires a default value.
+    @Transient
+    val displayName: String = email.substringBefore('@')
+) {
+    // Transient body property — derived lazily, no default required.
+    @Transient
+    val domain: String by lazy { email.substringAfter('@') }
+}
+```
 
 #### Auto-Generated RowMapper
 

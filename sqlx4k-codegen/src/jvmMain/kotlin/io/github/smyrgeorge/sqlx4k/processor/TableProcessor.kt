@@ -114,9 +114,18 @@ class TableProcessor(
         val tableName = nameArgument.value as String
 
         // Getting the list of member properties of the annotated class.
+        // Properties annotated with @Transient are fully excluded from generated code:
+        // they are not part of INSERT/UPDATE/RETURNING and are not mapped from query results.
         val properties: Sequence<KSPropertyDeclaration> = classDeclaration
             .getAllProperties()
             .filter { it.validate() }
+            .filterNot { it.isTransient() }
+            .toList()
+            .asSequence()
+
+        // A @Transient primary-constructor parameter must declare a default value, since the
+        // generated RowMapper omits it from the constructor call and relies on that default.
+        validateTransientConstructorParams(classDeclaration)
 
         // Make queries.
         emitInsert(file, tableName, classDeclaration, properties)
@@ -941,6 +950,43 @@ class TableProcessor(
         file += "        item.$functionName(row, converters)\n"
         file += "    }\n"
         file += "}\n"
+    }
+
+    /**
+     * Returns true if the property is annotated with @Transient and should be fully
+     * excluded from generated database code.
+     */
+    private fun KSPropertyDeclaration.isTransient(): Boolean =
+        annotations.any { it.qualifiedName() == TypeNames.TRANSIENT_ANNOTATION }
+
+    /**
+     * Validates that any @Transient primary-constructor parameter declares a default value.
+     *
+     * The generated RowMapper omits transient properties from the constructor call, so a
+     * transient constructor parameter without a default would produce code that does not
+     * compile. Transient body properties (not constructor parameters) are unaffected.
+     *
+     * @param clazz The @Table class declaration to validate.
+     * @throws IllegalStateException if a transient constructor parameter lacks a default value.
+     */
+    private fun validateTransientConstructorParams(clazz: KSClassDeclaration) {
+        val transientPropNames = clazz.getAllProperties()
+            .filter { it.isTransient() }
+            .map { it.simpleName() }
+            .toSet()
+        if (transientPropNames.isEmpty()) return
+
+        clazz.primaryConstructor?.parameters?.forEach { param ->
+            val name = param.name?.asString() ?: return@forEach
+            if (name in transientPropNames && !param.hasDefault) {
+                error(
+                    "@Transient property '$name' in ${clazz.qualifiedName()} is a constructor " +
+                            "parameter without a default value. Transient constructor parameters must " +
+                            "declare a default value (e.g. `@Transient val $name: ... = ...`), or be " +
+                            "moved to the class body."
+                )
+            }
+        }
     }
 
     operator fun OutputStream.plusAssign(str: String): Unit = write(str.toByteArray())

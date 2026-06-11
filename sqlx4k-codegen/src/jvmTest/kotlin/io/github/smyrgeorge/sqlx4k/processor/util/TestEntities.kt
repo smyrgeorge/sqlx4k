@@ -3,6 +3,7 @@ package io.github.smyrgeorge.sqlx4k.processor.util
 import io.github.smyrgeorge.sqlx4k.annotation.Column
 import io.github.smyrgeorge.sqlx4k.annotation.Id
 import io.github.smyrgeorge.sqlx4k.annotation.Table
+import io.github.smyrgeorge.sqlx4k.annotation.Transient
 import kotlinx.datetime.LocalDateTime
 
 /**
@@ -98,3 +99,20 @@ data class Tag(
     val id: Int,
     val name: String
 )
+
+/**
+ * Entity with @Transient properties that must be fully excluded from generated code.
+ * - displayName: a transient constructor parameter (has a default value).
+ * - domain: a transient body property derived lazily (not a constructor parameter).
+ */
+@Table("accounts")
+data class Account(
+    @Id
+    val id: Long,
+    val email: String,
+    @Transient
+    val displayName: String = email.substringBefore('@')
+) {
+    @Transient
+    val domain: String by lazy { email.substringAfter('@') }
+}
