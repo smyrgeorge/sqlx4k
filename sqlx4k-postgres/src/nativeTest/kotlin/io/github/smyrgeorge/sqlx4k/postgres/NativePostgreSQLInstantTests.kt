@@ -49,9 +49,6 @@ class NativePostgreSQLInstantTests {
     fun `reused named instant param`() = runner.`reused named instant param`()
 
     @Test
-    fun `instant in extended statement`() = runner.`instant in extended statement`()
-
-    @Test
     fun `instant param with type cast preservation`() = runner.`instant param with type cast preservation`()
 
     @Test

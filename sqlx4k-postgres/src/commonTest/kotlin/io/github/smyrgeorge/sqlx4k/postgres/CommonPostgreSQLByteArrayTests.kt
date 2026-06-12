@@ -9,7 +9,6 @@ import assertk.assertions.isNull
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
-import io.github.smyrgeorge.sqlx4k.impl.statement.ExtendedStatement
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asByteArray
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asByteArrayOrNull
 import kotlin.random.Random
@@ -162,26 +161,6 @@ class CommonPostgreSQLByteArrayTests(
                 assertThat(row.get(0).asByteArray().toList()).isEqualTo(payload.toList())
                 assertThat(row.get(1).asByteArray().toList()).isEqualTo(payload.toList())
             }
-        } finally {
-            runCatching { db.execute("drop table if exists $table").getOrThrow() }
-        }
-    }
-
-    // ---- Extended statement with $N positional params ----
-    fun `bytea in extended statement`() = runBlocking {
-        val table = newTable()
-        try {
-            db.execute("create table $table(id int primary key, data bytea not null)").getOrThrow()
-
-            val payload = byteArrayOf(0xCA.toByte(), 0xFE.toByte(), 0xBA.toByte(), 0xBE.toByte())
-            val insert = ExtendedStatement($$"insert into $$table(id, data) values ($1, $2)")
-                .bind(0, 1)
-                .bind(1, payload)
-            db.execute(insert).getOrThrow()
-
-            val select = ExtendedStatement($$"select data from $$table where id = $1").bind(0, 1)
-            val row = db.fetchAll(select).getOrThrow().first()
-            assertThat(row.get(0).asByteArray().toList()).isEqualTo(payload.toList())
         } finally {
             runCatching { db.execute("drop table if exists $table").getOrThrow() }
         }

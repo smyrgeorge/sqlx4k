@@ -43,9 +43,6 @@ class JvmPostgreSQLPreparedStatementTests {
     fun `reused named parameter`() = runner.`reused named parameter`()
 
     @Test
-    fun `extended statement with N params`() = runner.`extended statement with N params`()
-
-    @Test
     fun `string values with special characters`() = runner.`string values with special characters`()
 
     @Test
@@ -83,9 +80,6 @@ class JvmPostgreSQLPreparedStatementTests {
 
     @Test
     fun `custom type mixed with primitives and collections`() = runner.`custom type mixed with primitives and collections`()
-
-    @Test
-    fun `custom type in extended statement`() = runner.`custom type in extended statement`()
 
     @Test
     fun `reused named param with custom type`() = runner.`reused named param with custom type`()

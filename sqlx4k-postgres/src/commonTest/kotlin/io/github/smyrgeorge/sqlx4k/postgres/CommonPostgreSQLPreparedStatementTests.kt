@@ -23,7 +23,6 @@ import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asShort
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asUuid
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asUuidOrNull
-import io.github.smyrgeorge.sqlx4k.impl.statement.ExtendedStatement
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
 import kotlin.random.Random
 import kotlin.time.Instant
@@ -309,32 +308,6 @@ class CommonPostgreSQLPreparedStatementTests(
             val results = rows.map { it.get(0).asInt() to it.get(1).asInt() }
 
             assertThat(results).isEqualTo(listOf(1 to 2, 2 to 2))
-        } finally {
-            runCatching { db.execute("drop table if exists $table") }
-        }
-    }
-
-    // ---- ExtendedStatement ($N params) ----
-    fun `extended statement with N params`() = runBlocking {
-        val table = newTable()
-        try {
-            db.execute(
-                "create table $table(id serial primary key, v_text text, v_int4 int4)"
-            ).getOrThrow()
-
-            val insert = ExtendedStatement($$"insert into $$table(v_text, v_int4) values ($1, $2)")
-                .bind(0, "pg-style")
-                .bind(1, 77)
-            db.execute(insert).getOrThrow()
-
-            val select = ExtendedStatement($$"select v_text, v_int4 from $$table where v_int4 = $1")
-                .bind(0, 77)
-            val row = db.fetchAll(select).getOrThrow().first()
-
-            assertAll {
-                assertThat(row.get(0).asString()).isEqualTo("pg-style")
-                assertThat(row.get(1).asInt()).isEqualTo(77)
-            }
         } finally {
             runCatching { db.execute("drop table if exists $table") }
         }
@@ -642,31 +615,6 @@ class CommonPostgreSQLPreparedStatementTests(
             val rows = db.fetchAll(select).getOrThrow()
             val results = rows.map { Triple(it.get(0).asString(), it.get(1).asInt(), it.get(2).asInt()) }
             assertThat(results).isEqualTo(listOf(Triple("delta", 40, 60), Triple("gamma", 30, 90)))
-        } finally {
-            runCatching { db.execute("drop table if exists $table") }
-        }
-    }
-
-    fun `custom type in extended statement`() = runBlocking {
-        val table = newTable()
-        try {
-            db.execute(
-                "create table $table(id serial primary key, label text not null, amount int4 not null)"
-            ).getOrThrow()
-
-            val insert = ExtendedStatement($$"insert into $$table(label, amount) values ($1, $2)")
-                .bind(0, Tag("custom-ext"))
-                .bind(1, Money(99, "EUR"))
-            db.execute(insert).getOrThrow()
-
-            val select = ExtendedStatement($$"select label, amount from $$table where label = $1")
-                .bind(0, Tag("custom-ext"))
-            val row = db.fetchAll(select).getOrThrow().first()
-
-            assertAll {
-                assertThat(row.get(0).asString()).isEqualTo("custom-ext")
-                assertThat(row.get(1).asInt()).isEqualTo(99)
-            }
         } finally {
             runCatching { db.execute("drop table if exists $table") }
         }

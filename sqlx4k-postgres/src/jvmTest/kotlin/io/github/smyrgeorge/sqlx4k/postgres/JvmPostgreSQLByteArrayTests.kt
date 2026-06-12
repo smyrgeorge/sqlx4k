@@ -52,9 +52,6 @@ class JvmPostgreSQLByteArrayTests {
     fun `reused named bytea param`() = runner.`reused named bytea param`()
 
     @Test
-    fun `bytea in extended statement`() = runner.`bytea in extended statement`()
-
-    @Test
     fun `bytea param with type cast preservation`() = runner.`bytea param with type cast preservation`()
 
     @Test

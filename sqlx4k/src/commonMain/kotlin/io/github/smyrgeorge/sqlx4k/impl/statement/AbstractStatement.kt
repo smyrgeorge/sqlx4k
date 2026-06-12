@@ -10,6 +10,7 @@ import io.github.smyrgeorge.sqlx4k.impl.extensions.appendNativeValue
 import io.github.smyrgeorge.sqlx4k.impl.extensions.encodeValue
 import io.github.smyrgeorge.sqlx4k.impl.extensions.isIdentPart
 import io.github.smyrgeorge.sqlx4k.impl.extensions.isIdentStart
+import io.github.smyrgeorge.sqlx4k.impl.extensions.resolveNativeValue
 import io.github.smyrgeorge.sqlx4k.impl.extensions.scanSql
 import io.github.smyrgeorge.sqlx4k.impl.statement.AbstractStatement.Companion.NOT_SET
 
@@ -356,6 +357,29 @@ abstract class AbstractStatement(
     ) {
         scan(writeOutput = false) { i, c, _ -> onNormalChar(this, i, c) }
     }
+
+    /**
+     * Encodes a single bound value into its SQL literal representation using the given registry.
+     *
+     * @param value The value to encode (may be `null` or a [TypedNull]).
+     * @param encoders The registry providing encoders for custom types.
+     * @return The SQL literal representation of the value.
+     */
+    protected fun encode(value: Any?, encoders: ValueEncoderRegistry): String =
+        value.encodeValue(encoders)
+
+    /**
+     * Resolves a single bound value to the native representation used by [Statement.NativeQuery].
+     *
+     * Exposed for [AbstractStatement] subclasses that implement custom placeholder syntaxes
+     * and need to produce native query values exactly like the built-in rendering does.
+     *
+     * @param value The value to resolve (may be `null` or a [TypedNull]).
+     * @param encoders The registry providing encoders for custom types.
+     * @return The resolved native value (may be `null`).
+     */
+    protected fun resolveNative(value: Any?, encoders: ValueEncoderRegistry): Any? =
+        value.resolveNativeValue(encoders)
 
     /**
      * Extracts both named and positional parameters from the SQL statement in a single pass.

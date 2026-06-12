@@ -10,7 +10,6 @@ import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInstant
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInstantOrNull
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
-import io.github.smyrgeorge.sqlx4k.impl.statement.ExtendedStatement
 import kotlin.random.Random
 import kotlin.time.Instant
 import kotlinx.coroutines.runBlocking
@@ -146,26 +145,6 @@ class CommonPostgreSQLInstantTests(
                 assertThat(row.get(0).asInstant()).isEqualTo(ts)
                 assertThat(row.get(1).asInstant()).isEqualTo(ts)
             }
-        } finally {
-            runCatching { db.execute("drop table if exists $table").getOrThrow() }
-        }
-    }
-
-    // ---- Extended statement with $N positional params ----
-    fun `instant in extended statement`() = runBlocking {
-        val table = newTable()
-        try {
-            db.execute("create table $table(id int primary key, ts timestamptz not null)").getOrThrow()
-
-            val ts = Instant.parse("2025-07-04T17:20:30.500000Z")
-            val insert = ExtendedStatement($$"insert into $$table(id, ts) values ($1, $2)")
-                .bind(0, 1)
-                .bind(1, ts)
-            db.execute(insert).getOrThrow()
-
-            val select = ExtendedStatement($$"select ts from $$table where id = $1").bind(0, 1)
-            val row = db.fetchAll(select).getOrThrow().first()
-            assertThat(row.get(0).asInstant()).isEqualTo(ts)
         } finally {
             runCatching { db.execute("drop table if exists $table").getOrThrow() }
         }
