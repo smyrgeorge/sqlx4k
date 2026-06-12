@@ -14,7 +14,8 @@ package io.github.smyrgeorge.sqlx4k.annotation
  * ## Requirements
  *
  * - **Must be applied to a `data class`** (required for the generated `copy()` calls)
- * - Properties are mapped to columns using snake_case conversion (e.g., `createdAt` → `created_at`)
+ * - Properties are mapped to columns using snake_case conversion (e.g., `createdAt` → `created_at`),
+ *   unless overridden with [@Column(name = "...")][Column]
  *
  * ## Example
  *

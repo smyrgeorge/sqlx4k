@@ -127,6 +127,9 @@ class TableProcessor(
         // generated RowMapper omits it from the constructor call and relies on that default.
         validateTransientConstructorParams(classDeclaration)
 
+        // Two properties must not resolve to the same column (e.g. via @Column(name = ...)).
+        validateUniqueColumnNames(classDeclaration, properties)
+
         // Make queries.
         emitInsert(file, tableName, classDeclaration, properties)
         emitApplyInsertResult(file, classDeclaration, properties)
@@ -164,7 +167,7 @@ class TableProcessor(
         props: Sequence<KSPropertyDeclaration>
     ) {
         val ctx = prepareInsertContext(clazz, props)
-        val (allProps, insertPropDeclarations, insertProps, className, returningColumns) = ctx
+        val (allProps, insertPropDeclarations, insertColumns, className, returningColumns) = ctx
 
         file += "\n"
         file += "/**\n"
@@ -186,10 +189,10 @@ class TableProcessor(
             val idProp = allProps.find {
                 it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
             } ?: error("MySQL dialect requires an @Id property for insert() on table: $table")
-            val idCol = idProp.simpleName().toSnakeCase()
-            "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }}) values (${insertProps.joinToString { "?" }}); select $returningColumns from $table where $idCol = coalesce(nullif(last_insert_id(), 0), ?);\"\n"
+            val idCol = idProp.columnName()
+            "    val sql = \"insert into $table(${insertColumns.joinToString()}) values (${insertColumns.joinToString { "?" }}); select $returningColumns from $table where $idCol = coalesce(nullif(last_insert_id(), 0), ?);\"\n"
         } else {
-            "    val sql = \"insert into $table(${insertProps.joinToString { it.toSnakeCase() }}) values (${insertProps.joinToString { "?" }}) returning $returningColumns;\"\n"
+            "    val sql = \"insert into $table(${insertColumns.joinToString()}) values (${insertColumns.joinToString { "?" }}) returning $returningColumns;\"\n"
         }
         file += "    val statement = Statement.create(sql)\n"
         insertPropDeclarations.forEachIndexed { index, prop ->
@@ -202,7 +205,7 @@ class TableProcessor(
                 it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
             }
             val idBindExpr = generateBindExpression(idProp)
-            file += "    statement.bind(${insertProps.size}, $idBindExpr)\n"
+            file += "    statement.bind(${insertColumns.size}, $idBindExpr)\n"
         }
         file += "    return statement\n"
         file += "}\n"
@@ -248,11 +251,11 @@ class TableProcessor(
         props: Sequence<KSPropertyDeclaration>
     ) {
         val ctx = prepareUpdateContext(table, clazz, props) ?: return
-        val (allProps, id, updatePropDeclarations, updateProps, className, idName, _) = ctx
+        val (allProps, id, updatePropDeclarations, updateColumns, className, idName, idColumn) = ctx
         // Get DB-generated columns for RETURNING clause
         val returningColumns = findUpdateReturningProps(allProps)
             .ifEmpty { error("RETURNING SQL clause cannot be empty for entity (check that a property marked with @Id exists): $className") }
-            .joinToString { it.simpleName().toSnakeCase() }
+            .joinToString { it.columnName() }
 
         file += "\n"
         file += "/**\n"
@@ -270,13 +273,9 @@ class TableProcessor(
         file += "fun ${clazz.qualifiedName()}.update(): Statement {\n"
         file += "    // language=SQL\n"
         file += if (queryDialect == Dialect.MySQL) {
-            "    val sql = \"update $table set ${updateProps.joinToString { p -> "${p.toSnakeCase()} = ?" }} where ${
-                id.simpleName().toSnakeCase()
-            } = ?; select $returningColumns from $table where ${id.simpleName().toSnakeCase()} = ?;\"\n"
+            "    val sql = \"update $table set ${updateColumns.joinToString { c -> "$c = ?" }} where $idColumn = ?; select $returningColumns from $table where $idColumn = ?;\"\n"
         } else {
-            "    val sql = \"update $table set ${updateProps.joinToString { p -> "${p.toSnakeCase()} = ?" }} where ${
-                id.simpleName().toSnakeCase()
-            } = ? returning $returningColumns;\"\n"
+            "    val sql = \"update $table set ${updateColumns.joinToString { c -> "$c = ?" }} where $idColumn = ? returning $returningColumns;\"\n"
         }
 
         file += "    val statement = Statement.create(sql)\n"
@@ -285,9 +284,9 @@ class TableProcessor(
             file += "    statement.bind($index, $bindExpr)\n"
         }
         val idBindExpr = generateBindExpression(id)
-        file += "    statement.bind(${updateProps.size}, $idBindExpr)\n"
+        file += "    statement.bind(${updateColumns.size}, $idBindExpr)\n"
         if (queryDialect == Dialect.MySQL) {
-            file += "    statement.bind(${updateProps.size + 1}, $idBindExpr)\n"
+            file += "    statement.bind(${updateColumns.size + 1}, $idBindExpr)\n"
         }
         file += "    return statement\n"
         file += "}\n"
@@ -351,7 +350,7 @@ class TableProcessor(
         file += " */\n"
         file += "fun ${clazz.qualifiedName()}.delete(): Statement {\n"
         file += "    // language=SQL\n"
-        file += "    val sql = \"delete from $table where ${id.simpleName().toSnakeCase()} = ?;\"\n"
+        file += "    val sql = \"delete from $table where ${id.columnName()} = ?;\"\n"
         file += "    val statement = Statement.create(sql)\n"
         val idBindExpr = generateBindExpression(id)
         file += "    statement.bind(0, $idBindExpr)\n"
@@ -378,11 +377,11 @@ class TableProcessor(
         if (dialect == Dialect.MySQL) return
 
         val ctx = prepareInsertContext(clazz, props)
-        val (_, insertPropDeclarations, insertProps, className, returningColumns) = ctx
+        val (_, insertPropDeclarations, insertColumns, className, returningColumns) = ctx
 
-        val propsCount = insertProps.size
-        val columnNames = insertProps.joinToString { it.toSnakeCase() }
-        val singleValuePlaceholder = "(${insertProps.joinToString { "?" }})"
+        val propsCount = insertColumns.size
+        val columnNames = insertColumns.joinToString()
+        val singleValuePlaceholder = "(${insertColumns.joinToString { "?" }})"
 
         file += "\n"
         file += "/**\n"
@@ -462,10 +461,10 @@ class TableProcessor(
         if (dialect == Dialect.MySQL) return
 
         val ctx = prepareUpdateContext(table, clazz, props) ?: return
-        val (allProps, id, updatePropDeclarations, updateProps, className, idName, idColumn) = ctx
+        val (allProps, id, updatePropDeclarations, updateColumns, className, idName, idColumn) = ctx
 
         // Build the VALUES column list: (id, col1, col2, ...)
-        val valueColumns = listOf(idColumn) + updateProps.map { it.toSnakeCase() }
+        val valueColumns = listOf(idColumn) + updateColumns
         val valueColumnsList = valueColumns.joinToString(", ")
         val propsCount = valueColumns.size
         val singleValuePlaceholder = "(${valueColumns.joinToString { "?" }})"
@@ -494,8 +493,8 @@ class TableProcessor(
         val tableRef = if (dialect == Dialect.SQLite) table else "t"
         val returningColumns = findUpdateReturningProps(allProps)
             .ifEmpty { error("RETURNING SQL clause cannot be empty for entity (check that a property marked with @Id exists): $className") }
-            .joinToString { "$tableRef.${it.simpleName().toSnakeCase()}" }
-        val setClause = updateProps.joinToString(", ") { p -> "${p.toSnakeCase()} = v.${p.toSnakeCase()}" }
+            .joinToString { "$tableRef.${it.columnName()}" }
+        val setClause = updateColumns.joinToString(", ") { c -> "$c = v.$c" }
 
         file += "    // language=SQL\n"
         file += if (dialect == Dialect.SQLite) {
@@ -580,7 +579,7 @@ class TableProcessor(
         val properties = props.toList()
         properties.forEach { prop ->
             val propName = prop.simpleName()
-            val columnName = propName.toSnakeCase()
+            val columnName = prop.columnName()
             val propType = prop.type.resolve()
             val isNullable = propType.isMarkedNullable
 
@@ -667,7 +666,7 @@ class TableProcessor(
     private data class InsertContext(
         val allProps: List<KSPropertyDeclaration>,
         val insertPropDeclarations: List<KSPropertyDeclaration>,
-        val insertProps: List<String>,
+        val insertColumns: List<String>,
         val className: String,
         val returningColumns: String
     )
@@ -685,12 +684,12 @@ class TableProcessor(
     ): InsertContext {
         val allProps = props.toList()
         val insertPropDeclarations = findInsertableProps(allProps)
-        val insertProps = insertPropDeclarations.map { it.simpleName() }
+        val insertColumns = insertPropDeclarations.map { it.columnName() }
         val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
         val returningColumns = findInsertReturningProps(allProps)
             .ifEmpty { error("RETURNING SQL clause cannot be empty for entity (check that a property marked with @Id exists): $className") }
-            .joinToString { it.simpleName().toSnakeCase() }
-        return InsertContext(allProps, insertPropDeclarations, insertProps, className, returningColumns)
+            .joinToString { it.columnName() }
+        return InsertContext(allProps, insertPropDeclarations, insertColumns, className, returningColumns)
     }
 
     /**
@@ -700,7 +699,7 @@ class TableProcessor(
         val allProps: List<KSPropertyDeclaration>,
         val id: KSPropertyDeclaration,
         val updatePropDeclarations: List<KSPropertyDeclaration>,
-        val updateProps: List<String>,
+        val updateColumns: List<String>,
         val className: String,
         val idName: String,
         val idColumn: String
@@ -725,11 +724,11 @@ class TableProcessor(
             return null
         }
         val updatePropDeclarations = findUpdatableProps(allProps, id)
-        val updateProps = updatePropDeclarations.map { it.simpleName() }
+        val updateColumns = updatePropDeclarations.map { it.columnName() }
         val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
         val idName = id.simpleName.getShortName()
-        val idColumn = id.simpleName().toSnakeCase()
-        return UpdateContext(allProps, id, updatePropDeclarations, updateProps, className, idName, idColumn)
+        val idColumn = id.columnName()
+        return UpdateContext(allProps, id, updatePropDeclarations, updateColumns, className, idName, idColumn)
     }
 
     /**
@@ -991,6 +990,54 @@ class TableProcessor(
 
     operator fun OutputStream.plusAssign(str: String): Unit = write(str.toByteArray())
     private fun KSPropertyDeclaration.simpleName(): String = simpleName.getShortName()
+
+    /**
+     * Validates that no two properties resolve to the same column name, which can happen
+     * when @Column(name = ...) overrides collide with each other or with derived names.
+     *
+     * @param clazz The @Table class declaration to validate.
+     * @param props The (non-transient) properties of the entity.
+     * @throws IllegalStateException if two or more properties map to the same column.
+     */
+    private fun validateUniqueColumnNames(clazz: KSClassDeclaration, props: Sequence<KSPropertyDeclaration>) {
+        props.groupBy { it.columnName() }
+            .filterValues { it.size > 1 }
+            .forEach { (column, duplicates) ->
+                error(
+                    "Duplicate column name '$column' in ${clazz.qualifiedName()}: properties " +
+                            duplicates.joinToString { "'${it.simpleName()}'" } +
+                            " resolve to the same column. Check the @Column(name = ...) values."
+                )
+            }
+    }
+
+    /**
+     * Resolves the database column name for a property.
+     *
+     * Uses the explicit @Column(name = "...") value when provided; when the name is empty
+     * (the default) or the property has no @Column annotation, falls back to the default
+     * behavior of converting the property name to snake_case.
+     *
+     * Explicit names are validated against [COLUMN_NAME_REGEX]: the value is embedded verbatim
+     * in generated SQL strings and RowMapper lookups, so characters like `"`, `$`, or whitespace
+     * would produce generated code that does not compile.
+     *
+     * @throws IllegalStateException if an explicit name is not a plain SQL identifier.
+     */
+    private fun KSPropertyDeclaration.columnName(): String {
+        val column = annotations.find { it.qualifiedName() == TypeNames.COLUMN_ANNOTATION }
+        val name = column?.arguments?.find { it.name?.asString() == NAME_PROPERTY_NAME }?.value as? String
+        if (name.isNullOrEmpty()) return simpleName().toSnakeCase()
+        if (!name.matches(COLUMN_NAME_REGEX)) {
+            error(
+                "Invalid @Column name '$name' for property '${simpleName()}' in " +
+                        "${parentDeclaration?.qualifiedName?.asString()}: column names must match " +
+                        "[A-Za-z_][A-Za-z0-9_]* (leave it empty to derive the name from the property name)."
+            )
+        }
+        return name
+    }
+
     private fun KSClassDeclaration.qualifiedName(): String? = qualifiedName?.asString()
     private fun KSAnnotation.qualifiedName(): String? = annotationType.resolve().declaration.qualifiedName?.asString()
     private fun String.toSnakeCase(): String {
@@ -1140,7 +1187,13 @@ class TableProcessor(
          */
         private const val DIALECT_OPTION = "dialect"
 
+        private const val NAME_PROPERTY_NAME = "name"
         private const val INSERT_PROPERTY_NAME = "insert"
         private const val UPDATE_PROPERTY_NAME = "update"
+
+        /**
+         * Allowed shape of an explicit @Column(name = ...) value: a plain (unquoted) SQL identifier.
+         */
+        private val COLUMN_NAME_REGEX = "[A-Za-z_][A-Za-z0-9_]*".toRegex()
     }
 }

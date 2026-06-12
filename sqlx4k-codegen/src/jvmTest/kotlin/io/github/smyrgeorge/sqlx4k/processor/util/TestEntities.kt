@@ -101,6 +101,23 @@ data class Tag(
 )
 
 /**
+ * Entity with explicit column names via @Column(name = ...).
+ * - userName maps to the legacy "USER_NAME" column.
+ * - email maps to "mail_address" and is excluded from UPDATE.
+ * - isActive has no @Column annotation and uses the default snake_case conversion (is_active).
+ */
+@Table("legacy_users")
+data class LegacyUser(
+    @Id
+    val id: Long,
+    @Column(name = "USER_NAME")
+    val userName: String,
+    @Column(name = "mail_address", update = false)
+    val email: String,
+    val isActive: Boolean
+)
+
+/**
  * Entity with @Transient properties that must be fully excluded from generated code.
  * - displayName: a transient constructor parameter (has a default value).
  * - domain: a transient body property derived lazily (not a constructor parameter).

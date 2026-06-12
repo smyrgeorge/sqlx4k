@@ -56,7 +56,7 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 - [Custom Value Converters](#custom-value-converters)
 - [Transactions and coroutine TransactionContext](#transactions) · [TransactionContext (coroutines)](#transactioncontext-coroutines)
 - [Code generation: CRUD and @Repository implementations](#code-generation-crud-and-repository-implementations)
-    - [Controlling INSERT/UPDATE with @Column](#controlling-insertupdate-with-column)
+    - [Customizing columns with @Column](#customizing-columns-with-column)
     - [Excluding properties with @Transient](#excluding-properties-with-transient)
     - [Auto-Generated RowMapper](#auto-generated-rowmapper)
     - [Batch Operations](#batch-operations)
@@ -485,16 +485,46 @@ val res: Sqlx4k = Sqlx4kRepositoryImpl.insert(db, record).getOrThrow()
 val res: List<Sqlx4k> = Sqlx4kRepositoryImpl.selectAll(db).getOrThrow()
 ```
 
-##### Controlling INSERT/UPDATE with `@Column`
+For more details, take a look at the [examples](./examples).
 
-You can use the `@Column` annotation to control how a property participates in the generated `INSERT` and `UPDATE`
-statements. This is useful for database-generated or read-only columns that should be excluded from write operations but
-still retrieved afterwards (via the `RETURNING` clause).
+##### Customizing columns with `@Column`
 
-| Property         | Effect on Statement                    | Effect on `RETURNING`                     |
-|------------------|----------------------------------------|-------------------------------------------|
-| `insert = false` | Excluded from the INSERT's column list | Included in the INSERT's RETURNING clause |
-| `update = false` | Excluded from the UPDATE's SET clause  | Included in the UPDATE's RETURNING clause |
+You can use the `@Column` annotation to override the column name a property is mapped to, and to control how the
+property participates in the generated `INSERT` and `UPDATE` statements. The latter is useful for database-generated or
+read-only columns that should be excluded from write operations but still retrieved afterwards (via the `RETURNING`
+clause).
+
+| Property         | Effect                                                                            |
+|------------------|-----------------------------------------------------------------------------------|
+| `name = "..."`   | Overrides the column name used in all generated SQL and the generated `RowMapper` |
+| `insert = false` | Excluded from the INSERT's column list, included in the INSERT's RETURNING clause |
+| `update = false` | Excluded from the UPDATE's SET clause, included in the UPDATE's RETURNING clause  |
+
+By default — when `name` is empty, or when the property has no `@Column` annotation at all — the column name is derived
+from the property name using snake_case conversion (e.g., `createdAt` → `created_at`). Providing an explicit `name` is
+useful for legacy or non-conventional schemas:
+
+```kotlin
+@Table("legacy_users")
+data class LegacyUser(
+    @Id
+    val id: Long,
+    // Maps to the legacy "USER_NAME" column instead of the derived "user_name".
+    @Column(name = "USER_NAME")
+    val userName: String,
+    // A custom name can be combined with the insert/update flags.
+    @Column(name = "mail_address", update = false)
+    val email: String,
+    // No @Column: maps to "is_active" (default snake_case conversion).
+    val isActive: Boolean
+)
+```
+
+> [!NOTE]
+> An explicit `name` must be a plain (unquoted) SQL identifier (`[A-Za-z_][A-Za-z0-9_]*`) and is used verbatim in the
+> generated SQL and when reading result columns by name — so it must match the column name as reported by the database.
+> PostgreSQL folds unquoted identifiers to lowercase, so for PostgreSQL use the lowercase form unless the column was
+> created with a quoted (case-sensitive) name.
 
 ```kotlin
 @Table("articles")
@@ -521,8 +551,6 @@ data class Comment(
     val createdAt: LocalDateTime
 )
 ```
-
-For more details, take a look at the [examples](./examples).
 
 ##### Excluding properties with `@Transient`
 

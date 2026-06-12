@@ -22,7 +22,7 @@ export CXX_x86_64_w64_mingw32=x86_64-w64-mingw32-g++
 
 ./gradlew build -Ptargets=all
 
-./gradlew :dokka:dokkaGenerate
+./gradlew :dokka:dokkaGenerate -Ptargets=all
 rm -rf ./docs/*
 cp -R ./dokka/build/dokka/html/* ./docs/
 
