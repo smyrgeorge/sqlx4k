@@ -1,3 +1,4 @@
+.output.txt
 test.db
 test.db-shm
 test.db-wal
