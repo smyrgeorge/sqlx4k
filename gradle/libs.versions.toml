@@ -35,7 +35,7 @@ jsqlparser = "5.3"
 # https://github.com/apache/calcite
 calcite = "1.42.0"
 # https://github.com/smyrgeorge/log4k
-log4k = "2.0.1"
+log4k = "2.1.1"
 # https://github.com/xerial/sqlite-jdbc
 sqlite-jdbc = "3.53.2.0"
 # https://github.com/arrow-kt/arrow
