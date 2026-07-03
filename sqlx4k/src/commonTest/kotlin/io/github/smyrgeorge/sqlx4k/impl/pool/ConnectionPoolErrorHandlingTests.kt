@@ -83,7 +83,7 @@ class ConnectionPoolErrorHandlingTests {
         val factory: suspend () -> Connection = {
             attempts++
             if (attempts <= 2) {
-                delay(10)
+                delay(10.milliseconds)
                 error("Warmup connection $attempts failed")
             }
             FakeConnection(nextId++)
@@ -97,7 +97,7 @@ class ConnectionPoolErrorHandlingTests {
         )
 
         // Give warmup time to run (some will fail)
-        delay(500)
+        delay(500.milliseconds)
 
         // Pool should still be functional despite warmup failures
         val conn = pool.acquire().getOrThrow()
@@ -148,7 +148,7 @@ class ConnectionPoolErrorHandlingTests {
         )
 
         // Give warmup time
-        delay(500)
+        delay(500.milliseconds)
 
         // Pool should still be usable
         val conn = pool.acquire().getOrThrow()

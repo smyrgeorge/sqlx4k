@@ -8,6 +8,7 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isFailure
 import assertk.assertions.isTrue
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -33,14 +34,14 @@ class CommonPostgreSQLListenNotifyTests(
         }
 
         // Give listener a moment to subscribe
-        delay(150)
+        delay(150.milliseconds)
 
         (1..3).forEach { i -> db.notify(chan, "hello-$i") }
 
-        withTimeout(2_000) {
+        withTimeout(2_000.milliseconds) {
             while (true) {
                 val size = lock.withLock { received.size }
-                if (size >= 3) break else delay(50)
+                if (size >= 3) break else delay(50.milliseconds)
             }
         }
 
@@ -59,14 +60,14 @@ class CommonPostgreSQLListenNotifyTests(
                 lock.withLock { got.add(n.channel to n.value.asString()) }
             }
         }
-        delay(150)
+        delay(150.milliseconds)
 
         db.notify(chan1, "a1"); db.notify(chan2, "b1"); db.notify(chan1, "a2")
 
-        withTimeout(2_000) {
+        withTimeout(2_000.milliseconds) {
             while (true) {
                 val size = lock.withLock { got.size }
-                if (size >= 3) break else delay(50)
+                if (size >= 3) break else delay(50.milliseconds)
             }
         }
 
@@ -107,15 +108,15 @@ class CommonPostgreSQLListenNotifyTests(
                 lock.withLock { received.add(n.value.asString()) }
             }
         }
-        delay(150)
+        delay(150.milliseconds)
 
         // Send a burst of messages
         (1..10).forEach { i -> db.notify(chan, i.toString()) }
 
-        withTimeout(3_000) {
+        withTimeout(3_000.milliseconds) {
             while (true) {
                 val size = lock.withLock { received.size }
-                if (size >= 10) break else delay(50)
+                if (size >= 10) break else delay(50.milliseconds)
             }
         }
 

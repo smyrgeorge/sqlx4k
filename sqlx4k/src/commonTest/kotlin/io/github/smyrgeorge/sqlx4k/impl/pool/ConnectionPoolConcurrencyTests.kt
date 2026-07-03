@@ -44,7 +44,7 @@ class ConnectionPoolConcurrencyTests {
                 repeat(iterations) {
                     val conn = pool.acquire().getOrThrow()
                     // Simulate some work
-                    delay(1)
+                    delay(1.milliseconds)
                     conn.close().getOrThrow()
                 }
             }
@@ -68,7 +68,7 @@ class ConnectionPoolConcurrencyTests {
         val jobs = List(concurrency) { index ->
             async {
                 val conn = pool.acquire().getOrThrow()
-                delay((index % 5).toLong()) // Varying delays
+                delay((index % 5).toLong().milliseconds) // Varying delays
                 conn.close().getOrThrow()
             }
         }
@@ -76,7 +76,7 @@ class ConnectionPoolConcurrencyTests {
         jobs.awaitAll()
 
         // Give system a moment to stabilize
-        delay(50)
+        delay(50.milliseconds)
 
         // Verify counters are consistent
         val poolSize = pool.poolSize()
@@ -101,7 +101,7 @@ class ConnectionPoolConcurrencyTests {
             pool.acquire().getOrThrow()
         }
 
-        delay(50)
+        delay(50.milliseconds)
         job.cancel()
 
         // Release one connection
@@ -124,7 +124,7 @@ class ConnectionPoolConcurrencyTests {
         // Wait for warmup
         repeat(10) {
             if (pool.poolIdleSize() >= 2) return@repeat
-            delay(20)
+            delay(20.milliseconds)
         }
 
         // Create activity while cleanup is running
@@ -132,9 +132,9 @@ class ConnectionPoolConcurrencyTests {
             async {
                 repeat(10) {
                     val conn = pool.acquire().getOrThrow()
-                    delay(5)
+                    delay(5.milliseconds)
                     conn.close().getOrThrow()
-                    delay(15) // Some connections will become idle
+                    delay(15.milliseconds) // Some connections will become idle
                 }
             }
         }
@@ -169,19 +169,19 @@ class ConnectionPoolConcurrencyTests {
         val pool = newPool(min = 2, max = 8, idleTimeout = 150.milliseconds)
 
         // Wait for initial warmup
-        delay(100)
+        delay(100.milliseconds)
 
         // Create complex interleaving pattern
         val jobs = (1..30).map {
             async {
                 val conn = pool.acquire().getOrThrow()
-                delay((10..80L).random())
+                delay((10..80L).random().milliseconds)
                 conn.close().getOrThrow()
             }
         }
 
         jobs.awaitAll()
-        delay(100) // Let things settle
+        delay(100.milliseconds) // Let things settle
 
         // Verify consistency
         val finalIdle = pool.poolIdleSize()

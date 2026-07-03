@@ -41,7 +41,7 @@ class ConnectionPoolExpirationTests {
         c1.close().getOrThrow()
 
         // Let it become idle-expired
-        delay(170)
+        delay(170.milliseconds)
 
         val c2 = pool.acquire().getOrThrow()
         val id2 = c2.execute("id").getOrThrow()
@@ -62,7 +62,7 @@ class ConnectionPoolExpirationTests {
         c1.close().getOrThrow()
 
         // Wait for lifetime to elapse
-        delay(170)
+        delay(170.milliseconds)
 
         val c2 = pool.acquire().getOrThrow()
         val id2 = c2.execute("id").getOrThrow()
@@ -82,7 +82,7 @@ class ConnectionPoolExpirationTests {
         connections.forEach { it.close().getOrThrow() }
 
         // Wait for them to expire
-        delay(100)
+        delay(100.milliseconds)
 
         // Acquire again - should get fresh connections
         val newConnections = List(5) { pool.acquire().getOrThrow() }

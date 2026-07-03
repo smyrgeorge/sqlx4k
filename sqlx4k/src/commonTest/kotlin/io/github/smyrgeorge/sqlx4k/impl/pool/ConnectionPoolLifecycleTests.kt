@@ -46,7 +46,7 @@ class ConnectionPoolLifecycleTests {
         val pool = newPool(min = min, max = 4) { created++ }
 
         // Warmup runs in background; give it a brief moment
-        delay(500)
+        delay(500.milliseconds)
 
         assertThat(pool.poolSize()).isGreaterThan(0) // at least some created
         assertThat(pool.poolIdleSize()).isEqualTo(min)
@@ -61,11 +61,11 @@ class ConnectionPoolLifecycleTests {
         val pool = newPool(min = 2, max = 2) { it.onClose = { closedCount++ } }
 
         // Give warmup a chance
-        delay(500)
+        delay(500.milliseconds)
 
         pool.close().getOrThrow()
 
-        delay(500)
+        delay(500.milliseconds)
 
         // All idle connections should be closed by now
         assertThat(closedCount.toLong()).isEqualTo(2L)
@@ -108,7 +108,7 @@ class ConnectionPoolLifecycleTests {
         }
 
         // Give waiters time to start waiting
-        delay(100)
+        delay(100.milliseconds)
 
         // Close pool while waiters are blocked
         pool.close().getOrThrow()
@@ -127,7 +127,7 @@ class ConnectionPoolLifecycleTests {
         // Wait for warmup
         repeat(15) {
             if (pool.poolIdleSize() >= 1) return@repeat
-            delay(20)
+            delay(20.milliseconds)
         }
 
         // Create some connections beyond minimum
@@ -140,7 +140,7 @@ class ConnectionPoolLifecycleTests {
         assertThat(sizeAfterUse).isGreaterThan(0)
 
         // Pool should eventually stabilize
-        delay(6000)
+        delay(6000.milliseconds)
 
         // Pool should still have connections
         assertThat(pool.poolSize()).isGreaterThan(0)
@@ -164,13 +164,13 @@ class ConnectionPoolLifecycleTests {
         val pool = newPool(min = 2, max = 4, idleTimeout = 100.milliseconds)
 
         // Wait for warmup
-        delay(500)
+        delay(500.milliseconds)
 
         val initialSize = pool.poolSize()
         assertThat(initialSize).isGreaterThan(0)
 
         // Wait for cleanup cycle
-        delay(3000)
+        delay(3000.milliseconds)
 
         // Pool should maintain at least min connections
         assertThat(pool.poolSize()).isGreaterThan(0)
@@ -185,7 +185,7 @@ class ConnectionPoolLifecycleTests {
         // Wait for warmup
         repeat(15) {
             if (pool.poolIdleSize() >= 3) return@repeat
-            delay(20)
+            delay(20.milliseconds)
         }
 
         // Use some connections
@@ -195,7 +195,7 @@ class ConnectionPoolLifecycleTests {
         c2.close().getOrThrow()
 
         // Wait for cleanup cycles
-        delay(6500)
+        delay(6500.milliseconds)
 
         // Pool should maintain at least min connections
         assertThat(pool.poolSize()).isGreaterThan(0)
@@ -212,14 +212,14 @@ class ConnectionPoolLifecycleTests {
 
         // Start closing pool in background
         val closeJob = async {
-            delay(50)
+            delay(50.milliseconds)
             pool.close().getOrThrow()
         }
 
         // Release connections concurrently with pool closure
         val releaseJobs = connections.map { conn ->
             async {
-                delay((0..100L).random())
+                delay((0..100L).random().milliseconds)
                 conn.close()
             }
         }

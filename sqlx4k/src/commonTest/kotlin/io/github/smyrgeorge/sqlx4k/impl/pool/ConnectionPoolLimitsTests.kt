@@ -100,11 +100,11 @@ class ConnectionPoolLimitsTests {
         }
 
         // Give waiters time to queue up
-        delay(100)
+        delay(100.milliseconds)
 
         // Release connections one by one
         held.forEach { conn ->
-            delay(50)
+            delay(50.milliseconds)
             conn.close().getOrThrow()
         }
 
@@ -122,7 +122,7 @@ class ConnectionPoolLimitsTests {
         val pool = newPool(min = 5, max = 10)
 
         // Give warmup time to complete
-        delay(200)
+        delay(200.milliseconds)
 
         assertThat(pool.poolSize()).isEqualTo(5)
         assertThat(pool.poolIdleSize()).isEqualTo(5)
@@ -134,7 +134,7 @@ class ConnectionPoolLimitsTests {
     fun `Pool can grow beyond min connections`() = runBlocking {
         val pool = newPool(min = 2, max = 5)
 
-        delay(200) // Wait for warmup
+        delay(200.milliseconds) // Wait for warmup
 
         // Acquire more than min
         val conns = List(4) { pool.acquire().getOrThrow() }
@@ -156,7 +156,7 @@ class ConnectionPoolLimitsTests {
             pool.acquire().getOrThrow()
         }
 
-        delay(100) // Give time for acquire to block
+        delay(100.milliseconds) // Give time for acquire to block
 
         // Release first connection
         c1.close().getOrThrow()
@@ -178,7 +178,7 @@ class ConnectionPoolLimitsTests {
             async { pool.acquire().getOrNull() }
         }
 
-        delay(200)
+        delay(200.milliseconds)
 
         // Even with 100 attempts, pool size should never exceed max
         assertThat(pool.poolSize()).isEqualTo(5)
@@ -214,14 +214,14 @@ class ConnectionPoolLimitsTests {
     fun `Stress test - rapid acquire and release cycles`() = runBlocking {
         val pool = newPool(min = 2, max = 10, acquireTimeout = 2.seconds)
 
-        delay(200) // Wait for warmup
+        delay(200.milliseconds) // Wait for warmup
 
         // 50 coroutines each doing 10 acquire/release cycles
         val jobs = List(50) {
             async {
                 repeat(10) {
                     val conn = pool.acquire().getOrThrow()
-                    delay(5) // Simulate some work
+                    delay(5.milliseconds) // Simulate some work
                     conn.close().getOrThrow()
                 }
             }
@@ -245,7 +245,7 @@ class ConnectionPoolLimitsTests {
 
         conns.forEach { it.close().getOrThrow() }
 
-        delay(50) // Allow releases to complete
+        delay(50.milliseconds) // Allow releases to complete
 
         assertThat(pool.poolSize()).isEqualTo(pool.poolIdleSize())
 
@@ -275,7 +275,7 @@ class ConnectionPoolLimitsTests {
             }
         }
 
-        delay(50)
+        delay(50.milliseconds)
 
         // Close pool while acquires are in progress
         pool.close()
@@ -306,7 +306,7 @@ class ConnectionPoolLimitsTests {
                 mutex.withLock {
                     accessOrder.add(index)
                 }
-                delay(50)
+                delay(50.milliseconds)
                 conn.close().getOrThrow()
             }
         }
