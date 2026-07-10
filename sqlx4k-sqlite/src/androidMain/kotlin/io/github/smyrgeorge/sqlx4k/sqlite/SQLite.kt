@@ -204,10 +204,15 @@ class SQLite(
             mutex.withLock {
                 if (status == Connection.Status.Closed) return@withLock
                 _status = Connection.Status.Closed
-                withContext(dispatcher) {
-                    db.close()
+                try {
+                    withContext(dispatcher) {
+                        db.close()
+                    }
+                } finally {
+                    // Always release the dedicated single-thread executor, even if db.close() fails,
+                    // otherwise its thread would leak for the lifetime of the process.
+                    executor.shutdown()
                 }
-                executor.shutdown()
             }
         }
 
@@ -499,7 +504,7 @@ class SQLite(
                         ordinal = i,
                         name = getColumnName(i),
                         type = type,
-                        value = if (value == "null") null else value,
+                        value = value,
                     )
                 }
                 return ResultSet.Row(columns)
@@ -511,7 +516,17 @@ class SQLite(
                     rows.add(toRow())
                 } while (moveToNext())
             }
-            val meta = if (rows.isEmpty()) ResultSet.Metadata(emptyList()) else rows.first().toMetadata()
+            // Derive metadata from the first row when available; on an empty result the cursor still
+            // exposes column names/ordinals (SQLite types are per-value, so type is reported as "UNKNOWN").
+            val meta = if (rows.isNotEmpty()) {
+                rows.first().toMetadata()
+            } else {
+                ResultSet.Metadata(
+                    (0 until columnCount).map { i ->
+                        ResultSet.Metadata.Column(ordinal = i, name = getColumnName(i), type = "UNKNOWN")
+                    }
+                )
+            }
             return ResultSet(rows, null, meta)
         }
 

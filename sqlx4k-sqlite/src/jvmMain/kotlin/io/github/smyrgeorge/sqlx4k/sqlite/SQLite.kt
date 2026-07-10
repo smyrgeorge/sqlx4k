@@ -456,8 +456,18 @@ class SQLite(
             while (next()) {
                 rows.add(toRow())
             }
-            val meta = if (rows.isEmpty()) ResultSet.Metadata(emptyList())
-            else rows.first().toMetadata()
+            // Build column metadata from the JDBC ResultSetMetaData rather than the first row, so an
+            // empty result set still reports its columns (names/types) instead of losing them.
+            val metaData = this.metaData
+            val meta = ResultSet.Metadata(
+                (1..metaData.columnCount).map { i ->
+                    ResultSet.Metadata.Column(
+                        ordinal = i - 1,
+                        name = metaData.getColumnName(i),
+                        type = metaData.getColumnTypeName(i)
+                    )
+                }
+            )
             return ResultSet(rows, null, meta)
         }
 
