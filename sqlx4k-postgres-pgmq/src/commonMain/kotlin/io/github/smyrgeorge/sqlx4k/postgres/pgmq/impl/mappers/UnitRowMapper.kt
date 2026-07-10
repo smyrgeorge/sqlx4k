@@ -9,10 +9,8 @@ internal object UnitRowMapper : RowMapper<Unit> {
         require(row.size == 1) { "Expected a single column, got ${row.size}" }
     }
 
-    fun Result<List<Unit>>.toSingleUnit(): Result<Unit> = runCatching {
-        return map { rs ->
-            check(rs.size == 1) { "Expected a single row, got ${rs.size}" }
-            rs.first()
-        }
+    fun Result<List<Unit>>.toSingleUnit(): Result<Unit> = mapCatching { rs ->
+        check(rs.size == 1) { "Expected a single row, got ${rs.size}" }
+        rs.first()
     }
 }
