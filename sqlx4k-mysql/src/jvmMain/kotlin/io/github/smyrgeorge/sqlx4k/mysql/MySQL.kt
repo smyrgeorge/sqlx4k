@@ -40,10 +40,12 @@ import kotlin.time.toJavaDuration
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitLast
 import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.LocalDate
@@ -85,8 +87,7 @@ class MySQL(
     private val connectionFactory: MySqlConnectionFactory = connectionFactory(url, username, password)
     private val poolConfiguration: ConnectionPoolConfiguration = connectionPoolConfiguration(options, connectionFactory)
     private val pool: NativeR2dbcConnectionPool = NativeR2dbcConnectionPool(poolConfiguration).apply {
-        // Warm up the pool in the background without blocking construction; ignore warmup failures.
-        warmup().subscribe({ }, { })
+        runBlocking { launch { runCatching { warmup().awaitSingle() } } }
     }
 
     override suspend fun migrate(
