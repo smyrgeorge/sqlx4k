@@ -3,8 +3,8 @@ package io.github.smyrgeorge.sqlx4k.examples.sqlite
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.impl.coroutines.TransactionContext
 import io.github.smyrgeorge.sqlx4k.sqlite.cipher.ISQLiteCipher
-import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * The same example scenarios as [Examples], but against the encrypted SQLite (SQLCipher) driver
@@ -19,8 +19,6 @@ object CipherExamples {
         Examples.exampleBasics(db)
         delay(1000.milliseconds)
         Examples.examplePreparedStatements(db)
-        delay(1000.milliseconds)
-        Examples.exampleStatementBinding()
         delay(1000.milliseconds)
         exampleConnectionManagement(db)
         delay(1000.milliseconds)
