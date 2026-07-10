@@ -10,7 +10,7 @@ class SQLError(
     val code: Code,
     message: String? = null,
     cause: Throwable? = null
-) : RuntimeException("[$code] :: $message", cause) {
+) : RuntimeException(if (message != null) "[$code] :: $message" else "[$code]", cause) {
     /**
      * Throws the current instance of [SQLError].
      *

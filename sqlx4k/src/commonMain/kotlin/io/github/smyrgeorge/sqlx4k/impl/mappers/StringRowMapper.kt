@@ -10,10 +10,8 @@ internal object StringRowMapper : RowMapper<String> {
         return row.get(0).asString()
     }
 
-    fun Result<List<String>>.toSingleString(): Result<String> = runCatching {
-        return map { rs ->
-            check(rs.size == 1) { "Expected a single row, got ${rs.size}" }
-            rs.first()
-        }
+    fun Result<List<String>>.toSingleString(): Result<String> = mapCatching { rs ->
+        check(rs.size == 1) { "Expected a single row, got ${rs.size}" }
+        rs.first()
     }
 }

@@ -66,7 +66,7 @@ interface Transaction : QueryExecutor {
      *
      * The isolation level determines how transaction integrity is maintained and
      * how concurrent transactions interact with each other. Each level provides
-     * different guarantees regarding visibility of changes made by other transactions,
+     * different guarantees regarding visibility of changes made by other transactions
      * and controls phenomena like dirty reads, non-repeatable reads, and phantom reads.
      *
      * Isolation levels:

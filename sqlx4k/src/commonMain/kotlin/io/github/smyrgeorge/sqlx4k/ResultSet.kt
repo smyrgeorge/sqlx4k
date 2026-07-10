@@ -157,22 +157,22 @@ class ResultSet(
             fun isNull(): Boolean = value == null && bytes == null
 
             /**
-             * Converts the column value to a String.
-             *
-             * If the value is null, an SQLError with code `CannotDecode` is thrown.
+             * Converts the column value to a String, decoding raw [bytes] as UTF-8 when only the
+             * binary representation is present. Throws only when the column is truly null (see [isNull]).
              *
              * @return The string representation of the column value.
-             * @throws SQLError if the value is null.
+             * @throws SQLError if the column is null (neither [value] nor [bytes] is present).
              */
-            fun asString(): String = value
+            fun asString(): String = asStringOrNull()
                 ?: SQLError(SQLError.Code.CannotDecode, "Failed to decode value (null)").raise()
 
             /**
-             * Converts the value of the column to a nullable String.
+             * Converts the value of the column to a nullable String, decoding raw [bytes] as UTF-8
+             * when only the binary representation is present.
              *
-             * @return The string representation of the column value, or null if the value is not present.
+             * @return The string representation of the column value, or null if the column is null.
              */
-            fun asStringOrNull(): String? = value
+            fun asStringOrNull(): String? = value ?: bytes?.decodeToString()
 
             override fun equals(other: Any?): Boolean {
                 if (this === other) return true
@@ -184,6 +184,9 @@ class ResultSet(
                 if (name != other.name) return false
                 if (type != other.type) return false
                 if (value != other.value) return false
+                if (bytes != null) {
+                    if (other.bytes == null || !bytes.contentEquals(other.bytes)) return false
+                } else if (other.bytes != null) return false
                 return true
             }
 
@@ -192,6 +195,7 @@ class ResultSet(
                 result = 31 * result + name.hashCode()
                 result = 31 * result + type.hashCode()
                 result = 31 * result + (value?.hashCode() ?: 0)
+                result = 31 * result + (bytes?.contentHashCode() ?: 0)
                 return result
             }
         }
@@ -206,11 +210,6 @@ class ResultSet(
             columns.associateBy { it.name }
         }
 
-        // <ordinal, ColumnMetadata>
-        private val columnsByOrdinal: Map<Int, Column> by lazy {
-            columns.associateBy { it.ordinal }
-        }
-
         /**
          * Retrieves the number of columns of the result set.
          *
@@ -219,14 +218,14 @@ class ResultSet(
         fun getColumnCount(): Int = columns.size
 
         /**
-         * Retrieves the metadata for the column at the specified index.
+         * Retrieves the metadata for the column at the specified position.
          *
-         * @param index The zero-based index of the column.
+         * @param index The zero-based position of the column in this metadata's column list.
          * @return `ColumnMetadata` object containing details about the column.
-         * @throws NoSuchElementException If no column exists at the specified index.
+         * @throws NoSuchElementException If no column exists at the specified position.
          */
         fun getColumn(index: Int): Column =
-            columnsByOrdinal[index]
+            columns.getOrNull(index)
                 ?: throw NoSuchElementException("Cannot extract metadata: no column with index '$index'.")
 
         /**

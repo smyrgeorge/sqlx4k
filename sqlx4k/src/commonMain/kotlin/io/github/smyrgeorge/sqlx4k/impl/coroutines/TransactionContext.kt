@@ -78,8 +78,10 @@ class TransactionContext(
          *          [TransactionContext].
          * @return The result of the operation performed within the transaction context.
          */
-        suspend inline fun <T> withCurrent(db: Driver, crossinline f: suspend TransactionContext.() -> T): T =
-            currentOrNull()?.f() ?: new(db, f)
+        suspend inline fun <T> withCurrent(db: Driver, crossinline f: suspend TransactionContext.() -> T): T {
+            val current = currentOrNull()
+            return if (current != null) current.f() else new(db, f)
+        }
 
         /**
          * Retrieves the current [TransactionContext] from the coroutine context.

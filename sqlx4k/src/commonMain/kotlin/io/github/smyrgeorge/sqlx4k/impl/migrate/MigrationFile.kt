@@ -27,7 +27,9 @@ data class MigrationFile(
     }
 
     companion object {
-        private val fileNamePattern = Regex("""^\s*(\d+)_([A-Za-z0-9._-]+)\.sql\s*$""")
+        // Extension matched case-insensitively so files the directory scanner accepts (it filters
+        // on `.sql` case-insensitively) — e.g. `1_init.SQL` — also parse here.
+        private val fileNamePattern = Regex("""^\s*(\d+)_([A-Za-z0-9._-]+)\.sql\s*$""", RegexOption.IGNORE_CASE)
         private fun parseFileName(name: String): Pair<Long, String> {
             val name = name.trim()
             val match = fileNamePattern.matchEntire(name)

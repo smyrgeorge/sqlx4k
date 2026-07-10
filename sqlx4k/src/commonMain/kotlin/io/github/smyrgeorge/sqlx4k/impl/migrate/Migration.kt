@@ -38,6 +38,7 @@ data class Migration(
      * @return A configured `Statement` instance for executing the `INSERT` operation.
      */
     internal fun insert(table: String): Statement {
+        require(table.isNotBlank()) { "Table name cannot be blank." }
         // language=SQL
         val sql = """
             INSERT INTO ${IdentifierString(table)} (version, name, installed_on, checksum, execution_time)
@@ -90,7 +91,8 @@ data class Migration(
          * @param schema The name of the schema to be created. Must not be blank.
          * @param dialect The SQL dialect of the database system.
          * @return A `Statement` instance containing the SQL command to create the schema.
-         * @throws IllegalArgumentException If the schema name is blank or the dialect is SQLite.
+         * @throws IllegalArgumentException If the schema name is blank.
+         * @throws IllegalStateException If the dialect is SQLite, which does not support schemas.
          */
         internal fun createSchemaIfNotExists(schema: String, dialect: Dialect): Statement {
             require(schema.isNotBlank()) { "Schema name cannot be blank." }
@@ -147,9 +149,9 @@ data class Migration(
             require(schema.isNotBlank()) { "Schema name cannot be blank." }
             return when (dialect) {
                 // language=PostgreSQL
-                Dialect.PostgreSQL -> Statement.create("SET search_path TO $schema, public")
+                Dialect.PostgreSQL -> Statement.create("SET search_path TO ${IdentifierString(schema)}, public")
                 // language=MySQL
-                Dialect.MySQL -> Statement.create("USE $schema")
+                Dialect.MySQL -> Statement.create("USE ${IdentifierString(schema)}")
                 Dialect.SQLite -> error("SQLite does not support schemas.")
             }
         }

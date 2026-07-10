@@ -46,8 +46,8 @@ fun ResultSet.Row.Column.asLocalDate(): LocalDate = LocalDate.parse(asString())
 fun ResultSet.Row.Column.asLocalDateOrNull(): LocalDate? = asStringOrNull()?.let { LocalDate.parse(it) }
 fun ResultSet.Row.Column.asLocalTime(): LocalTime = LocalTime.parse(asString())
 fun ResultSet.Row.Column.asLocalTimeOrNull(): LocalTime? = asStringOrNull()?.let { LocalTime.parse(it) }
-fun ResultSet.Row.Column.asLocalDateTime(): LocalDateTime = LocalDateTime.parse(asString(), localDateTimeFormatter)
-fun ResultSet.Row.Column.asLocalDateTimeOrNull(): LocalDateTime? = asStringOrNull()?.let { LocalDateTime.parse(it, localDateTimeFormatter) }
+fun ResultSet.Row.Column.asLocalDateTime(): LocalDateTime = LocalDateTime.parse(asString().replace('T', ' '), localDateTimeFormatter)
+fun ResultSet.Row.Column.asLocalDateTimeOrNull(): LocalDateTime? = asStringOrNull()?.let { LocalDateTime.parse(it.replace('T', ' '), localDateTimeFormatter) }
 fun ResultSet.Row.Column.asInstant(): Instant = asString().asInstant()
 fun ResultSet.Row.Column.asInstantOrNull(): Instant? = asStringOrNull()?.asInstant()
 fun ResultSet.Row.Column.asByteArray(): ByteArray = bytes ?: asString().removePrefix("\\x").hexToByteArray()
@@ -80,8 +80,8 @@ private val localDateTimeFormatter: DateTimeFormat<LocalDateTime> = LocalDateTim
     byUnicodePattern("yyyy-MM-dd HH:mm:ss[.SSSSSS]")
 }
 
-// Match: "yyyy-MM-dd[ |T]HH:mm:ss[.fraction][(Z|+HH|+HHMM|+HH:MM|-HH|-HHMM|-HH:MM)]" (offset optional, space or 'T' separator)
-private val timestampRegex = Regex("""^(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?)(Z|[+-]\d{2}(?::?\d{2})?)?$""")
+// Match: "yyyy-MM-dd[ T]HH:mm:ss[.fraction][(Z|z|+HH|+HHMM|+HH:MM|-HH|-HHMM|-HH:MM)]" (offset optional; space or 'T' separator; Z/z = UTC)
+private val timestampRegex = Regex("""^(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?)([Zz]|[+-]\d{2}(?::?\d{2})?)?$""")
 private fun String.asInstant(): Instant {
     fun normalizeFractionTo6(s: String): String {
         val dot = s.indexOf('.')
@@ -122,7 +122,8 @@ private fun String.asInstant(): Instant {
     val m = timestampRegex.matchEntire(trim())
         ?: error("Invalid timestamp with optional offset: '$this'")
 
-    val dateTimePart = normalizeFractionTo6(m.groupValues[1])
+    // Normalize the ISO-8601 'T' date/time separator to the space the formatter expects.
+    val dateTimePart = normalizeFractionTo6(m.groupValues[1]).replace('T', ' ')
     val offsetPart = m.groupValues.getOrNull(2)
 
     val ldt = LocalDateTime.parse(dateTimePart, localDateTimeFormatter)

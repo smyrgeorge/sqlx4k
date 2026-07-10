@@ -65,7 +65,8 @@ internal fun Any?.resolveNativeValue(encoders: ValueEncoderRegistry): Any? {
         is ByteArray -> this
         is Instant, is LocalDate, is LocalTime, is LocalDateTime -> this
         is Uuid -> this
-        is Enum<*> -> name
+        // A registered encoder for the enum type takes precedence; otherwise bind the enum name.
+        is Enum<*> -> encoders.get(this::class)?.encode(this)?.resolveNativeValue(encoders) ?: name
         else -> {
             val encoder = encoders.get(this::class)
             if (encoder != null) {
