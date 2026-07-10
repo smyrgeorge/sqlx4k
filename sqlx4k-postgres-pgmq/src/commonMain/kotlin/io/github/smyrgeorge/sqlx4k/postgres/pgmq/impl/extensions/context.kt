@@ -24,7 +24,7 @@ suspend fun send(
     delay: Duration = 0.seconds
 ): Result<Long> {
     // language=PostgreSQL
-    val sql = "SELECT pgmq.send(queue_name := ?, msg := ?, headers := ?, delay := ?)"
+    val sql = "SELECT pgmq.send(queue_name := ?, msg := ?::jsonb, headers := ?::jsonb, delay := ?)"
     val statement = Statement.create(sql)
         .bind(0, queue)
         .bind(1, message)
@@ -41,7 +41,6 @@ suspend fun send(
     delay: Duration = 0.seconds
 ): Result<List<Long>> {
     // language=PostgreSQL
-    // headers must be jsonb[] with one entry per message — replicate the shared headers map for each
     val sql =
         "SELECT pgmq.send_batch(queue_name := ?, msgs := ARRAY[?]::jsonb[], headers := ARRAY[?]::jsonb[], delay := ?)"
     val statement = Statement.create(sql)
@@ -135,7 +134,7 @@ suspend fun sendTopic(
     delay: Duration = 0.seconds
 ): Result<Long> {
     // language=PostgreSQL
-    val sql = "SELECT pgmq.send_topic(routing_key := ?, msg := ?, headers := ?, delay := ?)"
+    val sql = "SELECT pgmq.send_topic(routing_key := ?, msg := ?::jsonb, headers := ?::jsonb, delay := ?)"
     val statement = Statement.create(sql)
         .bind(0, routingKey)
         .bind(1, message)

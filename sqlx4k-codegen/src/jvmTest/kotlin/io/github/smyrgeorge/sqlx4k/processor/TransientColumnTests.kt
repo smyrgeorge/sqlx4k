@@ -6,10 +6,11 @@ import assertk.assertions.doesNotContain
 import assertk.assertions.isEqualTo
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
-import io.github.smyrgeorge.sqlx4k.processor.util.Account
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.AccountAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.insert
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.update
+import io.github.smyrgeorge.sqlx4k.processor.util.Account
+import io.github.smyrgeorge.sqlx4k.processor.util.render
 import kotlin.test.Test
 
 /**

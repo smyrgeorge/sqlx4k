@@ -4,13 +4,15 @@ import assertk.assertThat
 import assertk.assertions.contains
 import assertk.assertions.doesNotContain
 import assertk.assertions.isEqualTo
+import io.github.smyrgeorge.sqlx4k.processor.test.generated.delete
 import io.github.smyrgeorge.sqlx4k.processor.util.Article
 import io.github.smyrgeorge.sqlx4k.processor.util.Customer
 import io.github.smyrgeorge.sqlx4k.processor.util.Order
 import io.github.smyrgeorge.sqlx4k.processor.util.Product
 import io.github.smyrgeorge.sqlx4k.processor.util.Tag
 import io.github.smyrgeorge.sqlx4k.processor.util.User
-import io.github.smyrgeorge.sqlx4k.processor.test.generated.delete
+import io.github.smyrgeorge.sqlx4k.processor.util.render
+import io.github.smyrgeorge.sqlx4k.processor.util.renderValues
 import kotlinx.datetime.LocalDateTime
 import kotlin.test.Test
 
@@ -24,9 +26,8 @@ class DeleteStatementTests {
     @Test
     fun `User delete uses id in WHERE clause`() {
         val user = User(id = 123, name = "Alice", email = "alice@example.com")
-        val sql = user.delete().render()
 
-        assertThat(sql).contains("where id = 123")
+        assertThat(user.delete().renderValues()).contains(123L)
     }
 
     @Test
@@ -52,7 +53,7 @@ class DeleteStatementTests {
 
         assertThat(sql).doesNotContain("name")
         assertThat(sql).doesNotContain("email")
-        assertThat(sql).doesNotContain("Should not appear")
+        assertThat(user.delete().renderValues()).doesNotContain("Should not appear")
     }
 
     @Test
@@ -60,7 +61,8 @@ class DeleteStatementTests {
         val user = User(id = 42, name = "Test", email = "test@test.com")
         val sql = user.delete().render()
 
-        assertThat(sql).isEqualTo("delete from users where id = 42;")
+        assertThat(sql).isEqualTo("delete from users where id = \$1;")
+        assertThat(user.delete().renderValues()).contains(42L)
     }
 
     // Product entity: @Id with String type
@@ -68,9 +70,8 @@ class DeleteStatementTests {
     @Test
     fun `Product delete uses string id in WHERE clause`() {
         val product = Product(id = "uuid-123", name = "Widget", price = 9.99)
-        val sql = product.delete().render()
 
-        assertThat(sql).contains("where id = 'uuid-123'")
+        assertThat(product.delete().renderValues()).contains("uuid-123")
     }
 
     @Test
@@ -86,7 +87,8 @@ class DeleteStatementTests {
         val product = Product(id = "p-001", name = "Test", price = 1.0)
         val sql = product.delete().render()
 
-        assertThat(sql).isEqualTo("delete from products where id = 'p-001';")
+        assertThat(sql).isEqualTo("delete from products where id = \$1;")
+        assertThat(product.delete().renderValues()).contains("p-001")
     }
 
     // Article entity: Delete ignores timestamp columns
@@ -117,9 +119,8 @@ class DeleteStatementTests {
             createdAt = LocalDateTime(2024, 1, 1, 0, 0),
             updatedAt = LocalDateTime(2024, 1, 1, 0, 0)
         )
-        val sql = article.delete().render()
 
-        assertThat(sql).contains("where id = 99")
+        assertThat(article.delete().renderValues()).contains(99L)
     }
 
     @Test
@@ -151,9 +152,8 @@ class DeleteStatementTests {
     @Test
     fun `Order delete uses id in WHERE clause`() {
         val order = Order(id = 77, customerId = 100, totalAmount = 250.0, version = 1)
-        val sql = order.delete().render()
 
-        assertThat(sql).contains("where id = 77")
+        assertThat(order.delete().renderValues()).contains(77L)
     }
 
     @Test
@@ -176,9 +176,8 @@ class DeleteStatementTests {
             phoneNumber = "555-1234",
             isActive = true
         )
-        val sql = customer.delete().render()
 
-        assertThat(sql).contains("where id = 500")
+        assertThat(customer.delete().renderValues()).contains(500L)
     }
 
     @Test
@@ -220,9 +219,8 @@ class DeleteStatementTests {
     @Test
     fun `Tag delete uses int id in WHERE clause`() {
         val tag = Tag(id = 42, name = "kotlin")
-        val sql = tag.delete().render()
 
-        assertThat(sql).contains("where id = 42")
+        assertThat(tag.delete().renderValues()).contains(42)
     }
 
     @Test
@@ -238,7 +236,8 @@ class DeleteStatementTests {
         val tag = Tag(id = 7, name = "test")
         val sql = tag.delete().render()
 
-        assertThat(sql).isEqualTo("delete from tags where id = 7;")
+        assertThat(sql).isEqualTo("delete from tags where id = \$1;")
+        assertThat(tag.delete().renderValues()).contains(7)
     }
 
     // Edge cases
@@ -246,49 +245,43 @@ class DeleteStatementTests {
     @Test
     fun `delete handles zero id value`() {
         val user = User(id = 0, name = "Test", email = "test@test.com")
-        val sql = user.delete().render()
 
-        assertThat(sql).contains("where id = 0")
+        assertThat(user.delete().renderValues()).contains(0L)
     }
 
     @Test
     fun `delete handles negative id value`() {
         val user = User(id = -1, name = "Test", email = "test@test.com")
-        val sql = user.delete().render()
 
-        assertThat(sql).contains("where id = -1")
+        assertThat(user.delete().renderValues()).contains(-1L)
     }
 
     @Test
     fun `delete handles large id value`() {
         val user = User(id = Long.MAX_VALUE, name = "Test", email = "test@test.com")
-        val sql = user.delete().render()
 
-        assertThat(sql).contains("where id = ${Long.MAX_VALUE}")
+        assertThat(user.delete().renderValues()).contains(Long.MAX_VALUE)
     }
 
     @Test
     fun `delete handles string id with special characters`() {
         val product = Product(id = "id-with-'quote", name = "Test", price = 1.0)
-        val sql = product.delete().render()
 
-        // The SQL should escape single quotes
-        assertThat(sql).contains("id-with-''quote")
+        // The raw bound value is preserved without escaping
+        assertThat(product.delete().renderValues()).contains("id-with-'quote")
     }
 
     @Test
     fun `delete handles empty string id`() {
         val product = Product(id = "", name = "Test", price = 1.0)
-        val sql = product.delete().render()
 
-        assertThat(sql).contains("where id = ''")
+        assertThat(product.delete().renderValues()).contains("")
     }
 
     @Test
     fun `delete handles string id with spaces`() {
         val product = Product(id = "id with spaces", name = "Test", price = 1.0)
-        val sql = product.delete().render()
 
-        assertThat(sql).contains("where id = 'id with spaces'")
+        assertThat(product.delete().renderValues()).contains("id with spaces")
     }
 }

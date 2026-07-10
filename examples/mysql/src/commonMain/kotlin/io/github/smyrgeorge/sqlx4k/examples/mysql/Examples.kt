@@ -5,8 +5,8 @@ import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.impl.coroutines.TransactionContext
 import io.github.smyrgeorge.sqlx4k.mysql.IMySQL
-import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 object Examples {
     /**
@@ -20,8 +20,6 @@ object Examples {
         exampleBasics(db)
         delay(1000.milliseconds)
         examplePreparedStatements(db)
-        delay(1000.milliseconds)
-        exampleStatementBinding()
         delay(1000.milliseconds)
         exampleConnectionManagement(db)
         delay(1000.milliseconds)
@@ -77,23 +75,6 @@ object Examples {
             .bind(0, 66)
         val res2 = db.fetchAll(st2, Sqlx4kRowMapper).getOrThrow()
         println("Positional params => $res2")
-    }
-
-    fun exampleStatementBinding() {
-        println("\n=== Statement binding ===")
-        runCatching {
-            val st = Statement.create("select * from sqlx4k where id = ?")
-                .bind(0, 65)
-                .render()
-            println("Statement: $st")
-
-            val st1 = Statement.create("? ? ?")
-                .bind(0, "test")
-                .bind(1, "'test'")
-                .bind(2, "';select *;--")
-                .render()
-            println("Statement: $st1")
-        }.onFailure { println("Statement error: ${it.message}") }
     }
 
     suspend fun exampleConnectionManagement(db: IMySQL) {

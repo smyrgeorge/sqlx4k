@@ -1,5 +1,6 @@
 package io.github.smyrgeorge.sqlx4k.processor.util
 
+import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.Statement
@@ -13,7 +14,7 @@ import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
  */
 class MockQueryExecutor : QueryExecutor {
 
-    override val encoders: ValueEncoderRegistry = ValueEncoderRegistry.Companion.EMPTY
+    override val encoders: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY
 
     // Track executed SQL statements
     private val _executedStatements = mutableListOf<String>()
@@ -26,6 +27,12 @@ class MockQueryExecutor : QueryExecutor {
     // Track execute calls
     private val _executeCalls = mutableListOf<String>()
     val executeCalls: List<String> get() = _executeCalls.toList()
+
+    // Track the bound (native) parameter values of the last executed Statement.
+    // Native queries render placeholders ($1, $2, ...) and carry the raw values separately,
+    // so value assertions inspect this list rather than the SQL text.
+    private var _lastBoundValues: List<Any?> = emptyList()
+    val lastBoundValues: List<Any?> get() = _lastBoundValues
 
     // Configurable responses
     private var executeResponse: Result<Long> = Result.success(1L)
@@ -65,6 +72,7 @@ class MockQueryExecutor : QueryExecutor {
         _executedStatements.clear()
         _fetchAllCalls.clear()
         _executeCalls.clear()
+        _lastBoundValues = emptyList()
         executeResponse = Result.success(1L)
         fetchAllResponse = Result.success(emptyResultSet())
     }
@@ -76,8 +84,9 @@ class MockQueryExecutor : QueryExecutor {
     }
 
     override suspend fun execute(statement: Statement): Result<Long> {
-        val sql = statement.render(encoders)
-        return execute(sql)
+        val nq = statement.renderNativeQuery(Dialect.PostgreSQL, encoders)
+        _lastBoundValues = nq.values
+        return execute(nq.sql)
     }
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> {
@@ -87,8 +96,9 @@ class MockQueryExecutor : QueryExecutor {
     }
 
     override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
-        val sql = statement.render(encoders)
-        return fetchAll(sql)
+        val nq = statement.renderNativeQuery(Dialect.PostgreSQL, encoders)
+        _lastBoundValues = nq.values
+        return fetchAll(nq.sql)
     }
 
     /**

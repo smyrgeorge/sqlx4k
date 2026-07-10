@@ -3,6 +3,7 @@ package io.github.smyrgeorge.sqlx4k.processor
 import assertk.assertThat
 import assertk.assertions.contains
 import assertk.assertions.doesNotContain
+import io.github.smyrgeorge.sqlx4k.processor.test.generated.insert
 import io.github.smyrgeorge.sqlx4k.processor.util.Article
 import io.github.smyrgeorge.sqlx4k.processor.util.Comment
 import io.github.smyrgeorge.sqlx4k.processor.util.Customer
@@ -10,7 +11,8 @@ import io.github.smyrgeorge.sqlx4k.processor.util.Order
 import io.github.smyrgeorge.sqlx4k.processor.util.Product
 import io.github.smyrgeorge.sqlx4k.processor.util.Tag
 import io.github.smyrgeorge.sqlx4k.processor.util.User
-import io.github.smyrgeorge.sqlx4k.processor.test.generated.insert
+import io.github.smyrgeorge.sqlx4k.processor.util.render
+import io.github.smyrgeorge.sqlx4k.processor.util.renderValues
 import kotlinx.datetime.LocalDateTime
 import kotlin.test.Test
 
@@ -51,10 +53,9 @@ class InsertStatementTests {
     @Test
     fun `User insert renders values correctly`() {
         val user = User(id = 0, name = "Bob", email = "bob@test.com")
-        val sql = user.insert().render()
 
-        assertThat(sql).contains("'Bob'")
-        assertThat(sql).contains("'bob@test.com'")
+        assertThat(user.insert().renderValues()).contains("Bob")
+        assertThat(user.insert().renderValues()).contains("bob@test.com")
     }
 
     @Test
@@ -78,9 +79,8 @@ class InsertStatementTests {
     @Test
     fun `Product insert renders id value`() {
         val product = Product(id = "uuid-456", name = "Gadget", price = 19.99)
-        val sql = product.insert().render()
 
-        assertThat(sql).contains("'uuid-456'")
+        assertThat(product.insert().renderValues()).contains("uuid-456")
     }
 
     @Test
@@ -251,9 +251,7 @@ class InsertStatementTests {
             phoneNumber = null,
             isActive = true
         )
-        val sql = activeCustomer.insert().render()
-
-        assertThat(sql).contains("true")
+        assertThat(activeCustomer.insert().renderValues()).contains(true)
     }
 
     @Test
@@ -266,9 +264,7 @@ class InsertStatementTests {
             phoneNumber = null,
             isActive = false
         )
-        val sql = customer.insert().render()
-
-        assertThat(sql).contains("null")
+        assertThat(customer.insert().renderValues()).contains(null)
     }
 
     // Tag entity: Simple entity with Int id
@@ -284,9 +280,8 @@ class InsertStatementTests {
     @Test
     fun `Tag insert has single placeholder`() {
         val tag = Tag(id = 0, name = "java")
-        val sql = tag.insert().render()
 
-        assertThat(sql).contains("'java'")
+        assertThat(tag.insert().renderValues()).contains("java")
     }
 
     @Test
@@ -302,25 +297,22 @@ class InsertStatementTests {
     @Test
     fun `insert handles special characters in strings`() {
         val user = User(id = 0, name = "O'Brien", email = "o'brien@test.com")
-        val sql = user.insert().render()
 
         // The SQL should escape single quotes
-        assertThat(sql).contains("O''Brien")
+        assertThat(user.insert().renderValues()).contains("O'Brien")
     }
 
     @Test
     fun `insert handles empty strings`() {
         val user = User(id = 0, name = "", email = "")
-        val sql = user.insert().render()
 
-        assertThat(sql).contains("''")
+        assertThat(user.insert().renderValues()).contains("")
     }
 
     @Test
     fun `insert handles numeric values correctly`() {
         val product = Product(id = "p1", name = "Test", price = 123.456)
-        val sql = product.insert().render()
 
-        assertThat(sql).contains("123.456")
+        assertThat(product.insert().renderValues()).contains(123.456)
     }
 }

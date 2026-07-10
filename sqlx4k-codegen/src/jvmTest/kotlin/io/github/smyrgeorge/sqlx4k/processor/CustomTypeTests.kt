@@ -8,16 +8,6 @@ import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.ValueEncoder
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
-import io.github.smyrgeorge.sqlx4k.processor.util.ConverterInvoice
-import io.github.smyrgeorge.sqlx4k.processor.util.ConverterPayment
-import io.github.smyrgeorge.sqlx4k.processor.util.ConverterStore
-import io.github.smyrgeorge.sqlx4k.processor.util.ConverterTransaction
-import io.github.smyrgeorge.sqlx4k.processor.util.GeoPoint
-import io.github.smyrgeorge.sqlx4k.processor.util.Invoice
-import io.github.smyrgeorge.sqlx4k.processor.util.Money
-import io.github.smyrgeorge.sqlx4k.processor.util.Payment
-import io.github.smyrgeorge.sqlx4k.processor.util.Store
-import io.github.smyrgeorge.sqlx4k.processor.util.Transaction
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.ConverterInvoiceAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.ConverterPaymentAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.ConverterStoreAutoRowMapper
@@ -29,6 +19,18 @@ import io.github.smyrgeorge.sqlx4k.processor.test.generated.TransactionAutoRowMa
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.delete
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.insert
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.update
+import io.github.smyrgeorge.sqlx4k.processor.util.ConverterInvoice
+import io.github.smyrgeorge.sqlx4k.processor.util.ConverterPayment
+import io.github.smyrgeorge.sqlx4k.processor.util.ConverterStore
+import io.github.smyrgeorge.sqlx4k.processor.util.ConverterTransaction
+import io.github.smyrgeorge.sqlx4k.processor.util.GeoPoint
+import io.github.smyrgeorge.sqlx4k.processor.util.Invoice
+import io.github.smyrgeorge.sqlx4k.processor.util.Money
+import io.github.smyrgeorge.sqlx4k.processor.util.Payment
+import io.github.smyrgeorge.sqlx4k.processor.util.Store
+import io.github.smyrgeorge.sqlx4k.processor.util.Transaction
+import io.github.smyrgeorge.sqlx4k.processor.util.render
+import io.github.smyrgeorge.sqlx4k.processor.util.renderValues
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
@@ -82,8 +84,8 @@ class CustomTypeTests {
         assertThat(sql).contains("insert into invoices")
         assertThat(sql).contains("description")
         assertThat(sql).contains("total_amount")
-        assertThat(sql).contains("'Test Invoice'")
-        assertThat(sql).contains("'100.5:USD'")
+        assertThat(invoice.insert().renderValues(registry)).contains("Test Invoice")
+        assertThat(invoice.insert().renderValues(registry)).contains("100.5:USD")
     }
 
     @Test
@@ -94,9 +96,7 @@ class CustomTypeTests {
             totalAmount = Money(0.0, "EUR")
         )
 
-        val sql = invoice.insert().render(registry)
-
-        assertThat(sql).contains("'0.0:EUR'")
+        assertThat(invoice.insert().renderValues(registry)).contains("0.0:EUR")
     }
 
     @Test
@@ -107,9 +107,7 @@ class CustomTypeTests {
             totalAmount = Money(999999.99, "GBP")
         )
 
-        val sql = invoice.insert().render(registry)
-
-        assertThat(sql).contains("'999999.99:GBP'")
+        assertThat(invoice.insert().renderValues(registry)).contains("999999.99:GBP")
     }
 
     @Test
@@ -123,8 +121,8 @@ class CustomTypeTests {
         val sql = store.insert().render(registry)
 
         assertThat(sql).contains("insert into stores")
-        assertThat(sql).contains("'NYC Store'")
-        assertThat(sql).contains("'40.7128,-74.006'")
+        assertThat(store.insert().renderValues(registry)).contains("NYC Store")
+        assertThat(store.insert().renderValues(registry)).contains("40.7128,-74.006")
     }
 
     @Test
@@ -138,8 +136,8 @@ class CustomTypeTests {
         val sql = store.insert().render(registry)
 
         assertThat(sql).contains("insert into stores")
-        assertThat(sql).contains("'Online Store'")
-        assertThat(sql).contains("null")
+        assertThat(store.insert().renderValues(registry)).contains("Online Store")
+        assertThat(store.insert().renderValues(registry)).contains(null)
     }
 
     @Test
@@ -154,9 +152,9 @@ class CustomTypeTests {
         val sql = transaction.insert().render(registry)
 
         assertThat(sql).contains("insert into transactions")
-        assertThat(sql).contains("'100.0:USD'")
-        assertThat(sql).contains("'85.0:EUR'")
-        assertThat(sql).contains("'51.5074,-0.1278'")
+        assertThat(transaction.insert().renderValues(registry)).contains("100.0:USD")
+        assertThat(transaction.insert().renderValues(registry)).contains("85.0:EUR")
+        assertThat(transaction.insert().renderValues(registry)).contains("51.5074,-0.1278")
     }
 
     @Test
@@ -170,9 +168,9 @@ class CustomTypeTests {
 
         val sql = transaction.insert().render(registry)
 
-        assertThat(sql).contains("'50.0:USD'")
-        assertThat(sql).contains("'45.0:CAD'")
-        assertThat(sql).contains("null")
+        assertThat(transaction.insert().renderValues(registry)).contains("50.0:USD")
+        assertThat(transaction.insert().renderValues(registry)).contains("45.0:CAD")
+        assertThat(transaction.insert().renderValues(registry)).contains(null)
     }
 
     @Test
@@ -186,7 +184,7 @@ class CustomTypeTests {
         val sql = payment.insert().render(registry)
 
         assertThat(sql).contains("insert into payments(amount)")
-        assertThat(sql).contains("'75.0:USD'")
+        assertThat(payment.insert().renderValues(registry)).contains("75.0:USD")
         // processedAmount should NOT be in the insert
     }
 
@@ -205,8 +203,10 @@ class CustomTypeTests {
         val sql = invoice.update().render(registry)
 
         assertThat(sql).contains("update invoices")
-        assertThat(sql).contains("set description = 'Updated Invoice', total_amount = '200.75:EUR'")
-        assertThat(sql).contains("where id = 42")
+        assertThat(sql).contains("set description = $1, total_amount = $2")
+        assertThat(invoice.update().renderValues(registry)).contains("Updated Invoice")
+        assertThat(invoice.update().renderValues(registry)).contains("200.75:EUR")
+        assertThat(invoice.update().renderValues(registry)).contains(42L)
     }
 
     @Test
@@ -220,9 +220,9 @@ class CustomTypeTests {
         val sql = store.update().render(registry)
 
         assertThat(sql).contains("update stores")
-        assertThat(sql).contains("name = 'Relocated Store'")
-        assertThat(sql).contains("'34.0522,-118.2437'")
-        assertThat(sql).contains("where id = 10")
+        assertThat(store.update().renderValues(registry)).contains("Relocated Store")
+        assertThat(store.update().renderValues(registry)).contains("34.0522,-118.2437")
+        assertThat(store.update().renderValues(registry)).contains(10L)
     }
 
     @Test
@@ -235,7 +235,7 @@ class CustomTypeTests {
 
         val sql = store.update().render(registry)
 
-        assertThat(sql).contains("location = null")
+        assertThat(store.update().renderValues(registry)).contains(null)
     }
 
     @Test
@@ -250,10 +250,10 @@ class CustomTypeTests {
         val sql = transaction.update().render(registry)
 
         assertThat(sql).contains("update transactions")
-        assertThat(sql).contains("'500.0:GBP'")
-        assertThat(sql).contains("'600.0:USD'")
-        assertThat(sql).contains("'48.8566,2.3522'")
-        assertThat(sql).contains("where id = 100")
+        assertThat(transaction.update().renderValues(registry)).contains("500.0:GBP")
+        assertThat(transaction.update().renderValues(registry)).contains("600.0:USD")
+        assertThat(transaction.update().renderValues(registry)).contains("48.8566,2.3522")
+        assertThat(transaction.update().renderValues(registry)).contains(100L)
     }
 
     @Test
@@ -266,7 +266,9 @@ class CustomTypeTests {
 
         val sql = payment.update().render(registry)
 
-        assertThat(sql).contains("update payments set amount = '150.0:USD' where id = 25")
+        assertThat(sql).contains("update payments set amount = $1 where id = $2")
+        assertThat(payment.update().renderValues(registry)).contains("150.0:USD")
+        assertThat(payment.update().renderValues(registry)).contains(25L)
     }
 
     // ===========================================
@@ -283,7 +285,8 @@ class CustomTypeTests {
 
         val sql = invoice.delete().render(registry)
 
-        assertThat(sql).isEqualTo("delete from invoices where id = 99;")
+        assertThat(sql).isEqualTo("delete from invoices where id = \$1;")
+        assertThat(invoice.delete().renderValues(registry)).contains(99L)
     }
 
     @Test
@@ -296,7 +299,8 @@ class CustomTypeTests {
 
         val sql = store.delete().render(registry)
 
-        assertThat(sql).isEqualTo("delete from stores where id = 77;")
+        assertThat(sql).isEqualTo("delete from stores where id = \$1;")
+        assertThat(store.delete().renderValues(registry)).contains(77L)
     }
 
     // ===========================================
@@ -509,8 +513,7 @@ class CustomTypeTests {
         )
 
         // Simulate what gets inserted
-        val insertSql = original.insert().render(registry)
-        assertThat(insertSql).contains("'123.45:USD'")
+        assertThat(original.insert().renderValues(registry)).contains("123.45:USD")
 
         // Simulate what comes back from DB
         val dbRow = row(
@@ -534,8 +537,7 @@ class CustomTypeTests {
         )
 
         // Simulate insert
-        val insertSql = original.insert().render(registry)
-        assertThat(insertSql).contains("'40.7128,-74.006'")
+        assertThat(original.insert().renderValues(registry)).contains("40.7128,-74.006")
 
         // Simulate DB response
         val dbRow = row(
@@ -559,8 +561,7 @@ class CustomTypeTests {
         )
 
         // Simulate insert
-        val insertSql = original.insert().render(registry)
-        assertThat(insertSql).contains("null")
+        assertThat(original.insert().renderValues(registry)).contains(null)
 
         // Simulate DB response
         val dbRow = row(
@@ -585,10 +586,9 @@ class CustomTypeTests {
         )
 
         // Simulate insert
-        val insertSql = original.insert().render(registry)
-        assertThat(insertSql).contains("'1000.0:USD'")
-        assertThat(insertSql).contains("'850.0:EUR'")
-        assertThat(insertSql).contains("'48.8566,2.3522'")
+        assertThat(original.insert().renderValues(registry)).contains("1000.0:USD")
+        assertThat(original.insert().renderValues(registry)).contains("850.0:EUR")
+        assertThat(original.insert().renderValues(registry)).contains("48.8566,2.3522")
 
         // Simulate DB response
         val dbRow = row(
@@ -620,11 +620,11 @@ class CustomTypeTests {
         )
 
         // Empty registry should work because @Converter uses encoder directly
-        val sql = invoice.insert().render(ValueEncoderRegistry.EMPTY)
+        val sql = invoice.insert().render()
 
         assertThat(sql).contains("insert into converter_invoices")
-        assertThat(sql).contains("'Test Invoice'")
-        assertThat(sql).contains("'100.5:USD'")
+        assertThat(invoice.insert().renderValues()).contains("Test Invoice")
+        assertThat(invoice.insert().renderValues()).contains("100.5:USD")
     }
 
     @Test
@@ -635,11 +635,14 @@ class CustomTypeTests {
             totalAmount = Money(200.75, "EUR")
         )
 
-        val sql = invoice.update().render(ValueEncoderRegistry.EMPTY)
+        val sql = invoice.update().render()
 
         assertThat(sql).contains("update converter_invoices")
-        assertThat(sql).contains("set description = 'Updated Invoice', total_amount = '200.75:EUR'")
-        assertThat(sql).contains("where id = 42")
+        assertThat(sql).contains("set description = $1, total_amount = $2")
+        assertThat(sql).contains("where id = $3")
+        assertThat(invoice.update().renderValues()).contains("Updated Invoice")
+        assertThat(invoice.update().renderValues()).contains("200.75:EUR")
+        assertThat(invoice.update().renderValues()).contains(42L)
     }
 
     @Test
@@ -666,11 +669,11 @@ class CustomTypeTests {
             location = GeoPoint(40.7128, -74.0060)
         )
 
-        val sql = storeWithLocation.insert().render(ValueEncoderRegistry.EMPTY)
+        val sql = storeWithLocation.insert().render()
 
         assertThat(sql).contains("insert into converter_stores")
-        assertThat(sql).contains("'NYC Store'")
-        assertThat(sql).contains("'40.7128,-74.006'")
+        assertThat(storeWithLocation.insert().renderValues()).contains("NYC Store")
+        assertThat(storeWithLocation.insert().renderValues()).contains("40.7128,-74.006")
     }
 
     @Test
@@ -681,11 +684,11 @@ class CustomTypeTests {
             location = null
         )
 
-        val sql = storeWithoutLocation.insert().render(ValueEncoderRegistry.EMPTY)
+        val sql = storeWithoutLocation.insert().render()
 
         assertThat(sql).contains("insert into converter_stores")
-        assertThat(sql).contains("'Online Store'")
-        assertThat(sql).contains("null")
+        assertThat(storeWithoutLocation.insert().renderValues()).contains("Online Store")
+        assertThat(storeWithoutLocation.insert().renderValues()).contains(null)
     }
 
     @Test
@@ -727,12 +730,12 @@ class CustomTypeTests {
             exchangeLocation = GeoPoint(51.5074, -0.1278)
         )
 
-        val sql = transaction.insert().render(ValueEncoderRegistry.EMPTY)
+        val sql = transaction.insert().render()
 
         assertThat(sql).contains("insert into converter_transactions")
-        assertThat(sql).contains("'100.0:USD'")
-        assertThat(sql).contains("'85.0:EUR'")
-        assertThat(sql).contains("'51.5074,-0.1278'")
+        assertThat(transaction.insert().renderValues()).contains("100.0:USD")
+        assertThat(transaction.insert().renderValues()).contains("85.0:EUR")
+        assertThat(transaction.insert().renderValues()).contains("51.5074,-0.1278")
     }
 
     @Test
@@ -760,11 +763,11 @@ class CustomTypeTests {
             processedAmount = Money(74.50, "USD")
         )
 
-        val sql = payment.insert().render(ValueEncoderRegistry.EMPTY)
+        val sql = payment.insert().render()
 
         // processedAmount should be excluded from insert due to @Column(insert = false)
         assertThat(sql).contains("insert into converter_payments(amount)")
-        assertThat(sql).contains("'75.0:USD'")
+        assertThat(payment.insert().renderValues()).contains("75.0:USD")
     }
 
     @Test
@@ -775,10 +778,12 @@ class CustomTypeTests {
             processedAmount = Money(149.0, "USD")
         )
 
-        val sql = payment.update().render(ValueEncoderRegistry.EMPTY)
+        val sql = payment.update().render()
 
         // processedAmount should be excluded from update due to @Column(update = false)
-        assertThat(sql).contains("update converter_payments set amount = '150.0:USD' where id = 25")
+        assertThat(sql).contains("update converter_payments set amount = $1 where id = $2")
+        assertThat(payment.update().renderValues()).contains("150.0:USD")
+        assertThat(payment.update().renderValues()).contains(25L)
     }
 
     @Test
@@ -819,8 +824,7 @@ class CustomTypeTests {
         )
 
         // Simulate what gets inserted (no registry needed)
-        val insertSql = original.insert().render(ValueEncoderRegistry.EMPTY)
-        assertThat(insertSql).contains("'123.45:USD'")
+        assertThat(original.insert().renderValues()).contains("123.45:USD")
 
         // Simulate what comes back from DB
         val dbRow = row(
@@ -845,8 +849,7 @@ class CustomTypeTests {
             location = GeoPoint(40.7128, -74.0060)
         )
 
-        val insertSql1 = withLocation.insert().render(ValueEncoderRegistry.EMPTY)
-        assertThat(insertSql1).contains("'40.7128,-74.006'")
+        assertThat(withLocation.insert().renderValues()).contains("40.7128,-74.006")
 
         // Without location
         val withoutLocation = ConverterStore(
@@ -855,8 +858,7 @@ class CustomTypeTests {
             location = null
         )
 
-        val insertSql2 = withoutLocation.insert().render(ValueEncoderRegistry.EMPTY)
-        assertThat(insertSql2).contains("null")
+        assertThat(withoutLocation.insert().renderValues()).contains(null)
     }
 
     @Test
@@ -868,8 +870,9 @@ class CustomTypeTests {
             exchangeLocation = null
         )
 
-        val sql = transaction.delete().render(ValueEncoderRegistry.EMPTY)
+        val sql = transaction.delete().render()
 
-        assertThat(sql).isEqualTo("delete from converter_transactions where id = 99;")
+        assertThat(sql).isEqualTo("delete from converter_transactions where id = \$1;")
+        assertThat(transaction.delete().renderValues()).contains(99L)
     }
 }

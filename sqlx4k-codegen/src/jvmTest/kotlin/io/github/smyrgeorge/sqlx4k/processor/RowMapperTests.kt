@@ -5,13 +5,6 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isNull
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
-import io.github.smyrgeorge.sqlx4k.processor.util.Article
-import io.github.smyrgeorge.sqlx4k.processor.util.Comment
-import io.github.smyrgeorge.sqlx4k.processor.util.Customer
-import io.github.smyrgeorge.sqlx4k.processor.util.Order
-import io.github.smyrgeorge.sqlx4k.processor.util.Product
-import io.github.smyrgeorge.sqlx4k.processor.util.Tag
-import io.github.smyrgeorge.sqlx4k.processor.util.User
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.ArticleAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.CommentAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.CustomerAutoRowMapper
@@ -19,6 +12,13 @@ import io.github.smyrgeorge.sqlx4k.processor.test.generated.OrderAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.ProductAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.TagAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.UserAutoRowMapper
+import io.github.smyrgeorge.sqlx4k.processor.util.Article
+import io.github.smyrgeorge.sqlx4k.processor.util.Comment
+import io.github.smyrgeorge.sqlx4k.processor.util.Customer
+import io.github.smyrgeorge.sqlx4k.processor.util.Order
+import io.github.smyrgeorge.sqlx4k.processor.util.Product
+import io.github.smyrgeorge.sqlx4k.processor.util.Tag
+import io.github.smyrgeorge.sqlx4k.processor.util.User
 import kotlinx.datetime.LocalDateTime
 import kotlin.test.Test
 

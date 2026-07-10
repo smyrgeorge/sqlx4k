@@ -16,7 +16,6 @@ import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.ResultSet
-import io.github.smyrgeorge.sqlx4k.RowMapper
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
@@ -210,10 +209,6 @@ class MySQL(
         }
     }
 
-    override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> = runCatching {
-        fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
-    }
-
     override suspend fun begin(): Result<Transaction> = runCatching {
         with(pool.acquire()) {
             try {
@@ -322,11 +317,6 @@ class MySQL(
             }
         }
 
-        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-            runCatching {
-                fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
-            }
-
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
                 assertIsOpen()
@@ -429,11 +419,6 @@ class MySQL(
                 }
             }
         }
-
-        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-            runCatching {
-                fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
-            }
     }
 
     companion object {

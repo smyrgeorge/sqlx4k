@@ -11,6 +11,8 @@ import io.github.smyrgeorge.sqlx4k.processor.test.generated.delete
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.insert
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.update
 import io.github.smyrgeorge.sqlx4k.processor.util.LegacyUser
+import io.github.smyrgeorge.sqlx4k.processor.util.render
+import io.github.smyrgeorge.sqlx4k.processor.util.renderValues
 import kotlin.test.Test
 
 /**
@@ -58,7 +60,9 @@ class ColumnNameTests {
     fun `update uses explicit column names in SET clause`() {
         val sql = user.update().render()
 
-        assertThat(sql).contains("set USER_NAME = 'Alice', is_active = true")
+        assertThat(sql).contains("set USER_NAME = $1, is_active = $2")
+        assertThat(user.update().renderValues()).contains("Alice")
+        assertThat(user.update().renderValues()).contains(true)
     }
 
     @Test
@@ -74,7 +78,8 @@ class ColumnNameTests {
         val sql = user.update().render()
 
         assertThat(sql).contains("update legacy_users")
-        assertThat(sql).contains("where id = 1")
+        assertThat(sql).contains("where id = $3")
+        assertThat(user.update().renderValues()).contains(1L)
     }
 
     // DELETE
@@ -83,7 +88,8 @@ class ColumnNameTests {
     fun `delete identifies row by id`() {
         val sql = user.delete().render()
 
-        assertThat(sql).contains("delete from legacy_users where id = 1")
+        assertThat(sql).contains("delete from legacy_users where id = $1")
+        assertThat(user.delete().renderValues()).contains(1L)
     }
 
     // Batch INSERT / UPDATE

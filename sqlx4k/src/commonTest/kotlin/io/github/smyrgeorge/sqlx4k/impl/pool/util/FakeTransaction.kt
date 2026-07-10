@@ -25,9 +25,9 @@ class FakeTransaction : Transaction {
     override val encoders: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY
 
     override suspend fun execute(sql: String): Result<Long> = Result.success(0)
-    override suspend fun execute(statement: Statement): Result<Long> = execute(statement.render(encoders))
+    override suspend fun execute(statement: Statement): Result<Long> = execute(statement.sql)
     override suspend fun fetchAll(sql: String): Result<ResultSet> =
         Result.success(ResultSet(emptyList(), null, ResultSet.Metadata(emptyList())))
 
-    override suspend fun fetchAll(statement: Statement): Result<ResultSet> = fetchAll(statement.render(encoders))
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> = fetchAll(statement.sql)
 }

@@ -9,9 +9,9 @@ import io.github.smyrgeorge.sqlx4k.postgres.pgmq.Metrics
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.PgmqClient
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.PgmqConsumer
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.PgmqDbAdapterImpl
+import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
-import kotlinx.coroutines.delay
 
 object Examples {
     /**
@@ -32,8 +32,6 @@ object Examples {
         exampleBasics(db)
         delay(1000.milliseconds)
         examplePreparedStatements(db)
-        delay(1000.milliseconds)
-        exampleStatementBinding()
         delay(1000.milliseconds)
         exampleConnectionManagement(db)
         delay(1000.milliseconds)
@@ -150,38 +148,6 @@ object Examples {
             .bind(0, 66)
         val res2 = db.fetchAll(st2, Sqlx4kRowMapper).getOrThrow()
         println("Positional params => $res2")
-    }
-
-    /**
-     * Demonstrates binding parameters to SQL statements and rendering them into executable strings.
-     *
-     * The function showcases the usage of `Statement` creation, parameter binding, and SQL rendering
-     * with positional parameter placeholders. It illustrates error handling during the process and logs
-     * the output statements or errors accordingly.
-     *
-     * - A `Statement` is created with placeholder parameters `?` for positional bindings.
-     * - Values are bound to these placeholders using the `bind` method.
-     * - The statement is rendered into a final SQL string using the `render` method.
-     * - On success, the rendered statement is printed, while errors are logged if they occur.
-     *
-     * This example places emphasis on how to handle SQL statement preparation dynamically and safely
-     * by substituting values and escaping appropriately as required.
-     */
-    fun exampleStatementBinding() {
-        println("\n=== Statement binding ===")
-        runCatching {
-            val st = Statement.create("select * from sqlx4k where id = ?")
-                .bind(0, 65)
-                .render()
-            println("Statement: $st")
-
-            val st1 = Statement.create("? ? ?")
-                .bind(0, "test")
-                .bind(1, "'test'")
-                .bind(2, "';select *;--")
-                .render()
-            println("Statement: $st1")
-        }.onFailure { println("Statement error: ${it.message}") }
     }
 
     /**

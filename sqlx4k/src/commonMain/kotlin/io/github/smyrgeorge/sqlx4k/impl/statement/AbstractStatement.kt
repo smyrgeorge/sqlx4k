@@ -3,16 +3,15 @@ package io.github.smyrgeorge.sqlx4k.impl.statement
 import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
-import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
-import kotlin.reflect.KClass
 import io.github.smyrgeorge.sqlx4k.impl.extensions.appendNativeValue
-import io.github.smyrgeorge.sqlx4k.impl.extensions.encodeValue
 import io.github.smyrgeorge.sqlx4k.impl.extensions.isIdentPart
 import io.github.smyrgeorge.sqlx4k.impl.extensions.isIdentStart
 import io.github.smyrgeorge.sqlx4k.impl.extensions.resolveNativeValue
 import io.github.smyrgeorge.sqlx4k.impl.extensions.scanSql
 import io.github.smyrgeorge.sqlx4k.impl.statement.AbstractStatement.Companion.NOT_SET
+import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
+import kotlin.reflect.KClass
 
 /**
  * Represents an abstract implementation of a SQL statement that supports binding
@@ -147,45 +146,6 @@ abstract class AbstractStatement(
         }
         namedParametersValues[parameter] = TypedNull(type)
         return this
-    }
-
-    /**
-     * Renders the SQL statement by replacing positional and named parameter placeholders
-     * with their corresponding bound values using the provided encoder registry.
-     *
-     * @param encoders The `ValueEncoderRegistry` used to encode parameter values.
-     * @return A string representing the rendered SQL statement with all parameters substituted by their bound values.
-     */
-    override fun render(encoders: ValueEncoderRegistry): String {
-        if (extractedPositionalParameters == 0 && extractedNamedParameters.isEmpty()) return sql
-        var nextPositionalIndex = 0
-        return sql.renderWithScanner { i, c, sb ->
-            // Handle positional '?'
-            if (c == '?' && extractedPositionalParameters > 0) {
-                val value = getPositionalValue(nextPositionalIndex++)
-                sb.append(value.encodeValue(encoders))
-                return@renderWithScanner i + 1
-            }
-            // Handle named ':name'
-            if (c == ':' && extractedNamedParameters.isNotEmpty()) {
-                // Skip PostgreSQL type casts '::'
-                if (i + 1 < length && this[i + 1] == ':') {
-                    sb.append("::")
-                    return@renderWithScanner i + 2
-                }
-                if (i + 1 < length && this[i + 1].isIdentStart()) {
-                    var j = i + 2
-                    while (j < length && this[j].isIdentPart()) j++
-                    val name = substring(i + 1, j)
-                    if (name in extractedNamedParameters) {
-                        val value = getNamedValue(name)
-                        sb.append(value.encodeValue(encoders))
-                        return@renderWithScanner j
-                    }
-                }
-            }
-            null
-        }
     }
 
     /**
@@ -359,24 +319,14 @@ abstract class AbstractStatement(
     }
 
     /**
-     * Encodes a single bound value into its SQL literal representation using the given registry.
-     *
-     * @param value The value to encode (may be `null` or a [TypedNull]).
-     * @param encoders The registry providing encoders for custom types.
-     * @return The SQL literal representation of the value.
-     */
-    protected fun encode(value: Any?, encoders: ValueEncoderRegistry): String =
-        value.encodeValue(encoders)
-
-    /**
      * Resolves a single bound value to the native representation used by [Statement.NativeQuery].
      *
      * Exposed for [AbstractStatement] subclasses that implement custom placeholder syntaxes
      * and need to produce native query values exactly like the built-in rendering does.
      *
-     * @param value The value to resolve (may be `null` or a [TypedNull]).
+     * @param value The value to resolve (maybe `null` or a [TypedNull]).
      * @param encoders The registry providing encoders for custom types.
-     * @return The resolved native value (may be `null`).
+     * @return The resolved native value (maybe `null`).
      */
     protected fun resolveNative(value: Any?, encoders: ValueEncoderRegistry): Any? =
         value.resolveNativeValue(encoders)

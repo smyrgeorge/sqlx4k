@@ -6,12 +6,12 @@ import assertk.assertions.containsExactly
 import assertk.assertions.isEqualTo
 import assertk.assertions.isSuccess
 import assertk.assertions.isTrue
+import io.github.smyrgeorge.sqlx4k.processor.test.generated.UserRepositoryWithHooksImpl
 import io.github.smyrgeorge.sqlx4k.processor.util.HooksTracker
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.row
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.userRow
 import io.github.smyrgeorge.sqlx4k.processor.util.User
-import io.github.smyrgeorge.sqlx4k.processor.test.generated.UserRepositoryWithHooksImpl
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -60,7 +60,7 @@ class CrudRepositoryHooksTests {
 
         // Hook modifies name to add "_preInsert" suffix
         val sql = mockExecutor.lastExecutedStatement()
-        assertThat(sql!!).contains("'Alice_preInsert'")
+        assertThat(mockExecutor.lastBoundValues).contains("Alice_preInsert")
     }
 
     @Test
@@ -133,7 +133,7 @@ class CrudRepositoryHooksTests {
 
         // Hook modifies name to add "_preUpdate" suffix
         val sql = mockExecutor.lastExecutedStatement()
-        assertThat(sql!!).contains("'Alice_preUpdate'")
+        assertThat(mockExecutor.lastBoundValues).contains("Alice_preUpdate")
     }
 
     @Test

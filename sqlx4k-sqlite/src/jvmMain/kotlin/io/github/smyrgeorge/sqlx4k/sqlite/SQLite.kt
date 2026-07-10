@@ -7,7 +7,6 @@ import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.ResultSet
-import io.github.smyrgeorge.sqlx4k.RowMapper
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
@@ -21,14 +20,6 @@ import io.github.smyrgeorge.sqlx4k.impl.pool.ConnectionPoolImpl
 import io.github.smyrgeorge.sqlx4k.impl.pool.PooledConnection
 import io.github.smyrgeorge.sqlx4k.impl.pool.PooledTransaction
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
-import java.sql.Connection as NativeJdbcConnection
-import java.sql.DriverManager
-import java.sql.ResultSet as NativeJdbcResultSet
-import kotlin.time.Duration
-import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -38,6 +29,14 @@ import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.toJavaLocalDate
 import kotlinx.datetime.toJavaLocalTime
+import java.sql.DriverManager
+import kotlin.time.Duration
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
+import java.sql.Connection as NativeJdbcConnection
+import java.sql.ResultSet as NativeJdbcResultSet
 
 /**
  * SQLite class provides mechanisms to interact with a SQLite database on the JVM platform.
@@ -168,10 +167,6 @@ class SQLite(
         }
     }
 
-    override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> = runCatching {
-        fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
-    }
-
     override suspend fun begin(): Result<Transaction> = runCatching {
         val connection = pool.acquire().getOrThrow() as PooledConnection
         try {
@@ -267,11 +262,6 @@ class SQLite(
                 }
             }
         }
-
-        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-            runCatching {
-                fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
-            }
 
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
@@ -398,11 +388,6 @@ class SQLite(
                 }
             }
         }
-
-        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-            runCatching {
-                fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
-            }
     }
 
     companion object {

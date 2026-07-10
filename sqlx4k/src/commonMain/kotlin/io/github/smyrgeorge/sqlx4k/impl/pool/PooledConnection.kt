@@ -4,7 +4,6 @@ package io.github.smyrgeorge.sqlx4k.impl.pool
 
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ResultSet
-import io.github.smyrgeorge.sqlx4k.RowMapper
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
@@ -146,10 +145,6 @@ class PooledConnection(
             assertIsOpen()
             connection.fetchAll(statement)
         }
-    }
-
-    override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> = runCatching {
-        fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {

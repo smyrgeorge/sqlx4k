@@ -3,6 +3,7 @@ package io.github.smyrgeorge.sqlx4k.processor
 import assertk.assertThat
 import assertk.assertions.contains
 import assertk.assertions.doesNotContain
+import io.github.smyrgeorge.sqlx4k.processor.test.generated.update
 import io.github.smyrgeorge.sqlx4k.processor.util.Article
 import io.github.smyrgeorge.sqlx4k.processor.util.Comment
 import io.github.smyrgeorge.sqlx4k.processor.util.Customer
@@ -10,7 +11,8 @@ import io.github.smyrgeorge.sqlx4k.processor.util.Order
 import io.github.smyrgeorge.sqlx4k.processor.util.Product
 import io.github.smyrgeorge.sqlx4k.processor.util.Tag
 import io.github.smyrgeorge.sqlx4k.processor.util.User
-import io.github.smyrgeorge.sqlx4k.processor.test.generated.update
+import io.github.smyrgeorge.sqlx4k.processor.util.render
+import io.github.smyrgeorge.sqlx4k.processor.util.renderValues
 import kotlinx.datetime.LocalDateTime
 import kotlin.test.Test
 
@@ -36,7 +38,8 @@ class UpdateStatementTests {
         val user = User(id = 42, name = "Bob", email = "bob@test.com")
         val sql = user.update().render()
 
-        assertThat(sql).contains("where id = 42")
+        assertThat(sql).contains("where id = ")
+        assertThat(user.update().renderValues()).contains(42L)
     }
 
     @Test
@@ -44,7 +47,9 @@ class UpdateStatementTests {
         val user = User(id = 1, name = "Charlie", email = "charlie@test.com")
         val sql = user.update().render()
 
-        assertThat(sql).contains("set name = 'Charlie', email = 'charlie@test.com'")
+        assertThat(sql).contains("set name = ")
+        assertThat(user.update().renderValues()).contains("Charlie")
+        assertThat(user.update().renderValues()).contains("charlie@test.com")
     }
 
     @Test
@@ -70,7 +75,8 @@ class UpdateStatementTests {
         val product = Product(id = "uuid-123", name = "Widget", price = 19.99)
         val sql = product.update().render()
 
-        assertThat(sql).contains("where id = 'uuid-123'")
+        assertThat(sql).contains("where id = ")
+        assertThat(product.update().renderValues()).contains("uuid-123")
     }
 
     @Test
@@ -78,7 +84,9 @@ class UpdateStatementTests {
         val product = Product(id = "uuid-456", name = "Gadget", price = 29.99)
         val sql = product.update().render()
 
-        assertThat(sql).contains("set name = 'Gadget', price = 29.99")
+        assertThat(sql).contains("set name = ")
+        assertThat(product.update().renderValues()).contains("Gadget")
+        assertThat(product.update().renderValues()).contains(29.99)
     }
 
     @Test
@@ -117,7 +125,9 @@ class UpdateStatementTests {
         )
         val sql = article.update().render()
 
-        assertThat(sql).contains("set title = 'New Title', content = 'New content'")
+        assertThat(sql).contains("set title = ")
+        assertThat(article.update().renderValues()).contains("New Title")
+        assertThat(article.update().renderValues()).contains("New content")
     }
 
     @Test
@@ -163,8 +173,10 @@ class UpdateStatementTests {
         val order = Order(id = 1, customerId = 200, totalAmount = 450.0, version = 1)
         val sql = order.update().render()
 
-        assertThat(sql).contains("customer_id = 200")
-        assertThat(sql).contains("total_amount = 450.0")
+        assertThat(sql).contains("customer_id = ")
+        assertThat(order.update().renderValues()).contains(200L)
+        assertThat(sql).contains("total_amount = ")
+        assertThat(order.update().renderValues()).contains(450.0)
     }
 
     @Test
@@ -202,9 +214,12 @@ class UpdateStatementTests {
         )
         val sql = comment.update().render()
 
-        assertThat(sql).contains("post_id = 20")
-        assertThat(sql).contains("author_name = 'Jane'")
-        assertThat(sql).contains("content = 'New content'")
+        assertThat(sql).contains("post_id = ")
+        assertThat(comment.update().renderValues()).contains(20L)
+        assertThat(sql).contains("author_name = ")
+        assertThat(comment.update().renderValues()).contains("Jane")
+        assertThat(sql).contains("content = ")
+        assertThat(comment.update().renderValues()).contains("New content")
     }
 
     @Test
@@ -235,10 +250,14 @@ class UpdateStatementTests {
         )
         val sql = customer.update().render()
 
-        assertThat(sql).contains("first_name = 'John'")
-        assertThat(sql).contains("last_name = 'Doe'")
-        assertThat(sql).contains("phone_number = '555-1234'")
-        assertThat(sql).contains("is_active = true")
+        assertThat(sql).contains("first_name = ")
+        assertThat(customer.update().renderValues()).contains("John")
+        assertThat(sql).contains("last_name = ")
+        assertThat(customer.update().renderValues()).contains("Doe")
+        assertThat(sql).contains("phone_number = ")
+        assertThat(customer.update().renderValues()).contains("555-1234")
+        assertThat(sql).contains("is_active = ")
+        assertThat(customer.update().renderValues()).contains(true)
 
         // Should not contain camelCase versions
         assertThat(sql).doesNotContain("firstName")
@@ -259,7 +278,8 @@ class UpdateStatementTests {
         )
         val sql = customer.update().render()
 
-        assertThat(sql).contains("phone_number = null")
+        assertThat(sql).contains("phone_number = ")
+        assertThat(customer.update().renderValues()).contains(null)
     }
 
     // Tag entity: Simple entity
@@ -269,7 +289,8 @@ class UpdateStatementTests {
         val tag = Tag(id = 5, name = "updated-tag")
         val sql = tag.update().render()
 
-        assertThat(sql).contains("set name = 'updated-tag'")
+        assertThat(sql).contains("set name = ")
+        assertThat(tag.update().renderValues()).contains("updated-tag")
     }
 
     @Test
@@ -277,7 +298,8 @@ class UpdateStatementTests {
         val tag = Tag(id = 10, name = "test")
         val sql = tag.update().render()
 
-        assertThat(sql).contains("where id = 10")
+        assertThat(sql).contains("where id = ")
+        assertThat(tag.update().renderValues()).contains(10)
     }
 
     @Test
@@ -293,10 +315,9 @@ class UpdateStatementTests {
     @Test
     fun `update handles special characters in strings`() {
         val user = User(id = 1, name = "O'Brien", email = "o'brien@test.com")
-        val sql = user.update().render()
 
-        // The SQL should escape single quotes
-        assertThat(sql).contains("O''Brien")
+        // The native query carries the raw, unescaped value
+        assertThat(user.update().renderValues()).contains("O'Brien")
     }
 
     @Test
@@ -304,16 +325,17 @@ class UpdateStatementTests {
         val user = User(id = 1, name = "", email = "")
         val sql = user.update().render()
 
-        assertThat(sql).contains("name = ''")
-        assertThat(sql).contains("email = ''")
+        assertThat(sql).contains("name = ")
+        assertThat(user.update().renderValues()).contains("")
+        assertThat(sql).contains("email = ")
+        assertThat(user.update().renderValues()).contains("")
     }
 
     @Test
     fun `update handles numeric values correctly`() {
         val product = Product(id = "p1", name = "Test", price = 999.99)
-        val sql = product.update().render()
 
-        assertThat(sql).contains("999.99")
+        assertThat(product.update().renderValues()).contains(999.99)
     }
 
     @Test
@@ -321,7 +343,8 @@ class UpdateStatementTests {
         val user = User(id = 0, name = "Test", email = "test@test.com")
         val sql = user.update().render()
 
-        assertThat(sql).contains("where id = 0")
+        assertThat(sql).contains("where id = ")
+        assertThat(user.update().renderValues()).contains(0L)
     }
 
     @Test
@@ -329,7 +352,8 @@ class UpdateStatementTests {
         val user = User(id = -1, name = "Test", email = "test@test.com")
         val sql = user.update().render()
 
-        assertThat(sql).contains("where id = -1")
+        assertThat(sql).contains("where id = ")
+        assertThat(user.update().renderValues()).contains(-1L)
     }
 
     @Test
@@ -337,6 +361,7 @@ class UpdateStatementTests {
         val user = User(id = Long.MAX_VALUE, name = "Test", email = "test@test.com")
         val sql = user.update().render()
 
-        assertThat(sql).contains("where id = ${Long.MAX_VALUE}")
+        assertThat(sql).contains("where id = ")
+        assertThat(user.update().renderValues()).contains(Long.MAX_VALUE)
     }
 }

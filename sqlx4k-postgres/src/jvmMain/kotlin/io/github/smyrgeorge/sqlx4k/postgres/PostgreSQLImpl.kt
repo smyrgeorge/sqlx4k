@@ -6,7 +6,6 @@ package io.github.smyrgeorge.sqlx4k.postgres
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.ResultSet
-import io.github.smyrgeorge.sqlx4k.RowMapper
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
@@ -178,10 +177,6 @@ class PostgreSQLImpl(
         }
     }
 
-    override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> = runCatching {
-        fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
-    }
-
     override suspend fun begin(): Result<Transaction> = runCatching {
         with(pool.acquire()) {
             try {
@@ -235,7 +230,11 @@ class PostgreSQLImpl(
         channels.forEach { validateChannelName(it) }
 
         val sql = channels.joinToString(separator = "\n") {
-            Statement.create("LISTEN ${DoubleQuotingString(it)};").render(encoders)
+            // LISTEN's channel is a SQL identifier, not a bindable value (PostgreSQL rejects
+            // `LISTEN $1`), so it is validated and double-quoted rather than bound. The statement
+            // is still built and rendered through the prepared-statement API for consistency.
+            Statement.create("LISTEN ${DoubleQuotingString(it)};")
+                .renderNativeQuery(Dialect.PostgreSQL, encoders).sql
         }
 
         PgChannelScope.launch {
@@ -376,11 +375,6 @@ class PostgreSQLImpl(
             }
         }
 
-        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-            runCatching {
-                fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
-            }
-
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
                 assertIsOpen()
@@ -483,11 +477,6 @@ class PostgreSQLImpl(
                 }
             }
         }
-
-        override suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> =
-            runCatching {
-                fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
-            }
     }
 
     companion object {

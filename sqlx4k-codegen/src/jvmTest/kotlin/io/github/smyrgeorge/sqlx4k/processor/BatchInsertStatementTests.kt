@@ -3,13 +3,15 @@ package io.github.smyrgeorge.sqlx4k.processor
 import assertk.assertThat
 import assertk.assertions.contains
 import assertk.assertions.doesNotContain
+import io.github.smyrgeorge.sqlx4k.processor.test.generated.insert
 import io.github.smyrgeorge.sqlx4k.processor.util.Article
 import io.github.smyrgeorge.sqlx4k.processor.util.Customer
 import io.github.smyrgeorge.sqlx4k.processor.util.Order
 import io.github.smyrgeorge.sqlx4k.processor.util.Product
 import io.github.smyrgeorge.sqlx4k.processor.util.Tag
 import io.github.smyrgeorge.sqlx4k.processor.util.User
-import io.github.smyrgeorge.sqlx4k.processor.test.generated.insert
+import io.github.smyrgeorge.sqlx4k.processor.util.render
+import io.github.smyrgeorge.sqlx4k.processor.util.renderValues
 import kotlinx.datetime.LocalDateTime
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -65,14 +67,12 @@ class BatchInsertStatementTests {
             User(id = 0, name = "Bob", email = "bob@example.com"),
             User(id = 0, name = "Charlie", email = "charlie@example.com")
         )
-        val sql = users.insert().render()
-
-        assertThat(sql).contains("'Alice'")
-        assertThat(sql).contains("'Bob'")
-        assertThat(sql).contains("'Charlie'")
-        assertThat(sql).contains("'alice@example.com'")
-        assertThat(sql).contains("'bob@example.com'")
-        assertThat(sql).contains("'charlie@example.com'")
+        assertThat(users.insert().renderValues()).contains("Alice")
+        assertThat(users.insert().renderValues()).contains("Bob")
+        assertThat(users.insert().renderValues()).contains("Charlie")
+        assertThat(users.insert().renderValues()).contains("alice@example.com")
+        assertThat(users.insert().renderValues()).contains("bob@example.com")
+        assertThat(users.insert().renderValues()).contains("charlie@example.com")
     }
 
     @Test
@@ -90,10 +90,8 @@ class BatchInsertStatementTests {
         val users = listOf(
             User(id = 0, name = "Single", email = "single@test.com")
         )
-        val sql = users.insert().render()
-
-        assertThat(sql).contains("'Single'")
-        assertThat(sql).contains("'single@test.com'")
+        assertThat(users.insert().renderValues()).contains("Single")
+        assertThat(users.insert().renderValues()).contains("single@test.com")
     }
 
     @Test
@@ -124,10 +122,8 @@ class BatchInsertStatementTests {
             Product(id = "uuid-1", name = "Widget", price = 9.99),
             Product(id = "uuid-2", name = "Gadget", price = 19.99)
         )
-        val sql = products.insert().render()
-
-        assertThat(sql).contains("'uuid-1'")
-        assertThat(sql).contains("'uuid-2'")
+        assertThat(products.insert().renderValues()).contains("uuid-1")
+        assertThat(products.insert().renderValues()).contains("uuid-2")
     }
 
     @Test
@@ -184,10 +180,8 @@ class BatchInsertStatementTests {
                 updatedAt = LocalDateTime(2024, 1, 1, 0, 0)
             )
         )
-        val sql = articles.insert().render()
-
-        assertThat(sql).contains("'First Article'")
-        assertThat(sql).contains("'Second Article'")
+        assertThat(articles.insert().renderValues()).contains("First Article")
+        assertThat(articles.insert().renderValues()).contains("Second Article")
     }
 
     // Order entity: @Column(insert = false, update = false) on version
@@ -210,12 +204,10 @@ class BatchInsertStatementTests {
             Order(id = 0, customerId = 100, totalAmount = 250.0, version = 0),
             Order(id = 0, customerId = 200, totalAmount = 350.0, version = 0)
         )
-        val sql = orders.insert().render()
-
-        assertThat(sql).contains("100")
-        assertThat(sql).contains("200")
-        assertThat(sql).contains("250.0")
-        assertThat(sql).contains("350.0")
+        assertThat(orders.insert().renderValues()).contains(100L)
+        assertThat(orders.insert().renderValues()).contains(200L)
+        assertThat(orders.insert().renderValues()).contains(250.0)
+        assertThat(orders.insert().renderValues()).contains(350.0)
     }
 
     // Customer entity: Tests camelCase to snake_case conversion
@@ -265,9 +257,7 @@ class BatchInsertStatementTests {
                 isActive = false
             )
         )
-        val sql = customers.insert().render()
-
-        assertThat(sql).contains("null")
+        assertThat(customers.insert().renderValues()).contains(null)
     }
 
     // Tag entity: Simple entity with Int id
@@ -291,11 +281,9 @@ class BatchInsertStatementTests {
             Tag(id = 0, name = "java"),
             Tag(id = 0, name = "scala")
         )
-        val sql = tags.insert().render()
-
-        assertThat(sql).contains("'kotlin'")
-        assertThat(sql).contains("'java'")
-        assertThat(sql).contains("'scala'")
+        assertThat(tags.insert().renderValues()).contains("kotlin")
+        assertThat(tags.insert().renderValues()).contains("java")
+        assertThat(tags.insert().renderValues()).contains("scala")
     }
 
     @Test
@@ -317,10 +305,8 @@ class BatchInsertStatementTests {
             User(id = 0, name = "O'Brien", email = "o'brien@test.com"),
             User(id = 0, name = "O'Connor", email = "o'connor@test.com")
         )
-        val sql = users.insert().render()
-
-        assertThat(sql).contains("O''Brien")
-        assertThat(sql).contains("O''Connor")
+        assertThat(users.insert().renderValues()).contains("O'Brien")
+        assertThat(users.insert().renderValues()).contains("O'Connor")
     }
 
     @Test
@@ -329,9 +315,7 @@ class BatchInsertStatementTests {
             User(id = 0, name = "", email = ""),
             User(id = 0, name = "Valid", email = "valid@test.com")
         )
-        val sql = users.insert().render()
-
-        assertThat(sql).contains("''")
+        assertThat(users.insert().renderValues()).contains("")
     }
 
     @Test
@@ -340,10 +324,8 @@ class BatchInsertStatementTests {
             Product(id = "p1", name = "Test1", price = 123.456),
             Product(id = "p2", name = "Test2", price = 789.012)
         )
-        val sql = products.insert().render()
-
-        assertThat(sql).contains("123.456")
-        assertThat(sql).contains("789.012")
+        assertThat(products.insert().renderValues()).contains(123.456)
+        assertThat(products.insert().renderValues()).contains(789.012)
     }
 
     @Test

@@ -3,8 +3,8 @@ package io.github.smyrgeorge.sqlx4k
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
-import kotlin.time.Duration
 import org.intellij.lang.annotations.Language
+import kotlin.time.Duration
 
 /**
  * Represents an interface for executing SQL statements and managing their results.
@@ -76,9 +76,8 @@ interface QueryExecutor {
      * @param rowMapper The RowMapper to use for converting rows in the result set to instances of type T.
      * @return A Result containing a list of instances of type T mapped from the query result set.
      */
-    suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> {
-        val sql = runCatching { statement.render(encoders) }.getOrElse { return Result.failure(it) }
-        return fetchAll(sql, rowMapper)
+    suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> = runCatching {
+        fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
     }
 
     /**
@@ -166,7 +165,7 @@ interface QueryExecutor {
     interface Migrate {
         /**
          * Applies database migrations using the SQL files located in the specified path directory.
-         * Utilizes the provided settings to manage schema creation, migration tracking, and callback operations
+         * Uses the provided settings to manage schema creation, migration tracking, and callback operations
          * for monitoring the progress of statements and file migrations.
          *
          * @param path The directory path containing the SQL migration files. Default is "./db/migrations".

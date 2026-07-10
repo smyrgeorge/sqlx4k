@@ -10,12 +10,12 @@ import assertk.assertions.isNull
 import assertk.assertions.isSuccess
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.processor.test.generated.UserCrudRepositoryImpl
+import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.countRow
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.row
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.userRow
 import io.github.smyrgeorge.sqlx4k.processor.util.User
-import io.github.smyrgeorge.sqlx4k.processor.test.generated.UserCrudRepositoryImpl
-import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -86,8 +86,8 @@ class CrudRepositoryTests {
 
         val sql = mockExecutor.lastExecutedStatement()
         assertThat(sql).isNotNull()
-        assertThat(sql!!).contains("'Bob'")
-        assertThat(sql).contains("'bob@test.com'")
+        assertThat(mockExecutor.lastBoundValues).contains("Bob")
+        assertThat(mockExecutor.lastBoundValues).contains("bob@test.com")
     }
 
     // ==================== UPDATE Tests ====================
@@ -280,7 +280,7 @@ class CrudRepositoryTests {
 
         val sql = mockExecutor.lastExecutedStatement()
         assertThat(sql).isNotNull()
-        assertThat(sql!!).contains("'test@example.com'")
+        assertThat(mockExecutor.lastBoundValues).contains("test@example.com")
     }
 
     // ==================== findAll Tests ====================
@@ -334,7 +334,7 @@ class CrudRepositoryTests {
 
         val sql = mockExecutor.lastExecutedStatement()
         assertThat(sql).isNotNull()
-        assertThat(sql!!).contains("'TestName'")
+        assertThat(mockExecutor.lastBoundValues).contains("TestName")
     }
 
     // ==================== findAllByEmailNotNull Tests ====================
@@ -403,7 +403,7 @@ class CrudRepositoryTests {
 
         val sql = mockExecutor.lastExecutedStatement()
         assertThat(sql).isNotNull()
-        assertThat(sql!!).contains("'TestName'")
+        assertThat(mockExecutor.lastBoundValues).contains("TestName")
     }
 
     // ==================== deleteByEmail Tests ====================
@@ -436,7 +436,7 @@ class CrudRepositoryTests {
 
         val sql = mockExecutor.lastExecutedStatement()
         assertThat(sql).isNotNull()
-        assertThat(sql!!).contains("'delete@test.com'")
+        assertThat(mockExecutor.lastBoundValues).contains("delete@test.com")
     }
 
     // ==================== executeUpdateName Tests ====================
@@ -469,8 +469,8 @@ class CrudRepositoryTests {
 
         val sql = mockExecutor.lastExecutedStatement()
         assertThat(sql).isNotNull()
-        assertThat(sql!!).contains("'FromName'")
-        assertThat(sql).contains("'ToName'")
+        assertThat(mockExecutor.lastBoundValues).contains("FromName")
+        assertThat(mockExecutor.lastBoundValues).contains("ToName")
     }
 
     // ==================== Error Propagation Tests ====================

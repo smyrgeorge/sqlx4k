@@ -100,19 +100,6 @@ interface Statement {
     fun bindNull(parameter: String, type: KClass<*>): Statement
 
     /**
-     * Renders the SQL statement by replacing placeholders for positional and named parameters
-     * with their respective bound values.
-     *
-     * This function first processes positional parameters, replacing each positional marker
-     * with its corresponding value. It subsequently processes named parameters, replacing each
-     * named marker (e.g., `:name`) with its corresponding value.
-     *
-     * @return A string representing the rendered SQL statement with all positional and named
-     * parameters substituted by their bound values.
-     */
-    fun render(encoders: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY): String
-
-    /**
      * Renders the SQL statement with all bound parameters and converts it into a `Query` object.
      *
      * This method processes the SQL statement by resolving positional and named parameter placeholders
