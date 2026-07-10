@@ -298,7 +298,9 @@ class PostgreSQL(
         private suspend fun setTransactionIsolationLevel(level: IsolationLevel, lock: Boolean): Result<Unit> {
             // language=SQL
             val sql = "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL ${level.value}"
-            return execute(sql, lock).map { }.also { _transactionIsolationLevel = level }
+            // Only record the new level once the SET has actually succeeded, so the tracked state
+            // never diverges from the database (and close() won't attempt a spurious reset).
+            return execute(sql, lock).map { }.onSuccess { _transactionIsolationLevel = level }
         }
 
         override suspend fun setTransactionIsolationLevel(level: IsolationLevel): Result<Unit> =

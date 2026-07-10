@@ -15,22 +15,8 @@ import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
-import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
-import io.r2dbc.postgresql.api.Notification as NativeR2dbcNotification
-import io.r2dbc.spi.Connection as NativeR2dbcConnection
-import io.r2dbc.spi.Result as NativeR2dbcResultSet
 import io.r2dbc.spi.Row
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.EmptyCoroutineContext
-import kotlin.jvm.optionals.getOrElse
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Instant
-import kotlin.time.toJavaInstant
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
-import kotlin.uuid.toJavaUuid
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
@@ -47,11 +33,26 @@ import kotlinx.datetime.LocalTime
 import kotlinx.datetime.toJavaLocalDate
 import kotlinx.datetime.toJavaLocalDateTime
 import kotlinx.datetime.toJavaLocalTime
-import kotlin.reflect.KClass
 import org.reactivestreams.Publisher
 import reactor.core.publisher.Mono
 import reactor.pool.PoolAcquireTimeoutException
 import reactor.pool.PoolShutdownException
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.jvm.optionals.getOrElse
+import kotlin.reflect.KClass
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
+import kotlin.time.toJavaInstant
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
+import kotlin.uuid.toJavaUuid
+import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
+import io.r2dbc.postgresql.api.Notification as NativeR2dbcNotification
+import io.r2dbc.spi.Connection as NativeR2dbcConnection
+import io.r2dbc.spi.Result as NativeR2dbcResultSet
 
 class PostgreSQLImpl(
     private val pool: NativeR2dbcConnectionPool,
@@ -240,21 +241,28 @@ class PostgreSQLImpl(
         PgChannelScope.launch {
             var retryCount = 0
             val baseDelay = 100.milliseconds
+            val maxDelay = 30.seconds
 
             // Automatically reconnect if the connection closes.
             while (true) {
                 try {
                     val con = connectionFactory.create().awaitSingle()
-                    con.createStatement(sql)
-                        .execute()
-                        .flatMap { it.rowsUpdated }
-                        .thenMany(con.notifications)
-                        .asFlow()
-                        .collect { f(it.toNotification()) }
-                    con.close().awaitSingleOrNull()
+                    // A successful connection resets the reconnect backoff.
+                    retryCount = 0
+                    try {
+                        con.createStatement(sql)
+                            .execute()
+                            .flatMap { it.rowsUpdated }
+                            .thenMany(con.notifications)
+                            .asFlow()
+                            .collect { f(it.toNotification()) }
+                    } finally {
+                        // Always release the connection, including when the stream fails mid-flight.
+                        con.close().awaitSingleOrNull()
+                    }
                 } catch (_: Exception) {
                     retryCount++
-                    delay(baseDelay * retryCount)
+                    delay(minOf(baseDelay * retryCount, maxDelay))
                 }
             }
         }
@@ -306,19 +314,24 @@ class PostgreSQLImpl(
                 if (status == Connection.Status.Closed) return@withLock
                 _status = Connection.Status.Closed
 
-                transactionIsolationLevel?.let {
-                    val default = IPostgresSQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL
-                    setTransactionIsolationLevel(default, false).getOrThrow()
+                try {
+                    transactionIsolationLevel?.let {
+                        val default = IPostgresSQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL
+                        setTransactionIsolationLevel(default, false).getOrThrow()
+                    }
+                } finally {
+                    // Always release the underlying connection, even if the isolation-level reset fails.
+                    connection.close().toMono().awaitSingleOrNull()
                 }
-
-                connection.close().toMono().awaitSingleOrNull()
             }
         }
 
         private suspend fun setTransactionIsolationLevel(level: IsolationLevel, lock: Boolean): Result<Unit> {
             // language=PostgreSQL
             val sql = "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL ${level.value}"
-            return execute(sql, lock).map { }.also { _transactionIsolationLevel = level }
+            // Only record the new level once the SET has actually succeeded, so the tracked state
+            // never diverges from the database (and close() won't attempt a spurious reset).
+            return execute(sql, lock).map { }.onSuccess { _transactionIsolationLevel = level }
         }
 
         override suspend fun setTransactionIsolationLevel(level: IsolationLevel): Result<Unit> =

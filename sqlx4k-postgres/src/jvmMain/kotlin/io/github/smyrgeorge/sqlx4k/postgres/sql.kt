@@ -28,9 +28,13 @@ internal value class DoubleQuotingString(val value: String) {
          * A valid SQL identifier must:
          * - Not be empty
          * - Not exceed 128 characters in length
-         * - Start with a letter (a-z, A-Z) or underscore (_)
-         * - Contain only letters (a-z, A-Z), digits (0-9), underscores (_), or dots (.)
+         * - Start with a letter (any Unicode letter, per [Char.isLetter]) or underscore (_)
+         * - Contain only letters, digits (per [Char.isLetterOrDigit]), underscores (_), or dots (.)
          * - Each segment between dots must be a valid identifier
+         *
+         * Note: letters/digits are matched via [Char.isLetter]/[Char.isLetterOrDigit], which accept
+         * non-ASCII Unicode letters and digits (PostgreSQL permits Unicode identifiers). Injection-risk
+         * characters (quotes, `;`, whitespace, comment markers, etc.) are still rejected.
          *
          * Dots are allowed to support schema-qualified identifiers (e.g., "schema.table").
          *

@@ -2,15 +2,12 @@ package io.github.smyrgeorge.sqlx4k.postgres
 
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
-import io.r2dbc.pool.ConnectionPool as R2dbcConnectionPool
 import io.r2dbc.pool.ConnectionPoolConfiguration
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
 import io.r2dbc.postgresql.PostgresqlConnectionFactoryProvider
 import io.r2dbc.spi.ConnectionFactoryOptions
 import kotlin.time.toJavaDuration
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.reactive.awaitSingle
-import kotlinx.coroutines.runBlocking
+import io.r2dbc.pool.ConnectionPool as R2dbcConnectionPool
 
 /**
  * PostgreSQL class provides mechanisms to interact with a PostgreSQL database.
@@ -73,7 +70,8 @@ class PostgreSQL(
         ): R2dbcConnectionPool {
             val poolConfiguration = connectionPoolConfiguration(options, connectionFactory)
             return R2dbcConnectionPool(poolConfiguration).apply {
-                runBlocking { launch { runCatching { warmup().awaitSingle() } } }
+                // Warm up the pool in the background without blocking construction; ignore warmup failures.
+                warmup().subscribe({ }, { })
             }
         }
     }
