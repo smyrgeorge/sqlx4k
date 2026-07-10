@@ -426,13 +426,13 @@ class PgmqClient(
     }
 
     /**
-     * Retrieves a list of metrics from the database using the `pgmq.metrics()` query.
+     * Retrieves metrics for every queue using the `pgmq.metrics_all()` query.
      *
      * @return a [Result] containing a list of [Metrics] objects if the retrieval is successful, or an error result otherwise.
      */
     suspend fun metrics(): Result<List<Metrics>> {
         // language=PostgreSQL
-        val sql = "SELECT * FROM pgmq.metrics()"
+        val sql = "SELECT * FROM pgmq.metrics_all()"
         return pg.fetchAll(sql, MetricsRowMapper)
     }
 

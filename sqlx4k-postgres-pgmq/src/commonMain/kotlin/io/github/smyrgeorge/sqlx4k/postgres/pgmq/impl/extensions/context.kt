@@ -83,10 +83,10 @@ suspend fun archive(queue: String, ids: List<Long>): Result<List<Long>> {
     // language=PostgreSQL
     val sql = "SELECT pgmq.archive(queue_name := ?, msg_ids := ARRAY[?])"
     val statement = Statement.create(sql).bind(0, queue).bind(1, NoWrappingTuple(ids))
-    return db.fetchAll(statement, LongRowMapper).mapCatching {
-        val archived = it.all { id -> id in ids }
-        check(archived) { "Some of the given ids could not be archived." }
-        it
+    return db.fetchAll(statement, LongRowMapper).mapCatching { archivedIds ->
+        val archivedSet = archivedIds.toSet()
+        check(ids.all { it in archivedSet }) { "Some of the given ids could not be archived." }
+        archivedIds
     }
 }
 
@@ -103,10 +103,10 @@ suspend fun delete(queue: String, ids: List<Long>): Result<List<Long>> {
     // language=PostgreSQL
     val sql = "SELECT pgmq.delete(queue_name := ?, msg_ids := ARRAY[?])"
     val statement = Statement.create(sql).bind(0, queue).bind(1, NoWrappingTuple(ids))
-    return db.fetchAll(statement, LongRowMapper).mapCatching {
-        val deleted = it.all { id -> id in ids }
-        check(deleted) { "Some of the given ids could not be deleted." }
-        it
+    return db.fetchAll(statement, LongRowMapper).mapCatching { deletedIds ->
+        val deletedSet = deletedIds.toSet()
+        check(ids.all { it in deletedSet }) { "Some of the given ids could not be deleted." }
+        deletedIds
     }
 }
 
@@ -139,6 +139,6 @@ suspend fun sendTopic(
         .bind(0, routingKey)
         .bind(1, message)
         .bind(2, headers.toJsonString())
-        .bind(3, delay.inWholeSeconds)
+        .bind(3, delay.inWholeSeconds.toInt())
     return db.fetchAll(statement, LongRowMapper).toSingleLong()
 }

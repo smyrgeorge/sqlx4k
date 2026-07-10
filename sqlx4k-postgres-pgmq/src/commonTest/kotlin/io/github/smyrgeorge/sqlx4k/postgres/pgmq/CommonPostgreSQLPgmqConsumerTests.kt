@@ -1,7 +1,15 @@
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq
 
 import assertk.assertThat
-import assertk.assertions.*
+import assertk.assertions.contains
+import assertk.assertions.containsExactly
+import assertk.assertions.containsExactlyInAnyOrder
+import assertk.assertions.hasSize
+import assertk.assertions.isEmpty
+import assertk.assertions.isEqualTo
+import assertk.assertions.isGreaterThanOrEqualTo
+import assertk.assertions.isNotEmpty
+import assertk.assertions.isNotNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
@@ -55,7 +63,7 @@ class CommonPostgreSQLPgmqConsumerTests(
         client.send(queueName, messageBatch).getOrThrow()
 
         // Wait for messages to be processed
-        withTimeout(5_000) {
+        withTimeout(5_000.milliseconds) {
             while (true) {
                 val size = lock.withLock { processedMessages.size }
                 if (size >= 3) break else delay(100.milliseconds)
@@ -118,7 +126,7 @@ class CommonPostgreSQLPgmqConsumerTests(
         client.send(queueName, """{"message": "test"}""").getOrThrow()
 
         // Wait for retry logic to process the message successfully
-        withTimeout(10_000) {
+        withTimeout(10_000.milliseconds) {
             while (true) {
                 val attempts = lock.withLock { attemptCounts.values.firstOrNull() ?: 0 }
                 if (attempts >= 3) break else delay(200.milliseconds)
@@ -169,7 +177,7 @@ class CommonPostgreSQLPgmqConsumerTests(
         ).getOrThrow()
 
         // Wait for processing
-        withTimeout(5_000) {
+        withTimeout(5_000.milliseconds) {
             while (true) {
                 val size = lock.withLock { processedMessages.size }
                 if (size >= 2) break else delay(100.milliseconds)
@@ -225,7 +233,7 @@ class CommonPostgreSQLPgmqConsumerTests(
         client.send(queueName, messageBatch).getOrThrow()
 
         // Wait for all messages to be processed
-        withTimeout(15_000) {
+        withTimeout(15_000.milliseconds) {
             while (true) {
                 val size = lock.withLock { processedMessages.size }
                 if (size >= 10) break else delay(200.milliseconds)
@@ -275,7 +283,7 @@ class CommonPostgreSQLPgmqConsumerTests(
         client.send(queueName, """{"message": "test"}""").getOrThrow()
 
         // Wait for at least one error to be captured
-        withTimeout(5_000) {
+        withTimeout(5_000.milliseconds) {
             while (true) {
                 val errorCount = lock.withLock { processErrors.size }
                 if (errorCount >= 1) break else delay(100.milliseconds)
@@ -328,7 +336,7 @@ class CommonPostgreSQLPgmqConsumerTests(
         client.send(queueName, messageBatch).getOrThrow()
 
         // Wait for all messages to be processed
-        withTimeout(10_000) {
+        withTimeout(10_000.milliseconds) {
             while (true) {
                 val size = lock.withLock { processedOrder.size }
                 if (size >= 3) break else delay(100.milliseconds)
@@ -374,7 +382,7 @@ class CommonPostgreSQLPgmqConsumerTests(
         client.send(queueName, """{"data": "value"}""", headers).getOrThrow()
 
         // Wait for message to be processed
-        withTimeout(5_000) {
+        withTimeout(5_000.milliseconds) {
             while (true) {
                 val size = lock.withLock { processedMessages.size }
                 if (size >= 1) break else delay(100.milliseconds)
@@ -467,7 +475,7 @@ class CommonPostgreSQLPgmqConsumerTests(
         client.send(queueName, largeBatch).getOrThrow()
 
         // Wait for all messages to be processed
-        withTimeout(15_000) {
+        withTimeout(15_000.milliseconds) {
             while (true) {
                 val size = lock.withLock { processedMessages.size }
                 if (size >= 20) break else delay(200.milliseconds)
@@ -526,7 +534,7 @@ class CommonPostgreSQLPgmqConsumerTests(
         assertThat(metricsBeforeCompletion.queueName).isEqualTo(queueName)
 
         // Wait for all processing to complete
-        withTimeout(10_000) {
+        withTimeout(10_000.milliseconds) {
             while (true) {
                 val size = lock.withLock { processedMessages.size }
                 if (size >= 3) break else delay(100.milliseconds)
@@ -579,7 +587,7 @@ class CommonPostgreSQLPgmqConsumerTests(
         client.send(queueName, """{"msg": "msg1"}""").getOrThrow()
 
         // Wait for processing
-        withTimeout(5_000) {
+        withTimeout(5_000.milliseconds) {
             while (true) {
                 val size = lock.withLock { processedMessages.size }
                 if (size >= 1) break else delay(100.milliseconds)

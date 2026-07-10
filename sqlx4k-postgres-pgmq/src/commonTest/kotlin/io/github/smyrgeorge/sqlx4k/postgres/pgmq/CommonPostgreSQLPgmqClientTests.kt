@@ -1,7 +1,16 @@
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq
 
 import assertk.assertThat
-import assertk.assertions.*
+import assertk.assertions.contains
+import assertk.assertions.containsExactlyInAnyOrder
+import assertk.assertions.doesNotContain
+import assertk.assertions.hasSize
+import assertk.assertions.isEmpty
+import assertk.assertions.isEqualTo
+import assertk.assertions.isGreaterThan
+import assertk.assertions.isGreaterThanOrEqualTo
+import assertk.assertions.isNotNull
+import assertk.assertions.isTrue
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlin.random.Random
@@ -85,6 +94,43 @@ class CommonPostgreSQLPgmqClientTests(
         client.drop(queue)
     }
 
+    fun `send message with special characters in headers should round-trip`() = runBlocking {
+        val queueName = newQueue()
+        val queue = PgmqClient.Queue(queueName)
+        client.create(queue).getOrThrow()
+        try {
+            // Values that must be JSON-escaped on the way out and decoded back unchanged.
+            val headers = mapOf(
+                "quote" to """he said "hi"""",
+                "backslash" to """a\b\c""",
+                "unicode" to "grin 😀 café",
+                "spacey" to "  padded value  "
+            )
+            client.send(queueName, """{"m": 1}""", headers).getOrThrow()
+
+            val messages = client.read(queueName, quantity = 10).getOrThrow()
+            assertThat(messages).hasSize(1)
+            assertThat(messages[0].headers).isEqualTo(headers)
+        } finally {
+            client.drop(queue)
+        }
+    }
+
+    fun `send message without headers should read back empty headers`() = runBlocking {
+        val queueName = newQueue()
+        val queue = PgmqClient.Queue(queueName)
+        client.create(queue).getOrThrow()
+        try {
+            client.send(queueName, """{"m": 1}""").getOrThrow()
+
+            val messages = client.read(queueName, quantity = 10).getOrThrow()
+            assertThat(messages).hasSize(1)
+            assertThat(messages[0].headers).isEqualTo(emptyMap())
+        } finally {
+            client.drop(queue)
+        }
+    }
+
     fun `send batch messages should enqueue all`() = runBlocking {
         val queueName = newQueue()
         val queue = PgmqClient.Queue(queueName)
@@ -107,6 +153,26 @@ class CommonPostgreSQLPgmqClientTests(
 
         // Cleanup
         client.drop(queue)
+    }
+
+    fun `send batch with headers should preserve headers on every message`() = runBlocking {
+        val queueName = newQueue()
+        val queue = PgmqClient.Queue(queueName)
+        client.create(queue).getOrThrow()
+        try {
+            val headers = mapOf("key1" to "value1", "key2" to "value2")
+            client.send(
+                queueName,
+                listOf("""{"msg": "a"}""", """{"msg": "b"}""", """{"msg": "c"}"""),
+                headers
+            ).getOrThrow()
+
+            val messages = client.read(queueName, quantity = 10).getOrThrow()
+            assertThat(messages).hasSize(3)
+            messages.forEach { assertThat(it.headers).isEqualTo(headers) }
+        } finally {
+            client.drop(queue)
+        }
     }
 
     fun `pop message should remove from queue`() = runBlocking {
@@ -179,11 +245,13 @@ class CommonPostgreSQLPgmqClientTests(
 
         client.create(queue).getOrThrow()
 
-        val msgIds = client.send(queueName, listOf(
-            """{"msg": "msg1"}""",
-            """{"msg": "msg2"}""",
-            """{"msg": "msg3"}"""
-        )).getOrThrow()
+        val msgIds = client.send(
+            queueName, listOf(
+                """{"msg": "msg1"}""",
+                """{"msg": "msg2"}""",
+                """{"msg": "msg3"}"""
+            )
+        ).getOrThrow()
 
         val archived = client.archive(queueName, msgIds.take(2)).getOrThrow()
         assertThat(archived).hasSize(2)
@@ -222,11 +290,13 @@ class CommonPostgreSQLPgmqClientTests(
 
         client.create(queue).getOrThrow()
 
-        val msgIds = client.send(queueName, listOf(
-            """{"msg": "msg1"}""",
-            """{"msg": "msg2"}""",
-            """{"msg": "msg3"}"""
-        )).getOrThrow()
+        val msgIds = client.send(
+            queueName, listOf(
+                """{"msg": "msg1"}""",
+                """{"msg": "msg2"}""",
+                """{"msg": "msg3"}"""
+            )
+        ).getOrThrow()
 
         val deleted = client.delete(queueName, msgIds.take(2)).getOrThrow()
         assertThat(deleted).hasSize(2)
@@ -239,19 +309,55 @@ class CommonPostgreSQLPgmqClientTests(
         client.drop(queue)
     }
 
+    fun `archive with an unknown id should fail`() = runBlocking {
+        val queueName = newQueue()
+        val queue = PgmqClient.Queue(queueName)
+        client.create(queue).getOrThrow()
+        try {
+            val msgIds = client.send(queueName, listOf("""{"msg": "1"}""", """{"msg": "2"}""")).getOrThrow()
+            // Ask to archive the two real ids plus one that does not exist: not every requested id
+            // can be archived, so the call must report a failure (not silently succeed).
+            val unknownId = (msgIds.maxOrNull() ?: 0L) + 1_000L
+            val result = client.archive(queueName, msgIds + unknownId)
+            assertThat(result.isFailure).isTrue()
+            assertThat(result.exceptionOrNull()?.message ?: "").contains("could not be archived")
+        } finally {
+            client.drop(queue)
+        }
+    }
+
+    fun `delete with an unknown id should fail`() = runBlocking {
+        val queueName = newQueue()
+        val queue = PgmqClient.Queue(queueName)
+        client.create(queue).getOrThrow()
+        try {
+            val msgIds = client.send(queueName, listOf("""{"msg": "1"}""", """{"msg": "2"}""")).getOrThrow()
+            // Ask to delete the two real ids plus one that does not exist: not every requested id
+            // can be deleted, so the call must report a failure (not silently succeed).
+            val unknownId = (msgIds.maxOrNull() ?: 0L) + 1_000L
+            val result = client.delete(queueName, msgIds + unknownId)
+            assertThat(result.isFailure).isTrue()
+            assertThat(result.exceptionOrNull()?.message ?: "").contains("could not be deleted")
+        } finally {
+            client.drop(queue)
+        }
+    }
+
     fun `purge queue should remove all messages`() = runBlocking {
         val queueName = newQueue()
         val queue = PgmqClient.Queue(queueName)
 
         client.create(queue).getOrThrow()
 
-        client.send(queueName, listOf(
-            """{"msg": "msg1"}""",
-            """{"msg": "msg2"}""",
-            """{"msg": "msg3"}""",
-            """{"msg": "msg4"}""",
-            """{"msg": "msg5"}"""
-        )).getOrThrow()
+        client.send(
+            queueName, listOf(
+                """{"msg": "msg1"}""",
+                """{"msg": "msg2"}""",
+                """{"msg": "msg3"}""",
+                """{"msg": "msg4"}""",
+                """{"msg": "msg5"}"""
+            )
+        ).getOrThrow()
 
         val purgedCount = client.purge(queue).getOrThrow()
         assertThat(purgedCount).isEqualTo(5)
@@ -306,6 +412,24 @@ class CommonPostgreSQLPgmqClientTests(
         client.drop(queue)
     }
 
+    fun `ack multiple should delete messages`() = runBlocking {
+        val queueName = newQueue()
+        val queue = PgmqClient.Queue(queueName)
+        client.create(queue).getOrThrow()
+        try {
+            val msgIds = client.send(
+                queueName,
+                listOf("""{"msg": "1"}""", """{"msg": "2"}""", """{"msg": "3"}""")
+            ).getOrThrow()
+
+            val acked = client.ack(queueName, msgIds).getOrThrow()
+            assertThat(acked).hasSize(3)
+            assertThat(client.read(queueName, quantity = 10).getOrThrow()).isEmpty()
+        } finally {
+            client.drop(queue)
+        }
+    }
+
     fun `nack should reset visibility timeout`() = runBlocking {
         val queueName = newQueue()
         val queue = PgmqClient.Queue(queueName)
@@ -334,11 +458,13 @@ class CommonPostgreSQLPgmqClientTests(
         client.create(queue).getOrThrow()
 
         // Send some messages
-        client.send(queueName, listOf(
-            """{"msg": "msg1"}""",
-            """{"msg": "msg2"}""",
-            """{"msg": "msg3"}"""
-        )).getOrThrow()
+        client.send(
+            queueName, listOf(
+                """{"msg": "msg1"}""",
+                """{"msg": "msg2"}""",
+                """{"msg": "msg3"}"""
+            )
+        ).getOrThrow()
 
         val metrics = client.metrics(queueName).getOrThrow()
         assertThat(metrics.queueName).isEqualTo(queueName)
@@ -346,6 +472,19 @@ class CommonPostgreSQLPgmqClientTests(
 
         // Cleanup
         client.drop(queue)
+    }
+
+    fun `metrics for all queues should include the created queue`() = runBlocking {
+        val queueName = newQueue()
+        val queue = PgmqClient.Queue(queueName)
+        client.create(queue).getOrThrow()
+        try {
+            client.send(queueName, """{"m": 1}""").getOrThrow()
+            val all = client.metrics().getOrThrow()
+            assertThat(all.map { it.queueName }).contains(queueName)
+        } finally {
+            client.drop(queue)
+        }
     }
 
     fun `delayed message should not be visible immediately`() = runBlocking {

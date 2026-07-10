@@ -84,6 +84,16 @@ class JvmPostgreSQLPgmqClientTests {
     }
 
     @Test
+    fun `archive with an unknown id should fail`() {
+        runner.`archive with an unknown id should fail`()
+    }
+
+    @Test
+    fun `delete with an unknown id should fail`() {
+        runner.`delete with an unknown id should fail`()
+    }
+
+    @Test
     fun `purge queue should remove all messages`() {
         runner.`purge queue should remove all messages`()
     }
@@ -126,5 +136,30 @@ class JvmPostgreSQLPgmqClientTests {
     @Test
     fun `message readCt should increment on repeated reads`() {
         runner.`message readCt should increment on repeated reads`()
+    }
+
+    @Test
+    fun `send message with special characters in headers should round-trip`() {
+        runner.`send message with special characters in headers should round-trip`()
+    }
+
+    @Test
+    fun `send message without headers should read back empty headers`() {
+        runner.`send message without headers should read back empty headers`()
+    }
+
+    @Test
+    fun `send batch with headers should preserve headers on every message`() {
+        runner.`send batch with headers should preserve headers on every message`()
+    }
+
+    @Test
+    fun `ack multiple should delete messages`() {
+        runner.`ack multiple should delete messages`()
+    }
+
+    @Test
+    fun `metrics for all queues should include the created queue`() {
+        runner.`metrics for all queues should include the created queue`()
     }
 }

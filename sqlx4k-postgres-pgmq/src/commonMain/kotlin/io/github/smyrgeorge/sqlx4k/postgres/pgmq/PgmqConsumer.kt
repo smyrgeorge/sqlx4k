@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalAtomicApi::class)
+
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq
 
 import kotlinx.coroutines.CoroutineScope
@@ -7,6 +9,8 @@ import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import kotlin.concurrent.atomics.AtomicReference
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.Duration
@@ -42,8 +46,8 @@ class PgmqConsumer(
 ) {
     private var notifyJob: Job? = null
     private var fetchJob: Job? = null
-    private var fetchDelay = Duration.ZERO
-    private var fetchDelayJob: Job? = null
+    private val fetchDelay = AtomicReference(Duration.ZERO)
+    private val fetchDelayJob = AtomicReference<Job?>(null)
     private var consumeJob: Job? = null
     private lateinit var consumeChannel: Channel<Message>
 
@@ -71,8 +75,8 @@ class PgmqConsumer(
     private fun startNotify() {
         notifyJob = PgChannelScope.launch {
             pgmq.pg.listen(options.listenChannel) {
-                fetchDelay = Duration.ZERO
-                fetchDelayJob?.cancel()
+                fetchDelay.store(Duration.ZERO)
+                fetchDelayJob.load()?.cancel()
             }
         }
     }
@@ -110,15 +114,18 @@ class PgmqConsumer(
                     // Process messages immediately.
                     messages.forEach { consumeChannel.send(it) }
                     // reset delay since queue is active
-                    fetchDelay = Duration.ZERO
+                    fetchDelay.store(Duration.ZERO)
                 } else {
-                    // no messages — back off
-                    if (fetchDelay == Duration.ZERO) fetchDelay = options.queueMinPullDelay
-                    fetchDelay = (fetchDelay * 2).coerceAtMost(options.queueMaxPullDelay)
+                    // no messages — back off, starting from queueMinPullDelay then doubling up to the max
+                    val current = fetchDelay.load()
+                    val next = if (current == Duration.ZERO) options.queueMinPullDelay
+                    else (current * 2).coerceAtMost(options.queueMaxPullDelay)
+                    fetchDelay.store(next)
                 }
 
-                fetchDelayJob = launch { runCatching { delay(fetchDelay) } }
-                fetchDelayJob?.join()
+                val job = launch { runCatching { delay(fetchDelay.load()) } }
+                fetchDelayJob.store(job)
+                job.join()
             }
         }
     }
@@ -140,9 +147,9 @@ class PgmqConsumer(
             delay(500.milliseconds)
             consumeJob?.cancel()
             consumeJob = null
-            fetchDelayJob?.cancel()
-            fetchDelayJob = null
-            fetchDelay = Duration.ZERO
+            fetchDelayJob.load()?.cancel()
+            fetchDelayJob.store(null)
+            fetchDelay.store(Duration.ZERO)
             delay(500.milliseconds)
             fetchJob?.cancel()
             fetchJob = null
