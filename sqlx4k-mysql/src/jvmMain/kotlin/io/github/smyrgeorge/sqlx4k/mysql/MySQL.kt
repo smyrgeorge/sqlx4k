@@ -40,12 +40,10 @@ import kotlin.time.toJavaDuration
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitLast
 import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.LocalDate
@@ -87,7 +85,8 @@ class MySQL(
     private val connectionFactory: MySqlConnectionFactory = connectionFactory(url, username, password)
     private val poolConfiguration: ConnectionPoolConfiguration = connectionPoolConfiguration(options, connectionFactory)
     private val pool: NativeR2dbcConnectionPool = NativeR2dbcConnectionPool(poolConfiguration).apply {
-        runBlocking { launch { runCatching { warmup().awaitSingle() } } }
+        // Warm up the pool in the background without blocking construction; ignore warmup failures.
+        warmup().subscribe({ }, { })
     }
 
     override suspend fun migrate(
@@ -248,19 +247,21 @@ class MySQL(
                 if (status == Connection.Status.Closed) return@withLock
                 _status = Connection.Status.Closed
 
-                transactionIsolationLevel?.let {
-                    val default = IMySQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL
-                    setTransactionIsolationLevel(default, false).getOrThrow()
+                try {
+                    transactionIsolationLevel?.let {
+                        val default = IMySQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL
+                        setTransactionIsolationLevel(default, false).getOrThrow()
+                    }
+                } finally {
+                    connection.close().toMono().awaitSingleOrNull()
                 }
-
-                connection.close().toMono().awaitSingleOrNull()
             }
         }
 
         private suspend fun setTransactionIsolationLevel(level: IsolationLevel, lock: Boolean): Result<Unit> {
             // language=MySQL
             val sql = "SET SESSION TRANSACTION ISOLATION LEVEL ${level.value}"
-            return execute(sql, lock).map { }.also { _transactionIsolationLevel = level }
+            return execute(sql, lock).map { }.onSuccess { _transactionIsolationLevel = level }
         }
 
         override suspend fun setTransactionIsolationLevel(level: IsolationLevel): Result<Unit> =

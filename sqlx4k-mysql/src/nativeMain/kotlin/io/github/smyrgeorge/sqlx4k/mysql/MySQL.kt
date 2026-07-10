@@ -210,7 +210,7 @@ class MySQL(
         private suspend fun setTransactionIsolationLevel(level: IsolationLevel, lock: Boolean): Result<Unit> {
             // language=SQL
             val sql = "SET SESSION TRANSACTION ISOLATION LEVEL ${level.value}"
-            return execute(sql, lock).map { }.also { _transactionIsolationLevel = level }
+            return execute(sql, lock).map { }.onSuccess { _transactionIsolationLevel = level }
         }
 
         override suspend fun setTransactionIsolationLevel(level: IsolationLevel): Result<Unit> =
