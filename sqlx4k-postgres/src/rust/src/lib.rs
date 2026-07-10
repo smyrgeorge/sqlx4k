@@ -1238,7 +1238,16 @@ fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mut c_char {
             let v: Vec<Vec<u8>> = row.get_unchecked(ordinal);
             format_pg_array_fmt(v.iter(), |b| format!("\\x{}", hex::encode(b)))
         }
-        // TEXT/VARCHAR/CHAR/NAME/JSON/JSONB and anything else (including NUMERIC,
+        // JSONB's binary wire format is a 1-byte version header (0x01) followed by the
+        // canonical JSON text. Decoding as `&str` (the fallthrough below) would keep that
+        // header byte, corrupting JSON parsing on the Kotlin side (e.g. `?{...}`), so strip
+        // it here. In the simple-query / text protocol there is no header, so the strip is a
+        // no-op. (Plain `JSON` is stored/sent as text and needs no adjustment.)
+        "JSONB" => {
+            let s = row.get_unchecked::<&str, _>(ordinal);
+            s.strip_prefix('\u{1}').unwrap_or(s).to_string()
+        }
+        // TEXT/VARCHAR/CHAR/NAME/JSON and anything else (including NUMERIC,
         // which we don't depend on bigdecimal/rust_decimal for) fall through to
         // `&str`. In the simple-query / text protocol every value arrives as text;
         // in extended/prepared mode this works for text-typed columns. Callers
