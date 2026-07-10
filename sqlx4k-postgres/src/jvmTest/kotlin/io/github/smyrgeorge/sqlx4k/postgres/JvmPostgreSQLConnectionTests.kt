@@ -64,6 +64,11 @@ class JvmPostgreSQLConnectionTests {
     }
 
     @Test
+    fun `failed setTransactionIsolationLevel should not change the tracked level`() {
+        runner.`failed setTransactionIsolationLevel should not change the tracked level`()
+    }
+
+    @Test
     fun `connection isolation level should be reset to default after connection is closed`() {
         val db = postgreSQL(
             url = "postgresql://localhost:15432/test",

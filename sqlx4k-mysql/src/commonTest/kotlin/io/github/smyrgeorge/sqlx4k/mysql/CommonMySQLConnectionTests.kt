@@ -5,6 +5,7 @@ package io.github.smyrgeorge.sqlx4k.mysql
 import assertk.assertThat
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFailure
+import assertk.assertions.isNotEqualTo
 import assertk.assertions.isSuccess
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
@@ -163,6 +164,16 @@ class CommonMySQLConnectionTests(
         assertThat(result).isFailure()
         val ex = result.exceptionOrNull() as SQLError
         assertThat(ex.code).isEqualTo(SQLError.Code.ConnectionIsClosed)
+    }
+
+    fun `failed setTransactionIsolationLevel should not change the tracked level`() = runBlocking {
+        val cn: Connection = db.acquire().getOrThrow()
+        cn.close().getOrThrow()
+        val before = cn.transactionIsolationLevel
+        val result = cn.setTransactionIsolationLevel(IsolationLevel.Serializable)
+        assertThat(result).isFailure()
+        assertThat(cn.transactionIsolationLevel).isEqualTo(before)
+        assertThat(cn.transactionIsolationLevel).isNotEqualTo(IsolationLevel.Serializable)
     }
 
     fun `connection isolation level should be reset to default after connection is closed`(db: IMySQL) = runBlocking {
