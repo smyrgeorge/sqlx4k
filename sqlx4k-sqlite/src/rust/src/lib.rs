@@ -15,6 +15,11 @@ use std::{
 };
 use tokio::runtime::Runtime;
 
+// Linux-only: provides the `fcntl64` symbol that the bundled `sqlite3.c` references but
+// Kotlin/Native's bundled glibc sysroot doesn't export. See the module docs for details.
+#[cfg(target_os = "linux")]
+mod compat;
+
 // ============================================================================
 // Shared constants and types (inlined from sqlx4k)
 // ============================================================================
