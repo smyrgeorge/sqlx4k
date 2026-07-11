@@ -8,13 +8,15 @@ import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
-import kotlin.concurrent.atomics.ExperimentalAtomicApi
-import kotlin.concurrent.atomics.decrementAndFetch
-import kotlin.concurrent.atomics.update
-import kotlin.time.TimeMark
-import kotlin.time.TimeSource
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.concurrent.Volatile
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.concurrent.atomics.decrementAndFetch
+import kotlin.concurrent.atomics.incrementAndFetch
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 class PooledConnection(
     private val connection: Connection,
@@ -22,10 +24,21 @@ class PooledConnection(
 ) : Connection {
     override val encoders: ValueEncoderRegistry = pool.encoders
     private val mutex = Mutex()
+
+    // Read without the mutex from isExpired()/isReleased() on background/cleanup coroutines, so both
+    // are @Volatile to guarantee cross-thread visibility of writes made under the mutex.
+    @Volatile
     private var acquired = true
     private val released get() = !acquired
     private val createdAt: TimeMark = TIME_SOURCE.markNow()
+
+    @Volatile
     private var lastUsedAt: TimeMark = createdAt
+
+    // Guards the one-time physical teardown (count decrement + connection close + semaphore release),
+    // so overlapping close paths — e.g., a pool-closed close() racing the acquire() cancellation
+    // cleanup — can never double-release the semaphore or double-decrement the pool count.
+    private val physicallyClosed = AtomicBoolean(false)
 
     override var status: Connection.Status = Connection.Status.Open
     override val transactionIsolationLevel: Transaction.IsolationLevel? get() = connection.transactionIsolationLevel
@@ -91,26 +104,35 @@ class PooledConnection(
     }
 
     internal suspend fun closeInternal() {
+        // Claim the teardown first so a second closeInternal() (e.g. from acquire()'s cancellation
+        // cleanup) neither decrements the count twice nor releases the semaphore twice.
+        if (!physicallyClosed.compareAndSet(expectedValue = false, newValue = true)) return
         pool.totalConnections.decrementAndFetch()
-        doClose()
+        releasePhysical()
     }
 
     internal suspend fun closeInternalIfAboveMinimum(minConnections: Int): Boolean {
-        var shouldClose = false
-        pool.totalConnections.update { count ->
-            if (count > minConnections) {
-                shouldClose = true
-                count - 1
-            } else {
-                count
+        if (physicallyClosed.load()) return false
+        // Atomically decide-and-decrement: only tear down while strictly above the minimum. The
+        // decrement and the decision are a single CAS, so the count can never be observed/acted upon
+        // inconsistently (the previous AtomicInt.update captured a flag whose value could survive a
+        // retry, closing a connection without decrementing).
+        while (true) {
+            val count = pool.totalConnections.load()
+            if (count <= minConnections) return false
+            if (pool.totalConnections.compareAndSet(count, count - 1)) {
+                if (physicallyClosed.compareAndSet(expectedValue = false, newValue = true)) {
+                    releasePhysical()
+                    return true
+                }
+                // Raced with another close path that already tore down (and decremented); undo ours.
+                pool.totalConnections.incrementAndFetch()
+                return false
             }
         }
-
-        if (shouldClose) doClose()
-        return shouldClose
     }
 
-    private suspend fun doClose() {
+    private suspend fun releasePhysical() {
         try {
             connection.close().getOrThrow()
         } catch (_: Exception) {

@@ -7,16 +7,11 @@ import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.logging.Logger
-import kotlin.concurrent.atomics.AtomicBoolean
-import kotlin.concurrent.atomics.AtomicInt
-import kotlin.concurrent.atomics.ExperimentalAtomicApi
-import kotlin.concurrent.atomics.decrementAndFetch
-import kotlin.concurrent.atomics.incrementAndFetch
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
@@ -24,8 +19,16 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.AtomicReference
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.concurrent.atomics.decrementAndFetch
+import kotlin.concurrent.atomics.incrementAndFetch
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Represents an implementation of a connection pool that manages a pool of connections and provides
@@ -92,11 +95,19 @@ class ConnectionPoolImpl(
      * the acquisition fails or the pool is closed.
      */
     override suspend fun acquire(): Result<Connection> {
+        // Tracks a connection obtained by acquireConnection so it can be reclaimed if the successful
+        // result is discarded while the coroutine unwinds — either acquireTimeout firing at the
+        // withTimeout boundary or the caller's coroutine being canceled during/after acquire().
+        val handoff = AtomicReference<PooledConnection?>(null)
         return runCatching {
             if (closed.load()) SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").raise()
-            if (options.acquireTimeout != null) withTimeout(options.acquireTimeout) { acquireConnection() }
-            else acquireConnection()
+            if (options.acquireTimeout != null) withTimeout(options.acquireTimeout) { acquireConnection(handoff) }
+            else acquireConnection(handoff)
         }.recoverCatching { error ->
+            // On any failure, if a connection was already handed off, it never reached the caller, so
+            // close it to avoid leaking it (and its semaphore permit). closeInternal() is idempotent,
+            // so this is safe even when the failing path already tore the connection down.
+            handoff.exchange(null)?.let { orphan -> withContext(NonCancellable) { orphan.closeInternal() } }
             when (error) {
                 is TimeoutCancellationException -> {
                     SQLError(
@@ -111,7 +122,17 @@ class ConnectionPoolImpl(
         }
     }
 
-    private suspend fun acquireConnection(): Connection {
+    // Publishes the connection to the hand-off holder before activating it, so acquire()'s
+    // cancellation cleanup can find and release it if this coroutine is cancelled during acquire().
+    private suspend fun handOff(
+        pooled: PooledConnection,
+        handoff: AtomicReference<PooledConnection?>
+    ): Connection {
+        handoff.store(pooled)
+        return pooled.acquire()
+    }
+
+    private suspend fun acquireConnection(handoff: AtomicReference<PooledConnection?>): Connection {
         while (true) {
             // Early closed check for fail-fast behavior
             if (closed.load()) {
@@ -127,7 +148,7 @@ class ConnectionPoolImpl(
                     // Yield to other coroutines to prevent CPU spinning
                     yield()
                 } else {
-                    return pooled.acquire()
+                    return handOff(pooled, handoff)
                 }
             }
 
@@ -144,7 +165,7 @@ class ConnectionPoolImpl(
                     val pooled = PooledConnection(newConnection, this)
                     totalConnections.incrementAndFetch()
                     semaphoreOwned = false // PooledConnection now owns the semaphore lifecycle
-                    return pooled.acquire()
+                    return handOff(pooled, handoff)
                 } catch (e: Exception) {
                     if (semaphoreOwned) semaphore.release()
                     throw e
@@ -171,7 +192,7 @@ class ConnectionPoolImpl(
                 // Expired: close and loop to try again
                 pooled.closeInternal()
             } else {
-                return pooled.acquire()
+                return handOff(pooled, handoff)
             }
         }
         // Unreachable
@@ -183,7 +204,7 @@ class ConnectionPoolImpl(
      * This method ensures that all idle connections are properly closed,
      * cleans up associated tasks, and updates internal states to reflect
      * that the pool is no longer active. If the pool is already closed,
-     * subsequent calls to this method will have no effect.
+     * later calls to this method will have no effect.
      *
      * @return A [Result] indicating the success or failure of the close operation.
      */
@@ -199,19 +220,22 @@ class ConnectionPoolImpl(
             idleCount.decrementAndFetch()
             pooled.closeInternal()
         }
-        // Reset idleCount to 0 unconditionally: after draining the channel no idle
-        // connections remain, and the pool is permanently closed so the value only
+        // Reset idleCount to 0 unconditionally: after draining the channel, no idle
+        // connections remain, and the pool is permanently closed, so the value only
         // matters for any final poolIdleSize() call.
         idleCount.store(0)
         scope.cancel()
     }
 
     internal suspend fun sendToIdle(connection: PooledConnection): Boolean {
+        // Increment before sending: a receiver must never observe the connection in the channel
+        // while idleCount still excludes it, which would let the counter go transiently negative.
+        idleCount.incrementAndFetch()
         return try {
             idleConnections.send(connection)
-            idleCount.incrementAndFetch()
             true
         } catch (_: Exception) {
+            idleCount.decrementAndFetch()
             false
         }
     }
@@ -253,7 +277,7 @@ class ConnectionPoolImpl(
             } catch (e: Exception) {
                 // Clean up based on what succeeded
                 if (pooled != null) {
-                    // Connection was created but something failed, close it
+                    // Connection was created, but something failed, close it
                     try {
                         pooled.closeInternal()
                     } catch (_: Exception) {
@@ -278,7 +302,9 @@ class ConnectionPoolImpl(
 
         // Process connections incrementally without draining all at once
         // This allows other coroutines to acquire connections during cleanup
-        val maxBatchSize: Int = options.maxConnections / 2 // Limit how many we process in one cleanup cycle
+        // Limit how many we process in one cleanup cycle. Use at least 1 so single-connection pools
+        // (where maxConnections / 2 == 0) still reclaim expired idle connections in the background.
+        val maxBatchSize: Int = maxOf(1, options.maxConnections / 2)
 
         while (processedCount < maxBatchSize) {
             val pooled = tryReceiveFromIdle() ?: break

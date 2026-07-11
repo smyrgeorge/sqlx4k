@@ -74,6 +74,31 @@ class ConnectionPoolExpirationTests {
     }
 
     @Test
+    fun `Background cleanup reclaims an idle expired connection in a max-1 pool`() = runBlocking {
+        // Regression test for the cleanup batch size: with maxConnections == 1 the batch size used
+        // to be maxConnections / 2 == 0, so the background cleanup loop was a no-op and an idle
+        // expired connection lingered until the next acquire. It should now be reclaimed on its own.
+        val pool = newPool(max = 1, idleTimeout = 100.milliseconds)
+
+        val c1 = pool.acquire().getOrThrow()
+        c1.close().getOrThrow() // now idle
+        assertThat(pool.poolSize()).isEqualTo(1)
+
+        // Wait for expiry (100ms) plus at least one cleanup cycle (CLEANUP_INTERVAL is 2s), without
+        // ever calling acquire() again — the background loop must do the reclamation itself.
+        var waited = 0
+        while (pool.poolSize() > 0 && waited < 8000) {
+            delay(200.milliseconds)
+            waited += 200
+        }
+
+        assertThat(pool.poolSize()).isEqualTo(0)
+        assertThat(pool.poolIdleSize()).isEqualTo(0)
+
+        pool.close().getOrThrow()
+    }
+
+    @Test
     fun `Expired connections during concurrent release are handled correctly`() = runBlocking {
         val pool = newPool(max = 5, idleTimeout = 50.milliseconds)
 
