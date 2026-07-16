@@ -57,7 +57,7 @@ fun targetsOf(project: Project): List<String> {
         else -> throw GradleException("Unsupported architecture: $arch")
     }
     val defaultTarget = "$osString$archString"
-    return (project.properties["targets"] as? String)?.let {
+    return (project.findProperty("targets") as? String)?.let {
         when (it) {
             "all" -> listOf(
                 "IosArm64",
