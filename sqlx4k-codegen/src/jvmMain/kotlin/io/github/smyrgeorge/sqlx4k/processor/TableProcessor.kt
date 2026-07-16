@@ -113,6 +113,10 @@ class TableProcessor(
         // Getting the value of the 'name' argument.
         val tableName = nameArgument.value as String
 
+        // The table name is embedded verbatim into generated SQL and Kotlin string literals,
+        // so it must be a safe SQL identifier (same reasoning as @Column names, see columnName()).
+        validateTableName(classDeclaration, tableName)
+
         // Getting the list of member properties of the annotated class.
         // Properties annotated with @Transient are fully excluded from generated code:
         // they are not part of INSERT/UPDATE/RETURNING and are not mapped from query results.
@@ -992,6 +996,29 @@ class TableProcessor(
     private fun KSPropertyDeclaration.simpleName(): String = simpleName.getShortName()
 
     /**
+     * Validates that a `@Table(name = ...)` value is a safe SQL identifier.
+     *
+     * The table name is embedded verbatim into generated SQL strings and Kotlin string literals,
+     * so characters like `"`, `$`, `;`, whitespace or comment markers would break the generated
+     * code (and are classic SQL-injection vectors). The value is validated against
+     * [TABLE_NAME_REGEX]: a plain SQL identifier, optionally schema-qualified with dots
+     * (e.g. `"users"` or `"public.users"`), where each dot-separated segment is a plain identifier.
+     *
+     * @param clazz The `@Table` class declaration (used for the error message).
+     * @param tableName The table name declared in the annotation.
+     * @throws IllegalStateException if the table name is not a valid (optionally schema-qualified) SQL identifier.
+     */
+    private fun validateTableName(clazz: KSClassDeclaration, tableName: String) {
+        if (!tableName.matches(TABLE_NAME_REGEX)) {
+            error(
+                "Invalid @Table name '$tableName' on ${clazz.qualifiedName()}: table names must be a plain " +
+                        "SQL identifier, optionally schema-qualified (e.g. \"users\" or \"public.users\"), where " +
+                        "each dot-separated segment matches [A-Za-z_][A-Za-z0-9_]*."
+            )
+        }
+    }
+
+    /**
      * Validates that no two properties resolve to the same column name, which can happen
      * when @Column(name = ...) overrides collide with each other or with derived names.
      *
@@ -1195,5 +1222,12 @@ class TableProcessor(
          * Allowed shape of an explicit @Column(name = ...) value: a plain (unquoted) SQL identifier.
          */
         private val COLUMN_NAME_REGEX = "[A-Za-z_][A-Za-z0-9_]*".toRegex()
+
+        /**
+         * Allowed shape of a @Table(name = ...) value: a plain (unquoted) SQL identifier, optionally
+         * schema-qualified with dots (e.g. "public.users"). Each dot-separated segment matches
+         * [COLUMN_NAME_REGEX].
+         */
+        private val TABLE_NAME_REGEX = "[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*".toRegex()
     }
 }
