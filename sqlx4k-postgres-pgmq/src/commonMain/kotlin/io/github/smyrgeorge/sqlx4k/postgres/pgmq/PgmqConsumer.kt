@@ -2,20 +2,24 @@
 
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.consumeEach
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
 import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.consumeEach
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * PgMqConsumer is responsible for consuming messages from a PostgreSQL-based
@@ -44,10 +48,18 @@ class PgmqConsumer(
     private val onFailToAck: suspend (Throwable) -> Unit = {},
     private val onFailToNack: suspend (Throwable) -> Unit = {},
 ) {
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default + CoroutineName("PgmqConsumer(${options.queue})")
+    )
     private var notifyJob: Job? = null
     private var fetchJob: Job? = null
     private val fetchDelay = AtomicReference(Duration.ZERO)
-    private val fetchDelayJob = AtomicReference<Job?>(null)
+
+    // Conflated wake-up signal: an insert notification offers to it, the fetch loop waits on it.
+    // Conflation makes the hand-off race-free — a signal sent while the loop is not waiting is
+    // retained and consumed by the next wait, so notifications are never lost.
+    private val wakeup = Channel<Unit>(Channel.CONFLATED)
+
     private var consumeJob: Job? = null
     private lateinit var consumeChannel: Channel<Message>
 
@@ -73,27 +85,39 @@ class PgmqConsumer(
     }
 
     private fun startNotify() {
-        notifyJob = PgChannelScope.launch {
+        notifyJob = scope.launch {
             pgmq.pg.listen(options.listenChannel) {
+                // Reset the backoff and wake the fetch loop immediately (if it is currently waiting).
                 fetchDelay.store(Duration.ZERO)
-                fetchDelayJob.load()?.cancel()
+                wakeup.trySend(Unit)
             }
         }
     }
 
     private fun startConsume() {
         consumeChannel = Channel(capacity = options.prefetch)
-        consumeJob = PgChannelScope.launch {
+        consumeJob = scope.launch {
             consumeChannel.consumeEach { msg ->
-                val res = runCatching {
-                    // Process message in a timeout.
+                // Process the message within a timeout. Only a genuine processing timeout or
+                // failure should trigger a nack; a CancellationException means the consumer is
+                // shutting down, so it must propagate instead of being treated as a failure.
+                val res = try {
                     withTimeout(options.vt) { onMessage(msg) }
+                    Result.success(Unit)
+                } catch (e: TimeoutCancellationException) {
+                    Result.failure(e)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    Result.failure(e)
                 }
 
                 res.onFailure { f ->
                     runCatching { onFailToProcess(f) }
                     val step = options.messageRetryDelayStep * msg.readCt
-                    val vt = step.coerceAtMost(options.messageMaxRetryDelay)
+                    // pgmq visibility timeout has whole-second granularity; round up so sub-second
+                    // retry delays don't truncate to 0 (which would cause immediate redelivery).
+                    val vt = step.coerceAtMost(options.messageMaxRetryDelay).ceilToWholeSeconds()
                     pgmq.nack(options.queue, msg.msgId, vt).onFailure { runCatching { onFailToNack(it) } }
                 }
                 res.onSuccess {
@@ -104,56 +128,65 @@ class PgmqConsumer(
     }
 
     private fun startFetch() {
-        fetchJob = PgChannelScope.launch {
+        fetchJob = scope.launch {
             while (true) {
                 val messages = pgmq.read(options.queue, options.prefetch, options.vtBias).getOrElse {
-                    onFailToRead(it)
+                    runCatching { onFailToRead(it) }
                     emptyList()
                 }
-                if (messages.isNotEmpty()) {
-                    // Process messages immediately.
-                    messages.forEach { consumeChannel.send(it) }
-                    // reset delay since queue is active
-                    fetchDelay.store(Duration.ZERO)
-                } else {
-                    // no messages — back off, starting from queueMinPullDelay then doubling up to the max
-                    val current = fetchDelay.load()
-                    val next = if (current == Duration.ZERO) options.queueMinPullDelay
-                    else (current * 2).coerceAtMost(options.queueMaxPullDelay)
-                    fetchDelay.store(next)
-                }
+                // Forward whatever we read for processing (applies natural backpressure via the channel).
+                messages.forEach { consumeChannel.send(it) }
 
-                val job = launch { runCatching { delay(fetchDelay.load()) } }
-                fetchDelayJob.store(job)
-                job.join()
+                // Decide how long to wait before the next read:
+                // - full batch   -> more messages are likely waiting, poll again immediately
+                // - partial read -> queue is (almost) drained, pause briefly so a slow trickle
+                //                   doesn't turn into a tight read loop that hammers the database
+                // - empty read   -> exponential backoff from queueMinPullDelay up to queueMaxPullDelay
+                val next = when {
+                    messages.size >= options.prefetch -> Duration.ZERO
+                    messages.isNotEmpty() -> options.queueMinPullDelay
+                    else -> {
+                        val current = fetchDelay.load()
+                        if (current == Duration.ZERO) options.queueMinPullDelay
+                        else (current * 2).coerceAtMost(options.queueMaxPullDelay)
+                    }
+                }
+                fetchDelay.store(next)
+
+                // Wait for the backoff to elapse, unless woken early by an insert notification.
+                // No coroutine is allocated on the hot path where next == ZERO.
+                if (next > Duration.ZERO) withTimeoutOrNull(next) { wakeup.receive() }
             }
         }
     }
 
     /**
-     * Stops the message queue consumer by gracefully canceling ongoing processes for consumption and fetching.
+     * Stops the message queue consumer, gracefully shutting down all of its jobs and awaiting their completion.
      *
-     * This method cancels the following in sequence:
-     * - The channel consumption process (`consumeChannel`) to stop receiving messages.
-     * - The message consumption job (`consumeJob`) responsible for processing messages.
-     * - The fetching delay job (`fetchDelayJob`) that controls delays between fetch operations and resets the fetch delay to zero.
-     * - The fetching job (`fetchJob`) responsible for retrieving messages from the queue.
+     * The shutdown proceeds in the following order:
+     * - The notification job (`notifyJob`) is cancelled so no further insert notifications are processed.
+     * - The fetching job (`fetchJob`) is cancelled first, stopping the consumer from pulling in new work,
+     *   and the fetch delay is reset to zero.
+     * - The consume channel is closed so any already-buffered messages are drained (rather than dropped)
+     *   and the consume job (`consumeJob`) is awaited until it finishes processing them.
      *
-     * Delays are applied during the stopping process to ensure a proper shutdown and cleanup of resources.
+     * This method suspends until the shutdown has fully completed, so the caller can rely on the consumer
+     * being stopped once it returns. The consumer can be started again afterwards via [start].
      */
-    fun stop() {
-        PgChannelScope.launch {
-            consumeChannel.cancel()
-            delay(500.milliseconds)
-            consumeJob?.cancel()
-            consumeJob = null
-            fetchDelayJob.load()?.cancel()
-            fetchDelayJob.store(null)
-            fetchDelay.store(Duration.ZERO)
-            delay(500.milliseconds)
-            fetchJob?.cancel()
-            fetchJob = null
-        }
+    suspend fun stop() {
+        notifyJob?.cancelAndJoin()
+        notifyJob = null
+        fetchJob?.cancelAndJoin()
+        fetchJob = null
+        fetchDelay.store(Duration.ZERO)
+        if (::consumeChannel.isInitialized) consumeChannel.close()
+        consumeJob?.join()
+        consumeJob = null
+    }
+
+    private fun Duration.ceilToWholeSeconds(): Duration {
+        val seconds = inWholeSeconds
+        return if (this == seconds.seconds) this else (seconds + 1).seconds
     }
 
     /**
@@ -222,11 +255,4 @@ class PgmqConsumer(
     }
 
     override fun toString(): String = "PgMqConsumer(queue='${options.queue}')"
-
-    companion object {
-        private object PgChannelScope : CoroutineScope {
-            override val coroutineContext: CoroutineContext
-                get() = EmptyCoroutineContext
-        }
-    }
 }
