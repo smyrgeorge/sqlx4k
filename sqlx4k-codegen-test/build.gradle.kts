@@ -17,6 +17,8 @@ kotlin {
                 // self-contained here on purpose.
                 implementation(project(":sqlx4k"))
                 implementation(libs.ksp)
+                // Parses @Query SQL to derive in-memory WHERE predicates.
+                implementation(libs.jsqlparser)
             }
         }
         jvmTest {

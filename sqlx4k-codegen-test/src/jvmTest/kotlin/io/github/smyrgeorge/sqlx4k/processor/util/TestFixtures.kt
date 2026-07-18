@@ -42,6 +42,10 @@ interface UserCrudRepository : CrudRepository<User> {
     @Query("SELECT * FROM users WHERE email IS NOT NULL")
     suspend fun findAllByEmailNotNull(context: QueryExecutor): Result<List<User>>
 
+    // LIKE is not translatable to an in-memory predicate, so this becomes an overridable stub.
+    @Query("SELECT * FROM users WHERE name LIKE :pattern")
+    suspend fun findAllByNameLike(context: QueryExecutor, pattern: String): Result<List<User>>
+
     @Query("SELECT count(*) FROM users")
     suspend fun countAll(context: QueryExecutor): Result<Long>
 

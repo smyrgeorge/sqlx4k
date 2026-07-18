@@ -6,6 +6,7 @@ import io.github.smyrgeorge.sqlx4k.CrudRepositoryHooks
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.annotation.Column
 import io.github.smyrgeorge.sqlx4k.annotation.Id
 import io.github.smyrgeorge.sqlx4k.annotation.Query
 import io.github.smyrgeorge.sqlx4k.annotation.Repository
@@ -24,6 +25,7 @@ internal object TypeNames {
     val REPOSITORY_ANNOTATION = Repository::class.qualifiedName!!
     val ID_ANNOTATION = Id::class.qualifiedName!!
     val QUERY_ANNOTATION = Query::class.qualifiedName!!
+    val COLUMN_ANNOTATION = Column::class.qualifiedName!!
 
     // Repository base interfaces
     val CRUD_REPOSITORY_HOOKS = CrudRepositoryHooks::class.qualifiedName!!

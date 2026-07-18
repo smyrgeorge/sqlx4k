@@ -905,31 +905,27 @@ What the generated implementation provides:
 - **Full CRUD** — `insert`, `update`, `delete`, `save`, `batchInsert`, `batchUpdate`. Numeric `@Id` keys with
   `insert = false` get auto-incrementing ids; application-provided ids (`@Id(insert = true)`) are stored as given.
 - **Whole-table queries** — `findAll`, `countAll`, `deleteAll`.
-- **Derived `@Query` methods** — `findOneBy…`, `findAllBy…`, `countBy…`, and `deleteBy…` are derived from the *method
-  name*: each segment (split on `And`) is matched to an entity property for equality, e.g. `findAllByName(name)`
-  behaves like `filter { it.name == name }`.
+- **Derived `@Query` methods** — the in-memory behavior is derived from each method's `@Query` **SQL**: the statement is
+  parsed and its `WHERE` clause becomes a predicate over the stored entities (columns are mapped back to properties via
+  snake_case / `@Column`). Supports `=`, `<>`, `<`, `<=`, `>`, `>=`, `IS [NOT] NULL`, `AND`/`OR`, named parameters, and
+  simple literals — for `find*`/`count*` (SELECT), `delete*` (DELETE), and `execute*` (UPDATE `SET …`/DELETE). For
+  example `@Query("select * from users where name = :name")` behaves like `filter { it.name == name }`.
 - **Repository hooks** — the overridden `preInsert/afterInsert/... /aroundQuery` hooks are honored exactly like the
   real generated implementations.
 - **Test helpers** — `clear()` empties the store (and resets the id sequence) and `findAllStored()` returns a snapshot.
 
-Anything the generator cannot derive from the method name — for example `executeXxx` methods or conditions like
-`WHERE email IS NOT NULL` — is emitted as a stub that throws `NotImplementedError`. The generated class is `open`, so
-provide the behavior yourself by subclassing and overriding just those methods. Use the `withStore { }` helper for
-thread-safe access to the backing map (the `MutableMap` is the lambda receiver):
+Anything the generator cannot translate — a `WHERE` it doesn't understand (e.g. `LIKE`, `IN`, subqueries, function
+calls), or an `execute*` that isn't a plain UPDATE/DELETE — is emitted as a stub that throws `NotImplementedError`. The
+generated class is `open`, so provide the behavior yourself by subclassing and overriding just those methods. Use the
+`withStore { }` helper for thread-safe access to the backing map (the `MutableMap` is the lambda receiver):
 
 ```kotlin
 class TestSqlx4kRepository : InMemorySqlx4kRepository() {
-    // A method the generator left as a stub (e.g. an `execute…` @Query it could not derive).
-    override suspend fun executeRenameAll(context: QueryExecutor, from: String, to: String): Result<Long> =
+    // A method whose WHERE the generator could not translate (e.g. LIKE), so it was left as a stub.
+    override suspend fun findAllByTestLike(context: QueryExecutor, pattern: String): Result<List<Sqlx4k>> =
         withStore {
-            var affected = 0L
-            entries.forEach { e ->
-                if (e.value.test == from) {
-                    e.setValue(e.value.copy(test = to))
-                    affected++
-                }
-            }
-            Result.success(affected)
+            val prefix = pattern.removeSuffix("%")
+            runCatching { values.filter { it.test.startsWith(prefix) } }
         }
 }
 ```

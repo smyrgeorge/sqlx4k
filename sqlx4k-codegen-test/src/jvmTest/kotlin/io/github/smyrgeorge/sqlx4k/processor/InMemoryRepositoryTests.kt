@@ -166,53 +166,52 @@ class InMemoryRepositoryTests {
         assertThat(repo.findAllStored()).hasSize(1)
     }
 
-    // ==================== Non-derivable methods -> overridable stubs ====================
+    // ==================== Predicates derived from the @Query SQL WHERE clause ====================
 
     @Test
-    fun `non-derivable query methods throw NotImplementedError`() = runTest {
+    fun `findAllByEmailNotNull derives an IS NOT NULL predicate from the SQL`() = runTest {
+        repo.insert(ctx, User(id = 0, name = "Alice", email = "a@example.com"))
+        repo.insert(ctx, User(id = 0, name = "Bob", email = "b@example.com"))
+        // WHERE email IS NOT NULL -> it.email != null (email is non-null, so all rows match).
+        assertThat(repo.findAllByEmailNotNull(ctx).getOrThrow()).hasSize(2)
+    }
+
+    @Test
+    fun `executeUpdateName applies the parsed UPDATE SET and WHERE`() = runTest {
+        repo.insert(ctx, User(id = 0, name = "Alice", email = "a@example.com"))
+        repo.insert(ctx, User(id = 0, name = "Alice", email = "b@example.com"))
+        repo.insert(ctx, User(id = 0, name = "Bob", email = "c@example.com"))
+
+        // UPDATE users SET name = :newName WHERE name = :oldName
+        val affected = repo.executeUpdateName(ctx, "Alice", "Alicia").getOrThrow()
+        assertThat(affected).isEqualTo(2L)
+        assertThat(repo.findAllByName(ctx, "Alicia").getOrThrow()).hasSize(2)
+        assertThat(repo.findAllByName(ctx, "Alice").getOrThrow()).hasSize(0)
+    }
+
+    // ==================== Non-translatable WHERE -> overridable stubs ====================
+
+    @Test
+    fun `queries with an unsupported WHERE clause become throwing stubs`() = runTest {
         repo.insert(ctx, User(id = 0, name = "Alice", email = "alice@example.com"))
-        // 'WHERE email IS NOT NULL' cannot be derived from the method name.
-        assertFailsWith<NotImplementedError> { repo.findAllByEmailNotNull(ctx) }
-        // 'executeXxx' cannot be derived.
-        assertFailsWith<NotImplementedError> { repo.executeUpdateName(ctx, "old", "new") }
+        // 'WHERE name LIKE :pattern' cannot be translated to an in-memory predicate.
+        assertFailsWith<NotImplementedError> { repo.findAllByNameLike(ctx, "A%") }
     }
 
     @Test
     fun `stubbed methods can be overridden in a subclass`() = runTest {
         val overridden = object : InMemoryUserCrudRepository() {
-            override suspend fun findAllByEmailNotNull(context: io.github.smyrgeorge.sqlx4k.QueryExecutor): Result<List<User>> =
-                Result.success(findAllStored().filter { it.email.isNotEmpty() })
-        }
-        overridden.insert(ctx, User(id = 0, name = "Alice", email = "alice@example.com"))
-        assertThat(overridden.findAllByEmailNotNull(ctx).getOrThrow()).hasSize(1)
-    }
-
-    @Test
-    fun `withStore lets an override mutate the backing store atomically`() = runTest {
-        val overridden = object : InMemoryUserCrudRepository() {
-            override suspend fun executeUpdateName(
+            override suspend fun findAllByNameLike(
                 context: io.github.smyrgeorge.sqlx4k.QueryExecutor,
-                oldName: String,
-                newName: String,
-            ): Result<Long> = withStore {
-                var affected = 0L
-                entries.forEach { entry ->
-                    if (entry.value.name == oldName) {
-                        entry.setValue(entry.value.copy(name = newName))
-                        affected++
-                    }
-                }
-                Result.success(affected)
+                pattern: String,
+            ): Result<List<User>> = withStore {
+                val prefix = pattern.removeSuffix("%")
+                runCatching { values.filter { it.name.startsWith(prefix) } }
             }
         }
-        overridden.insert(ctx, User(id = 0, name = "Alice", email = "a@example.com"))
-        overridden.insert(ctx, User(id = 0, name = "Alice", email = "b@example.com"))
-        overridden.insert(ctx, User(id = 0, name = "Bob", email = "c@example.com"))
-
-        val affected = overridden.executeUpdateName(ctx, "Alice", "Alicia").getOrThrow()
-        assertThat(affected).isEqualTo(2L)
-        assertThat(overridden.findAllByName(ctx, "Alicia").getOrThrow()).hasSize(2)
-        assertThat(overridden.findAllByName(ctx, "Alice").getOrThrow()).hasSize(0)
+        overridden.insert(ctx, User(id = 0, name = "Alice", email = "alice@example.com"))
+        overridden.insert(ctx, User(id = 0, name = "Bob", email = "bob@example.com"))
+        assertThat(overridden.findAllByNameLike(ctx, "Al%").getOrThrow()).hasSize(1)
     }
 
     // ==================== clear() ====================
