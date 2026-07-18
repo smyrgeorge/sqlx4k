@@ -66,6 +66,7 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
     - [List of Repository interfaces](#list-of-repository-interfaces)
     - [SQL syntax validation (compile-time)](#sql-syntax-validation-compile-time)
     - [SQL schema validation (compile-time)](#sql-schema-validation-compile-time)
+    - [In-memory repositories (for unit testing)](#in-memory-repositories-for-unit-testing)
 - [Database migrations](#database-migrations)
 - [PostgreSQL LISTEN/NOTIFY](#listennotify-only-for-postgresql)
 - [Extensions](#extensions)
@@ -857,6 +858,79 @@ You can also disable schema checks for a specific query:
 interface UserRepository {
     @Query("select * from users where id = :id", checkSchema = false)
     suspend fun findOneById(context: QueryExecutor, id: Int): Result<User?>
+}
+```
+
+#### In-memory repositories (for unit testing)
+
+> [!NOTE]
+> **Experimental Feature**: in-memory repository generation is currently in early development; its behavior and the
+> generated API may change in future releases.
+
+The companion `sqlx4k-codegen-test` module generates a thread-safe, **in-memory** implementation of every `@Repository`
+interface, so you can unit-test the code that depends on your repositories without a real database. For a repository
+named `Sqlx4kRepository`, it generates a class named `InMemorySqlx4kRepository`.
+
+It is a separate module from `sqlx4k-codegen`, so in-memory generation is opt-in per dependency — add it only to the KSP
+configuration that processes your repositories:
+
+```kotlin
+ksp {
+    // The generated implementations are emitted into this package (same option used by sqlx4k-codegen).
+    arg("output-package", "io.github.smyrgeorge.sqlx4k.examples.postgres")
+}
+
+dependencies {
+    // Real @Repository implementations (production).
+    add("kspMacosArm64", implementation("io.github.smyrgeorge:sqlx4k-codegen:x.y.z"))
+    // In-memory implementations for unit tests.
+    add("kspMacosArm64Test", "io.github.smyrgeorge:sqlx4k-codegen-test:x.y.z")
+}
+```
+
+Given the `Sqlx4kRepository` from the examples above, use the generated implementation directly in your tests:
+
+```kotlin
+val repo = InMemorySqlx4kRepository()
+
+// A QueryExecutor is still accepted to match the interface, but it is never touched —
+// it works entirely in memory, so any instance (even a no-op fake) will do.
+val saved = repo.insert(db, Sqlx4k(id = 1, test = "test")).getOrThrow()
+val all = repo.findAll(db).getOrThrow()
+```
+
+What the generated implementation provides:
+
+- **Thread-safe storage** — entities live in a `HashMap` guarded by a `Mutex`.
+- **Full CRUD** — `insert`, `update`, `delete`, `save`, `batchInsert`, `batchUpdate`. Numeric `@Id` keys with
+  `insert = false` get auto-incrementing ids; application-provided ids (`@Id(insert = true)`) are stored as given.
+- **Whole-table queries** — `findAll`, `countAll`, `deleteAll`.
+- **Derived `@Query` methods** — `findOneBy…`, `findAllBy…`, `countBy…`, and `deleteBy…` are derived from the *method
+  name*: each segment (split on `And`) is matched to an entity property for equality, e.g. `findAllByName(name)`
+  behaves like `filter { it.name == name }`.
+- **Repository hooks** — the overridden `preInsert/afterInsert/... /aroundQuery` hooks are honored exactly like the
+  real generated implementations.
+- **Test helpers** — `clear()` empties the store (and resets the id sequence) and `findAllStored()` returns a snapshot.
+
+Anything the generator cannot derive from the method name — for example `executeXxx` methods or conditions like
+`WHERE email IS NOT NULL` — is emitted as a stub that throws `NotImplementedError`. The generated class is `open`, so
+provide the behavior yourself by subclassing and overriding just those methods. Use the `withStore { }` helper for
+thread-safe access to the backing map (the `MutableMap` is the lambda receiver):
+
+```kotlin
+class TestSqlx4kRepository : InMemorySqlx4kRepository() {
+    // A method the generator left as a stub (e.g. an `execute…` @Query it could not derive).
+    override suspend fun executeRenameAll(context: QueryExecutor, from: String, to: String): Result<Long> =
+        withStore {
+            var affected = 0L
+            entries.forEach { e ->
+                if (e.value.test == from) {
+                    e.setValue(e.value.copy(test = to))
+                    affected++
+                }
+            }
+            Result.success(affected)
+        }
 }
 ```
 

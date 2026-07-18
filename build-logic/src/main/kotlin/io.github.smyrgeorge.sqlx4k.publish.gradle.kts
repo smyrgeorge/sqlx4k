@@ -10,6 +10,7 @@ val descriptions: Map<String, String> = mapOf(
     "sqlx4k" to "A high-performance Kotlin Multiplatform database driver for PostgreSQL, MySQL/MariaDB, and SQLite.",
     "sqlx4k-arrow" to "A high-performance Kotlin Multiplatform database driver for PostgreSQL, MySQL, and SQLite.",
     "sqlx4k-codegen" to "A high-performance Kotlin Multiplatform database driver for PostgreSQL, MySQL/MariaDB, and SQLite.",
+    "sqlx4k-codegen-test" to "A high-performance Kotlin Multiplatform database driver for PostgreSQL, MySQL/MariaDB, and SQLite.",
     "sqlx4k-mysql" to "A high-performance Kotlin Multiplatform database driver for MySQL/MariaDB.",
     "sqlx4k-postgres" to "A high-performance Kotlin Multiplatform database driver for PostgreSQL.",
     "sqlx4k-postgres-pgmq" to "A PGMQ client using PostgreSQL as a message queue.",
