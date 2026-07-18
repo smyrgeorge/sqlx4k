@@ -69,8 +69,8 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
     - [Query validations and optimizations](#query-validations-and-optimizations)
     - [In-memory repositories (for unit testing)](#in-memory-repositories-for-unit-testing)
 - [Database migrations](#database-migrations)
-- [PostgreSQL LISTEN/NOTIFY](#listennotify-only-for-postgresql)
 - [Extensions](#extensions)
+    - [PostgreSQL LISTEN/NOTIFY](#postgresql-listennotify)
     - [PostgreSQL Message Queue (PGMQ)](#postgresql-message-queue-pgmq)
     - [SQLDelight](#sqldelight)
 - [Supported targets](#supported-targets)
@@ -993,7 +993,11 @@ println("Migration completed. $res")
 This process will create a table with name `_sqlx4k_migrations`. For more information, take a look at
 the [examples](#examples).
 
-### Listen/Notify (only for PostgreSQL)
+## Extensions
+
+`sqlx4k` provides several extensions to enhance functionality:
+
+### PostgreSQL Listen/Notify
 
 ```kotlin
 db.listen("chan0") { notification: Postgres.Notification ->
@@ -1005,10 +1009,6 @@ db.listen("chan0") { notification: Postgres.Notification ->
     delay(1000)
 }
 ```
-
-## Extensions
-
-`sqlx4k` provides several extensions to enhance functionality:
 
 ### PostgreSQL Message Queue (PGMQ)
 
