@@ -465,8 +465,16 @@ interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
 
     @Query("SELECT count(*) FROM sqlx4k")
     suspend fun countAll(context: QueryExecutor): Result<Long>
+
+    @Query("SELECT * FROM sqlx4k WHERE id = :id")
+    suspend fun existsById(context: QueryExecutor, id: Int): Result<Boolean>
 }
 ```
+
+> [!NOTE]
+> A `@Query` method's name prefix determines its shape and expected return type: `findAll`/`findAllBy…` →
+> `Result<List<T>>`, `findOneBy…` → `Result<T?>`, `countAll`/`countBy…` → `Result<Long>`, `existsBy…` →
+> `Result<Boolean>`, `deleteAll`/`deleteBy…` and `execute…` → `Result<Long>` (affected rows).
 
 > [!NOTE]
 > Besides your @Query methods, because your interface extends `CrudRepository<T>`, the generator also adds the CRUD
@@ -867,14 +875,17 @@ interface UserRepository {
 Beyond syntax and schema checks, the processor parses each `@Query` once (with JSqlParser) and applies a few extra
 compile-time safeguards and codegen optimizations. Each is controlled by a global KSP option and enabled by default:
 
-| KSP option                  | Default | What it does                                                                                                                                                                                                                                                       |
-|-----------------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `reject-stacked-statements` | `true`  | Fails the build if a single `@Query` contains more than one SQL statement (a stacked-query guard).                                                                                                                                                                 |
-| `validate-sql-columns`      | `true`  | Fails the build if a `@Query` references a column that does not exist on the entity — across the `SELECT` list, `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY`, and `UPDATE ... SET`. Applies to single-table queries only (joins/subselects/other tables are skipped). |
-| `validate-sql-table`        | `true`  | Fails the build if a single-table `@Query` targets a table other than the entity's own (`@Table`). Skips subselect `FROM` clauses.                                                                                                                                 |
-| `validate-count-projection` | `true`  | Fails the build if a `count*` method does not select a single `count(...)` aggregate.                                                                                                                                                                              |
-| `expand-select-star`        | `true`  | Rewrites a bare `SELECT *` over the entity's table into the entity's explicit columns in the generated statement (e.g. `select * from users` → `select id, name, email from users`). Leaves `count(*)`, joins, and explicit column lists untouched.                |
-| `findone-limit`             | `true`  | Appends `LIMIT 2` to `findOne*` queries so the driver fetches at most two rows — it still detects a multi-row result, but transfers far less on wide tables. Skips queries that already declare a `LIMIT`.                                                         |
+| KSP option                   | Default | What it does                                                                                                                                                                                                                                                       |
+|------------------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `reject-stacked-statements`  | `true`  | Fails the build if a single `@Query` contains more than one SQL statement (a stacked-query guard).                                                                                                                                                                 |
+| `validate-sql-columns`       | `true`  | Fails the build if a `@Query` references a column that does not exist on the entity — across the `SELECT` list, `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY`, and `UPDATE ... SET`. Applies to single-table queries only (joins/subselects/other tables are skipped). |
+| `validate-sql-table`         | `true`  | Fails the build if a single-table `@Query` targets a table other than the entity's own (`@Table`). Skips subselect `FROM` clauses.                                                                                                                                 |
+| `validate-count-projection`  | `true`  | Fails the build if a `count*` method does not select a single `count(...)` aggregate.                                                                                                                                                                              |
+| `validate-statement-kind`    | `true`  | Fails the build if a `@Query`'s statement kind doesn't match its prefix: `find*`/`count*`/`exists*` must be a `SELECT`, `delete*` a `DELETE`, and `execute*` a write (`INSERT`/`UPDATE`/`DELETE`).                                                                 |
+| `validate-projection`        | `true`  | Fails the build if a `find*` method bound by the generated row mapper selects only some columns (which would leave the mapper without a column at runtime). Requires `SELECT *` or every entity column. Skipped when a custom `@Repository(mapper = ...)` is used. |
+| `validate-returning-columns` | `true`  | Fails the build if a `RETURNING` clause references a column that does not exist on the entity.                                                                                                                                                                     |
+| `expand-select-star`         | `true`  | Rewrites a bare `SELECT *` over the entity's table into the entity's explicit columns in the generated statement (e.g. `select * from users` → `select id, name, email from users`). Leaves `count(*)`, joins, and explicit column lists untouched.                |
+| `findone-limit`              | `true`  | Appends `LIMIT 2` to `findOne*` queries so the driver fetches at most two rows — it still detects a multi-row result, but transfers far less on wide tables. Skips queries that already declare a `LIMIT`.                                                         |
 
 Disable any of them module-wide in your build.gradle.kts:
 
@@ -884,6 +895,9 @@ ksp {
     // arg("validate-sql-columns", "false")
     // arg("validate-sql-table", "false")
     // arg("validate-count-projection", "false")
+    // arg("validate-statement-kind", "false")
+    // arg("validate-projection", "false")
+    // arg("validate-returning-columns", "false")
     // arg("expand-select-star", "false")
     // arg("findone-limit", "false")
 }

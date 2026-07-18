@@ -71,6 +71,15 @@ class RepositoryProcessor(
         val globalValidateCountProjection = options[VALIDATE_COUNT_PROJECTION_OPTION]?.toBoolean() ?: true
         logger.info("[RepositoryProcessor] Validate count projection: $globalValidateCountProjection")
 
+        val globalValidateStatementKind = options[VALIDATE_STATEMENT_KIND_OPTION]?.toBoolean() ?: true
+        logger.info("[RepositoryProcessor] Validate statement kind: $globalValidateStatementKind")
+
+        val globalValidateProjection = options[VALIDATE_PROJECTION_OPTION]?.toBoolean() ?: true
+        logger.info("[RepositoryProcessor] Validate projection completeness: $globalValidateProjection")
+
+        val globalValidateReturning = options[VALIDATE_RETURNING_COLUMNS_OPTION]?.toBoolean() ?: true
+        logger.info("[RepositoryProcessor] Validate RETURNING columns: $globalValidateReturning")
+
         val globalExpandSelectStar = options[EXPAND_SELECT_STAR_OPTION]?.toBoolean() ?: true
         logger.info("[RepositoryProcessor] Expand SELECT *: $globalExpandSelectStar")
 
@@ -140,6 +149,9 @@ class RepositoryProcessor(
                         globalValidateColumns = globalValidateColumns,
                         globalValidateTable = globalValidateTable,
                         globalValidateCountProjection = globalValidateCountProjection,
+                        globalValidateStatementKind = globalValidateStatementKind,
+                        globalValidateProjection = globalValidateProjection,
+                        globalValidateReturning = globalValidateReturning,
                         globalExpandSelectStar = globalExpandSelectStar,
                         globalFindOneLimit = globalFindOneLimit,
                         mapperTypeName = mapperTypeName,
@@ -182,6 +194,7 @@ class RepositoryProcessor(
      * - `FIND_ONE_BY`: Indicates methods that fetch a single instance of a domain model based on certain conditions.
      * - `DELETE_BY`: Indicates methods that delete instances of a domain model based on certain conditions.
      * - `COUNT_BY`: Indicates methods that count instances of a domain model based on certain conditions.
+     * - `EXISTS_BY`: Indicates methods that check whether any instance matching certain conditions exists.
      * - `EXECUTE`: Indicates methods that perform a custom execution, typically associated with annotated SQL queries.
      *
      * This enum is used internally by the `RepositoryProcessor` to parse method names, validate method
@@ -195,6 +208,7 @@ class RepositoryProcessor(
         DELETE_ALL,
         COUNT_BY,
         COUNT_ALL,
+        EXISTS_BY,
         EXECUTE
     }
 
@@ -216,8 +230,9 @@ class RepositoryProcessor(
         name.startsWith("findOneBy") -> Prefix.FIND_ONE_BY
         name.startsWith("deleteBy") -> Prefix.DELETE_BY
         name.startsWith("countBy") -> Prefix.COUNT_BY
+        name.startsWith("existsBy") -> Prefix.EXISTS_BY
         name.startsWith("execute") -> Prefix.EXECUTE
-        else -> error("Invalid repository method name '$name'. Must start with one of: findAll, deleteAll, countAll or start with: findAllBy, findOneBy, deleteBy, countBy, execute.")
+        else -> error("Invalid repository method name '$name'. Must start with one of: findAll, deleteAll, countAll or start with: findAllBy, findOneBy, deleteBy, countBy, existsBy, execute.")
     }
 
     /**
@@ -433,6 +448,13 @@ class RepositoryProcessor(
                 if (qn0 != TypeNames.KOTLIN_LONG || r0.isMarkedNullable)
                     error("Method '$name' must return ${TypeNames.KOTLIN_LONG}")
             }
+
+            Prefix.EXISTS_BY -> {
+                val qn0 = r0.declaration.qualifiedName()
+                    ?: error("Unable to resolve inner type for method '$name'")
+                if (qn0 != TypeNames.KOTLIN_BOOLEAN || r0.isMarkedNullable)
+                    error("Method '$name' must return ${TypeNames.KOTLIN_BOOLEAN}")
+            }
         }
     }
 
@@ -456,7 +478,7 @@ class RepositoryProcessor(
             Prefix.FIND_ALL, Prefix.DELETE_ALL, Prefix.COUNT_ALL -> {
                 if (nonContextCount != 0) error("Method '$name' must not have parameters other than context")
             }
-            Prefix.FIND_ALL_BY, Prefix.FIND_ONE_BY, Prefix.DELETE_BY, Prefix.COUNT_BY, Prefix.EXECUTE -> {
+            Prefix.FIND_ALL_BY, Prefix.FIND_ONE_BY, Prefix.DELETE_BY, Prefix.COUNT_BY, Prefix.EXISTS_BY, Prefix.EXECUTE -> {
                 // *By methods may have zero parameters when the WHERE clause is self-contained
                 // (e.g. "WHERE x IS NOT NULL"); validateParameters checks the parameters
                 // against the named parameters of the SQL statement.
@@ -543,6 +565,9 @@ class RepositoryProcessor(
         globalValidateColumns: Boolean,
         globalValidateTable: Boolean,
         globalValidateCountProjection: Boolean,
+        globalValidateStatementKind: Boolean,
+        globalValidateProjection: Boolean,
+        globalValidateReturning: Boolean,
         globalExpandSelectStar: Boolean,
         globalFindOneLimit: Boolean,
         mapperTypeName: String,
@@ -594,10 +619,24 @@ class RepositoryProcessor(
         val entityTable = tableNameOf(domainDecl)
         val entityColumns = Columns.columnNames(domainDecl)
 
+        val isFind = prefix == Prefix.FIND_ALL || prefix == Prefix.FIND_ALL_BY || prefix == Prefix.FIND_ONE_BY
+        val usesAutoMapper = mapperTypeName == "${domainDecl.simpleName()}AutoRowMapper"
+
         // Structural checks that need the parsed statement (skipped when it could not be parsed).
         statement?.let { stmt ->
+            if (globalValidateStatementKind) {
+                val kind = when (prefix) {
+                    Prefix.DELETE_ALL, Prefix.DELETE_BY -> SqlValidator.StatementKind.DELETE
+                    Prefix.EXECUTE -> SqlValidator.StatementKind.WRITE
+                    else -> SqlValidator.StatementKind.SELECT
+                }
+                SqlValidator.validateStatementKind(fn.simpleName(), stmt, kind)
+            }
             if (globalValidateColumns) {
                 SqlValidator.validateColumnsExist(fn.simpleName(), stmt, entityTable, entityColumns.toSet())
+            }
+            if (globalValidateReturning) {
+                SqlValidator.validateReturningColumns(fn.simpleName(), stmt, entityColumns.toSet())
             }
             if (globalValidateTable) {
                 SqlValidator.validateTable(fn.simpleName(), stmt, entityTable)
@@ -605,17 +644,28 @@ class RepositoryProcessor(
             if (globalValidateCountProjection && (prefix == Prefix.COUNT_ALL || prefix == Prefix.COUNT_BY)) {
                 SqlValidator.validateCountProjection(fn.simpleName(), stmt)
             }
+            if (globalValidateProjection && isFind && usesAutoMapper) {
+                SqlValidator.validateProjection(fn.simpleName(), stmt, entityColumns.toSet())
+            }
         }
 
-        // Rewrites that need the parsed statement: expand `SELECT *` and append a findOne* fetch limit.
+        // Rewrites that need the parsed statement: expand `SELECT *`, append a findOne* fetch limit,
+        // and wrap exists* queries in `SELECT EXISTS(...)`.
         var sql: String = rawSql
         statement?.let { stmt ->
-            if (globalExpandSelectStar) {
-                sql = SqlValidator.expandSelectStar(stmt, sql, entityTable, entityColumns)
-            }
-            // findOne* fetches at most two rows: still detects a multi-row result, but transfers less.
-            if (globalFindOneLimit && prefix == Prefix.FIND_ONE_BY) {
-                sql = SqlValidator.withRowLimit(stmt, sql, 2)
+            when (prefix) {
+                Prefix.EXISTS_BY -> {
+                    sql = SqlValidator.toExistsQuery(stmt, sql, entityTable)
+                }
+                else -> {
+                    if (globalExpandSelectStar) {
+                        sql = SqlValidator.expandSelectStar(stmt, sql, entityTable, entityColumns)
+                    }
+                    // findOne* fetches at most two rows: still detects a multi-row result, transfers less.
+                    if (globalFindOneLimit && prefix == Prefix.FIND_ONE_BY) {
+                        sql = SqlValidator.withRowLimit(stmt, sql, 2)
+                    }
+                }
             }
         }
 
@@ -639,6 +689,7 @@ class RepositoryProcessor(
             Prefix.FIND_ONE_BY -> "Result containing a single ${domainDecl.simpleName()} entity or null if not found"
             Prefix.DELETE_ALL, Prefix.DELETE_BY, Prefix.EXECUTE -> "Result containing the number of affected rows"
             Prefix.COUNT_ALL, Prefix.COUNT_BY -> "Result containing the count"
+            Prefix.EXISTS_BY -> "Result containing true if a matching row exists, false otherwise"
         }
         file += "     * @return $returnDesc, or an error if the operation fails\n"
         file += "     */\n"
@@ -658,24 +709,11 @@ class RepositoryProcessor(
         val hasAroundQueryHook = isHookOverridden(repo, "aroundQuery")
 
         when (prefix) {
-            Prefix.FIND_ALL, Prefix.FIND_ALL_BY -> {
-                if (hasAroundQueryHook) {
-                    file += "        aroundQuery(\"$name\", statement) {\n"
-                    file += "            $contextParamName.fetchAll(statement, $mapperTypeName)\n"
-                    file += "        }\n"
-                } else {
-                    file += "        $contextParamName.fetchAll(statement, $mapperTypeName)\n"
-                }
-            }
+            Prefix.FIND_ALL, Prefix.FIND_ALL_BY ->
+                emitDbCall(file, hasAroundQueryHook, name, "$contextParamName.fetchAll(statement, $mapperTypeName)", "\n")
 
             Prefix.FIND_ONE_BY -> {
-                if (hasAroundQueryHook) {
-                    file += "        aroundQuery(\"$name\", statement) {\n"
-                    file += "            $contextParamName.fetchAll(statement, $mapperTypeName)\n"
-                    file += "        }.fold(\n"
-                } else {
-                    file += "        $contextParamName.fetchAll(statement, $mapperTypeName).fold(\n"
-                }
+                emitDbCall(file, hasAroundQueryHook, name, "$contextParamName.fetchAll(statement, $mapperTypeName)", ".fold(\n")
                 file += "            onSuccess = { list ->\n"
                 file += "                when (list.size) {\n"
                 file += "                    0 -> Result.success(null)\n"
@@ -687,24 +725,11 @@ class RepositoryProcessor(
                 file += "        )\n"
             }
 
-            Prefix.DELETE_ALL, Prefix.DELETE_BY, Prefix.EXECUTE -> {
-                if (hasAroundQueryHook) {
-                    file += "        aroundQuery(\"$name\", statement) {\n"
-                    file += "            $contextParamName.execute(statement)\n"
-                    file += "        }\n"
-                } else {
-                    file += "        $contextParamName.execute(statement)\n"
-                }
-            }
+            Prefix.DELETE_ALL, Prefix.DELETE_BY, Prefix.EXECUTE ->
+                emitDbCall(file, hasAroundQueryHook, name, "$contextParamName.execute(statement)", "\n")
 
             Prefix.COUNT_ALL, Prefix.COUNT_BY -> {
-                if (hasAroundQueryHook) {
-                    file += "        aroundQuery(\"$name\", statement) {\n"
-                    file += "            $contextParamName.fetchAll(statement)\n"
-                    file += "        }.fold(\n"
-                } else {
-                    file += "        $contextParamName.fetchAll(statement).fold(\n"
-                }
+                emitDbCall(file, hasAroundQueryHook, name, "$contextParamName.fetchAll(statement)", ".fold(\n")
                 file += "            onSuccess = { rs ->\n"
                 file += "                val row = rs.firstOrNull()\n"
                 file += "                if (row == null) {\n"
@@ -716,10 +741,42 @@ class RepositoryProcessor(
                 file += "            onFailure = { Result.failure(it) }\n"
                 file += "        )\n"
             }
+
+            Prefix.EXISTS_BY -> {
+                emitDbCall(file, hasAroundQueryHook, name, "$contextParamName.fetchAll(statement)", ".fold(\n")
+                file += "            onSuccess = { rs ->\n"
+                file += "                Result.success(rs.firstOrNull()?.get(0)?.asBoolean() ?: false)\n"
+                file += "            },\n"
+                file += "            onFailure = { Result.failure(it) }\n"
+                file += "        )\n"
+            }
         }
         file += "    }"
         if (useArrow) file += ".toDbResult()"
         file += "\n\n"
+    }
+
+    /**
+     * Emits a database call, optionally wrapped in the `aroundQuery` hook, followed by [trailer] which
+     * continues the generated expression (e.g. `"\n"` to end it, or `".fold(\n"` to keep folding the
+     * returned `Result`).
+     *
+     * @param op The call to perform, e.g. `context.fetchAll(statement)` or `context.execute(statement)`.
+     */
+    private fun emitDbCall(
+        file: OutputStream,
+        hasAroundQueryHook: Boolean,
+        name: String,
+        op: String,
+        trailer: String
+    ) {
+        if (hasAroundQueryHook) {
+            file += "        aroundQuery(\"$name\", statement) {\n"
+            file += "            $op\n"
+            file += "        }$trailer"
+        } else {
+            file += "        $op$trailer"
+        }
     }
 
     /**
@@ -1345,6 +1402,25 @@ class RepositoryProcessor(
          * aggregate. Defaults to `true`.
          */
         private const val VALIDATE_COUNT_PROJECTION_OPTION: String = "validate-count-projection"
+
+        /**
+         * Option key to enable/disable validating that a `@Query`'s statement kind matches its method
+         * prefix (`find*`/`count*`/`exists*` = SELECT, `delete*` = DELETE, `execute*` = write).
+         * Defaults to `true`.
+         */
+        private const val VALIDATE_STATEMENT_KIND_OPTION: String = "validate-statement-kind"
+
+        /**
+         * Option key to enable/disable validating that a `find*` method bound by the generated row mapper
+         * selects every entity column (or `SELECT *`). Defaults to `true`.
+         */
+        private const val VALIDATE_PROJECTION_OPTION: String = "validate-projection"
+
+        /**
+         * Option key to enable/disable validating that a `RETURNING` clause references only columns that
+         * exist on the entity. Defaults to `true`.
+         */
+        private const val VALIDATE_RETURNING_COLUMNS_OPTION: String = "validate-returning-columns"
 
         /**
          * Option key to enable/disable appending a `LIMIT 2` to `findOne*` queries so they fetch at most

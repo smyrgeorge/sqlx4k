@@ -397,6 +397,7 @@ class InMemoryRepositoryProcessor(
         val returnType = when (prefix) {
             Prefix.FIND_ALL, Prefix.FIND_ALL_BY -> "$resultType<List<$domainQn>>"
             Prefix.FIND_ONE_BY -> "$resultType<$domainQn?>"
+            Prefix.EXISTS_BY -> "$resultType<Boolean>"
             Prefix.DELETE_ALL, Prefix.DELETE_BY, Prefix.COUNT_ALL, Prefix.COUNT_BY, Prefix.EXECUTE, null ->
                 "$resultType<Long>"
         }
@@ -467,6 +468,15 @@ class InMemoryRepositoryProcessor(
                 when (val where = analyzeWhere(ps.where, valueParams, columns)) {
                     Where.All -> "withStore { runCatching { size.toLong() } }"
                     is Where.By -> "withStore { runCatching { values.count { ${where.predicate} }.toLong() } }"
+                    Where.Unsupported -> null
+                }
+            }
+
+            Prefix.EXISTS_BY -> {
+                val ps = statement as? PlainSelect ?: return null
+                when (val where = analyzeWhere(ps.where, valueParams, columns)) {
+                    Where.All -> "withStore { runCatching { values.isNotEmpty() } }"
+                    is Where.By -> "withStore { runCatching { values.any { ${where.predicate} } } }"
                     Where.Unsupported -> null
                 }
             }
@@ -760,6 +770,7 @@ class InMemoryRepositoryProcessor(
         DELETE_ALL,
         COUNT_BY,
         COUNT_ALL,
+        EXISTS_BY,
         EXECUTE,
     }
 
@@ -771,6 +782,7 @@ class InMemoryRepositoryProcessor(
         name.startsWith("findOneBy") -> Prefix.FIND_ONE_BY
         name.startsWith("deleteBy") -> Prefix.DELETE_BY
         name.startsWith("countBy") -> Prefix.COUNT_BY
+        name.startsWith("existsBy") -> Prefix.EXISTS_BY
         name.startsWith("execute") -> Prefix.EXECUTE
         else -> null
     }

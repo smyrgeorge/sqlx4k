@@ -52,6 +52,9 @@ interface UserCrudRepository : CrudRepository<User> {
     @Query("SELECT count(*) FROM users WHERE name = :name")
     suspend fun countByName(context: QueryExecutor, name: String): Result<Long>
 
+    @Query("SELECT * FROM users WHERE email = :email")
+    suspend fun existsByEmail(context: QueryExecutor, email: String): Result<Boolean>
+
     @Query("DELETE FROM users WHERE email = :email")
     suspend fun deleteByEmail(context: QueryExecutor, email: String): Result<Long>
 

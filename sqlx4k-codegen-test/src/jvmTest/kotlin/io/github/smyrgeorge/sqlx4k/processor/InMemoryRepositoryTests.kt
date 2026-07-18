@@ -166,6 +166,13 @@ class InMemoryRepositoryTests {
         assertThat(repo.findAllStored()).hasSize(1)
     }
 
+    @Test
+    fun `existsByEmail reports whether a matching entity is present`() = runTest {
+        repo.insert(ctx, User(id = 0, name = "Alice", email = "alice@example.com"))
+        assertThat(repo.existsByEmail(ctx, "alice@example.com").getOrThrow()).isEqualTo(true)
+        assertThat(repo.existsByEmail(ctx, "nobody@example.com").getOrThrow()).isEqualTo(false)
+    }
+
     // ==================== Predicates derived from the @Query SQL WHERE clause ====================
 
     @Test

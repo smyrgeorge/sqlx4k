@@ -211,6 +211,24 @@ class CrudRepositoryTests {
         assertThat(mockExecutor.hasExecuted("update users")).isTrue()
     }
 
+    // ==================== existsBy Tests ====================
+
+    @Test
+    fun `existsByEmail wraps the query in SELECT EXISTS and returns a boolean`() = runTest {
+        // No rows configured -> firstOrNull() is null -> false.
+        val absent = repository.existsByEmail(mockExecutor, "nobody@example.com")
+        assertThat(absent).isSuccess()
+        assertThat(absent.getOrNull()).isEqualTo(false)
+        assertThat(mockExecutor.hasExecuted("exists(select 1 from users")).isTrue()
+        assertThat(mockExecutor.hasExecuted("where email")).isTrue()
+
+        // A row whose first column is truthy -> true.
+        mockExecutor.setFetchAllRows(row("exists" to "true"))
+        val present = repository.existsByEmail(mockExecutor, "alice@example.com")
+        assertThat(present).isSuccess()
+        assertThat(present.getOrNull()).isEqualTo(true)
+    }
+
     // ==================== findOneById Tests ====================
 
     @Test

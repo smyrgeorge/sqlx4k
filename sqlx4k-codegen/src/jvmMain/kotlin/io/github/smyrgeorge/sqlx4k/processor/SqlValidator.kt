@@ -19,9 +19,11 @@ import net.sf.jsqlparser.statement.alter.AlterOperation
 import net.sf.jsqlparser.statement.create.table.CreateTable
 import net.sf.jsqlparser.statement.delete.Delete
 import net.sf.jsqlparser.statement.drop.Drop
+import net.sf.jsqlparser.statement.insert.Insert
 import net.sf.jsqlparser.statement.select.AllColumns
 import net.sf.jsqlparser.statement.select.Limit
 import net.sf.jsqlparser.statement.select.PlainSelect
+import net.sf.jsqlparser.statement.select.Select
 import net.sf.jsqlparser.statement.select.SelectItem
 import net.sf.jsqlparser.statement.update.Update
 import org.apache.calcite.adapter.java.JavaTypeFactory
@@ -327,6 +329,83 @@ object SqlValidator {
         }
     }
 
+    /** The kind of SQL statement a repository method prefix expects. */
+    enum class StatementKind { SELECT, DELETE, WRITE }
+
+    /**
+     * Validates that the statement kind matches the one implied by the method prefix (e.g. `find*` must
+     * be a SELECT, `delete*` a DELETE, `execute*` a write).
+     */
+    fun validateStatementKind(fn: String, stmt: JStatement, expected: StatementKind) {
+        val matches = when (expected) {
+            StatementKind.SELECT -> stmt is Select
+            StatementKind.DELETE -> stmt is Delete
+            StatementKind.WRITE -> stmt is Update || stmt is Delete || stmt is Insert
+        }
+        if (matches) return
+        val actual = when (stmt) {
+            is Select -> "SELECT"
+            is Delete -> "DELETE"
+            is Update -> "UPDATE"
+            is Insert -> "INSERT"
+            else -> stmt::class.simpleName ?: "unknown"
+        }
+        val expectedText = when (expected) {
+            StatementKind.SELECT -> "a SELECT"
+            StatementKind.DELETE -> "a DELETE"
+            StatementKind.WRITE -> "an INSERT/UPDATE/DELETE"
+        }
+        error("@Query ($fn) must be $expectedText statement but is a $actual.")
+    }
+
+    /**
+     * Validates that a `find*` method whose result is bound by the generated row mapper selects every
+     * entity column (or `SELECT *`). A partial projection would leave the mapper without a column at
+     * runtime. Multi-table queries and non-plain selects are skipped.
+     */
+    fun validateProjection(fn: String, stmt: JStatement, columnNames: Set<String>) {
+        val select = stmt as? PlainSelect ?: return
+        if (!select.joins.isNullOrEmpty()) return
+        val items = select.selectItems ?: return
+        if (items.any { it.expression is AllColumns }) return
+        val selected = items
+            .mapNotNull { (it.expression as? Column)?.columnName?.trim('"', '`', '[', ']')?.lowercase() }
+            .toSet()
+        val missing = columnNames.filter { it.lowercase() !in selected }
+        if (missing.isNotEmpty()) {
+            error(
+                "@Query ($fn) uses the generated row mapper but its SELECT list is missing column(s): " +
+                    "${missing.joinToString()}. Select every entity column (or use `SELECT *`), or supply a " +
+                    "custom @Repository(mapper = ...)."
+            )
+        }
+    }
+
+    /** Validates that a `RETURNING` clause references only columns that exist on the entity. */
+    fun validateReturningColumns(fn: String, stmt: JStatement, columnNames: Set<String>) {
+        val returning = when (stmt) {
+            is Insert -> stmt.returningClause
+            is Update -> stmt.returningClause
+            is Delete -> stmt.returningClause
+            else -> null
+        } ?: return
+        val columns = mutableListOf<Column>()
+        returning.forEach { collectColumns(it.expression, columns) }
+        val known = columnNames.map { it.lowercase() }.toSet()
+        val unknown = columns
+            .filterNot { it.columnName.lowercase() == "true" || it.columnName.lowercase() == "false" }
+            .map { it.columnName.trim('"', '`', '[', ']') }
+            .filter { it != "*" }
+            .distinct()
+            .filter { it.lowercase() !in known }
+        if (unknown.isNotEmpty()) {
+            error(
+                "@Query ($fn) RETURNING references column(s) not found on the entity: ${unknown.joinToString()}. " +
+                    "Known columns: ${columnNames.sorted().joinToString()}."
+            )
+        }
+    }
+
     /**
      * Validates that every column referenced by a single-table `@Query` exists on the entity. Multi-table
      * queries (joins, subselects, or a different `FROM` table) are skipped to avoid false positives.
@@ -430,6 +509,19 @@ object SqlValidator {
         if (select.limit != null) return sql
         select.limit = Limit().apply { setRowCount(LongValue(rowCount)) }
         return select.toString()
+    }
+
+    /**
+     * Wraps a plain `SELECT ... FROM <entity table> WHERE ...` into `SELECT EXISTS(SELECT 1 FROM ...)`
+     * for `exists*` methods. If the query is not a plain select over the entity table (e.g. the user
+     * already wrote `SELECT EXISTS(...)`, which has no `FROM`), it is returned unchanged.
+     */
+    fun toExistsQuery(stmt: JStatement, sql: String, tableName: String): String {
+        val select = stmt as? PlainSelect ?: return sql
+        val from = select.fromItem as? Table ?: return sql
+        if (!from.name.equals(tableName, ignoreCase = true)) return sql
+        select.selectItems = listOf(SelectItem.from(LongValue(1), null))
+        return "SELECT EXISTS(" + select.toString() + ")"
     }
 
     data class ColumnDef(val name: String, val type: String)

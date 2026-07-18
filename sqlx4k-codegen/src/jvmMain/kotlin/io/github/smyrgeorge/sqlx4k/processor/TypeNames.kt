@@ -74,6 +74,7 @@ object TypeNames {
     val KOTLIN_LIST = List::class.qualifiedName!!
     val KOTLIN_LONG = Long::class.qualifiedName!!
     val KOTLIN_INT = Int::class.qualifiedName!!
+    val KOTLIN_BOOLEAN = Boolean::class.qualifiedName!!
 
     /**
      * Set of primitive types that have native decoder support and should not use @Converter.
