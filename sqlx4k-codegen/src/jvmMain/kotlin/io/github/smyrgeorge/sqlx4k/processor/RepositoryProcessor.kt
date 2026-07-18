@@ -65,8 +65,17 @@ class RepositoryProcessor(
         val globalValidateColumns = options[VALIDATE_SQL_COLUMNS_OPTION]?.toBoolean() ?: true
         logger.info("[RepositoryProcessor] Validate SQL columns: $globalValidateColumns")
 
+        val globalValidateTable = options[VALIDATE_SQL_TABLE_OPTION]?.toBoolean() ?: true
+        logger.info("[RepositoryProcessor] Validate SQL table: $globalValidateTable")
+
+        val globalValidateCountProjection = options[VALIDATE_COUNT_PROJECTION_OPTION]?.toBoolean() ?: true
+        logger.info("[RepositoryProcessor] Validate count projection: $globalValidateCountProjection")
+
         val globalExpandSelectStar = options[EXPAND_SELECT_STAR_OPTION]?.toBoolean() ?: true
         logger.info("[RepositoryProcessor] Expand SELECT *: $globalExpandSelectStar")
+
+        val globalFindOneLimit = options[FIND_ONE_LIMIT_OPTION]?.toBoolean() ?: true
+        logger.info("[RepositoryProcessor] Append LIMIT to findOne queries: $globalFindOneLimit")
 
         // Load schemas.
         if (globalCheckSqlSchema) SqlValidator.loadSchema(schemaMigrationsPath)
@@ -129,7 +138,10 @@ class RepositoryProcessor(
                         globalCheckSqlSchema = globalCheckSqlSchema,
                         globalRejectStackedStatements = globalRejectStackedStatements,
                         globalValidateColumns = globalValidateColumns,
+                        globalValidateTable = globalValidateTable,
+                        globalValidateCountProjection = globalValidateCountProjection,
                         globalExpandSelectStar = globalExpandSelectStar,
+                        globalFindOneLimit = globalFindOneLimit,
                         mapperTypeName = mapperTypeName,
                         domainDecl = domainDecl,
                         useContextParameters = useContextParameters,
@@ -529,7 +541,10 @@ class RepositoryProcessor(
         globalCheckSqlSchema: Boolean,
         globalRejectStackedStatements: Boolean,
         globalValidateColumns: Boolean,
+        globalValidateTable: Boolean,
+        globalValidateCountProjection: Boolean,
         globalExpandSelectStar: Boolean,
+        globalFindOneLimit: Boolean,
         mapperTypeName: String,
         domainDecl: KSClassDeclaration,
         useContextParameters: Boolean,
@@ -571,23 +586,37 @@ class RepositoryProcessor(
         // Parse the SQL once (jsqlparser) and reuse the AST across the structural checks below.
         // When syntax validation is disabled, a parse failure is ignored and the AST is simply absent.
         val statements = SqlValidator.validateQuerySyntax(fn.simpleName(), rawSql, reportErrors = validateSyntax)
-        val statement = statements.singleOrNull()
-
         if (globalRejectStackedStatements) SqlValidator.rejectStackedStatements(fn.simpleName(), statements)
 
+        if (validateSchema) SqlValidator.validateQuerySchema(fn.simpleName(), rawSql)
+
+        val statement = statements.singleOrNull()
         val entityTable = tableNameOf(domainDecl)
         val entityColumns = Columns.columnNames(domainDecl)
 
-        if (globalValidateColumns && statement != null) {
-            SqlValidator.validateColumnsExist(fn.simpleName(), statement, entityTable, entityColumns.toSet())
+        // Structural checks that need the parsed statement (skipped when it could not be parsed).
+        statement?.let { stmt ->
+            if (globalValidateColumns) {
+                SqlValidator.validateColumnsExist(fn.simpleName(), stmt, entityTable, entityColumns.toSet())
+            }
+            if (globalValidateTable) {
+                SqlValidator.validateTable(fn.simpleName(), stmt, entityTable)
+            }
+            if (globalValidateCountProjection && (prefix == Prefix.COUNT_ALL || prefix == Prefix.COUNT_BY)) {
+                SqlValidator.validateCountProjection(fn.simpleName(), stmt)
+            }
         }
-        if (validateSchema) SqlValidator.validateQuerySchema(fn.simpleName(), rawSql)
 
-        // Expand `SELECT *` into the entity's explicit columns for the emitted statement.
-        val sql: String = if (globalExpandSelectStar && statement != null) {
-            SqlValidator.expandSelectStar(statement, rawSql, entityTable, entityColumns)
-        } else {
-            rawSql
+        // Rewrites that need the parsed statement: expand `SELECT *` and append a findOne* fetch limit.
+        var sql: String = rawSql
+        statement?.let { stmt ->
+            if (globalExpandSelectStar) {
+                sql = SqlValidator.expandSelectStar(stmt, sql, entityTable, entityColumns)
+            }
+            // findOne* fetches at most two rows: still detects a multi-row result, but transfers less.
+            if (globalFindOneLimit && prefix == Prefix.FIND_ONE_BY) {
+                sql = SqlValidator.withRowLimit(stmt, sql, 2)
+            }
         }
 
         logger.info("[RepositoryProcessor] Emitting method '$name' with prefix ${prefix.name} in ${domainDecl.qualifiedName()} using mapper $mapperTypeName")
@@ -1304,6 +1333,24 @@ class RepositoryProcessor(
          * entity (single-table queries only). Defaults to `true`.
          */
         private const val VALIDATE_SQL_COLUMNS_OPTION: String = "validate-sql-columns"
+
+        /**
+         * Option key to enable/disable validating that a single-table `@Query` targets the entity's own
+         * table (as declared by `@Table`). Defaults to `true`.
+         */
+        private const val VALIDATE_SQL_TABLE_OPTION: String = "validate-sql-table"
+
+        /**
+         * Option key to enable/disable validating that a `count*` method selects a single `count(...)`
+         * aggregate. Defaults to `true`.
+         */
+        private const val VALIDATE_COUNT_PROJECTION_OPTION: String = "validate-count-projection"
+
+        /**
+         * Option key to enable/disable appending a `LIMIT 2` to `findOne*` queries so they fetch at most
+         * two rows (still detecting a multi-row result). Defaults to `true`.
+         */
+        private const val FIND_ONE_LIMIT_OPTION: String = "findone-limit"
 
         /**
          * Option key to enable/disable rewriting a bare `SELECT *` into the entity's explicit columns

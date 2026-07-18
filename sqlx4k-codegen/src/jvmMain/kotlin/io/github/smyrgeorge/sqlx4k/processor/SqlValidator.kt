@@ -5,6 +5,8 @@ import java.io.File
 import java.util.Properties
 import net.sf.jsqlparser.expression.BinaryExpression
 import net.sf.jsqlparser.expression.Expression
+import net.sf.jsqlparser.expression.Function
+import net.sf.jsqlparser.expression.LongValue
 import net.sf.jsqlparser.expression.operators.relational.InExpression
 import net.sf.jsqlparser.expression.operators.relational.IsNullExpression
 import net.sf.jsqlparser.expression.operators.relational.ParenthesedExpressionList
@@ -18,6 +20,7 @@ import net.sf.jsqlparser.statement.create.table.CreateTable
 import net.sf.jsqlparser.statement.delete.Delete
 import net.sf.jsqlparser.statement.drop.Drop
 import net.sf.jsqlparser.statement.select.AllColumns
+import net.sf.jsqlparser.statement.select.Limit
 import net.sf.jsqlparser.statement.select.PlainSelect
 import net.sf.jsqlparser.statement.select.SelectItem
 import net.sf.jsqlparser.statement.update.Update
@@ -296,6 +299,35 @@ object SqlValidator {
     }
 
     /**
+     * Validates that a single-table `@Query` targets the repository entity's own table. A `FROM` that is
+     * a subselect (or a non-CRUD statement) is skipped.
+     */
+    fun validateTable(fn: String, stmt: JStatement, tableName: String) {
+        val actual = when (stmt) {
+            is PlainSelect -> (stmt.fromItem as? Table)?.name
+            is Delete -> stmt.table?.name
+            is Update -> stmt.table?.name
+            else -> null
+        } ?: return
+        if (!actual.equals(tableName, ignoreCase = true)) {
+            error("@Query ($fn) targets table '$actual' but the repository entity is mapped to table '$tableName'.")
+        }
+    }
+
+    /**
+     * Validates that a `count*` method selects a single `count(...)` aggregate (rather than, say, `*`).
+     */
+    fun validateCountProjection(fn: String, stmt: JStatement) {
+        val select = stmt as? PlainSelect ?: return
+        val items = select.selectItems ?: return
+        val isCount = items.size == 1 &&
+            (items[0].expression as? Function)?.name?.equals("count", ignoreCase = true) == true
+        if (!isCount) {
+            error("@Query ($fn) is a count method but does not select a single count(...) aggregate.")
+        }
+    }
+
+    /**
      * Validates that every column referenced by a single-table `@Query` exists on the entity. Multi-table
      * queries (joins, subselects, or a different `FROM` table) are skipped to avoid false positives.
      */
@@ -310,6 +342,9 @@ object SqlValidator {
                 from.alias?.name?.let { aliases.add(it.lowercase()) }
                 stmt.selectItems?.forEach { collectColumns(it.expression, columns) }
                 collectColumns(stmt.where, columns)
+                stmt.groupBy?.groupByExpressionList?.forEach { collectColumns(it, columns) }
+                collectColumns(stmt.having, columns)
+                stmt.orderByElements?.forEach { collectColumns(it.expression, columns) }
             }
 
             is Delete -> {
@@ -381,6 +416,19 @@ object SqlValidator {
 
         val prefix = from.alias?.name?.let { "$it." } ?: ""
         select.selectItems = columnNames.map { SelectItem.from(Column("$prefix$it"), null) }
+        return select.toString()
+    }
+
+    /**
+     * Appends a `LIMIT [rowCount]` to a `SELECT` that has none, so `findOne*` methods fetch at most a
+     * couple of rows while still detecting a multi-row result. Returns the SQL unchanged for anything
+     * that already has a limit or is not a plain select. `LIMIT n` is portable across all supported
+     * dialects (PostgreSQL, MySQL, SQLite).
+     */
+    fun withRowLimit(stmt: JStatement, sql: String, rowCount: Long): String {
+        val select = stmt as? PlainSelect ?: return sql
+        if (select.limit != null) return sql
+        select.limit = Limit().apply { setRowCount(LongValue(rowCount)) }
         return select.toString()
     }
 

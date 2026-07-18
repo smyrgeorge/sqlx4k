@@ -865,13 +865,16 @@ interface UserRepository {
 #### Query validations and optimizations
 
 Beyond syntax and schema checks, the processor parses each `@Query` once (with JSqlParser) and applies a few extra
-compile-time safeguards and a codegen optimization. Each is controlled by a global KSP option and enabled by default:
+compile-time safeguards and codegen optimizations. Each is controlled by a global KSP option and enabled by default:
 
-| KSP option                  | Default | What it does                                                                                                                                                                                                                                        |
-|-----------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `reject-stacked-statements` | `true`  | Fails the build if a single `@Query` contains more than one SQL statement (a stacked-query guard).                                                                                                                                                  |
-| `validate-sql-columns`      | `true`  | Fails the build if a `@Query` references a column that does not exist on the entity. Applies to single-table queries only (joins/subselects/other tables are skipped).                                                                              |
-| `expand-select-star`        | `true`  | Rewrites a bare `SELECT *` over the entity's table into the entity's explicit columns in the generated statement (e.g. `select * from users` → `select id, name, email from users`). Leaves `count(*)`, joins, and explicit column lists untouched. |
+| KSP option                  | Default | What it does                                                                                                                                                                                                                                                       |
+|-----------------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `reject-stacked-statements` | `true`  | Fails the build if a single `@Query` contains more than one SQL statement (a stacked-query guard).                                                                                                                                                                 |
+| `validate-sql-columns`      | `true`  | Fails the build if a `@Query` references a column that does not exist on the entity — across the `SELECT` list, `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY`, and `UPDATE ... SET`. Applies to single-table queries only (joins/subselects/other tables are skipped). |
+| `validate-sql-table`        | `true`  | Fails the build if a single-table `@Query` targets a table other than the entity's own (`@Table`). Skips subselect `FROM` clauses.                                                                                                                                 |
+| `validate-count-projection` | `true`  | Fails the build if a `count*` method does not select a single `count(...)` aggregate.                                                                                                                                                                              |
+| `expand-select-star`        | `true`  | Rewrites a bare `SELECT *` over the entity's table into the entity's explicit columns in the generated statement (e.g. `select * from users` → `select id, name, email from users`). Leaves `count(*)`, joins, and explicit column lists untouched.                |
+| `findone-limit`             | `true`  | Appends `LIMIT 2` to `findOne*` queries so the driver fetches at most two rows — it still detects a multi-row result, but transfers far less on wide tables. Skips queries that already declare a `LIMIT`.                                                         |
 
 Disable any of them module-wide in your build.gradle.kts:
 
@@ -879,13 +882,16 @@ Disable any of them module-wide in your build.gradle.kts:
 ksp {
     // arg("reject-stacked-statements", "false")
     // arg("validate-sql-columns", "false")
+    // arg("validate-sql-table", "false")
+    // arg("validate-count-projection", "false")
     // arg("expand-select-star", "false")
+    // arg("findone-limit", "false")
 }
 ```
 
 > [!NOTE]
-> Column validation and `SELECT *` expansion map columns back to properties using the same rules as the CRUD generator
-> (snake_case, or an explicit `@Column(name = "...")`), so they always stay consistent with the generated SQL.
+> Column/table validation and `SELECT *` expansion map columns back to properties using the same rules as the CRUD
+> generator (snake_case, or an explicit `@Column(name = "...")`), so they always stay consistent with the generated SQL.
 
 #### In-memory repositories (for unit testing)
 
