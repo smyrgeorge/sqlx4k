@@ -1,11 +1,26 @@
 package io.github.smyrgeorge.sqlx4k.processor
 
 import io.github.smyrgeorge.sqlx4k.Statement
+import java.io.File
+import java.util.Properties
+import net.sf.jsqlparser.expression.BinaryExpression
+import net.sf.jsqlparser.expression.Expression
+import net.sf.jsqlparser.expression.operators.relational.InExpression
+import net.sf.jsqlparser.expression.operators.relational.IsNullExpression
+import net.sf.jsqlparser.expression.operators.relational.ParenthesedExpressionList
 import net.sf.jsqlparser.parser.CCJSqlParserUtil
+import net.sf.jsqlparser.schema.Column
+import net.sf.jsqlparser.schema.Table
+import net.sf.jsqlparser.statement.Statement as JStatement
 import net.sf.jsqlparser.statement.alter.Alter
 import net.sf.jsqlparser.statement.alter.AlterOperation
 import net.sf.jsqlparser.statement.create.table.CreateTable
+import net.sf.jsqlparser.statement.delete.Delete
 import net.sf.jsqlparser.statement.drop.Drop
+import net.sf.jsqlparser.statement.select.AllColumns
+import net.sf.jsqlparser.statement.select.PlainSelect
+import net.sf.jsqlparser.statement.select.SelectItem
+import net.sf.jsqlparser.statement.update.Update
 import org.apache.calcite.adapter.java.JavaTypeFactory
 import org.apache.calcite.config.CalciteConnectionConfigImpl
 import org.apache.calcite.config.Lex
@@ -15,7 +30,11 @@ import org.apache.calcite.prepare.CalciteCatalogReader
 import org.apache.calcite.rel.type.RelDataType
 import org.apache.calcite.rel.type.RelDataTypeFactory
 import org.apache.calcite.schema.impl.AbstractTable
-import org.apache.calcite.sql.*
+import org.apache.calcite.sql.SqlCall
+import org.apache.calcite.sql.SqlIdentifier
+import org.apache.calcite.sql.SqlKind
+import org.apache.calcite.sql.SqlLiteral
+import org.apache.calcite.sql.SqlNode
 import org.apache.calcite.sql.`fun`.SqlStdOperatorTable
 import org.apache.calcite.sql.parser.SqlParser
 import org.apache.calcite.sql.type.SqlTypeName
@@ -24,8 +43,6 @@ import org.apache.calcite.sql.validate.SqlConformanceEnum
 import org.apache.calcite.sql.validate.SqlValidator
 import org.apache.calcite.sql.validate.SqlValidatorCatalogReader
 import org.apache.calcite.sql.validate.SqlValidatorUtil
-import java.io.File
-import java.util.*
 
 /**
  * A utility object that provides functionality for SQL validation and schema handling.
@@ -42,19 +59,25 @@ object SqlValidator {
         .withLex(Lex.JAVA) // Avoid automatic UPPER-casing
 
     /**
-     * Validates the syntax of an SQL query by attempting to parse it.
-     * If the SQL syntax is invalid, an error is thrown with a message indicating the issue.
+     * Parses [sql] and returns the parsed statement(s), so the result can be reused by the structural
+     * checks ([rejectStackedStatements], [validateColumnsExist], [expandSelectStar]) instead of re-parsing.
      *
-     * @param fn A string representing the context or identifier of the function where the validation is being invoked.
-     * This is used for naming the source of the error in the error message.
-     * @param sql The SQL query string to be validated for correct syntax.
+     * When [reportErrors] is `true`, malformed SQL raises an error; otherwise it returns an empty list
+     * (used when syntax validation is disabled but the other checks still want the AST when available).
+     *
+     * @param fn Identifier of the function under validation, used in error messages.
+     * @param sql The SQL query string to parse.
+     * @param reportErrors Whether a parse failure should raise an error (syntax validation) or be ignored.
      */
-    fun validateQuerySyntax(fn: String, sql: String) {
-        try {
-            CCJSqlParserUtil.parse(sql)
+    fun validateQuerySyntax(fn: String, sql: String, reportErrors: Boolean = true): List<JStatement> {
+        return try {
+            CCJSqlParserUtil.parseStatements(sql)
         } catch (e: Exception) {
-            val cause = e.message?.removePrefix("net.sf.jsqlparser.parser.ParseException: ")
-            error("Invalid SQL syntax ($fn): $cause")
+            if (reportErrors) {
+                val cause = e.message?.removePrefix("net.sf.jsqlparser.parser.ParseException: ")
+                error("Invalid SQL syntax ($fn): $cause")
+            }
+            emptyList()
         }
     }
 
@@ -128,7 +151,7 @@ object SqlValidator {
 
         val schema = mutableMapOf<String, TableDef>()
 
-        files.map { file ->
+        files.forEach { file ->
             val sql = file.readText()
             CCJSqlParserUtil.parseStatements(sql).forEach { stmt ->
 
@@ -260,6 +283,105 @@ object SqlValidator {
                 return super.visit(call)
             }
         })
+    }
+
+    /**
+     * Rejects a `@Query` value that contains more than one SQL statement (a stacked-query safety guard).
+     * Malformed SQL is ignored here — it is reported by [validateQuerySyntax].
+     */
+    fun rejectStackedStatements(fn: String, statements: List<JStatement>) {
+        if (statements.size > 1) {
+            error("Multiple SQL statements are not allowed in a single @Query ($fn): found ${statements.size} statements.")
+        }
+    }
+
+    /**
+     * Validates that every column referenced by a single-table `@Query` exists on the entity. Multi-table
+     * queries (joins, subselects, or a different `FROM` table) are skipped to avoid false positives.
+     */
+    fun validateColumnsExist(fn: String, stmt: JStatement, tableName: String, columnNames: Set<String>) {
+        val aliases = linkedSetOf(tableName.lowercase())
+        val columns = mutableListOf<Column>()
+        when (stmt) {
+            is PlainSelect -> {
+                val from = stmt.fromItem as? Table ?: return
+                if (!from.name.equals(tableName, ignoreCase = true)) return
+                if (!stmt.joins.isNullOrEmpty()) return
+                from.alias?.name?.let { aliases.add(it.lowercase()) }
+                stmt.selectItems?.forEach { collectColumns(it.expression, columns) }
+                collectColumns(stmt.where, columns)
+            }
+
+            is Delete -> {
+                if (!stmt.table.name.equals(tableName, ignoreCase = true)) return
+                if (!stmt.joins.isNullOrEmpty()) return
+                stmt.table.alias?.name?.let { aliases.add(it.lowercase()) }
+                collectColumns(stmt.where, columns)
+            }
+
+            is Update -> {
+                if (!stmt.table.name.equals(tableName, ignoreCase = true)) return
+                if (!stmt.joins.isNullOrEmpty()) return
+                stmt.table.alias?.name?.let { aliases.add(it.lowercase()) }
+                stmt.updateSets.forEach { set -> for (i in set.columns.indices) columns.add(set.getColumn(i)) }
+                collectColumns(stmt.where, columns)
+            }
+
+            else -> return
+        }
+
+        val known = columnNames.map { it.lowercase() }.toSet()
+        val unknown = columns
+            .asSequence()
+            .filterNot { it.columnName.lowercase() == "true" || it.columnName.lowercase() == "false" }
+            .filter { column -> column.table?.name?.lowercase()?.let { it in aliases } ?: true }
+            .map { it.columnName.trim('"', '`', '[', ']') }
+            .filter { it != "*" }
+            .distinct()
+            .filter { it.lowercase() !in known }
+            .toList()
+
+        if (unknown.isNotEmpty()) {
+            error(
+                "@Query ($fn) references column(s) not found on the entity: ${unknown.joinToString()}. " +
+                        "Known columns: ${columnNames.sorted().joinToString()}."
+            )
+        }
+    }
+
+    /** Recursively collects the [Column] references from the common WHERE/SELECT expression shapes. */
+    private fun collectColumns(e: Expression?, out: MutableList<Column>) {
+        when (e) {
+            null -> {}
+            is Column -> out += e
+            is ParenthesedExpressionList<*> -> e.forEach { collectColumns(it, out) }
+            is IsNullExpression -> collectColumns(e.leftExpression, out)
+            is InExpression -> collectColumns(e.leftExpression, out)
+            is BinaryExpression -> {
+                collectColumns(e.leftExpression, out)
+                collectColumns(e.rightExpression, out)
+            }
+
+            else -> {}
+        }
+    }
+
+    /**
+     * Rewrites a bare `SELECT *` over the entity's own table into the entity's explicit columns. Returns
+     * the SQL unchanged for anything else (joins, a different table, `SELECT count(*)`, an explicit list).
+     */
+    fun expandSelectStar(stmt: JStatement, sql: String, tableName: String, columnNames: List<String>): String {
+        if (columnNames.isEmpty()) return sql
+        val select = stmt as? PlainSelect ?: return sql
+        val from = select.fromItem as? Table ?: return sql
+        if (!from.name.equals(tableName, ignoreCase = true)) return sql
+        if (!select.joins.isNullOrEmpty()) return sql
+        val items = select.selectItems ?: return sql
+        if (items.size != 1 || items[0].expression !is AllColumns) return sql
+
+        val prefix = from.alias?.name?.let { "$it." } ?: ""
+        select.selectItems = columnNames.map { SelectItem.from(Column("$prefix$it"), null) }
+        return select.toString()
     }
 
     data class ColumnDef(val name: String, val type: String)

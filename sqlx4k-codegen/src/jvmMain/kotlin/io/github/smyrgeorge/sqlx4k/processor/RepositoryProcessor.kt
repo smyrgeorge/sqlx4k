@@ -59,6 +59,15 @@ class RepositoryProcessor(
         logger.info("[RepositoryProcessor] Validate SQL schema: $globalCheckSqlSchema")
         val schemaMigrationsPath = options[SCHEMA_MIGRATIONS_PATH_OPTION] ?: "./set-the-path-to-schema-migrations"
 
+        val globalRejectStackedStatements = options[REJECT_STACKED_STATEMENTS_OPTION]?.toBoolean() ?: true
+        logger.info("[RepositoryProcessor] Reject stacked statements: $globalRejectStackedStatements")
+
+        val globalValidateColumns = options[VALIDATE_SQL_COLUMNS_OPTION]?.toBoolean() ?: true
+        logger.info("[RepositoryProcessor] Validate SQL columns: $globalValidateColumns")
+
+        val globalExpandSelectStar = options[EXPAND_SELECT_STAR_OPTION]?.toBoolean() ?: true
+        logger.info("[RepositoryProcessor] Expand SELECT *: $globalExpandSelectStar")
+
         // Load schemas.
         if (globalCheckSqlSchema) SqlValidator.loadSchema(schemaMigrationsPath)
 
@@ -118,6 +127,9 @@ class RepositoryProcessor(
                         fn = fn,
                         globalCheckSqlSyntax = globalCheckSqlSyntax,
                         globalCheckSqlSchema = globalCheckSqlSchema,
+                        globalRejectStackedStatements = globalRejectStackedStatements,
+                        globalValidateColumns = globalValidateColumns,
+                        globalExpandSelectStar = globalExpandSelectStar,
                         mapperTypeName = mapperTypeName,
                         domainDecl = domainDecl,
                         useContextParameters = useContextParameters,
@@ -515,6 +527,9 @@ class RepositoryProcessor(
         fn: KSFunctionDeclaration,
         globalCheckSqlSyntax: Boolean,
         globalCheckSqlSchema: Boolean,
+        globalRejectStackedStatements: Boolean,
+        globalValidateColumns: Boolean,
+        globalExpandSelectStar: Boolean,
         mapperTypeName: String,
         domainDecl: KSClassDeclaration,
         useContextParameters: Boolean,
@@ -537,7 +552,7 @@ class RepositoryProcessor(
         val validateSyntax = globalCheckSqlSyntax && localCheckSyntax
         val validateSchema = globalCheckSqlSchema && localCheckSchema
 
-        val sql: String = queryAnn.arguments
+        val rawSql: String = queryAnn.arguments
             .firstOrNull { it.name?.asString() == "value" }?.value as? String
             ?: error("Unable to generate query method (could not extract sql query from the @Query): $fn")
 
@@ -550,10 +565,30 @@ class RepositoryProcessor(
 
         validateContextParameter(fn, useContextParameters)
         validateParameterArity(prefix, fn, useContextParameters)
-        validateParameters(sql, fn, useContextParameters)
+        validateParameters(rawSql, fn, useContextParameters)
         validateReturnType(prefix, fn, domainDecl, useArrow)
-        if (validateSyntax) SqlValidator.validateQuerySyntax(fn.simpleName(), sql)
-        if (validateSchema) SqlValidator.validateQuerySchema(fn.simpleName(), sql)
+
+        // Parse the SQL once (jsqlparser) and reuse the AST across the structural checks below.
+        // When syntax validation is disabled, a parse failure is ignored and the AST is simply absent.
+        val statements = SqlValidator.validateQuerySyntax(fn.simpleName(), rawSql, reportErrors = validateSyntax)
+        val statement = statements.singleOrNull()
+
+        if (globalRejectStackedStatements) SqlValidator.rejectStackedStatements(fn.simpleName(), statements)
+
+        val entityTable = tableNameOf(domainDecl)
+        val entityColumns = Columns.columnNames(domainDecl)
+
+        if (globalValidateColumns && statement != null) {
+            SqlValidator.validateColumnsExist(fn.simpleName(), statement, entityTable, entityColumns.toSet())
+        }
+        if (validateSchema) SqlValidator.validateQuerySchema(fn.simpleName(), rawSql)
+
+        // Expand `SELECT *` into the entity's explicit columns for the emitted statement.
+        val sql: String = if (globalExpandSelectStar && statement != null) {
+            SqlValidator.expandSelectStar(statement, rawSql, entityTable, entityColumns)
+        } else {
+            rawSql
+        }
 
         logger.info("[RepositoryProcessor] Emitting method '$name' with prefix ${prefix.name} in ${domainDecl.qualifiedName()} using mapper $mapperTypeName")
 
@@ -1227,6 +1262,11 @@ class RepositoryProcessor(
         return imports
     }
 
+    private fun tableNameOf(domainDecl: KSClassDeclaration): String {
+        val table = domainDecl.annotations.first { it.qualifiedName() == TypeNames.TABLE_ANNOTATION }
+        return table.arguments.first { it.name?.asString() == "name" }.value as String
+    }
+
     operator fun OutputStream.plusAssign(str: String): Unit = write(str.toByteArray())
     private fun KSDeclaration.qualifiedName(): String? = qualifiedName?.asString()
     private fun KSClassDeclaration.simpleName(): String = simpleName.asString()
@@ -1252,6 +1292,24 @@ class RepositoryProcessor(
          * and query definitions to ensure consistency and correctness.
          */
         private const val VALIDATE_SQL_SCHEMA_OPTION: String = "validate-sql-schema"
+
+        /**
+         * Option key to enable/disable rejecting a `@Query` that contains more than one SQL statement
+         * (a stacked-query safety guard). Defaults to `true`.
+         */
+        private const val REJECT_STACKED_STATEMENTS_OPTION: String = "reject-stacked-statements"
+
+        /**
+         * Option key to enable/disable validating that columns referenced by a `@Query` exist on the
+         * entity (single-table queries only). Defaults to `true`.
+         */
+        private const val VALIDATE_SQL_COLUMNS_OPTION: String = "validate-sql-columns"
+
+        /**
+         * Option key to enable/disable rewriting a bare `SELECT *` into the entity's explicit columns
+         * in the generated statement. Defaults to `true`.
+         */
+        private const val EXPAND_SELECT_STAR_OPTION: String = "expand-select-star"
 
         /**
          * Represents the option key used for specifying the path to schema migration files

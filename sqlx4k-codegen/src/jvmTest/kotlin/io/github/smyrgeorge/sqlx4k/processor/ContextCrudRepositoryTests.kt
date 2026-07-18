@@ -252,7 +252,7 @@ class ContextCrudRepositoryTests {
             repository.findOneById(1)
         }
 
-        assertThat(mockExecutor.hasExecuted("SELECT * FROM users")).isTrue()
+        assertThat(mockExecutor.hasExecuted("select id, name, email from users")).isTrue()
         assertThat(mockExecutor.hasExecuted("WHERE id")).isTrue()
     }
 

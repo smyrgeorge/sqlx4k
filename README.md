@@ -66,6 +66,7 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
     - [List of Repository interfaces](#list-of-repository-interfaces)
     - [SQL syntax validation (compile-time)](#sql-syntax-validation-compile-time)
     - [SQL schema validation (compile-time)](#sql-schema-validation-compile-time)
+    - [Query validations and optimizations](#query-validations-and-optimizations)
     - [In-memory repositories (for unit testing)](#in-memory-repositories-for-unit-testing)
 - [Database migrations](#database-migrations)
 - [PostgreSQL LISTEN/NOTIFY](#listennotify-only-for-postgresql)
@@ -860,6 +861,31 @@ interface UserRepository {
     suspend fun findOneById(context: QueryExecutor, id: Int): Result<User?>
 }
 ```
+
+#### Query validations and optimizations
+
+Beyond syntax and schema checks, the processor parses each `@Query` once (with JSqlParser) and applies a few extra
+compile-time safeguards and a codegen optimization. Each is controlled by a global KSP option and enabled by default:
+
+| KSP option                  | Default | What it does                                                                                                                                                                                                                                        |
+|-----------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `reject-stacked-statements` | `true`  | Fails the build if a single `@Query` contains more than one SQL statement (a stacked-query guard).                                                                                                                                                  |
+| `validate-sql-columns`      | `true`  | Fails the build if a `@Query` references a column that does not exist on the entity. Applies to single-table queries only (joins/subselects/other tables are skipped).                                                                              |
+| `expand-select-star`        | `true`  | Rewrites a bare `SELECT *` over the entity's table into the entity's explicit columns in the generated statement (e.g. `select * from users` → `select id, name, email from users`). Leaves `count(*)`, joins, and explicit column lists untouched. |
+
+Disable any of them module-wide in your build.gradle.kts:
+
+```kotlin
+ksp {
+    // arg("reject-stacked-statements", "false")
+    // arg("validate-sql-columns", "false")
+    // arg("expand-select-star", "false")
+}
+```
+
+> [!NOTE]
+> Column validation and `SELECT *` expansion map columns back to properties using the same rules as the CRUD generator
+> (snake_case, or an explicit `@Column(name = "...")`), so they always stay consistent with the generated SQL.
 
 #### In-memory repositories (for unit testing)
 
