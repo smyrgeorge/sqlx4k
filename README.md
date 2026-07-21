@@ -872,16 +872,15 @@ interface UserRepository {
 
 #### Query validations and optimizations
 
-Beyond syntax and schema checks, the processor parses each `@Query` once (with JSqlParser) and reuses that AST for a few
-extra compile-time checks and codegen rewrites. Each is controlled by a global KSP option and enabled by default. They
-fall into two groups: **validations** that fail the build when a `@Query` looks wrong, and **optimizations** that
-rewrite
-the generated SQL for efficiency without changing its result.
+Beyond syntax and schema checks, the processor runs a set of extra compile-time checks and codegen rewrites over each
+`@Query` (and the entity it maps to). Each is controlled by a global KSP option and enabled by default. They fall into
+two groups: **validations** that fail the build when a `@Query` or entity looks wrong, and **optimizations** that
+rewrite the generated SQL for efficiency without changing its result.
 
 ##### Validations
 
-Compile-time safeguards that fail the build when a `@Query` is inconsistent with its entity or its method prefix. They
-never change the generated SQL.
+Compile-time safeguards that fail the build when a `@Query` — or the entity it maps to — is inconsistent (an unknown
+column or table, the wrong statement kind, an unsupported key shape, …). They never change the generated SQL.
 
 | KSP option                   | Default | What it does                                                                                                                                                                                                                                                       |
 |------------------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -892,6 +891,8 @@ never change the generated SQL.
 | `validate-statement-kind`    | `true`  | Fails the build if a `@Query`'s statement kind doesn't match its prefix: `find*`/`count*`/`exists*` must be a `SELECT`, `delete*` a `DELETE`, and `execute*` a write (`INSERT`/`UPDATE`/`DELETE`).                                                                 |
 | `validate-projection`        | `true`  | Fails the build if a `find*` method bound by the generated row mapper selects only some columns (which would leave the mapper without a column at runtime). Requires `SELECT *` or every entity column. Skipped when a custom `@Repository(mapper = ...)` is used. |
 | `validate-returning-columns` | `true`  | Fails the build if a `RETURNING` clause references a column that does not exist on the entity.                                                                                                                                                                     |
+| `reject-grouping-in-scalar`  | `true`  | Fails the build if a `count*`, `findOne*`, or `exists*` method's `@Query` contains a `GROUP BY`/`HAVING` clause. A grouped query returns one row per group, but these methods read only the first row — so the result would be wrong.                              |
+| `validate-single-id`         | `true`  | Fails the build if the repository entity declares more than one `@Id` property. Zero (a keyless entity) and one are both allowed; composite primary keys are not supported by the CRUD generator.                                                                  |
 
 Disable any of them module-wide in your build.gradle.kts:
 
@@ -904,6 +905,8 @@ ksp {
     // arg("validate-statement-kind", "false")
     // arg("validate-projection", "false")
     // arg("validate-returning-columns", "false")
+    // arg("reject-grouping-in-scalar", "false")
+    // arg("validate-single-id", "false")
 }
 ```
 
@@ -912,17 +915,21 @@ ksp {
 Codegen rewrites that make the generated SQL more efficient. They never fail the build; a query that doesn't fit the
 rewrite is emitted unchanged.
 
-| KSP option           | Default | What it does                                                                                                                                                                                                                                        |
-|----------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `expand-select-star` | `true`  | Rewrites a bare `SELECT *` over the entity's table into the entity's explicit columns in the generated statement (e.g. `select * from users` → `select id, name, email from users`). Leaves `count(*)`, joins, and explicit column lists untouched. |
-| `findone-limit`      | `true`  | Appends `LIMIT 2` to `findOne*` queries so the driver fetches at most two rows — it still detects a multi-row result, but transfers far less on wide tables. Skips queries that already declare a `LIMIT`.                                          |
+| KSP option                | Default | What it does                                                                                                                                                                                                                                        |
+|---------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `expand-select-star`      | `true`  | Rewrites a bare `SELECT *` over the entity's table into the entity's explicit columns in the generated statement (e.g. `select * from users` → `select id, name, email from users`). Leaves `count(*)`, joins, and explicit column lists untouched. |
+| `findone-limit`           | `true`  | Appends `LIMIT 2` to `findOne*` queries so the driver fetches at most two rows — it still detects a multi-row result, but transfers far less on wide tables. Skips queries that already declare a `LIMIT`.                                          |
+| `expand-returning-star`   | `true`  | Rewrites a bare `RETURNING *` on a write over the entity's table into the entity's explicit columns (mirrors `expand-select-star`). Leaves an explicit `RETURNING` list, or a write against a different table, untouched.                           |
+| `drop-redundant-order-by` | `true`  | Strips a meaningless `ORDER BY` from `exists*`/`count*` queries — their result is a single scalar, so ordering only costs the database a sort. Leaves queries with no `ORDER BY` untouched.                                                         |
 
-Disable either of them module-wide in your build.gradle.kts:
+Disable any of them module-wide in your build.gradle.kts:
 
 ```kotlin
 ksp {
     // arg("expand-select-star", "false")
     // arg("findone-limit", "false")
+    // arg("expand-returning-star", "false")
+    // arg("drop-redundant-order-by", "false")
 }
 ```
 

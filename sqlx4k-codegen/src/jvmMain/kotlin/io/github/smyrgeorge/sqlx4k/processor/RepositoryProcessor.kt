@@ -86,6 +86,18 @@ class RepositoryProcessor(
         val globalFindOneLimit = options[FIND_ONE_LIMIT_OPTION]?.toBoolean() ?: true
         logger.info("[RepositoryProcessor] Append LIMIT to findOne queries: $globalFindOneLimit")
 
+        val globalRejectGroupingInScalar = options[REJECT_GROUPING_IN_SCALAR_OPTION]?.toBoolean() ?: true
+        logger.info("[RepositoryProcessor] Reject grouping in scalar methods: $globalRejectGroupingInScalar")
+
+        val globalValidateSingleId = options[VALIDATE_SINGLE_ID_OPTION]?.toBoolean() ?: true
+        logger.info("[RepositoryProcessor] Validate single @Id: $globalValidateSingleId")
+
+        val globalExpandReturningStar = options[EXPAND_RETURNING_STAR_OPTION]?.toBoolean() ?: true
+        logger.info("[RepositoryProcessor] Expand RETURNING *: $globalExpandReturningStar")
+
+        val globalDropRedundantOrderBy = options[DROP_REDUNDANT_ORDER_BY_OPTION]?.toBoolean() ?: true
+        logger.info("[RepositoryProcessor] Drop redundant ORDER BY: $globalDropRedundantOrderBy")
+
         // Load schemas.
         if (globalCheckSqlSchema) SqlValidator.loadSchema(schemaMigrationsPath)
 
@@ -97,6 +109,8 @@ class RepositoryProcessor(
 
             // Extract domain and mapper from @Repository annotation on the interface
             val (domainDecl, mapperTypeName, useContextParameters, useArrow) = parseRepositoryAnnotation(repo)
+
+            if (globalValidateSingleId) validateSingleId(domainDecl)
 
             // Determine implementation class name
             val implName = "${repo.simpleName()}Impl"
@@ -154,6 +168,9 @@ class RepositoryProcessor(
                         globalValidateReturning = globalValidateReturning,
                         globalExpandSelectStar = globalExpandSelectStar,
                         globalFindOneLimit = globalFindOneLimit,
+                        globalRejectGroupingInScalar = globalRejectGroupingInScalar,
+                        globalExpandReturningStar = globalExpandReturningStar,
+                        globalDropRedundantOrderBy = globalDropRedundantOrderBy,
                         mapperTypeName = mapperTypeName,
                         domainDecl = domainDecl,
                         useContextParameters = useContextParameters,
@@ -338,6 +355,28 @@ class RepositoryProcessor(
             }
         }
         return Quadruple(domainDecl, mapperTypeName, useContextParameters, useArrow)
+    }
+
+    /**
+     * Validates that the repository entity declares at most one `@Id` property.
+     *
+     * Zero `@Id` properties is allowed — a keyless entity is fine, the CRUD `update`/`delete`/`save`
+     * helpers simply have no id to key on. Two or more is rejected: the CRUD generator keys on a single
+     * id and composite primary keys are not supported.
+     *
+     * @param domainDecl The repository's `@Table`-annotated domain entity.
+     */
+    private fun validateSingleId(domainDecl: KSClassDeclaration) {
+        val idProps = domainDecl.getAllProperties()
+            .filter { p -> p.annotations.any { it.qualifiedName() == TypeNames.ID_ANNOTATION } }
+            .toList()
+        if (idProps.size > 1) {
+            val names = idProps.joinToString { it.simpleName.asString() }
+            error(
+                "@Table entity '${domainDecl.qualifiedName()}' declares ${idProps.size} @Id properties ($names), " +
+                    "but at most one is supported. Composite primary keys are not supported by the CRUD generator."
+            )
+        }
     }
 
     /**
@@ -570,6 +609,9 @@ class RepositoryProcessor(
         globalValidateReturning: Boolean,
         globalExpandSelectStar: Boolean,
         globalFindOneLimit: Boolean,
+        globalRejectGroupingInScalar: Boolean,
+        globalExpandReturningStar: Boolean,
+        globalDropRedundantOrderBy: Boolean,
         mapperTypeName: String,
         domainDecl: KSClassDeclaration,
         useContextParameters: Boolean,
@@ -647,6 +689,12 @@ class RepositoryProcessor(
             if (globalValidateProjection && isFind && usesAutoMapper) {
                 SqlValidator.validateProjection(fn.simpleName(), stmt, entityColumns.toSet())
             }
+            // Scalar (single-row) methods read only the first row, so a GROUP BY/HAVING would be silently wrong.
+            val isScalar = prefix == Prefix.COUNT_ALL || prefix == Prefix.COUNT_BY ||
+                prefix == Prefix.FIND_ONE_BY || prefix == Prefix.EXISTS_BY
+            if (globalRejectGroupingInScalar && isScalar) {
+                SqlValidator.rejectGroupingInScalar(fn.simpleName(), stmt)
+            }
         }
 
         // Rewrites that need the parsed statement: expand `SELECT *`, append a findOne* fetch limit,
@@ -655,11 +703,20 @@ class RepositoryProcessor(
         statement?.let { stmt ->
             when (prefix) {
                 Prefix.EXISTS_BY -> {
+                    // ORDER BY is meaningless inside an existence check; drop it before wrapping.
+                    if (globalDropRedundantOrderBy) sql = SqlValidator.dropOrderBy(stmt, sql)
                     sql = SqlValidator.toExistsQuery(stmt, sql, entityTable)
                 }
                 else -> {
+                    // ORDER BY is meaningless for a single count(...) aggregate.
+                    if (globalDropRedundantOrderBy && (prefix == Prefix.COUNT_ALL || prefix == Prefix.COUNT_BY)) {
+                        sql = SqlValidator.dropOrderBy(stmt, sql)
+                    }
                     if (globalExpandSelectStar) {
                         sql = SqlValidator.expandSelectStar(stmt, sql, entityTable, entityColumns)
+                    }
+                    if (globalExpandReturningStar) {
+                        sql = SqlValidator.expandReturningStar(stmt, sql, entityTable, entityColumns)
                     }
                     // findOne* fetches at most two rows: still detects a multi-row result, transfers less.
                     if (globalFindOneLimit && prefix == Prefix.FIND_ONE_BY) {
@@ -1433,6 +1490,30 @@ class RepositoryProcessor(
          * in the generated statement. Defaults to `true`.
          */
         private const val EXPAND_SELECT_STAR_OPTION: String = "expand-select-star"
+
+        /**
+         * Option key to enable/disable rejecting `GROUP BY`/`HAVING` in a single-row method
+         * (`count*`/`findOne*`/`exists*`), which reads only the first row. Defaults to `true`.
+         */
+        private const val REJECT_GROUPING_IN_SCALAR_OPTION: String = "reject-grouping-in-scalar"
+
+        /**
+         * Option key to enable/disable validating that the repository entity declares at most one `@Id`
+         * property (zero is allowed; two or more is rejected). Defaults to `true`.
+         */
+        private const val VALIDATE_SINGLE_ID_OPTION: String = "validate-single-id"
+
+        /**
+         * Option key to enable/disable rewriting a bare `RETURNING *` into the entity's explicit columns
+         * in the generated statement. Defaults to `true`.
+         */
+        private const val EXPAND_RETURNING_STAR_OPTION: String = "expand-returning-star"
+
+        /**
+         * Option key to enable/disable stripping a meaningless `ORDER BY` from `exists*`/`count*` queries.
+         * Defaults to `true`.
+         */
+        private const val DROP_REDUNDANT_ORDER_BY_OPTION: String = "drop-redundant-order-by"
 
         /**
          * Represents the option key used for specifying the path to schema migration files

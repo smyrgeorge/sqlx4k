@@ -1,6 +1,10 @@
 package io.github.smyrgeorge.sqlx4k.processor
 
 import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.processor.SqlValidator.expandSelectStar
+import io.github.smyrgeorge.sqlx4k.processor.SqlValidator.rejectStackedStatements
+import io.github.smyrgeorge.sqlx4k.processor.SqlValidator.validateColumnsExist
+import io.github.smyrgeorge.sqlx4k.processor.SqlValidator.validateQuerySyntax
 import java.io.File
 import java.util.Properties
 import net.sf.jsqlparser.expression.BinaryExpression
@@ -13,6 +17,7 @@ import net.sf.jsqlparser.expression.operators.relational.ParenthesedExpressionLi
 import net.sf.jsqlparser.parser.CCJSqlParserUtil
 import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.schema.Table
+import net.sf.jsqlparser.statement.ReturningClause
 import net.sf.jsqlparser.statement.Statement as JStatement
 import net.sf.jsqlparser.statement.alter.Alter
 import net.sf.jsqlparser.statement.alter.AlterOperation
@@ -323,10 +328,29 @@ object SqlValidator {
         val select = stmt as? PlainSelect ?: return
         val items = select.selectItems ?: return
         val isCount = items.size == 1 &&
-            (items[0].expression as? Function)?.name?.equals("count", ignoreCase = true) == true
+                (items[0].expression as? Function)?.name?.equals("count", ignoreCase = true) == true
         if (!isCount) {
             error("@Query ($fn) is a count method but does not select a single count(...) aggregate.")
         }
+    }
+
+    /**
+     * Rejects a `GROUP BY` / `HAVING` clause in a method that reads a single scalar row
+     * (`count*`, `findOne*`, `exists*`). Such a query returns one row per group, but these methods only read
+     * the first row — so grouping would silently yield the wrong result. Non-plain selects are skipped.
+     */
+    fun rejectGroupingInScalar(fn: String, stmt: JStatement) {
+        val select = stmt as? PlainSelect ?: return
+        val clause = when {
+            select.groupBy != null -> "GROUP BY"
+            select.having != null -> "HAVING"
+            else -> return
+        }
+        error(
+            "@Query ($fn) is a single-row method (count*/findOne*/exists*) but contains a $clause clause. " +
+                    "A grouped query returns one row per group and only the first row is read, so the result would " +
+                    "be incorrect. Remove the grouping (or use a findAll* method that returns a list)."
+        )
     }
 
     /** The kind of SQL statement a repository method prefix expects. */
@@ -375,8 +399,8 @@ object SqlValidator {
         if (missing.isNotEmpty()) {
             error(
                 "@Query ($fn) uses the generated row mapper but its SELECT list is missing column(s): " +
-                    "${missing.joinToString()}. Select every entity column (or use `SELECT *`), or supply a " +
-                    "custom @Repository(mapper = ...)."
+                        "${missing.joinToString()}. Select every entity column (or use `SELECT *`), or supply a " +
+                        "custom @Repository(mapper = ...)."
             )
         }
     }
@@ -393,15 +417,17 @@ object SqlValidator {
         returning.forEach { collectColumns(it.expression, columns) }
         val known = columnNames.map { it.lowercase() }.toSet()
         val unknown = columns
+            .asSequence()
             .filterNot { it.columnName.lowercase() == "true" || it.columnName.lowercase() == "false" }
             .map { it.columnName.trim('"', '`', '[', ']') }
             .filter { it != "*" }
             .distinct()
             .filter { it.lowercase() !in known }
+            .toList()
         if (unknown.isNotEmpty()) {
             error(
                 "@Query ($fn) RETURNING references column(s) not found on the entity: ${unknown.joinToString()}. " +
-                    "Known columns: ${columnNames.sorted().joinToString()}."
+                        "Known columns: ${columnNames.sorted().joinToString()}."
             )
         }
     }
@@ -499,6 +525,39 @@ object SqlValidator {
     }
 
     /**
+     * Rewrites a bare `RETURNING *` on a write over the entity's own table into the entity's explicit
+     * columns, mirroring [expandSelectStar]. Returns the SQL unchanged for anything else (a non-write, a
+     * write against a different table, or an explicit `RETURNING` column list).
+     */
+    fun expandReturningStar(stmt: JStatement, sql: String, tableName: String, columnNames: List<String>): String {
+        if (columnNames.isEmpty()) return sql
+        val target: Table? = when (stmt) {
+            is Insert -> stmt.table
+            is Update -> stmt.table
+            is Delete -> stmt.table
+            else -> return sql
+        }
+        if (target?.name?.equals(tableName, ignoreCase = true) != true) return sql
+        val returning: ReturningClause = when (stmt) {
+            is Insert -> stmt.returningClause
+            is Update -> stmt.returningClause
+            is Delete -> stmt.returningClause
+            else -> null
+        } ?: return sql
+        if (returning.size != 1 || returning[0].expression !is AllColumns) return sql
+
+        val expanded = ReturningClause(returning.keyword, columnNames.map { SelectItem.from(Column(it), null) })
+        // The setter is builder-style (returns the statement), so it can't be used as a Kotlin property.
+        when (stmt) {
+            is Insert -> stmt.setReturningClause(expanded)
+            is Update -> stmt.setReturningClause(expanded)
+            is Delete -> stmt.setReturningClause(expanded)
+            else -> return sql
+        }
+        return stmt.toString()
+    }
+
+    /**
      * Appends a `LIMIT [rowCount]` to a `SELECT` that has none, so `findOne*` methods fetch at most a
      * couple of rows while still detecting a multi-row result. Returns the SQL unchanged for anything
      * that already has a limit or is not a plain select. `LIMIT n` is portable across all supported
@@ -512,6 +571,18 @@ object SqlValidator {
     }
 
     /**
+     * Removes an `ORDER BY` clause that has no effect on the result of a scalar method (`exists*`, `count*`) —
+     * ordering rows the query never returns individually is pure overhead for the database. Returns the SQL
+     * unchanged when there is no `ORDER BY` or the statement is not a plain select.
+     */
+    fun dropOrderBy(stmt: JStatement, sql: String): String {
+        val select = stmt as? PlainSelect ?: return sql
+        if (select.orderByElements == null) return sql
+        select.orderByElements = null
+        return select.toString()
+    }
+
+    /**
      * Wraps a plain `SELECT ... FROM <entity table> WHERE ...` into `SELECT EXISTS(SELECT 1 FROM ...)`
      * for `exists*` methods. If the query is not a plain select over the entity table (e.g. the user
      * already wrote `SELECT EXISTS(...)`, which has no `FROM`), it is returned unchanged.
@@ -521,7 +592,7 @@ object SqlValidator {
         val from = select.fromItem as? Table ?: return sql
         if (!from.name.equals(tableName, ignoreCase = true)) return sql
         select.selectItems = listOf(SelectItem.from(LongValue(1), null))
-        return "SELECT EXISTS(" + select.toString() + ")"
+        return "SELECT EXISTS($select)"
     }
 
     data class ColumnDef(val name: String, val type: String)
