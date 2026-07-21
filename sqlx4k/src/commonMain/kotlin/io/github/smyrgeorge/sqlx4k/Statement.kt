@@ -2,6 +2,7 @@ package io.github.smyrgeorge.sqlx4k
 
 import io.github.smyrgeorge.sqlx4k.impl.statement.SimpleStatement
 import kotlin.reflect.KClass
+import org.intellij.lang.annotations.Language
 
 /**
  * Represents a statement that allows binding of positional and named parameters.
@@ -132,6 +133,6 @@ interface Statement {
          * @param sql The SQL string used to create the statement.
          * @return A new `Statement` instance initialized with the provided SQL string.
          */
-        fun create(sql: String): Statement = SimpleStatement(sql)
+        fun create(@Language("SQL") sql: String): Statement = SimpleStatement(sql)
     }
 }
