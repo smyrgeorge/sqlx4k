@@ -872,8 +872,16 @@ interface UserRepository {
 
 #### Query validations and optimizations
 
-Beyond syntax and schema checks, the processor parses each `@Query` once (with JSqlParser) and applies a few extra
-compile-time safeguards and codegen optimizations. Each is controlled by a global KSP option and enabled by default:
+Beyond syntax and schema checks, the processor parses each `@Query` once (with JSqlParser) and reuses that AST for a few
+extra compile-time checks and codegen rewrites. Each is controlled by a global KSP option and enabled by default. They
+fall into two groups: **validations** that fail the build when a `@Query` looks wrong, and **optimizations** that
+rewrite
+the generated SQL for efficiency without changing its result.
+
+##### Validations
+
+Compile-time safeguards that fail the build when a `@Query` is inconsistent with its entity or its method prefix. They
+never change the generated SQL.
 
 | KSP option                   | Default | What it does                                                                                                                                                                                                                                                       |
 |------------------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -884,8 +892,6 @@ compile-time safeguards and codegen optimizations. Each is controlled by a globa
 | `validate-statement-kind`    | `true`  | Fails the build if a `@Query`'s statement kind doesn't match its prefix: `find*`/`count*`/`exists*` must be a `SELECT`, `delete*` a `DELETE`, and `execute*` a write (`INSERT`/`UPDATE`/`DELETE`).                                                                 |
 | `validate-projection`        | `true`  | Fails the build if a `find*` method bound by the generated row mapper selects only some columns (which would leave the mapper without a column at runtime). Requires `SELECT *` or every entity column. Skipped when a custom `@Repository(mapper = ...)` is used. |
 | `validate-returning-columns` | `true`  | Fails the build if a `RETURNING` clause references a column that does not exist on the entity.                                                                                                                                                                     |
-| `expand-select-star`         | `true`  | Rewrites a bare `SELECT *` over the entity's table into the entity's explicit columns in the generated statement (e.g. `select * from users` → `select id, name, email from users`). Leaves `count(*)`, joins, and explicit column lists untouched.                |
-| `findone-limit`              | `true`  | Appends `LIMIT 2` to `findOne*` queries so the driver fetches at most two rows — it still detects a multi-row result, but transfers far less on wide tables. Skips queries that already declare a `LIMIT`.                                                         |
 
 Disable any of them module-wide in your build.gradle.kts:
 
@@ -898,6 +904,23 @@ ksp {
     // arg("validate-statement-kind", "false")
     // arg("validate-projection", "false")
     // arg("validate-returning-columns", "false")
+}
+```
+
+##### Optimizations
+
+Codegen rewrites that make the generated SQL more efficient. They never fail the build; a query that doesn't fit the
+rewrite is emitted unchanged.
+
+| KSP option           | Default | What it does                                                                                                                                                                                                                                        |
+|----------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `expand-select-star` | `true`  | Rewrites a bare `SELECT *` over the entity's table into the entity's explicit columns in the generated statement (e.g. `select * from users` → `select id, name, email from users`). Leaves `count(*)`, joins, and explicit column lists untouched. |
+| `findone-limit`      | `true`  | Appends `LIMIT 2` to `findOne*` queries so the driver fetches at most two rows — it still detects a multi-row result, but transfers far less on wide tables. Skips queries that already declare a `LIMIT`.                                          |
+
+Disable either of them module-wide in your build.gradle.kts:
+
+```kotlin
+ksp {
     // arg("expand-select-star", "false")
     // arg("findone-limit", "false")
 }
