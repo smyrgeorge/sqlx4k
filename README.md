@@ -247,7 +247,7 @@ a consistent, coroutine-based API for executing SQL statements. This interface i
 
 The `QueryExecutor` interface provides two primary methods for running queries:
 
-#### execute() - For SQL statements that modify data
+#### execute () - For SQL statements that modify data
 
 Returns the number of affected rows (INSERT, UPDATE, DELETE, DDL statements):
 
@@ -256,7 +256,7 @@ Returns the number of affected rows (INSERT, UPDATE, DELETE, DDL statements):
 val affected: Long = db.execute("insert into users(id, name) values (1, 'Alice');").getOrThrow()
 ```
 
-#### fetchAll() - For queries that return data
+#### fetchAll () - For queries that return data
 
 Returns a `ResultSet` containing all rows (SELECT queries):
 
@@ -365,8 +365,8 @@ db.transaction {
 
 ### TransactionContext (coroutines)
 
-When using coroutines, you can propagate a transaction through the coroutine context using `TransactionContext`.
-This allows you to write small, composable suspend functions that either:
+When using coroutines, you can propagate a transaction through the coroutine context using `TransactionContext`. This
+allows you to write small, composable suspend functions that either:
 
 - start a transaction at the boundary of your use case, and
 - inside helper functions call `TransactionContext.current()` to participate in the same transaction without having to
@@ -659,8 +659,8 @@ val result: Result<List<User>> = userRepository.batchUpdate(db, updatedUsers)
 
 | Operation     | PostgreSQL | SQLite | MySQL | Generic |
 |---------------|:----------:|:------:|:-----:|:-------:|
-| `batchInsert` |     ✅      |   ✅    |   ❌   |    ✅    |
-| `batchUpdate` |     ✅      |   ✅    |   ❌   |    ✅    |
+| `batchInsert` |     ✅     |   ✅   |  ❌   |   ✅    |
+| `batchUpdate` |     ✅     |   ✅   |  ❌   |   ✅    |
 
 - **PostgreSQL**: Full support for both batch operations using multi-row `INSERT ... RETURNING` and
   `UPDATE ... FROM (VALUES ...) ... RETURNING` syntax.
@@ -675,8 +675,8 @@ val result: Result<List<User>> = userRepository.batchUpdate(db, updatedUsers)
 
 #### Property-Level Converters (@Converter)
 
-For custom types, you can use the `@Converter` annotation to specify a `ValueEncoder` directly on the property.
-This provides compile-time type safety, avoids runtime registry lookups, and eliminates object instantiation overhead.
+For custom types, you can use the `@Converter` annotation to specify a `ValueEncoder` directly on the property. This
+provides compile-time type safety, avoids runtime registry lookups, and eliminates object instantiation overhead.
 
 **Defining a Custom Encoder:**
 
@@ -721,14 +721,14 @@ data class Invoice(
 
 Optional: Using `ContextCrudRepository` with [context-parameters](https://kotlinlang.org/docs/context-parameters.html).
 
-You can opt in to generated repositories that use Kotlin context-parameters instead of passing a QueryExecutor
-parameter to every method. This switches your repository to ContextCrudRepository and makes all generated CRUD and
-@Query methods require an ambient QueryExecutor provided via a context-parameter.
+You can opt in to generated repositories that use Kotlin context-parameters instead of passing a QueryExecutor parameter
+to every method. This switches your repository to ContextCrudRepository and makes all generated CRUD and @Query methods
+require an ambient QueryExecutor provided via a context-parameter.
 
 To enable this mode:
 
 - Make your repository interface extend ContextCrudRepository<T> instead of CrudRepository<T>.
-- Declare your @Query methods with a context(context: QueryExecutor) receiver instead of an explicit context parameter.
+- Declare your @Query methods with a context (context: QueryExecutor) receiver instead of an explicit context parameter.
 
 Repository interface example with context receivers:
 
@@ -837,16 +837,16 @@ interface UserRepository {
 > **Experimental Feature**: SQL schema validation is currently in early development and may have limitations.
 
 - What it is: during code generation, sqlx4k can also validate your `@Query` SQL against a known database schema. It
-  loads your migration files, builds an in-memory schema, and uses Apache Calcite to validate that tables, columns,
-  and basic types referenced by the query exist and are compatible.
+  loads your migration files, builds an in-memory schema, and uses Apache Calcite to validate that tables, columns, and
+  basic types referenced by the query exist and are compatible.
 - What it checks:
     - Existence of referenced tables and columns.
     - Basic type compatibility for literals and simple expressions.
     - It does not execute queries or connect to a database.
 - When it runs: at KSP processing time, right after syntax validation.
 - Default: disabled. You must enable it explicitly per module.
-- Requirements: point the processor to your migrations directory so it can reconstruct the schema. The loader supports
-  a pragmatic subset of DDL: CREATE TABLE, ALTER TABLE ADD/DROP COLUMN, and DROP TABLE, processed in migration order.
+- Requirements: point the processor to your migrations directory so it can reconstruct the schema. The loader supports a
+  pragmatic subset of DDL: CREATE TABLE, ALTER TABLE ADD/DROP COLUMN, and DROP TABLE, processed in migration order.
 - Dialect notes: validation is based on Calcite’s SQL semantics and a simplified schema model derived from your
   migrations. Some vendor-specific features and advanced DDL may not be fully supported.
 
@@ -986,8 +986,8 @@ What the generated implementation provides:
   snake_case / `@Column`). Supports `=`, `<>`, `<`, `<=`, `>`, `>=`, `IS [NOT] NULL`, `AND`/`OR`, named parameters, and
   simple literals — for `find*`/`count*` (SELECT), `delete*` (DELETE), and `execute*` (UPDATE `SET …`/DELETE). For
   example `@Query("select * from users where name = :name")` behaves like `filter { it.name == name }`.
-- **Repository hooks** — the overridden `preInsert/afterInsert/... /aroundQuery` hooks are honored exactly like the
-  real generated implementations.
+- **Repository hooks** — the overridden `preInsert/afterInsert/... /aroundQuery` hooks are honored exactly like the real
+  generated implementations.
 - **Test helpers** — `clear()` empties the store (and resets the id sequence) and `findAllStored()` returns a snapshot.
 
 Anything the generator cannot translate — a `WHERE` it doesn't understand (e.g. `LIKE`, `IN`, subqueries, function
@@ -1125,10 +1125,9 @@ Please look at this issue: [#18](https://github.com/smyrgeorge/sqlx4k/issues/18)
 
 ## Compilation
 
-You will need the `Rust` toolchain to build this project.
-Check here: https://rustup.rs/
+You will need the `Rust` toolchain to build this project. Check here: https://rustup.rs/
 
-> [!NOTE]  
+> [!NOTE]
 > By default, the project will build only for your system architecture-os (e.g. `macosArm64`, `linuxArm64`, etc.)
 
 Also, make sure that you have installed all the necessary targets (only if you want to build for all targets):
@@ -1188,8 +1187,7 @@ And then run the examples.
 
 ## Examples
 
-Here are small, self‑contained snippets for the most common tasks.
-For full runnable apps, see the modules under:
+Here are small, self‑contained snippets for the most common tasks. For full runnable apps, see the modules under:
 
 - PostgreSQL: [examples/postgres](./examples/postgres)
 - MySQL: [examples/mysql](./examples/mysql)
@@ -1199,8 +1197,7 @@ For full runnable apps, see the modules under:
 
 ### macOS (using 'leaks' tool)
 
-Check for memory leaks with the `leaks` tool.
-First, sign the binary:
+Check for memory leaks with the `leaks` tool. First, sign the binary:
 
 ```shell
 codesign -s - -v -f --entitlements =(echo -n '<?xml version="1.0" encoding="UTF-8"?>
@@ -1233,8 +1230,8 @@ sqlx4k stands on the shoulders of excellent open-source projects:
             - https://github.com/asyncer-io/r2dbc-mysql
         - SQLite: rsqlite-jdbc
             - https://github.com/xerial/sqlite-jdbc
-    - Encrypted SQLite — `sqlx4k-sqlite-cipher` (the same sqlx (Rust) core on every target, via FFI on
-      native and JNI on JVM/Android):
+    - Encrypted SQLite — `sqlx4k-sqlite-cipher` (the same sqlx (Rust) core on every target, via FFI on native and JNI on
+      JVM/Android):
         - SQLCipher — encrypted SQLite
             - https://www.zetetic.net/sqlcipher/
 
