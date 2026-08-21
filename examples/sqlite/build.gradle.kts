@@ -56,6 +56,10 @@ tasks.withType<KotlinCompilationTask<*>> {
     dependsOn("kspCommonMainKotlinMetadata")
 }
 
+tasks.matching { it.name.startsWith("ksp") && it.name != "kspCommonMainKotlinMetadata" }.configureEach {
+    dependsOn("kspCommonMainKotlinMetadata")
+}
+
 fun targetsOf(project: Project): List<String> {
     val os = DefaultNativePlatform.getCurrentOperatingSystem()
     val arch = DefaultNativePlatform.getCurrentArchitecture()
