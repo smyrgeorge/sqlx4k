@@ -140,7 +140,11 @@ class RepositoryProcessor(
             file += "import ${TypeNames.QUERY_EXECUTOR}\n"
             file += "import ${TypeNames.SQL_ERROR}\n"
             file += "import io.github.smyrgeorge.sqlx4k.impl.extensions.*\n"
-            if (useArrow) file += "import ${TypeNames.TO_DB_RESULT}\n"
+            if (useArrow) {
+                // DbResult is referenced explicitly by the MySQL batchInsert/batchUpdate stubs.
+                file += "import ${TypeNames.DB_RESULT}\n"
+                file += "import ${TypeNames.TO_DB_RESULT}\n"
+            }
             // Import parameter types (e.g., Uuid, LocalDate, LocalTime, etc.)
             parameterTypeImports.sorted().forEach { import ->
                 file += "import $import\n"
