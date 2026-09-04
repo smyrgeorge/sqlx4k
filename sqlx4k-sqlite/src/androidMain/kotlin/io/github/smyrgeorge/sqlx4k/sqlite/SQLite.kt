@@ -26,6 +26,12 @@ import io.github.smyrgeorge.sqlx4k.impl.pool.PooledConnection
 import io.github.smyrgeorge.sqlx4k.impl.pool.PooledTransaction
 import io.github.smyrgeorge.sqlx4k.impl.types.SqlRawLiteral
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
+import java.util.concurrent.Executors
+import kotlin.time.Duration
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -35,12 +41,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
-import java.util.concurrent.Executors
-import kotlin.time.Duration
-import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 /**
  * SQLite class provides mechanisms to interact with a SQLite database on the Android platform.
@@ -48,10 +48,15 @@ import kotlin.uuid.Uuid
  * offering functionalities such as connection pooling, executing queries,
  * fetching data, and handling transactions.
  *
- * The URL format for SQLite can be one of the following:
+ * The URL uses the same sqlx-style format as the other targets:
  * - `sqlite::memory:` - Creates an in-memory database
- * - `sqlite:database.db` - Creates/opens a database file
- * - `sqlite:/path/to/database.db` - Uses absolute path
+ * - `sqlite:database.db` / `sqlite://database.db` - Creates/opens a database file in the app's
+ *   databases directory (see [Context.getDatabasePath])
+ * - `sqlite:///path/to/database.db` - Uses an absolute path
+ * - `sqlite:///path/to/database.db?mode=ro` - Opens read-only. `mode` may be `ro`, `rw` (never
+ *   creates), `rwc` or `memory`; without it the file is created when missing. `cache` is accepted
+ *   but ignored: Android manages its own cache, and in-memory pools are limited to one connection
+ *   anyway. Any other parameter (`immutable`, `vfs`, ...) cannot be honoured on Android and is rejected.
  *
  * If the URL does not start with "sqlite:", it will be automatically prefixed.
  *
@@ -545,12 +550,20 @@ class SQLite(
             options: ConnectionPool.Options,
             encoders: ValueEncoderRegistry
         ): ConnectionPoolImpl {
-            // Parse the URL to extract database name
-            val dbUrl = url.removePrefix("sqlite:").removePrefix("//")
+            // Parse the URL: split the database name from the `?mode=...` query string, so the
+            // parameters are honoured instead of ending up inside the file name.
+            val parsed = SQLiteUrl.parse(url)
+            parsed.params.keys.firstOrNull { it != SQLiteUrl.PARAM_MODE && it != SQLiteUrl.PARAM_CACHE }?.let { key ->
+                SQLError(
+                    SQLError.Code.Pool,
+                    "Unsupported SQLite URL parameter `$key` on Android (in '$url'). " +
+                            "Only `mode` is honoured (`cache` is accepted and ignored)."
+                ).raise()
+            }
 
             // Validate in-memory database configuration
             // In-memory SQLite databases are isolated per connection, so pool size must be 1
-            val isInMemory = dbUrl.equals(":memory:", ignoreCase = true)
+            val isInMemory = parsed.isInMemory
             if (isInMemory && options.maxConnections > 1) {
                 throw IllegalArgumentException(
                     "SQLite in-memory databases cannot be used with connection pools larger than 1. " +
@@ -562,13 +575,27 @@ class SQLite(
             // Connection factory that creates Android SQLite connections
             val connectionFactory: suspend () -> Connection = {
                 withContext(Dispatchers.IO) {
-                    val db = if (isInMemory) {
-                        SQLiteDatabase.create(null)
-                    } else {
-                        // Use Context to open/create the database, then enable WAL for
-                        // better read concurrency (matches the JVM implementation behaviour).
-                        context.openOrCreateDatabase(dbUrl, Context.MODE_PRIVATE, null).also {
-                            it.enableWriteAheadLogging()
+                    val db = when {
+                        isInMemory -> SQLiteDatabase.create(null)
+
+                        // Default and `mode=rwc`: use Context to open/create the database, then enable
+                        // WAL for better read concurrency (matches the JVM implementation behaviour).
+                        parsed.mode == null || parsed.mode == SQLiteUrl.MODE_RWC ->
+                            context.openOrCreateDatabase(parsed.database, Context.MODE_PRIVATE, null).also {
+                                it.enableWriteAheadLogging()
+                            }
+
+                        // `mode=ro` / `mode=rw`: open the file the Context would resolve, but never
+                        // create it. WAL only makes sense (and is only possible) for writable databases.
+                        else -> {
+                            val flags =
+                                if (parsed.isReadOnly) SQLiteDatabase.OPEN_READONLY
+                                else SQLiteDatabase.OPEN_READWRITE
+
+                            val path = context.getDatabasePath(parsed.database).path
+                            SQLiteDatabase.openDatabase(path, null, flags).also {
+                                if (!parsed.isReadOnly) it.enableWriteAheadLogging()
+                            }
                         }
                     }
                     AndroidConnection(db, encoders)

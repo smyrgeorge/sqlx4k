@@ -20,6 +20,14 @@ import io.github.smyrgeorge.sqlx4k.impl.pool.ConnectionPoolImpl
 import io.github.smyrgeorge.sqlx4k.impl.pool.PooledConnection
 import io.github.smyrgeorge.sqlx4k.impl.pool.PooledTransaction
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
+import java.sql.Connection as NativeJdbcConnection
+import java.sql.DriverManager
+import java.sql.ResultSet as NativeJdbcResultSet
+import kotlin.time.Duration
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -29,14 +37,6 @@ import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.toJavaLocalDate
 import kotlinx.datetime.toJavaLocalTime
-import java.sql.DriverManager
-import kotlin.time.Duration
-import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
-import java.sql.Connection as NativeJdbcConnection
-import java.sql.ResultSet as NativeJdbcResultSet
 
 /**
  * SQLite class provides mechanisms to interact with a SQLite database on the JVM platform.
@@ -44,12 +44,16 @@ import java.sql.ResultSet as NativeJdbcResultSet
  * offering functionalities such as connection pooling, executing queries,
  * fetching data, and handling transactions.
  *
- * The URL format for SQLite can be one of the following:
- * - `jdbc:sqlite::memory:` - Creates an in-memory database
- * - `jdbc:sqlite:database.db` - Creates/opens a database file
- * - `jdbc:sqlite:/path/to/database.db` - Uses absolute path
+ * The URL uses the same sqlx-style format as the native target, so one string works everywhere:
+ * - `sqlite::memory:` - Creates an in-memory database
+ * - `sqlite:database.db` / `sqlite://database.db` - Creates/opens a database file (relative path)
+ * - `sqlite:///path/to/database.db` - Uses an absolute path
+ * - `sqlite:///path/to/database.db?mode=rwc` - Query parameters as defined by SQLite URI filenames
+ *   (`mode=ro|rw|rwc|memory`, `cache=shared|private`, `immutable`, `vfs`)
  *
- * If the URL does not start with "jdbc:sqlite:", it will be automatically prefixed.
+ * Any other parameter is rejected, as on the other targets. A `jdbc:sqlite:` prefix is accepted as
+ * well and skips that check, so JDBC-style URLs with driver-specific parameters (e.g. xerial pragmas
+ * such as `?journal_mode=WAL`) keep working. See [SQLiteUrl] and [toJdbcUrl] for the translation.
  *
  * @param url The URL of the SQLite database to connect to.
  * @param options Optional pool configuration, defaulting to `ConnectionPool.Options`.
@@ -391,6 +395,13 @@ class SQLite(
     }
 
     companion object {
+        private const val JDBC_PREFIX = "jdbc:"
+        internal fun SQLiteUrl.toJdbcUrl(): String = when {
+            query == null -> "jdbc:sqlite:$database"
+            database.startsWith(SQLiteUrl.FILE_PREFIX) -> "jdbc:sqlite:$database?$query"
+            else -> "jdbc:sqlite:${SQLiteUrl.FILE_PREFIX}$database?$query"
+        }
+
         private fun NativeJdbcConnection.prepareStatement(
             statement: Statement,
             encoders: ValueEncoderRegistry
@@ -476,12 +487,18 @@ class SQLite(
             options: ConnectionPool.Options,
             encoders: ValueEncoderRegistry
         ): ConnectionPoolImpl {
-            // Ensure the URL has the proper JDBC prefix
-            val jdbcUrl = "jdbc:sqlite:${url.removePrefix("jdbc:").removePrefix("sqlite:").removePrefix("//")}"
+            // Accept both the sqlx-style URL shared with the other targets and a JDBC-style one. An
+            // sqlx-style URL is validated exactly like on native and Android (only the parameters
+            // SQLite defines are allowed); a `jdbc:` URL is the escape hatch for driver-specific
+            // parameters such as xerial pragmas (`jdbc:sqlite:data.db?journal_mode=WAL`).
+            val isJdbc = url.startsWith(JDBC_PREFIX)
+            val parsed = SQLiteUrl.parse(url.removePrefix(JDBC_PREFIX))
+            if (!isJdbc) parsed.requireKnownParams()
+            val jdbcUrl = parsed.toJdbcUrl()
 
             // Validate in-memory database configuration
             // In-memory SQLite databases are isolated per connection, so pool size must be 1
-            val isInMemory = jdbcUrl.contains(":memory:", ignoreCase = true)
+            val isInMemory = parsed.isInMemory
             if (isInMemory && options.maxConnections > 1) {
                 throw IllegalArgumentException(
                     "SQLite in-memory databases cannot be used with connection pools larger than 1. " +
@@ -496,9 +513,10 @@ class SQLite(
                     val connection = DriverManager.getConnection(jdbcUrl)
                     connection.autoCommit = true
                     JdbcConnection(connection, encoders).apply {
-                        // Enable WAL mode for file-based databases to improve concurrency
-                        // In-memory databases don't support WAL mode
-                        if (!isInMemory) {
+                        // Enable WAL mode for file-based databases to improve concurrency.
+                        // In-memory databases don't support WAL mode, and switching the journal mode
+                        // writes to the database header, which a read-only (`mode=ro`) connection cannot do.
+                        if (!isInMemory && !parsed.isReadOnly) {
                             execute("PRAGMA journal_mode=WAL").getOrThrow()
                         }
                     }

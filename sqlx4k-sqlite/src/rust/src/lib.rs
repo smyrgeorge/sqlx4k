@@ -29,6 +29,7 @@ pub const ERROR_DATABASE: c_int = 0;
 pub const ERROR_POOL_TIMED_OUT: c_int = 1;
 pub const ERROR_POOL_CLOSED: c_int = 2;
 pub const ERROR_WORKER_CRASHED: c_int = 3;
+pub const ERROR_POOL: c_int = 5;
 
 #[repr(C)]
 pub struct Sqlx4kSqlitePtr {
@@ -248,7 +249,7 @@ pub extern "C" fn sqlx4k_sqlite_free_result(ptr: *mut Sqlx4kSqliteResult) {
 
 pub fn sqlx4k_sqlite_error_result_of(err: sqlx::Error) -> Sqlx4kSqliteResult {
     let (code, message) = match err {
-        Error::Configuration(_) => panic!("Unexpected error occurred."),
+        Error::Configuration(e) => (ERROR_POOL, format!("Invalid SQLite URL :: {}", e)),
         Error::Database(e) => match e.code() {
             Some(code) => (ERROR_DATABASE, format!("[{}] {}", code, e.to_string())),
             None => (ERROR_DATABASE, format!("{}", e.to_string())),
@@ -291,6 +292,22 @@ pub fn sqlx4k_sqlite_error_result_of(err: sqlx::Error) -> Sqlx4kSqliteResult {
 
 pub fn c_chars_to_str_sqlite<'a>(c_chars: *const c_char) -> &'a str {
     unsafe { CStr::from_ptr(c_chars).to_str().unwrap() }
+}
+
+/// The `mode` query parameter of an sqlx-style SQLite URL (`sqlite:///path.db?mode=ro`), if any.
+/// The last occurrence wins, as in sqlx's own parser.
+fn sqlite_url_mode(url: &str) -> Option<&str> {
+    let query = url.splitn(2, '?').nth(1)?;
+    query
+        .split('&')
+        .filter_map(|kv| {
+            let mut it = kv.splitn(2, '=');
+            match (it.next(), it.next()) {
+                (Some("mode"), Some(v)) => Some(v),
+                _ => None,
+            }
+        })
+        .last()
 }
 
 // ============================================================================
@@ -581,7 +598,15 @@ pub extern "C" fn sqlx4k_sqlite_of(
     let url = c_chars_to_str_sqlite(url);
     let _username = username;
     let _password = password;
-    let options: SqliteConnectOptions = url.parse().unwrap();
+    let options: SqliteConnectOptions = match url.parse() {
+        Ok(o) => o,
+        Err(err) => return sqlx4k_sqlite_error_result_of(err).leak(),
+    };
+    // `mode` decides whether a missing file may be created and whether the connection is writable,
+    // exactly as on the JVM and Android drivers (and as SQLite defines `ro` / `rw` / `rwc`).
+    let mode = sqlite_url_mode(url);
+    let read_only = mode == Some("ro");
+    let create_if_missing = matches!(mode, None | Some("rwc"));
 
     // Create the tokio runtime.
     let runtime = if RUNTIME.get().is_some() {
@@ -599,13 +624,17 @@ pub extern "C" fn sqlx4k_sqlite_of(
     // `sqlx4k-sqlite-cipher` driver. There the built-in option can't be used — it runs before
     // `PRAGMA key` and silently fails on the still-encrypted file — so both drivers set WAL the same
     // way. WAL is sqlx's default anyway, and this is a no-op for in-memory databases ("memory").
+    // It is skipped for `mode=ro`: changing the journal mode writes to the database header, which a
+    // read-only connection cannot do (it would fail with "attempt to write a readonly database").
     let pool = SqlitePoolOptions::new()
         .max_connections(max_connections as u32)
-        .after_connect(|conn, _meta| {
+        .after_connect(move |conn, _meta| {
             Box::pin(async move {
-                sqlx::query("PRAGMA journal_mode = WAL;")
-                    .execute(&mut *conn)
-                    .await?;
+                if !read_only {
+                    sqlx::query("PRAGMA journal_mode = WAL;")
+                        .execute(&mut *conn)
+                        .await?;
+                }
                 Ok(())
             })
         });
@@ -634,12 +663,20 @@ pub extern "C" fn sqlx4k_sqlite_of(
         pool
     };
 
-    // Creat the database file if not exists.
-    runtime.block_on(async {
-        if !sqlx::Sqlite::database_exists(&url).await.unwrap() {
-            sqlx::Sqlite::create_database(&url).await.unwrap();
+    // Create the database file if it does not exist, but only for the default mode and `mode=rwc`:
+    // `ro` and `rw` must fail on a missing file instead (the pool below then reports that error).
+    // Creation can legitimately fail too (e.g. an unwritable directory), so surface it as an error.
+    if create_if_missing {
+        let created = runtime.block_on(async {
+            if !sqlx::Sqlite::database_exists(&url).await? {
+                sqlx::Sqlite::create_database(&url).await?;
+            }
+            Ok::<(), sqlx::Error>(())
+        });
+        if let Err(err) = created {
+            return sqlx4k_sqlite_error_result_of(err).leak();
         }
-    });
+    }
 
     let pool = pool.connect_with(options);
 
