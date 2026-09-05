@@ -1,0 +1,91 @@
+name: Feature request
+description: Suggest a new feature or an improvement for sqlx4k.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. Please describe the problem you are trying to solve
+        as well as the solution you have in mind.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What problem are you trying to solve? Why is the current behavior insufficient?
+      placeholder: I want to ..., but currently ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the feature or change you would like to see. Include an API sketch or code sample if you have one.
+      placeholder: |
+        ```kotlin
+        // Example of how the new API could look
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any alternative solutions or workarounds you have considered or are currently using.
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: Affected module(s)
+      description: Which module(s) would this feature touch?
+      multiple: true
+      options:
+        - sqlx4k (core)
+        - sqlx4k-postgres
+        - sqlx4k-postgres-pgmq
+        - sqlx4k-mysql
+        - sqlx4k-sqlite
+        - sqlx4k-sqlite-cipher
+        - sqlx4k-codegen
+        - sqlx4k-arrow
+        - New module
+        - Other / not sure
+
+  - type: dropdown
+    id: database
+    attributes:
+      label: Database(s)
+      description: Which database(s) does this feature relate to, if any?
+      multiple: true
+      options:
+        - PostgreSQL
+        - MySQL
+        - MariaDB
+        - SQLite
+        - All / not database specific
+
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Is this a breaking change?
+      options:
+        - "No"
+        - "Yes"
+        - Not sure
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Links to related issues, upstream sqlx features, documentation, or anything else that helps.
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to open a pull request for this feature.
+          required: false

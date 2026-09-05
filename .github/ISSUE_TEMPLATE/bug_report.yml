@@ -1,0 +1,151 @@
+name: Bug report
+description: Report a bug or unexpected behavior in sqlx4k.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill in as much of the form as you can.
+        Before opening a new issue, please search the existing issues to avoid duplicates.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+      placeholder: When I run ..., the driver ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps (or a minimal code sample) that reproduce the problem.
+      placeholder: |
+        1. Create a driver with `PostgreSQL(...)`
+        2. Run `db.execute("...")`
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened? Include the full error message and stack trace if there is one.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: sqlx4k version
+      description: The version of sqlx4k you are using (for example `1.13.1`).
+      placeholder: 1.13.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: Affected module(s)
+      description: Select the module(s) where the problem occurs.
+      multiple: true
+      options:
+        - sqlx4k (core)
+        - sqlx4k-postgres
+        - sqlx4k-postgres-pgmq
+        - sqlx4k-mysql
+        - sqlx4k-sqlite
+        - sqlx4k-sqlite-cipher
+        - sqlx4k-codegen
+        - sqlx4k-arrow
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: database
+    attributes:
+      label: Database
+      description: Which database (and version) are you connecting to?
+      multiple: true
+      options:
+        - PostgreSQL
+        - MySQL
+        - MariaDB
+        - SQLite
+        - Not applicable
+    validations:
+      required: true
+
+  - type: input
+    id: database-version
+    attributes:
+      label: Database version
+      placeholder: e.g. PostgreSQL 17.2, MariaDB 11.4, SQLite 3.47
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Kotlin target / platform
+      description: Select the target(s) on which the bug occurs.
+      multiple: true
+      options:
+        - JVM
+        - Android
+        - linuxX64
+        - linuxArm64
+        - macosArm64
+        - macosX64
+        - mingwX64 (Windows)
+        - iosArm64
+        - iosSimulatorArm64
+        - androidNativeArm64
+        - androidNativeX64
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: kotlin-version
+    attributes:
+      label: Kotlin version
+      placeholder: e.g. 2.4.10
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, JDK version (if JVM), Gradle version, and anything else relevant.
+      placeholder: |
+        - OS: macOS 15.1
+        - JDK: 21
+        - Gradle: 8.11
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Logs, screenshots, links to a reproduction repository, or anything else that may help.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched the existing issues and this is not a duplicate.
+          required: true
+        - label: I am using the latest released version of sqlx4k, or I have confirmed the bug still exists there.
+          required: false

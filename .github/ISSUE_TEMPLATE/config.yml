@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://smyrgeorge.github.io/sqlx4k/
+    about: Read the sqlx4k documentation before opening an issue.
+  - name: Questions & discussions
+    url: https://github.com/smyrgeorge/sqlx4k/discussions
+    about: Ask questions or discuss ideas with the community.
