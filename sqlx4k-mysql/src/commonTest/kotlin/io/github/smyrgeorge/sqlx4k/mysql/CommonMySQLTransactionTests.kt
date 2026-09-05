@@ -9,6 +9,7 @@ import assertk.assertions.isNotNull
 import assertk.assertions.isNull
 import assertk.assertions.isSuccess
 import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.impl.coroutines.TransactionContext
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 import kotlin.random.Random
@@ -21,6 +22,9 @@ class CommonMySQLTransactionTests(
     private fun newTable(): String = "t_tx_${Random.nextInt(1_000_000)}"
     private fun countRows(table: String): Long = runBlocking {
         db.fetchAll("select count(*) from $table;").getOrThrow().first().get(0).asLong()
+    }
+    private fun countRowsWhere(table: String, where: String): Long = runBlocking {
+        db.fetchAll("select count(*) from $table where $where;").getOrThrow().first().get(0).asLong()
     }
 
     fun `begin-commit should persist data`() = runBlocking {
@@ -260,5 +264,201 @@ class CommonMySQLTransactionTests(
 
         assertThat(countRows(table)).isEqualTo(0L)
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
+
+    // ---- Savepoints ----
+
+    fun `savepoint rollback should revert only changes after the savepoint`() = runBlocking {
+        val table = newTable()
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+        db.execute("create table if not exists $table(id int auto_increment primary key, v int not null);").getOrThrow()
+
+        val tx = db.begin().getOrThrow()
+        tx.execute("insert into $table(v) values (1);").getOrThrow()
+        assertThat(tx.savepoint("sp1")).isSuccess()
+        tx.execute("insert into $table(v) values (2);").getOrThrow()
+        assertThat(tx.rollbackToSavepoint("sp1")).isSuccess()
+        // The transaction is still open and usable after rolling back to the savepoint.
+        tx.execute("insert into $table(v) values (3);").getOrThrow()
+        tx.commit().getOrThrow()
+
+        assertThat(countRows(table)).isEqualTo(2L)
+        assertThat(countRowsWhere(table, "v = 2")).isEqualTo(0L)
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
+
+    fun `release savepoint should keep changes`() = runBlocking {
+        val table = newTable()
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+        db.execute("create table if not exists $table(id int auto_increment primary key, v int not null);").getOrThrow()
+
+        val tx = db.begin().getOrThrow()
+        tx.execute("insert into $table(v) values (1);").getOrThrow()
+        assertThat(tx.savepoint("sp1")).isSuccess()
+        tx.execute("insert into $table(v) values (2);").getOrThrow()
+        assertThat(tx.releaseSavepoint("sp1")).isSuccess()
+        tx.commit().getOrThrow()
+
+        assertThat(countRows(table)).isEqualTo(2L)
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
+
+    fun `rollback to released savepoint should fail`() = runBlocking {
+        val tx = db.begin().getOrThrow()
+        tx.savepoint("sp1").getOrThrow()
+        tx.releaseSavepoint("sp1").getOrThrow()
+        // A released savepoint no longer exists. On PostgreSQL the failed statement also aborts the
+        // transaction, so the test ends with a rollback rather than a commit.
+        val res = tx.rollbackToSavepoint("sp1")
+        assertThat(res).isFailure()
+        assertThat((res.exceptionOrNull() as SQLError).code).isEqualTo(SQLError.Code.Database)
+        tx.rollback().getOrThrow()
+    }
+
+    fun `rollback to savepoint should recover from a failed statement`() = runBlocking {
+        val table = newTable()
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+        db.execute("create table if not exists $table(id int auto_increment primary key, v int not null);").getOrThrow()
+
+        val tx = db.begin().getOrThrow()
+        tx.execute("insert into $table(v) values (1);").getOrThrow()
+        assertThat(tx.savepoint("sp1")).isSuccess()
+        // Violates the NOT NULL constraint. On PostgreSQL this aborts the transaction until a
+        // ROLLBACK (TO SAVEPOINT) is issued.
+        assertThat(tx.execute("insert into $table(v) values (null);")).isFailure()
+        assertThat(tx.rollbackToSavepoint("sp1")).isSuccess()
+        tx.execute("insert into $table(v) values (2);").getOrThrow()
+        tx.commit().getOrThrow()
+
+        assertThat(countRows(table)).isEqualTo(2L)
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
+
+    fun `nested savepoints should roll back independently`() = runBlocking {
+        val table = newTable()
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+        db.execute("create table if not exists $table(id int auto_increment primary key, v int not null);").getOrThrow()
+
+        val tx = db.begin().getOrThrow()
+        tx.execute("insert into $table(v) values (1);").getOrThrow()
+        tx.savepoint("sp1").getOrThrow()
+        tx.execute("insert into $table(v) values (2);").getOrThrow()
+        tx.savepoint("sp2").getOrThrow()
+        tx.execute("insert into $table(v) values (3);").getOrThrow()
+        // Undo only the inner savepoint's work.
+        tx.rollbackToSavepoint("sp2").getOrThrow()
+        tx.execute("insert into $table(v) values (4);").getOrThrow()
+        // Keep everything since sp1 (2 and 4).
+        tx.releaseSavepoint("sp1").getOrThrow()
+        tx.commit().getOrThrow()
+
+        assertThat(countRows(table)).isEqualTo(3L)
+        assertThat(countRowsWhere(table, "v = 3")).isEqualTo(0L)
+        assertThat(countRowsWhere(table, "v in (1, 2, 4)")).isEqualTo(3L)
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
+
+    fun `savepoint block should release on success and roll back on failure`() = runBlocking {
+        val table = newTable()
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+        db.execute("create table if not exists $table(id int auto_increment primary key, v int not null);").getOrThrow()
+
+        val tx = db.begin().getOrThrow()
+        tx.execute("insert into $table(v) values (1);").getOrThrow()
+
+        // success path: the block's work is kept
+        val ok = runCatching {
+            tx.savepoint {
+                execute("insert into $table(v) values (2);").getOrThrow()
+            }
+        }
+        assertThat(ok).isSuccess()
+
+        // failure path: only the block's work is undone, the transaction stays open
+        val err = runCatching {
+            tx.savepoint("failing_step") {
+                execute("insert into $table(v) values (3);").getOrThrow()
+                error("boom")
+            }
+        }
+        assertThat(err).isFailure()
+        assertThat(tx.status).isEqualTo(Transaction.Status.Open)
+        tx.execute("insert into $table(v) values (4);").getOrThrow()
+        tx.commit().getOrThrow()
+
+        assertThat(countRows(table)).isEqualTo(3L)
+        assertThat(countRowsWhere(table, "v = 3")).isEqualTo(0L)
+        assertThat(countRowsWhere(table, "v in (1, 2, 4)")).isEqualTo(3L)
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
+
+    fun `savepoint block should recover from a failed statement`() = runBlocking {
+        val table = newTable()
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+        db.execute("create table if not exists $table(id int auto_increment primary key, v int not null);").getOrThrow()
+
+        val tx = db.begin().getOrThrow()
+        tx.execute("insert into $table(v) values (1);").getOrThrow()
+        // The NOT NULL violation fails the block; the helper rolls back to the savepoint, which on
+        // PostgreSQL is what clears the aborted state so the transaction can continue.
+        val res = tx.savepointCatching {
+            execute("insert into $table(v) values (null);").getOrThrow()
+        }
+        assertThat(res).isFailure()
+        tx.execute("insert into $table(v) values (2);").getOrThrow()
+        tx.commit().getOrThrow()
+
+        assertThat(countRows(table)).isEqualTo(2L)
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
+
+    fun `nested savepoint blocks should roll back independently`() = runBlocking {
+        val table = newTable()
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+        db.execute("create table if not exists $table(id int auto_increment primary key, v int not null);").getOrThrow()
+
+        val tx = db.begin().getOrThrow()
+        tx.execute("insert into $table(v) values (1);").getOrThrow()
+        tx.savepoint {
+            execute("insert into $table(v) values (2);").getOrThrow()
+            // inner block fails: only its insert is undone
+            val inner = runCatching {
+                savepoint {
+                    execute("insert into $table(v) values (3);").getOrThrow()
+                    error("boom")
+                }
+            }
+            assertThat(inner).isFailure()
+            execute("insert into $table(v) values (4);").getOrThrow()
+        }
+        tx.commit().getOrThrow()
+
+        assertThat(countRows(table)).isEqualTo(3L)
+        assertThat(countRowsWhere(table, "v = 3")).isEqualTo(0L)
+        assertThat(countRowsWhere(table, "v in (1, 2, 4)")).isEqualTo(3L)
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
+
+    fun `savepoint with unsafe name should fail`() = runBlocking {
+        val tx = db.begin().getOrThrow()
+        // Rejected by IdentifierString before reaching the database (semicolons, comment markers, newlines).
+        listOf("sp;1", "sp; drop table t", "sp--x", "sp/*x*/", "sp\n1").forEach { name ->
+            val res = tx.savepoint(name)
+            assertThat(res).isFailure()
+            assertThat((res.exceptionOrNull() as SQLError).code).isEqualTo(SQLError.Code.UnsafeStringContent)
+        }
+        // Nothing was sent to the database, so the transaction is unaffected (relevant on PostgreSQL,
+        // where a rejected statement would have aborted it).
+        assertThat(tx.savepoint("sp_ok")).isSuccess()
+        tx.rollback().getOrThrow()
+    }
+
+    fun `savepoint on closed transaction should fail`() = runBlocking {
+        val tx = db.begin().getOrThrow()
+        tx.commit().getOrThrow()
+        listOf(tx.savepoint("sp1"), tx.releaseSavepoint("sp1"), tx.rollbackToSavepoint("sp1")).forEach { res ->
+            assertThat(res).isFailure()
+            assertThat((res.exceptionOrNull() as SQLError).code).isEqualTo(SQLError.Code.TransactionIsClosed)
+        }
     }
 }

@@ -330,6 +330,23 @@ class SQLite(
         override val commited: Boolean get() = _commited
         override val rollbacked: Boolean get() = _rollbacked
 
+        // Savepoints cannot be offered on top of android.database.sqlite: the framework classifies every
+        // statement by its first keyword before running it, and `ROLLBACK TO SAVEPOINT ...` is treated as
+        // a plain ROLLBACK (SQLiteSession.executeSpecial), which ends the *whole* transaction instead of
+        // rolling back to the savepoint.
+        override suspend fun savepoint(name: String): Result<Unit> = savepointsUnsupported()
+        override suspend fun releaseSavepoint(name: String): Result<Unit> = savepointsUnsupported()
+        override suspend fun rollbackToSavepoint(name: String): Result<Unit> = savepointsUnsupported()
+
+        private fun savepointsUnsupported(): Result<Unit> = Result.failure(
+            SQLError(
+                code = SQLError.Code.Database,
+                message = "Savepoints are not supported by the Android platform SQLite driver: " +
+                        "android.database.sqlite intercepts `ROLLBACK TO SAVEPOINT` and ends the whole transaction. " +
+                        "Use sqlx4k-sqlite-cipher (sqlx core) if you need savepoints on Android."
+            )
+        )
+
         override suspend fun commit(): Result<Unit> = runCatching {
             mutex.withLock {
                 if (commited) return@withLock

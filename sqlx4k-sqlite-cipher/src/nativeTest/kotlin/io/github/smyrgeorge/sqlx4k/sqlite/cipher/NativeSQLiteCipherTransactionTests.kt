@@ -71,4 +71,54 @@ class NativeSQLiteCipherTransactionTests {
     fun `rollback followed by commit should fail`() {
         runner.`rollback followed by commit should fail`()
     }
+
+    @Test
+    fun `savepoint rollback should revert only changes after the savepoint`() {
+        runner.`savepoint rollback should revert only changes after the savepoint`()
+    }
+
+    @Test
+    fun `release savepoint should keep changes`() {
+        runner.`release savepoint should keep changes`()
+    }
+
+    @Test
+    fun `rollback to released savepoint should fail`() {
+        runner.`rollback to released savepoint should fail`()
+    }
+
+    @Test
+    fun `rollback to savepoint should recover from a failed statement`() {
+        runner.`rollback to savepoint should recover from a failed statement`()
+    }
+
+    @Test
+    fun `nested savepoints should roll back independently`() {
+        runner.`nested savepoints should roll back independently`()
+    }
+
+    @Test
+    fun `savepoint block should release on success and roll back on failure`() {
+        runner.`savepoint block should release on success and roll back on failure`()
+    }
+
+    @Test
+    fun `savepoint block should recover from a failed statement`() {
+        runner.`savepoint block should recover from a failed statement`()
+    }
+
+    @Test
+    fun `nested savepoint blocks should roll back independently`() {
+        runner.`nested savepoint blocks should roll back independently`()
+    }
+
+    @Test
+    fun `savepoint with unsafe name should fail`() {
+        runner.`savepoint with unsafe name should fail`()
+    }
+
+    @Test
+    fun `savepoint on closed transaction should fail`() {
+        runner.`savepoint on closed transaction should fail`()
+    }
 }

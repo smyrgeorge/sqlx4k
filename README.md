@@ -52,9 +52,9 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 - [Acquiring and using connections](#acquiring-and-using-connections)
 - [Running queries](#running-queries)
 - [Prepared statements (named and positional parameters)](#prepared-statements)
-- [Row mappers](#rowmappers)
+- [Row mappers](#rowmapper-s)
 - [Custom Value Converters](#custom-value-converters)
-- [Transactions and coroutine TransactionContext](#transactions) · [TransactionContext (coroutines)](#transactioncontext-coroutines)
+- [Transactions and coroutine TransactionContext](#transactions) · [Savepoints](#savepoints) · [TransactionContext (coroutines)](#transactioncontext-coroutines)
 - [Code generation: CRUD and @Repository implementations](#code-generation-crud-and-repository-implementations)
     - [Customizing columns with @Column](#customizing-columns-with-column)
     - [Excluding properties with @Transient](#excluding-properties-with-transient)
@@ -365,6 +365,18 @@ db.transaction {
     // If any error occurs, it will automatically trigger the rollback method.
 }
 ```
+
+#### Savepoints
+
+A transaction can also create SQL savepoints. A savepoint marks a point inside an open transaction that you can later
+return to: `savepoint(name)` creates one, `rollbackToSavepoint(name)` undoes everything executed after it while the
+transaction itself stays open, and `releaseSavepoint(name)` discards it while keeping the work. This lets you undo a
+single failed step (for example an optional insert) without losing the rest of the transaction, and on PostgreSQL it is
+the way to keep using a transaction after a statement has failed. Savepoints can be nested, and committing or rolling
+back the transaction discards all of them. The block form `savepoint(name) { ... }` (and `savepointCatching`) mirrors
+`transaction { ... }`: it creates the savepoint, releases it when the block succeeds, and rolls back to it when the block
+throws or returns a failed `Result`. The Android platform SQLite driver does not support savepoints; the SQLCipher
+driver does.
 
 ### TransactionContext (coroutines)
 

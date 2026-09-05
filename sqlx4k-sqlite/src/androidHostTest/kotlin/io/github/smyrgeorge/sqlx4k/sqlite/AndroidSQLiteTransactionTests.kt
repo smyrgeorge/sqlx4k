@@ -88,4 +88,9 @@ class AndroidSQLiteTransactionTests {
     fun `rollback followed by commit should fail`() {
         runner.`rollback followed by commit should fail`()
     }
+
+    @Test
+    fun `savepoints should be rejected by the driver`() {
+        runner.`savepoints should be rejected by the driver`()
+    }
 }

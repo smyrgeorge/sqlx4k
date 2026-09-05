@@ -1,11 +1,15 @@
 package io.github.smyrgeorge.sqlx4k
 
+import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.IdentifierString
+import kotlin.random.Random
+
 /**
- * Represents a transaction in the system, providing methods to manage and execute
- * transactional operations such as commit and rollback.
+ * Represents a database transaction, providing methods to manage the transaction lifecycle and perform transactional operations.
  *
- * This interface integrates with the `Driver` interface to facilitate execution
- * of SQL queries and retrieval of results within a transactional context.
+ * A transaction groups a series of database operations into a single unit, allowing them to succeed or fail as a whole.
+ * Transactions ensure data consistency and integrity by supporting operations like commit, rollback, and savepoints.
+ *
+ * This interface extends [QueryExecutor], which includes the capability to execute queries within the transactional context.
  */
 interface Transaction : QueryExecutor {
     val status: Status
@@ -50,6 +54,106 @@ interface Transaction : QueryExecutor {
     suspend fun rollback(): Result<Unit>
 
     /**
+     * Creates a savepoint within the current transaction.
+     *
+     * A savepoint is a named point within a transaction that allows partial rollback
+     * to the state at the savepoint without affecting changes made prior to it.
+     * This method executes a SQL `SAVEPOINT` statement using the provided savepoint name.
+     *
+     * @param name The name of the savepoint to be created. Must be a valid SQL identifier.
+     * @return A [Result] containing [Unit] if the savepoint was successfully created, or an error if the operation failed.
+     * @throws SQLError if the transaction is closed or the savepoint name is invalid.
+     */
+    suspend fun savepoint(name: String): Result<Unit> = runCatching {
+        @Suppress("SqlDialectInspection")
+        execute("SAVEPOINT ${IdentifierString(name)}").getOrThrow()
+    }
+
+    /**
+     * Releases a previously created savepoint within the current transaction.
+     *
+     * This method executes a `RELEASE SAVEPOINT` SQL command for the specified savepoint name.
+     * Releasing a savepoint makes it no longer available for rolling back to
+     * and can help optimize transactional resource usage.
+     *
+     * @param name The name of the savepoint to be released. Must be a valid SQL identifier.
+     * @return A [Result] containing [Unit] if the savepoint was successfully released, or an error if the operation failed.
+     */
+    suspend fun releaseSavepoint(name: String): Result<Unit> = runCatching {
+        @Suppress("SqlDialectInspection")
+        execute("RELEASE SAVEPOINT ${IdentifierString(name)}").getOrThrow()
+    }
+
+    /**
+     * Rolls back the current transaction to a previously created savepoint.
+     *
+     * This method undoes all changes made after the specified savepoint within the transaction context,
+     * without affecting changes made prior to it. The savepoint must exist and must be valid
+     * at the point of invoking this operation. If the rollback succeeds, the transaction remains
+     * active and can continue making further changes.
+     *
+     * @param name The name of the savepoint to roll back to. Must be a valid SQL identifier.
+     * @return A [Result] containing [Unit] if the rollback to the savepoint was successful, or an error if the operation failed.
+     * @throws SQLError if the transaction is closed, the savepoint does not exist, or the savepoint name is invalid.
+     */
+    suspend fun rollbackToSavepoint(name: String): Result<Unit> = runCatching {
+        @Suppress("SqlDialectInspection")
+        execute("ROLLBACK TO SAVEPOINT ${IdentifierString(name)}").getOrThrow()
+    }
+
+    /**
+     * Executes a block of code within a savepoint and ensures that the savepoint's lifecycle
+     * is managed correctly. This includes creating the savepoint, handling exceptions, rolling
+     * back to the savepoint on failure, and releasing the savepoint on completion.
+     *
+     * If the provided block of code [f] results in a failure (throws an exception or returns a
+     * failed [Result]), the transaction is rolled back to the savepoint and the exception is propagated.
+     * If the block executes successfully, the savepoint is released and the result of the block is returned.
+     *
+     * @param name The name of the savepoint. Defaults to a randomly generated unique name if not provided.
+     *             Must be a valid SQL identifier.
+     * @param f The block of code to execute within the savepoint. The receiver of this block is the current
+     *          transaction.
+     * @return The value returned by the block [f]. If an exception is thrown during execution or a rollback
+     *         occurs to the savepoint, the exception is rethrown.
+     * @throws Throwable If any errors occur during the execution of [f], rollback to the savepoint, or
+     *                   release of the savepoint.
+     */
+    suspend fun <T> savepoint(name: String = randomSavepointName(), f: suspend Transaction.() -> T): T {
+        savepoint(name).getOrThrow()
+        val res = try {
+            when (val r = f(this)) {
+                is Result<*> if r.isFailure -> throw r.exceptionOrNull()!! // Trigger rollback
+                else -> r
+            }
+        } catch (e: Throwable) {
+            rollbackToSavepoint(name).onFailure { e.addSuppressed(it) }
+            throw e
+        }
+        releaseSavepoint(name).getOrThrow()
+        return res
+    }
+
+    /**
+     * Executes a block of code within a savepoint, capturing any exceptions or failures that occur and
+     * returning them as a [Result].
+     *
+     * This method attempts to create a savepoint using the specified [name], runs the provided block [f]
+     * within the context of the savepoint, and then handles the savepoint's lifecycle. If an exception is
+     * thrown or a failure occurs within [f], the transaction is rolled back to the savepoint, and the
+     * resulting error is encapsulated in [Result.Failure].
+     *
+     * @param name The name of the savepoint. Defaults to a randomly generated unique name if not provided.
+     *             Must be a valid SQL identifier.
+     * @param f The block of code to execute within the savepoint. The receiver of this block is the current
+     *          transaction.
+     * @return A [Result] containing the success value returned by [f], or a failure if an exception was thrown
+     *         or a rollback to the savepoint failed.
+     */
+    suspend fun <T> savepointCatching(name: String = randomSavepointName(), f: suspend Transaction.() -> T): Result<T> =
+        runCatching { savepoint(name, f) }
+
+    /**
      * Represents the status of a transaction.
      *
      * The status can be either of the following:
@@ -82,4 +186,14 @@ interface Transaction : QueryExecutor {
         RepeatableRead("REPEATABLE READ"),
         Serializable("SERIALIZABLE"),
     }
+
+    /**
+     * Generates a random name for a SQL savepoint.
+     *
+     * This method creates a unique name for a savepoint by appending a random,
+     * hexadecimal representation of an unsigned long value to the prefix "sqlx4k_sp_".
+     *
+     * @return A randomly generated savepoint name in the format "sqlx4k_sp_<random_hex_value>".
+     */
+    private fun randomSavepointName(): String = "sqlx4k_sp_" + Random.nextLong().toULong().toString(16)
 }

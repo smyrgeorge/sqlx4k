@@ -164,6 +164,9 @@ For complete working examples, see the [examples/sqlite](../examples/sqlite) dir
 - **In-memory databases**: Must use pool size of 1 (each connection creates a separate database)
 - **Write concurrency**: SQLite uses database-level locking, so write operations are serialized
 - **Android**: Requires manual setup of native libraries (see [Android Targets](#android-targets))
+- **Android**: Savepoints (`savepoint`/`releaseSavepoint`/`rollbackToSavepoint`) are not supported, because
+  `android.database.sqlite` intercepts `ROLLBACK TO SAVEPOINT` and ends the whole transaction. Use
+  `sqlx4k-sqlite-cipher` if you need savepoints on Android.
 
 ## Documentation
 
