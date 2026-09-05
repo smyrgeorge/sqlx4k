@@ -79,11 +79,14 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 
 - Create and publish sqlx4k-gradle-plugin
 - Support streaming large tables (e.g. with cursors)
-- Validate queries at compile time (avoid runtime errors)
-    - Syntax checking is already supported (using the `@Query` annotation) ✅
-    - Validate queries by accessing the DB schema ✅
-    - Validate query literal types (type check query parameters)
-- Add support for SQLite JVM target ✅
+- Driver-level interceptor. A QueryListener on the driver gives query logging, slow-query warnings, and metrics.
+- Pool lifecycle hooks and health. afterConnect for session setup such as search_path, timezone, or application_name,
+  plus ping () and acquire-wait metrics.
+- Postgres COPY. COPY FROM STDIN is an order of magnitude faster than multi-row INSERT for bulk loads.
+- `kotlinx.serialization` module. JSON and JSONB columns to and from @Serializable classes, and a generic @Converter for
+  any serializable type.
+- MariaDB dialect. MariaDB supports RETURNING on INSERT and DELETE since 10.5, so batch operations can be enabled.
+- Type coverage, NUMERIC/decimal, Duration or interval, enum or composite types.
 - WASM support (?).
 
 ### Supported Databases
@@ -289,7 +292,7 @@ db.fetchAll(st2).getOrThrow().map {
 }
 ```
 
-### RowMapper(s)
+### RowMapper (s)
 
 ```kotlin
 object Sqlx4kRowMapper : RowMapper<Sqlx4k> {
