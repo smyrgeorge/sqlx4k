@@ -30,7 +30,7 @@ r2dbc-mysql = "1.4.3"
 r2dbc-postgresql = "1.1.2.RELEASE"
 # https://central.sonatype.com/artifact/com.github.jsqlparser/jsqlparser
 # https://github.com/JSQLParser/JSqlParser
-jsqlparser = "5.3"
+jsqlparser = "5.4"
 # https://mvnrepository.com/artifact/org.apache.calcite/calcite-core
 # https://github.com/apache/calcite
 calcite = "1.42.0"
