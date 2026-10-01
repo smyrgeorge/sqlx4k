@@ -5,7 +5,7 @@
 ![GitHub License](https://img.shields.io/github/license/smyrgeorge/sqlx4k)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/w/smyrgeorge/sqlx4k)
 ![GitHub issues](https://img.shields.io/github/issues/smyrgeorge/sqlx4k)
-[![Kotlin](https://img.shields.io/badge/kotlin-2.4.10-blue.svg?logo=kotlin)](http://kotlinlang.org)
+[![Kotlin](https://img.shields.io/badge/kotlin-2.4.20-blue.svg?logo=kotlin)](http://kotlinlang.org)
 
 ![](https://img.shields.io/static/v1?label=&message=Platforms&color=grey)
 ![](https://img.shields.io/static/v1?label=&message=Jvm&color=blue)
@@ -92,8 +92,8 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 
 ### Supported Databases
 
-- ![MySQL](https://img.shields.io/badge/MySQL-00758F?logo=mysql&logoColor=white)
 - ![MariaDB](https://img.shields.io/badge/MariaDB-003545?logo=mariadb&logoColor=white)
+- ![MySQL](https://img.shields.io/badge/MySQL-00758F?logo=mysql&logoColor=white)
 - ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-336791?logo=postgresql&logoColor=white)
 - ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
 - ![SQLCipher](https://img.shields.io/badge/SQLCipher-003B57?logo=sqlite&logoColor=white) (encrypted SQLite —
@@ -1248,8 +1248,9 @@ leaks -atExit -- ./bench/postgres-sqlx4k/build/bin/macosArm64/releaseExecutable/
 sqlx4k stands on the shoulders of excellent open-source projects:
 
 - Data access engines
-    - Native targets (Kotlin/Native): sqlx (Rust)
-        - https://github.com/launchbadge/sqlx
+    - Native targets (Kotlin/Native):
+        - sqlx (Rust)
+            - https://github.com/launchbadge/sqlx
     - JVM targets:
         - PostgreSQL: r2dbc-postgresql
             - https://github.com/pgjdbc/r2dbc-postgresql
