@@ -106,7 +106,12 @@ fun KotlinNativeTarget.rust(target: String) {
                     "--release"
                 )
             }
-            tasks.getByName(interopProcessingTaskName) { dependsOn(cargoTask) }
+            // cinterop embeds the static library into the klib, so it must re-run whenever cargo rebuilds it.
+            // Otherwise, a change to the Rust sources alone would keep linking the previous library.
+            tasks.getByName(interopProcessingTaskName) {
+                dependsOn(cargoTask)
+                inputs.files(cargoTask).withPropertyName("rustStaticLibrary").withPathSensitivity(PathSensitivity.NONE)
+            }
         }
     }
 }

@@ -242,43 +242,26 @@ pub extern "C" fn sqlx4k_mysql_free_result(ptr: *mut Sqlx4kMysqlResult) {
 
 pub fn sqlx4k_mysql_error_result_of(err: sqlx::Error) -> Sqlx4kMysqlResult {
     let (code, message) = match err {
-        Error::Configuration(_) => panic!("Unexpected error occurred."),
         Error::Database(e) => match e.code() {
             Some(code) => (ERROR_DATABASE, format!("[{}] {}", code, e.to_string())),
             None => (ERROR_DATABASE, format!("{}", e.to_string())),
         },
-        Error::Io(_) => panic!("Io :: Unexpected error occurred."),
-        Error::Tls(_) => panic!("Tls :: Unexpected error occurred."),
-        Error::Protocol(_) => panic!("Protocol :: Unexpected error occurred."),
-        Error::RowNotFound => panic!("RowNotFound :: Unexpected error occurred."),
-        Error::TypeNotFound { type_name: _ } => {
-            panic!("TypeNotFound :: Unexpected error occurred.")
-        }
-        Error::ColumnIndexOutOfBounds { index: _, len: _ } => {
-            panic!("ColumnIndexOutOfBounds :: Unexpected error occurred.")
-        }
-        Error::ColumnNotFound(_) => panic!("ColumnNotFound :: Unexpected error occurred."),
-        Error::ColumnDecode {
-            index: _,
-            source: _,
-        } => {
-            panic!("ColumnDecode :: Unexpected error occurred.")
-        }
-        Error::Decode(_) => panic!("Decode :: Unexpected error occurred."),
-        Error::AnyDriverError(_) => panic!("AnyDriverError :: Unexpected error occurred."),
         Error::PoolTimedOut => (ERROR_POOL_TIMED_OUT, "PoolTimedOut".to_string()),
         Error::PoolClosed => (
             ERROR_POOL_CLOSED,
             "The connection pool is already closed".to_string(),
         ),
         Error::WorkerCrashed => (ERROR_WORKER_CRASHED, "WorkerCrashed".to_string()),
-        Error::Migrate(_) => panic!("Migrate :: Unexpected error occurred."),
-        _ => panic!("Unexpected error occurred."),
+        // Any other error (Io, Tls, Protocol, Decode, ...) is reported as a database error.
+        // Never panic here: with `panic = "abort"`, a dropped connection would terminate the process.
+        e => (ERROR_DATABASE, e.to_string()),
     };
 
+    // CString::new fails on interior NUL bytes, which may appear in values echoed back by the server.
+    let message = CString::new(message.replace('\0', "")).unwrap();
     Sqlx4kMysqlResult {
         error: code,
-        error_message: CString::new(message).unwrap().into_raw(),
+        error_message: message.into_raw(),
         ..Default::default()
     }
 }
