@@ -54,7 +54,9 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 - [Prepared statements (named and positional parameters)](#prepared-statements)
 - [Row mappers](#rowmapper-s)
 - [Custom Value Converters](#custom-value-converters)
-- [Transactions and coroutine TransactionContext](#transactions) · [Savepoints](#savepoints) · [TransactionContext (coroutines)](#transactioncontext-coroutines)
+- [Transactions](#transactions)
+    - [Savepoints](#savepoints)
+    - [TransactionContext (coroutines)](#transactioncontext-coroutines)
 - [Code generation: CRUD and @Repository implementations](#code-generation-crud-and-repository-implementations)
     - [Customizing columns with @Column](#customizing-columns-with-column)
     - [Excluding properties with @Transient](#excluding-properties-with-transient)
@@ -384,7 +386,7 @@ db.transaction {
 
 You can also call `savepoint(name)`, `rollbackToSavepoint(name)` and `releaseSavepoint(name)` directly.
 
-### TransactionContext (coroutines)
+#### TransactionContext (coroutines)
 
 When using coroutines, you can propagate a transaction through the coroutine context using `TransactionContext`. This
 allows you to write small, composable suspend functions that either:
