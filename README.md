@@ -367,15 +367,22 @@ db.transaction {
 
 #### Savepoints
 
-A transaction can also create SQL savepoints. A savepoint marks a point inside an open transaction that you can later
-return to: `savepoint(name)` creates one, `rollbackToSavepoint(name)` undoes everything executed after it while the
-transaction itself stays open, and `releaseSavepoint(name)` discards it while keeping the work. This lets you undo a
-single failed step (for example an optional insert) without losing the rest of the transaction, and on PostgreSQL it is
-the way to keep using a transaction after a statement has failed. Savepoints can be nested, and committing or rolling
-back the transaction discards all of them. The block form `savepoint(name) { ... }` (and `savepointCatching`) mirrors
-`transaction { ... }`: it creates the savepoint, releases it when the block succeeds, and rolls back to it when the block
-throws or returns a failed `Result`. The Android platform SQLite driver does not support savepoints; the SQLCipher
-driver does.
+A savepoint lets you roll back part of a transaction without ending it. The block form releases the savepoint on
+success and rolls back to it on failure. `savepointCatching` returns the failure as a `Result`; `savepoint` rethrows it.
+
+```kotlin
+db.transaction {
+    execute("insert into orders (id, status) values (1, 'new');").getOrThrow()
+
+    // If this fails, only the audit insert is undone.
+    val audit: Result<Long> = savepointCatching {
+        execute("insert into audit_log (order_id, event) values (1, 'created');").getOrThrow()
+    }
+    if (audit.isFailure) println("Audit insert skipped.")
+}
+```
+
+You can also call `savepoint(name)`, `rollbackToSavepoint(name)` and `releaseSavepoint(name)` directly.
 
 ### TransactionContext (coroutines)
 
@@ -516,7 +523,7 @@ For more details, take a look at the [examples](./examples).
 
 You can use the `@Column` annotation to override the column name a property is mapped to, and to control how the
 property participates in the generated `INSERT` and `UPDATE` statements. The latter is useful for database-generated or
-read-only columns that should be excluded from write operations but still retrieved afterwards (via the `RETURNING`
+read-only columns that should be excluded from write operations but still retrieved afterward (via the `RETURNING`
 clause).
 
 | Property         | Effect                                                                            |
@@ -1200,7 +1207,7 @@ And then run the examples.
 ./examples/postgres/build/bin/macosArm64/releaseExecutable/postgres.kexe
 ./examples/mysql/build/bin/macosArm64/releaseExecutable/mysql.kexe
 ./examples/sqlite/build/bin/macosArm64/releaseExecutable/sqlite.kexe
-# If you run in another platform consider running the correct tartge.
+# If you run in another platform consider running the correct target.
 ```
 
 ## Examples
