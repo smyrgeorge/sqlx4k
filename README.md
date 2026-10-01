@@ -85,7 +85,6 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 - Postgres COPY. COPY FROM STDIN is an order of magnitude faster than multi-row INSERT for bulk loads.
 - `kotlinx.serialization` module. JSON and JSONB columns to and from @Serializable classes, and a generic @Converter for
   any serializable type.
-- MariaDB dialect. MariaDB supports RETURNING on INSERT and DELETE since 10.5, so batch operations can be enabled.
 - Type coverage, NUMERIC/decimal, Duration or interval, enum or composite types.
 - WASM support (?).
 
@@ -441,6 +440,7 @@ ksp {
     // Optional: pick the SQL dialect for CRUD generation from @Table classes.
     // Supported dialects:
     // arg("dialect", "mysql")
+    // arg("dialect", "mariadb")
     // arg("dialect", "postgresql")
     // arg("dialect", "sqlite")
 
@@ -636,6 +636,7 @@ ksp {
 Supported dialects:
 
 - `"mysql"` - Adjusts CRUD query generation for MySQL compatibility
+- `"mariadb"` - Like `"mysql"`, but uses `INSERT ... RETURNING` (MariaDB 10.5+), which enables `batchInsert`
 - `"postgresql"` - Enables PostgreSQL-specific extensions (array types)
 - `"sqlite"` - Adjusts CRUD query generation for SQLite compatibility
 - Default (or `"generic"`) - Uses standard SQL with builtin decoders
@@ -672,16 +673,18 @@ val result: Result<List<User>> = userRepository.batchUpdate(db, updatedUsers)
 
 **Database Support:**
 
-| Operation     | PostgreSQL | SQLite | MySQL | Generic |
-|---------------|:----------:|:------:|:-----:|:-------:|
-| `batchInsert` |     ✅     |   ✅   |  ❌   |   ✅    |
-| `batchUpdate` |     ✅     |   ✅   |  ❌   |   ✅    |
+| Operation     | PostgreSQL | SQLite | MySQL | MariaDB | Generic |
+|---------------|:----------:|:------:|:-----:|:-------:|:-------:|
+| `batchInsert` |     ✅     |   ✅   |  ❌   |   ✅    |   ✅    |
+| `batchUpdate` |     ✅     |   ✅   |  ❌   |   ❌    |   ✅    |
 
 - **PostgreSQL**: Full support for both batch operations using multi-row `INSERT ... RETURNING` and
   `UPDATE ... FROM (VALUES ...) ... RETURNING` syntax.
 - **SQLite**: Full support for both batch operations using multi-row `INSERT ... RETURNING` and
   `WITH ... UPDATE ... FROM ... RETURNING` syntax (CTE-based approach).
 - **MySQL**: Neither batch operation is supported because MySQL lacks `RETURNING` clause support.
+- **MariaDB**: `batchInsert` is supported using multi-row `INSERT ... RETURNING` (MariaDB 10.5+). `batchUpdate` is not
+  supported because MariaDB has no `UPDATE ... RETURNING` (nor `UPDATE ... FROM (VALUES ...)`).
 - **Generic**: Generates code for both operations, but actual support depends on the underlying database.
 
 > [!NOTE]

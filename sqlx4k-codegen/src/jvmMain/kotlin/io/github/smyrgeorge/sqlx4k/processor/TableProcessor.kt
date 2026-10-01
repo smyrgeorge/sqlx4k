@@ -27,18 +27,19 @@ class TableProcessor(
 
     private val dialect: Dialect = when (options[DIALECT_OPTION]?.lowercase()) {
         "mysql" -> Dialect.MySQL
+        "mariadb" -> Dialect.MariaDB
         "postgres", "postgresql" -> Dialect.PostgreSQL
         "sqlite" -> Dialect.SQLite
         else -> Dialect.Generic
     }
 
-    private val queryDialect: Dialect = when (dialect) {
-        Dialect.MySQL -> Dialect.MySQL
-        else -> Dialect.Generic
-    }
+    // MySQL has no RETURNING clause at all.
+    // MariaDB supports INSERT ... RETURNING (since 10.5) but not UPDATE ... RETURNING.
+    private val supportsInsertReturning: Boolean = dialect != Dialect.MySQL
+    private val supportsUpdateReturning: Boolean = dialect != Dialect.MySQL && dialect != Dialect.MariaDB
 
     private val rowMapperDialect: Dialect = when (dialect) {
-        Dialect.MySQL -> Dialect.MySQL
+        Dialect.MySQL, Dialect.MariaDB -> Dialect.MySQL
         Dialect.PostgreSQL -> Dialect.PostgreSQL
         else -> Dialect.Generic
     }
@@ -142,8 +143,8 @@ class TableProcessor(
         emitDelete(file, tableName, classDeclaration, properties)
 
         // Make batch queries.
-        // Batch insert: Supported by PostgreSQL, SQLite, and Generic (requires multi-row INSERT with RETURNING).
-        // Batch update: Supported by PostgreSQL and Generic (requires FROM VALUES with RETURNING).
+        // Batch insert: Supported by PostgreSQL, SQLite, MariaDB, and Generic (requires multi-row INSERT with RETURNING).
+        // Batch update: Supported by PostgreSQL, SQLite, and Generic (requires FROM VALUES with RETURNING).
         // Generic dialect: Generates code for all batch operations but may produce SQL syntax errors
         //                  depending on the actual database being used.
         emitBatchInsert(file, tableName, classDeclaration, properties)
@@ -188,7 +189,7 @@ class TableProcessor(
         file += " */\n"
         file += "fun ${clazz.qualifiedName()}.insert(): Statement {\n"
         file += "    // language=SQL\n"
-        file += if (queryDialect == Dialect.MySQL) {
+        file += if (!supportsInsertReturning) {
             // For MySQL, use LAST_INSERT_ID() since RETURNING is not supported
             val idProp = allProps.find {
                 it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
@@ -203,7 +204,7 @@ class TableProcessor(
             val bindExpr = generateBindExpression(prop)
             file += "    statement.bind($index, $bindExpr)\n"
         }
-        if (queryDialect == Dialect.MySQL) {
+        if (!supportsInsertReturning) {
             // idProp is guaranteed to exist for MySQL (error thrown above if missing)
             val idProp = allProps.first {
                 it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
@@ -269,14 +270,14 @@ class TableProcessor(
         file += " * updatable properties. The entity is identified by its @Id property `$idName`.\n"
         file += " * Properties marked with `@Column(update = false)` are excluded from the update.\n"
         file += " *\n"
-        file += " * The statement includes a RETURNING clause (or equivalent for MySQL) to fetch\n"
+        file += " * The statement includes a RETURNING clause (or equivalent for MySQL/MariaDB) to fetch\n"
         file += " * the updated row with any modified values.\n"
         file += " *\n"
         file += " * @return A prepared [Statement] with bound values ready for execution\n"
         file += " */\n"
         file += "fun ${clazz.qualifiedName()}.update(): Statement {\n"
         file += "    // language=SQL\n"
-        file += if (queryDialect == Dialect.MySQL) {
+        file += if (!supportsUpdateReturning) {
             "    val sql = \"update $table set ${updateColumns.joinToString { c -> "$c = ?" }} where $idColumn = ?; select $returningColumns from $table where $idColumn = ?;\"\n"
         } else {
             "    val sql = \"update $table set ${updateColumns.joinToString { c -> "$c = ?" }} where $idColumn = ? returning $returningColumns;\"\n"
@@ -289,7 +290,7 @@ class TableProcessor(
         }
         val idBindExpr = generateBindExpression(id)
         file += "    statement.bind(${updateColumns.size}, $idBindExpr)\n"
-        if (queryDialect == Dialect.MySQL) {
+        if (!supportsUpdateReturning) {
             file += "    statement.bind(${updateColumns.size + 1}, $idBindExpr)\n"
         }
         file += "    return statement\n"
@@ -364,7 +365,7 @@ class TableProcessor(
 
     /**
      * Generates a batch INSERT statement for the provided class declaration.
-     * Supported for PostgreSQL, SQLite, and Generic dialects.
+     * Supported for PostgreSQL, SQLite, MariaDB, and Generic dialects.
      *
      * @param file The output stream to write the generated code.
      * @param table The name of the table into which the data will be inserted.
@@ -377,8 +378,8 @@ class TableProcessor(
         clazz: KSClassDeclaration,
         props: Sequence<KSPropertyDeclaration>
     ) {
-        // Only support PostgreSQL, SQLite, and Generic (not MySQL)
-        if (dialect == Dialect.MySQL) return
+        // Only support PostgreSQL, SQLite, MariaDB, and Generic (not MySQL)
+        if (!supportsInsertReturning) return
 
         val ctx = prepareInsertContext(clazz, props)
         val (_, insertPropDeclarations, insertColumns, className, returningColumns) = ctx
@@ -430,8 +431,8 @@ class TableProcessor(
         clazz: KSClassDeclaration,
         props: Sequence<KSPropertyDeclaration>
     ) {
-        // Only support PostgreSQL, SQLite, and Generic (not MySQL)
-        if (dialect == Dialect.MySQL) return
+        // Only support PostgreSQL, SQLite, MariaDB, and Generic (not MySQL)
+        if (!supportsInsertReturning) return
 
         val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
         val returningProps = findInsertReturningProps(props.toList())
@@ -461,8 +462,8 @@ class TableProcessor(
         clazz: KSClassDeclaration,
         props: Sequence<KSPropertyDeclaration>
     ) {
-        // Only support PostgreSQL, SQLite, and Generic (not MySQL)
-        if (dialect == Dialect.MySQL) return
+        // Only support PostgreSQL, SQLite, and Generic (not MySQL/MariaDB)
+        if (!supportsUpdateReturning) return
 
         val ctx = prepareUpdateContext(table, clazz, props) ?: return
         val (allProps, id, updatePropDeclarations, updateColumns, className, idName, idColumn) = ctx
@@ -537,8 +538,8 @@ class TableProcessor(
         clazz: KSClassDeclaration,
         props: Sequence<KSPropertyDeclaration>
     ) {
-        // Only support PostgreSQL, SQLite, and Generic (not MySQL)
-        if (dialect == Dialect.MySQL) return
+        // Only support PostgreSQL, SQLite, and Generic (not MySQL/MariaDB)
+        if (!supportsUpdateReturning) return
 
         val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
         val returningProps = findUpdateReturningProps(props.toList())
@@ -1210,7 +1211,7 @@ class TableProcessor(
         const val PACKAGE_OPTION = "output-package"
 
         /**
-         * The option key used to specify the SQL dialect. Supported: generic (default), mysql
+         * The option key used to specify the SQL dialect. Supported: generic (default), mysql, mariadb, postgres, sqlite
          */
         private const val DIALECT_OPTION = "dialect"
 

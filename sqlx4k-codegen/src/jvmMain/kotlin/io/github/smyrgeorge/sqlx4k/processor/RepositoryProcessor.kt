@@ -28,6 +28,7 @@ class RepositoryProcessor(
 
     private val dialect: Dialect = when (options[DIALECT_OPTION]?.lowercase()) {
         "mysql" -> Dialect.MySQL
+        "mariadb" -> Dialect.MariaDB
         "postgres", "postgresql" -> Dialect.PostgreSQL
         "sqlite" -> Dialect.SQLite
         else -> Dialect.Generic
@@ -141,7 +142,7 @@ class RepositoryProcessor(
             file += "import ${TypeNames.SQL_ERROR}\n"
             file += "import io.github.smyrgeorge.sqlx4k.impl.extensions.*\n"
             if (useArrow) {
-                // DbResult is referenced explicitly by the MySQL batchInsert/batchUpdate stubs.
+                // DbResult is referenced explicitly by the MySQL/MariaDB batchInsert/batchUpdate stubs.
                 file += "import ${TypeNames.DB_RESULT}\n"
                 file += "import ${TypeNames.TO_DB_RESULT}\n"
             }
@@ -1161,7 +1162,7 @@ class RepositoryProcessor(
             }
         }
 
-        // batchInsert (supported for PostgreSQL and SQLite, not MySQL)
+        // batchInsert (supported for PostgreSQL, SQLite, MariaDB, and Generic, not MySQL)
         if (dialect != Dialect.MySQL) {
             logger.info("[RepositoryProcessor] Emitting CRUD method: batchInsert(Iterable<$domainQn>)")
             file += "\n"
@@ -1171,7 +1172,7 @@ class RepositoryProcessor(
             file += "     * Executes a batch INSERT statement and returns the inserted entities with any\n"
             file += "     * generated values (e.g., auto-incremented IDs) populated.\n"
             file += "     *\n"
-            file += "     * Note: Supported for PostgreSQL and SQLite dialects (requires multi-row INSERT with RETURNING).\n"
+            file += "     * Note: Supported for PostgreSQL, SQLite, MariaDB, and Generic dialects (requires multi-row INSERT with RETURNING).\n"
             file += "     *\n"
             if (!useContextParameters) {
                 file += "     * @param context The query executor (database connection or transaction)\n"
@@ -1251,8 +1252,8 @@ class RepositoryProcessor(
             }
         }
 
-        // batchUpdate (supported for PostgreSQL, SQLite, and Generic, not MySQL)
-        if (dialect != Dialect.MySQL) {
+        // batchUpdate (supported for PostgreSQL, SQLite, and Generic, not MySQL/MariaDB)
+        if (dialect != Dialect.MySQL && dialect != Dialect.MariaDB) {
             logger.info("[RepositoryProcessor] Emitting CRUD method: batchUpdate(Iterable<$domainQn>)")
             file += "\n"
             file += "    /**\n"
@@ -1313,20 +1314,20 @@ class RepositoryProcessor(
             if (useArrow) file += ".toDbResult()"
             file += "\n"
         } else {
-            // MySQL doesn't support batch update - generate error method
-            logger.info("[RepositoryProcessor] Emitting unsupported CRUD method: batchUpdate(Iterable<$domainQn>) for MySQL")
+            // MySQL/MariaDB don't support batch update - generate error method
+            logger.info("[RepositoryProcessor] Emitting unsupported CRUD method: batchUpdate(Iterable<$domainQn>) for $dialect")
             file += "\n"
             file += "    /**\n"
-            file += "     * Batch update is not supported for MySQL dialect.\n"
+            file += "     * Batch update is not supported for $dialect dialect.\n"
             file += "     *\n"
-            file += "     * MySQL does not support UPDATE ... FROM (VALUES ...) syntax with RETURNING clause,\n"
+            file += "     * $dialect does not support UPDATE ... FROM (VALUES ...) syntax with RETURNING clause,\n"
             file += "     * which is required for batch update operations.\n"
             file += "     *\n"
             if (!useContextParameters) {
                 file += "     * @param context The query executor (database connection or transaction)\n"
             }
             file += "     * @param entities The collection of $domainSimpleName entities that would be updated\n"
-            file += "     * @throws UnsupportedOperationException Always thrown, since batch update is not supported for MySQL\n"
+            file += "     * @throws UnsupportedOperationException Always thrown, since batch update is not supported for $dialect\n"
             file += "     */\n"
             if (useContextParameters) {
                 file += "    context(context: QueryExecutor)\n"
@@ -1335,9 +1336,9 @@ class RepositoryProcessor(
                 file += "    override suspend fun batchUpdate(context: QueryExecutor, entities: Iterable<$domainQn>)"
             }
             file += if (useArrow) {
-                ": DbResult<List<$domainQn>> = throw UnsupportedOperationException(\"Batch update is not supported for MySQL dialect (no UPDATE FROM VALUES with RETURNING support)\")\n"
+                ": DbResult<List<$domainQn>> = throw UnsupportedOperationException(\"Batch update is not supported for $dialect dialect (no UPDATE FROM VALUES with RETURNING support)\")\n"
             } else {
-                ": Result<List<$domainQn>> = throw UnsupportedOperationException(\"Batch update is not supported for MySQL dialect (no UPDATE FROM VALUES with RETURNING support)\")\n"
+                ": Result<List<$domainQn>> = throw UnsupportedOperationException(\"Batch update is not supported for $dialect dialect (no UPDATE FROM VALUES with RETURNING support)\")\n"
             }
         }
     }
@@ -1531,7 +1532,7 @@ class RepositoryProcessor(
         private const val SCHEMA_MIGRATIONS_PATH_OPTION: String = "schema-migrations-path"
 
         /**
-         * The option key used to specify the SQL dialect. Supported: generic (default), mysql, postgres, sqlite
+         * The option key used to specify the SQL dialect. Supported: generic (default), mysql, mariadb, postgres, sqlite
          */
         private const val DIALECT_OPTION = "dialect"
     }
