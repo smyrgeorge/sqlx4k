@@ -370,14 +370,14 @@ db.transaction {
 #### Savepoints
 
 A savepoint lets you roll back part of a transaction without ending it. The block form releases the savepoint on
-success and rolls back to it on failure. `savepointCatching` returns the failure as a `Result`; `savepoint` rethrows it.
+success and rolls back to it on failure. Either way it returns a `Result` and never propagates the error.
 
 ```kotlin
 db.transaction {
     execute("insert into orders (id, status) values (1, 'new');").getOrThrow()
 
     // If this fails, only the audit insert is undone.
-    val audit: Result<Long> = savepointCatching {
+    val audit: Result<Long> = savepoint {
         execute("insert into audit_log (order_id, event) values (1, 'created');").getOrThrow()
     }
     if (audit.isFailure) println("Audit insert skipped.")

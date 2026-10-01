@@ -23,7 +23,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
 import kotlin.test.Test
-import kotlin.test.assertFailsWith
 import kotlin.time.Duration.Companion.milliseconds
 
 class TransactionSavepointTests {
@@ -149,7 +148,7 @@ class TransactionSavepointTests {
         assertThat(tx.executed).containsExactly("ROLLBACK TO SAVEPOINT sp1")
     }
 
-    // ---- Block helpers: savepoint(name) { } / savepointCatching ----
+    // ---- Block helper: savepoint(name) { } ----
 
     @Test
     fun `savepoint block releases on success and returns the block value`() = runBlocking {
@@ -158,7 +157,7 @@ class TransactionSavepointTests {
             execute("insert into t values (1)").getOrThrow()
             42
         }
-        assertThat(result).isEqualTo(42)
+        assertThat(result).isEqualTo(Result.success(42))
         assertThat(tx.executed).containsExactly(
             "SAVEPOINT sp1",
             "insert into t values (1)",
@@ -167,15 +166,14 @@ class TransactionSavepointTests {
     }
 
     @Test
-    fun `savepoint block rolls back to the savepoint and rethrows when the block throws`() = runBlocking {
+    fun `savepoint block rolls back to the savepoint and returns the error when the block throws`() = runBlocking {
         val tx = RecordingTransaction()
-        val ex = assertFailsWith<IllegalStateException> {
-            tx.savepoint("sp1") {
-                execute("insert into t values (1)").getOrThrow()
-                error("boom")
-            }
+        val res = tx.savepoint("sp1") {
+            execute("insert into t values (1)").getOrThrow()
+            error("boom")
         }
-        assertThat(ex.message).isEqualTo("boom")
+        assertThat(res.exceptionOrNull()).isNotNull().isInstanceOf<IllegalStateException>()
+        assertThat(res.exceptionOrNull()!!.message).isEqualTo("boom")
         assertThat(tx.executed).containsExactly(
             "SAVEPOINT sp1",
             "insert into t values (1)",
@@ -183,25 +181,24 @@ class TransactionSavepointTests {
         )
         // The transaction itself is untouched.
         assertThat(tx.status).isEqualTo(Transaction.Status.Open)
+        assertThat(tx.commited).isFalse()
     }
 
     @Test
     fun `savepoint block treats a failed Result as failure and rolls back`() = runBlocking {
         val tx = RecordingTransaction()
         val boom = SQLError(SQLError.Code.Database, "bad")
-        val ex = assertFailsWith<SQLError> {
-            tx.savepoint("sp1") { Result.failure<Int>(boom) }
-        }
-        assertThat(ex).isSameInstanceAs(boom)
+        val res = tx.savepoint("sp1") { Result.failure<Int>(boom) }
+        assertThat(res.exceptionOrNull()!!).isSameInstanceAs(boom)
         assertThat(tx.executed).containsExactly("SAVEPOINT sp1", "ROLLBACK TO SAVEPOINT sp1")
     }
 
     @Test
-    fun `savepoint block returns a successful Result unchanged and releases`() = runBlocking {
+    fun `savepoint block wraps a successful Result block value and releases`() = runBlocking {
         val tx = RecordingTransaction()
         val ok = Result.success(7)
         val res = tx.savepoint("sp1") { ok }
-        assertThat(res).isEqualTo(ok)
+        assertThat(res).isEqualTo(Result.success(ok))
         assertThat(tx.executed).containsExactly("SAVEPOINT sp1", "RELEASE SAVEPOINT sp1")
     }
 
@@ -209,9 +206,7 @@ class TransactionSavepointTests {
     fun `savepoint block attaches a suppressed error when the rollback also fails`() = runBlocking {
         val rollbackErr = SQLError(SQLError.Code.Database, "rollback failed")
         val tx = RecordingTransaction(failWhen = { if (it.startsWith("ROLLBACK TO")) rollbackErr else null })
-        val ex = assertFailsWith<IllegalStateException> {
-            tx.savepoint("sp1") { error("boom") }
-        }
+        val ex = tx.savepoint("sp1") { error("boom") }.exceptionOrNull()!!
         assertThat(ex.message).isEqualTo("boom")
         assertThat(ex.suppressedExceptions).hasSize(1)
         assertThat(ex.suppressedExceptions.single()).isSameInstanceAs(rollbackErr)
@@ -222,26 +217,26 @@ class TransactionSavepointTests {
         val createErr = SQLError(SQLError.Code.Database, "savepoints unsupported")
         val tx = RecordingTransaction(failWhen = { if (it.startsWith("SAVEPOINT")) createErr else null })
         var ran = false
-        val ex = assertFailsWith<SQLError> { tx.savepoint("sp1") { ran = true } }
-        assertThat(ex).isSameInstanceAs(createErr)
+        val res = tx.savepoint("sp1") { ran = true }
+        assertThat(res.exceptionOrNull()!!).isSameInstanceAs(createErr)
         assertThat(ran).isFalse()
         assertThat(tx.executed).containsExactly("SAVEPOINT sp1")
     }
 
     @Test
-    fun `savepoint block propagates a failed release`() = runBlocking {
+    fun `savepoint block returns a failed release as a failure`() = runBlocking {
         val releaseErr = SQLError(SQLError.Code.Database, "release failed")
         val tx = RecordingTransaction(failWhen = { if (it.startsWith("RELEASE")) releaseErr else null })
-        val ex = assertFailsWith<SQLError> { tx.savepoint("sp1") { 1 } }
-        assertThat(ex).isSameInstanceAs(releaseErr)
+        val res = tx.savepoint("sp1") { 1 }
+        assertThat(res.exceptionOrNull()!!).isSameInstanceAs(releaseErr)
         assertThat(tx.executed).containsExactly("SAVEPOINT sp1", "RELEASE SAVEPOINT sp1")
     }
 
     @Test
     fun `savepoint block generates a distinct safe name when none is given`() = runBlocking {
         val tx = RecordingTransaction()
-        tx.savepoint { 1 }
-        tx.savepoint { 2 }
+        tx.savepoint { 1 }.getOrThrow()
+        tx.savepoint { 2 }.getOrThrow()
         val names = tx.executed.filter { it.startsWith("SAVEPOINT ") }.map { it.removePrefix("SAVEPOINT ") }
         assertThat(names).hasSize(2)
         names.forEach { assertThat(it).matches(Regex("sqlx4k_sp_[0-9a-f]+")) }
@@ -259,11 +254,13 @@ class TransactionSavepointTests {
     @Test
     fun `nested savepoint blocks use their own names and roll back independently`() = runBlocking {
         val tx = RecordingTransaction()
-        tx.savepoint("outer") {
+        val outer = tx.savepoint("outer") {
             execute("insert 1").getOrThrow()
-            runCatching { savepoint("inner") { execute("insert 2").getOrThrow(); error("boom") } }
+            val inner = savepoint("inner") { execute("insert 2").getOrThrow(); error("boom") }
+            assertThat(inner).isFailure()
             execute("insert 3").getOrThrow()
         }
+        assertThat(outer).isSuccess()
         assertThat(tx.executed).containsExactly(
             "SAVEPOINT outer",
             "insert 1",
@@ -276,27 +273,12 @@ class TransactionSavepointTests {
     }
 
     @Test
-    fun `savepointCatching wraps success and failure in a Result`() = runBlocking {
-        val tx = RecordingTransaction()
-        assertThat(tx.savepointCatching("ok") { 5 }).isEqualTo(Result.success(5))
-        val failed = tx.savepointCatching("ko") { error("boom") }
-        assertThat(failed).isFailure()
-        assertThat(failed.exceptionOrNull()!!.message).isEqualTo("boom")
-        assertThat(tx.executed).containsExactly(
-            "SAVEPOINT ok", "RELEASE SAVEPOINT ok",
-            "SAVEPOINT ko", "ROLLBACK TO SAVEPOINT ko",
-        )
-        assertThat(tx.status).isEqualTo(Transaction.Status.Open)
-        assertThat(tx.commited).isFalse()
-    }
-
-    @Test
     fun `savepoint block on a closed transaction fails before running`() = runBlocking {
         val tx = RecordingTransaction()
         tx.commit().getOrThrow()
         var ran = false
-        val ex = assertFailsWith<SQLError> { tx.savepoint("sp1") { ran = true } }
-        assertThat(ex.code).isEqualTo(SQLError.Code.TransactionIsClosed)
+        val res = tx.savepoint("sp1") { ran = true }
+        assertThat((res.exceptionOrNull() as SQLError).code).isEqualTo(SQLError.Code.TransactionIsClosed)
         assertThat(ran).isFalse()
         assertThat(tx.executed).isEmpty()
         assertThat(tx.commited).isTrue()
@@ -305,13 +287,13 @@ class TransactionSavepointTests {
     // ---- Cancellation ----
 
     @Test
-    fun `savepointCatching rethrows cancellation and still rolls back to the savepoint`() = runBlocking {
+    fun `savepoint block rethrows cancellation and still rolls back to the savepoint`() = runBlocking {
         // execute() suspends, so the rollback would itself be cancelled unless it runs NonCancellable.
         val tx = RecordingTransaction(yieldOnExecute = true)
         val entered = CompletableDeferred<Unit>()
         var continued = false
         val job = launch {
-            tx.savepointCatching("sp1") {
+            tx.savepoint("sp1") {
                 entered.complete(Unit)
                 awaitCancellation()
             }
@@ -325,9 +307,9 @@ class TransactionSavepointTests {
     }
 
     @Test
-    fun `savepointCatching returns a timeout inside the block as a failure`() = runBlocking {
+    fun `savepoint block returns a timeout inside the block as a failure`() = runBlocking {
         val tx = RecordingTransaction()
-        val res = tx.savepointCatching("sp1") { withTimeout(10.milliseconds) { awaitCancellation() } }
+        val res = tx.savepoint("sp1") { withTimeout(10.milliseconds) { awaitCancellation() } }
         assertThat(res.exceptionOrNull()).isNotNull().isInstanceOf<TimeoutCancellationException>()
         assertThat(tx.executed).containsExactly("SAVEPOINT sp1", "ROLLBACK TO SAVEPOINT sp1")
     }

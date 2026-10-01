@@ -367,19 +367,15 @@ class CommonPostgreSQLTransactionTests(
         tx.execute("insert into $table(v) values (1);").getOrThrow()
 
         // success path: the block's work is kept
-        val ok = runCatching {
-            tx.savepoint {
-                execute("insert into $table(v) values (2);").getOrThrow()
-            }
+        val ok = tx.savepoint {
+            execute("insert into $table(v) values (2);").getOrThrow()
         }
         assertThat(ok).isSuccess()
 
         // failure path: only the block's work is undone, the transaction stays open
-        val err = runCatching {
-            tx.savepoint("failing_step") {
-                execute("insert into $table(v) values (3);").getOrThrow()
-                error("boom")
-            }
+        val err = tx.savepoint("failing_step") {
+            execute("insert into $table(v) values (3);").getOrThrow()
+            error("boom")
         }
         assertThat(err).isFailure()
         assertThat(tx.status).isEqualTo(Transaction.Status.Open)
@@ -401,7 +397,7 @@ class CommonPostgreSQLTransactionTests(
         tx.execute("insert into $table(v) values (1);").getOrThrow()
         // The NOT NULL violation fails the block; the helper rolls back to the savepoint, which on
         // PostgreSQL is what clears the aborted state so the transaction can continue.
-        val res = tx.savepointCatching {
+        val res = tx.savepoint {
             execute("insert into $table(v) values (null);").getOrThrow()
         }
         assertThat(res).isFailure()
@@ -422,15 +418,13 @@ class CommonPostgreSQLTransactionTests(
         tx.savepoint {
             execute("insert into $table(v) values (2);").getOrThrow()
             // inner block fails: only its insert is undone
-            val inner = runCatching {
-                savepoint {
-                    execute("insert into $table(v) values (3);").getOrThrow()
-                    error("boom")
-                }
+            val inner = savepoint {
+                execute("insert into $table(v) values (3);").getOrThrow()
+                error("boom")
             }
             assertThat(inner).isFailure()
             execute("insert into $table(v) values (4);").getOrThrow()
-        }
+        }.getOrThrow()
         tx.commit().getOrThrow()
 
         assertThat(countRows(table)).isEqualTo(3L)

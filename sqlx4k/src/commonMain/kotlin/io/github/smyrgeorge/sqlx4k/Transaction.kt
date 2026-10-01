@@ -105,60 +105,45 @@ interface Transaction : QueryExecutor {
     }
 
     /**
-     * Executes a block of code within a savepoint and ensures that the savepoint's lifecycle
-     * is managed correctly. This includes creating the savepoint, handling exceptions, rolling
-     * back to the savepoint on failure, and releasing the savepoint on completion.
+     * Executes a block of code within a savepoint and returns its outcome as a [Result], without
+     * propagating the error. The transaction itself stays open either way.
      *
-     * If the provided block of code [f] results in a failure (throws an exception or returns a
-     * failed [Result]), the transaction is rolled back to the savepoint and the exception is propagated.
-     * If the block executes successfully, the savepoint is released and the result of the block is returned.
+     * The savepoint is created before [f] runs. If [f] succeeds, the savepoint is released and the value
+     * of [f] is returned as a successful [Result]. If [f] throws or returns a failed [Result], the transaction
+     * is rolled back to the savepoint, undoing only the changes made by [f], and the error is returned as a
+     * failed [Result].
      *
-     * @param name The name of the savepoint. Defaults to a randomly generated unique name if not provided.
-     *             Must be a valid SQL identifier.
-     * @param f The block of code to execute within the savepoint. The receiver of this block is the current
-     *          transaction.
-     * @return The value returned by the block [f]. If an exception is thrown during execution or a rollback
-     *         occurs to the savepoint, the exception is rethrown.
-     * @throws Throwable If any errors occur during the execution of [f], rollback to the savepoint, or
-     *                   release of the savepoint.
-     */
-    suspend fun <T> savepoint(name: String = randomSavepointName(), f: suspend Transaction.() -> T): T {
-        savepoint(name).getOrThrow()
-        val res = try {
-            when (val r = f(this)) {
-                is Result<*> if r.isFailure -> throw r.exceptionOrNull()!! // Trigger rollback
-                else -> r
-            }
-        } catch (e: Throwable) {
-            // NonCancellable: if the block was cancelled, the rollback to the savepoint must still run.
-            withContext(NonCancellable) { rollbackToSavepoint(name) }.onFailure { e.addSuppressed(it) }
-            throw e
-        }
-        releaseSavepoint(name).getOrThrow()
-        return res
-    }
-
-    /**
-     * Executes a block of code within a savepoint, capturing any exceptions or failures that occur and
-     * returning them as a [Result].
-     *
-     * This method attempts to create a savepoint using the specified [name], runs the provided block [f]
-     * within the context of the savepoint, and then handles the savepoint's lifecycle. If an exception is
-     * thrown or a failure occurs within [f], the transaction is rolled back to the savepoint, and the
-     * resulting error is encapsulated in [Result.Failure].
+     * A failure to create, roll back to, or release the savepoint is also returned as a failed [Result].
+     * If the rollback to the savepoint fails, that error is attached to the original one as suppressed.
      *
      * Cancellation of the calling coroutine is not captured: the transaction is rolled back to the
      * savepoint and the [kotlinx.coroutines.CancellationException] is rethrown.
      *
+     * Note: if this is the last expression of a `transaction { ... }` block, a failed [Result] makes the
+     * whole transaction roll back, since that block treats a failed [Result] as a failure.
+     *
      * @param name The name of the savepoint. Defaults to a randomly generated unique name if not provided.
      *             Must be a valid SQL identifier.
      * @param f The block of code to execute within the savepoint. The receiver of this block is the current
      *          transaction.
-     * @return A [Result] containing the success value returned by [f], or a failure if an exception was thrown
-     *         or a rollback to the savepoint failed.
+     * @return A [Result] containing the value returned by [f], or the error that made the savepoint fail.
      */
-    suspend fun <T> savepointCatching(name: String = randomSavepointName(), f: suspend Transaction.() -> T): Result<T> =
-        runSuspendCatching { savepoint(name, f) }
+    suspend fun <T> savepoint(name: String = randomSavepointName(), f: suspend Transaction.() -> T): Result<T> =
+        runSuspendCatching {
+            savepoint(name).getOrThrow()
+            val res = try {
+                when (val r = f(this)) {
+                    is Result<*> if r.isFailure -> throw r.exceptionOrNull()!! // Trigger rollback
+                    else -> r
+                }
+            } catch (e: Throwable) {
+                // NonCancellable: if the block was cancelled, the rollback to the savepoint must still run.
+                withContext(NonCancellable) { rollbackToSavepoint(name) }.onFailure { e.addSuppressed(it) }
+                throw e
+            }
+            releaseSavepoint(name).getOrThrow()
+            res
+        }
 
     /**
      * Represents the status of a transaction.
