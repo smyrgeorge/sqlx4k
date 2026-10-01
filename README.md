@@ -18,6 +18,8 @@
 A coroutine-first SQL toolkit with compile-time query validations for Kotlin Multiplatform. PostgreSQL, MySQL/MariaDB,
 and SQLite are supported.
 
+<p align="center"><img src="banner.svg" alt="sqlx4k" width="100%"></p>
+
 ---
 
 **sqlx4k** is not an ORM. Instead, it provides a comprehensive toolkit of primitives and utilities to communicate
