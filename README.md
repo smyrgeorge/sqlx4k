@@ -518,7 +518,7 @@ Then in your code you can use it like:
 val record = Sqlx4k(id = 1, test = "test")
 val res: Sqlx4k = Sqlx4kRepositoryImpl.insert(db, record).getOrThrow()
 // Execute a generated query.
-val res: List<Sqlx4k> = Sqlx4kRepositoryImpl.selectAll(db).getOrThrow()
+val res: List<Sqlx4k> = Sqlx4kRepositoryImpl.findAll(db).getOrThrow()
 ```
 
 For more details, take a look at the [examples](./examples).
@@ -757,9 +757,10 @@ require an ambient QueryExecutor provided via a context-parameter.
 To enable this mode:
 
 - Make your repository interface extend ContextCrudRepository<T> instead of CrudRepository<T>.
-- Declare your @Query methods with a context (context: QueryExecutor) receiver instead of an explicit context parameter.
+- Declare your @Query methods with a `context(context: QueryExecutor)` context parameter instead of an explicit
+  `context` argument.
 
-Repository interface example with context receivers:
+Repository interface example with context parameters:
 
 ```kotlin
 @Repository
@@ -784,8 +785,8 @@ with(db) {
 }
 ```
 
-If you prefer the explicit-parameter style, keep CrudRepository<T> and do not set enable-context-parameters. In that
-case, each generated method takes a QueryExecutor (e.g., db or transaction) as the first argument.
+If you prefer the explicit-parameter style, extend CrudRepository<T> instead. In that case, each generated method takes
+a QueryExecutor (e.g., db or transaction) as the first argument.
 
 #### Repository Hooks
 
@@ -1122,6 +1123,7 @@ SQLDelight integration for type-safe SQL queries with sqlx4k.
 ## Supported Targets
 
 - jvm
+- android (`sqlx4k-sqlite` and `sqlx4k-sqlite-cipher` only, minSdk 26)
 - iosArm64
 - iosSimulatorArm64
 - androidNativeX64
