@@ -1,8 +1,11 @@
 package io.github.smyrgeorge.sqlx4k
 
+import io.github.smyrgeorge.sqlx4k.impl.coroutines.runSuspendCatching
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import org.intellij.lang.annotations.Language
 import kotlin.time.Duration
 
@@ -120,7 +123,8 @@ interface QueryExecutor {
                     else -> r
                 }
             } catch (e: Throwable) {
-                tx.rollback().onFailure { rollbackError ->
+                // NonCancellable: if the block was cancelled, the rollback must still run (and release the connection).
+                withContext(NonCancellable) { tx.rollback() }.onFailure { rollbackError ->
                     e.addSuppressed(
                         SQLError(
                             code = SQLError.Code.TransactionRollbackFailed,
@@ -147,12 +151,16 @@ interface QueryExecutor {
          * encountered during the operation are captured and returned as part of a [Result] object. It is useful
          * for safely managing transactions without explicitly handling rollback or commit logic within the caller's context.
          *
+         * Cancellation of the calling coroutine is not captured: the transaction is rolled back and the
+         * [kotlinx.coroutines.CancellationException] is rethrown.
+         *
          * @param T The type of the result produced by the transactional operation.
          * @param f A suspend function that defines the transactional operations to be performed.
          *          The function is executed with the started transaction as the receiver.
          * @return A [Result] containing either the successful result of the transactional block or an exception if the operation fails.
          */
-        suspend fun <T> transactionCatching(f: suspend Transaction.() -> T): Result<T> = runCatching { transaction(f) }
+        suspend fun <T> transactionCatching(f: suspend Transaction.() -> T): Result<T> =
+            runSuspendCatching { transaction(f) }
     }
 
     /**

@@ -1,6 +1,9 @@
 package io.github.smyrgeorge.sqlx4k
 
+import io.github.smyrgeorge.sqlx4k.impl.coroutines.runSuspendCatching
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.IdentifierString
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 /**
@@ -127,7 +130,8 @@ interface Transaction : QueryExecutor {
                 else -> r
             }
         } catch (e: Throwable) {
-            rollbackToSavepoint(name).onFailure { e.addSuppressed(it) }
+            // NonCancellable: if the block was cancelled, the rollback to the savepoint must still run.
+            withContext(NonCancellable) { rollbackToSavepoint(name) }.onFailure { e.addSuppressed(it) }
             throw e
         }
         releaseSavepoint(name).getOrThrow()
@@ -143,6 +147,9 @@ interface Transaction : QueryExecutor {
      * thrown or a failure occurs within [f], the transaction is rolled back to the savepoint, and the
      * resulting error is encapsulated in [Result.Failure].
      *
+     * Cancellation of the calling coroutine is not captured: the transaction is rolled back to the
+     * savepoint and the [kotlinx.coroutines.CancellationException] is rethrown.
+     *
      * @param name The name of the savepoint. Defaults to a randomly generated unique name if not provided.
      *             Must be a valid SQL identifier.
      * @param f The block of code to execute within the savepoint. The receiver of this block is the current
@@ -151,7 +158,7 @@ interface Transaction : QueryExecutor {
      *         or a rollback to the savepoint failed.
      */
     suspend fun <T> savepointCatching(name: String = randomSavepointName(), f: suspend Transaction.() -> T): Result<T> =
-        runCatching { savepoint(name, f) }
+        runSuspendCatching { savepoint(name, f) }
 
     /**
      * Represents the status of a transaction.

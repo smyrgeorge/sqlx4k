@@ -2,19 +2,29 @@ package io.github.smyrgeorge.sqlx4k
 
 import assertk.assertThat
 import assertk.assertions.containsExactly
+import assertk.assertions.hasSize
 import assertk.assertions.isEmpty
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFailure
+import assertk.assertions.isFalse
+import assertk.assertions.isInstanceOf
+import assertk.assertions.isNotEqualTo
+import assertk.assertions.isNotNull
 import assertk.assertions.isSameInstanceAs
 import assertk.assertions.isSuccess
 import assertk.assertions.isTrue
-import assertk.assertions.isFalse
-import assertk.assertions.isNotEqualTo
 import assertk.assertions.matches
-import assertk.assertions.hasSize
-import kotlin.test.assertFailsWith
-import kotlin.test.Test
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
+import kotlin.test.Test
+import kotlin.test.assertFailsWith
+import kotlin.time.Duration.Companion.milliseconds
 
 class TransactionSavepointTests {
 
@@ -23,6 +33,8 @@ class TransactionSavepointTests {
         var executeResult: Result<Long> = Result.success(0),
         /** Statements for which `execute` fails with the returned throwable instead of [executeResult]. */
         var failWhen: (String) -> Throwable? = { null },
+        /** When true, `execute` suspends first, so it fails if called from a cancelled coroutine. */
+        var yieldOnExecute: Boolean = false,
     ) : Transaction {
         val executed = mutableListOf<String>()
         override var status: Transaction.Status = Transaction.Status.Open
@@ -42,6 +54,7 @@ class TransactionSavepointTests {
 
         override suspend fun execute(sql: String): Result<Long> = runCatching {
             assertIsOpen()
+            if (yieldOnExecute) yield()
             executed += sql
             failWhen(sql)?.let { throw it }
             executeResult.getOrThrow()
@@ -234,7 +247,12 @@ class TransactionSavepointTests {
         names.forEach { assertThat(it).matches(Regex("sqlx4k_sp_[0-9a-f]+")) }
         assertThat(names[0]).isNotEqualTo(names[1])
         assertThat(tx.executed).isEqualTo(
-            listOf("SAVEPOINT ${names[0]}", "RELEASE SAVEPOINT ${names[0]}", "SAVEPOINT ${names[1]}", "RELEASE SAVEPOINT ${names[1]}")
+            listOf(
+                "SAVEPOINT ${names[0]}",
+                "RELEASE SAVEPOINT ${names[0]}",
+                "SAVEPOINT ${names[1]}",
+                "RELEASE SAVEPOINT ${names[1]}"
+            )
         )
     }
 
@@ -282,5 +300,35 @@ class TransactionSavepointTests {
         assertThat(ran).isFalse()
         assertThat(tx.executed).isEmpty()
         assertThat(tx.commited).isTrue()
+    }
+
+    // ---- Cancellation ----
+
+    @Test
+    fun `savepointCatching rethrows cancellation and still rolls back to the savepoint`() = runBlocking {
+        // execute() suspends, so the rollback would itself be cancelled unless it runs NonCancellable.
+        val tx = RecordingTransaction(yieldOnExecute = true)
+        val entered = CompletableDeferred<Unit>()
+        var continued = false
+        val job = launch {
+            tx.savepointCatching("sp1") {
+                entered.complete(Unit)
+                awaitCancellation()
+            }
+            continued = true
+        }
+        entered.await()
+        job.cancelAndJoin()
+        assertThat(job.isCancelled).isTrue()
+        assertThat(continued).isFalse()
+        assertThat(tx.executed).containsExactly("SAVEPOINT sp1", "ROLLBACK TO SAVEPOINT sp1")
+    }
+
+    @Test
+    fun `savepointCatching returns a timeout inside the block as a failure`() = runBlocking {
+        val tx = RecordingTransaction()
+        val res = tx.savepointCatching("sp1") { withTimeout(10.milliseconds) { awaitCancellation() } }
+        assertThat(res.exceptionOrNull()).isNotNull().isInstanceOf<TimeoutCancellationException>()
+        assertThat(tx.executed).containsExactly("SAVEPOINT sp1", "ROLLBACK TO SAVEPOINT sp1")
     }
 }

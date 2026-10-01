@@ -3,6 +3,7 @@ package io.github.smyrgeorge.sqlx4k.utils
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
+import io.github.smyrgeorge.sqlx4k.QueryExecutor.Transactional
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
@@ -10,6 +11,7 @@ import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
+import kotlinx.coroutines.yield
 import kotlin.time.Duration
 
 /**
@@ -20,6 +22,8 @@ import kotlin.time.Duration
 class ControllableTransaction(
     var commitResult: Result<Unit> = Result.success(Unit),
     var rollbackResult: Result<Unit> = Result.success(Unit),
+    /** When true, `rollback` suspends first, so it fails if called from a cancelled coroutine. */
+    var suspendOnRollback: Boolean = false,
 ) : Transaction {
     override var status: Transaction.Status = Transaction.Status.Open
     override var commited: Boolean = false
@@ -36,6 +40,7 @@ class ControllableTransaction(
     }
 
     override suspend fun rollback(): Result<Unit> {
+        if (suspendOnRollback) yield()
         rollbackCount++
         return rollbackResult.onSuccess {
             status = Transaction.Status.Closed

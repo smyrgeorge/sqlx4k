@@ -7,9 +7,13 @@ import assertk.assertions.isSameInstanceAs
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.utils.ControllableTransaction
 import io.github.smyrgeorge.sqlx4k.utils.FakeTransactional
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
-import kotlinx.coroutines.runBlocking
 
 class QueryExecutorTransactionTests {
 
@@ -109,6 +113,43 @@ class QueryExecutorTransactionTests {
         val tx = ControllableTransaction()
         val res = withTx(tx).transactionCatching { error("boom") }
         assertThat(res.isFailure).isTrue()
+        assertThat(tx.rollbackCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `transaction still rolls back when the block is cancelled`() = runBlocking {
+        // rollback() suspends, so it would itself be cancelled unless it runs NonCancellable.
+        val tx = ControllableTransaction(suspendOnRollback = true)
+        val entered = CompletableDeferred<Unit>()
+        val job = launch {
+            withTx(tx).transaction {
+                entered.complete(Unit)
+                awaitCancellation()
+            }
+        }
+        entered.await()
+        job.cancelAndJoin()
+        assertThat(tx.rollbackCount).isEqualTo(1)
+        assertThat(tx.rollbacked).isTrue()
+        assertThat(tx.commitCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `transactionCatching rethrows cancellation instead of returning a failure`() = runBlocking {
+        val tx = ControllableTransaction()
+        val entered = CompletableDeferred<Unit>()
+        var continued = false
+        val job = launch {
+            withTx(tx).transactionCatching {
+                entered.complete(Unit)
+                awaitCancellation()
+            }
+            continued = true
+        }
+        entered.await()
+        job.cancelAndJoin()
+        assertThat(job.isCancelled).isTrue()
+        assertThat(continued).isFalse()
         assertThat(tx.rollbackCount).isEqualTo(1)
     }
 }
