@@ -1,0 +1,333 @@
+<!doctype html>
+<html class="no-js" lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" charset="UTF-8">
+    <title>io.github.smyrgeorge.sqlx4k.sqlite.cipher</title>
+<link href="../../images/logo-icon.svg" rel="icon" type="image/svg"><script>var pathToRoot = "../../";</script>
+    <script>document.documentElement.classList.replace("no-js", "js");</script>
+    <script>const storage = localStorage.getItem("dokka-dark-mode")
+      if (storage == null) {
+        const osDarkSchemePreferred = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+        if (osDarkSchemePreferred === true) {
+          document.getElementsByTagName("html")[0].classList.add("theme-dark")
+        }
+      } else {
+        const savedDarkMode = JSON.parse(storage)
+        if (savedDarkMode === true) {
+          document.getElementsByTagName("html")[0].classList.add("theme-dark")
+        }
+      }
+    </script>
+<script type="text/javascript" src="../../scripts/sourceset_dependencies.js" async></script>
+<link href="../../styles/style.css" rel="Stylesheet">
+<link href="../../styles/main.css" rel="Stylesheet">
+<link href="../../styles/prism.css" rel="Stylesheet">
+<link href="../../styles/logo-styles.css" rel="Stylesheet">
+<link href="../../ui-kit/ui-kit.min.css" rel="Stylesheet">
+<script type="text/javascript" src="../../scripts/safe-local-storage_blocking.js"></script>
+<script type="text/javascript" src="../../scripts/navigation-loader.js" async></script>
+<script type="text/javascript" src="../../scripts/platform-content-handler.js" async></script>
+<script type="text/javascript" src="../../scripts/main.js" defer></script>
+<script type="text/javascript" src="../../scripts/prism.js" async></script>
+<script type="text/javascript" src="../../ui-kit/ui-kit.min.js" defer></script></head>
+<body>
+<div class="root">
+    <header class="navigation theme-dark" id="navigation-wrapper" role="banner">
+<a class="library-name--link" href="../../index.html" tabindex="1">
+                    sqlx4k
+            </a>        <button class="navigation-controls--btn navigation-controls--btn_toc ui-kit_mobile-only" id="toc-toggle" type="button">Toggle table of contents
+        </button>
+        <div class="navigation-controls--break ui-kit_mobile-only"></div>
+        <div class="library-version" id="library-version">1.14.0
+        </div>
+        <div class="navigation-controls">
+        <ul class="filter-section filter-section_loading" id="filter-section" aria-label="Target filter">
+                <button class="platform-tag platform-selector jvm-like" data-active="" aria-pressed="true" data-filter=":sqlx4k-sqlite-cipher/androidMain">android</button>
+                <button class="platform-tag platform-selector common-like" data-active="" aria-pressed="true" data-filter=":sqlx4k-sqlite-cipher/commonMain">common</button>
+                <button class="platform-tag platform-selector jvm-like" data-active="" aria-pressed="true" data-filter=":sqlx4k-sqlite-cipher/jniMain">jni</button>
+                <button class="platform-tag platform-selector jvm-like" data-active="" aria-pressed="true" data-filter=":sqlx4k-sqlite-cipher/jvmMain">jvm</button>
+                <button class="platform-tag platform-selector native-like" data-active="" aria-pressed="true" data-filter=":sqlx4k-sqlite-cipher/nativeMain">native</button>
+            <div class="dropdown filter-section--dropdown" data-role="dropdown" id="filter-section-dropdown">
+                <button class="button button_dropdown filter-section--dropdown-toggle" role="combobox" data-role="dropdown-toggle" aria-controls="platform-tags-listbox" aria-haspopup="listbox" aria-expanded="false" aria-label="Toggle source sets"></button>
+                <ul role="listbox" id="platform-tags-listbox" class="dropdown--list" data-role="dropdown-listbox" aria-label="Target filter">
+                    <div class="dropdown--header"><span>Target filter</span>
+                        <button class="button" data-role="dropdown-toggle" aria-label="Close target filter">
+                            <i class="ui-kit-icon ui-kit-icon_cross"></i>
+                        </button>
+                    </div>
+                        <li role="option" class="dropdown--option platform-selector-option jvm-like" tabindex="0">
+                            <label class="checkbox">
+                                <input type="checkbox" class="checkbox--input" id=":sqlx4k-sqlite-cipher/androidMain" data-filter=":sqlx4k-sqlite-cipher/androidMain">
+                                <span class="checkbox--icon"></span>
+                                android
+                            </label>
+                        </li>
+                        <li role="option" class="dropdown--option platform-selector-option common-like" tabindex="0">
+                            <label class="checkbox">
+                                <input type="checkbox" class="checkbox--input" id=":sqlx4k-sqlite-cipher/commonMain" data-filter=":sqlx4k-sqlite-cipher/commonMain">
+                                <span class="checkbox--icon"></span>
+                                common
+                            </label>
+                        </li>
+                        <li role="option" class="dropdown--option platform-selector-option jvm-like" tabindex="0">
+                            <label class="checkbox">
+                                <input type="checkbox" class="checkbox--input" id=":sqlx4k-sqlite-cipher/jniMain" data-filter=":sqlx4k-sqlite-cipher/jniMain">
+                                <span class="checkbox--icon"></span>
+                                jni
+                            </label>
+                        </li>
+                        <li role="option" class="dropdown--option platform-selector-option jvm-like" tabindex="0">
+                            <label class="checkbox">
+                                <input type="checkbox" class="checkbox--input" id=":sqlx4k-sqlite-cipher/jvmMain" data-filter=":sqlx4k-sqlite-cipher/jvmMain">
+                                <span class="checkbox--icon"></span>
+                                jvm
+                            </label>
+                        </li>
+                        <li role="option" class="dropdown--option platform-selector-option native-like" tabindex="0">
+                            <label class="checkbox">
+                                <input type="checkbox" class="checkbox--input" id=":sqlx4k-sqlite-cipher/nativeMain" data-filter=":sqlx4k-sqlite-cipher/nativeMain">
+                                <span class="checkbox--icon"></span>
+                                native
+                            </label>
+                        </li>
+                </ul>
+                <div class="dropdown--overlay"></div>
+            </div>
+        </ul>
+            <button class="navigation-controls--btn navigation-controls--btn_theme" id="theme-toggle-button" type="button">Switch theme
+            </button>
+            <div class="navigation-controls--btn navigation-controls--btn_search" id="searchBar" role="button">Search in
+                API
+            </div>
+        </div>
+    </header>
+    <div id="container">
+        <nav id="leftColumn" class="sidebar" data-item-type="SECTION" data-item-config="{&quot;defaultSize&quot;: 280, &quot;minSize&quot;: 200, &quot;maxSize&quot;: 400}">
+            <a class="toc--skip-link" href="#main">Skip to content</a>
+            <div class="dropdown theme-dark_mobile" data-role="dropdown" id="toc-dropdown">
+                <ul role="listbox" id="toc-listbox" class="dropdown--list dropdown--list_toc-list" data-role="dropdown-listbox" aria-label="Table of contents">
+                    <div class="dropdown--header">
+                            <span>
+                                    sqlx4k
+                            </span>
+                        <button class="button" data-role="dropdown-toggle" aria-label="Close table of contents">
+                            <i class="ui-kit-icon ui-kit-icon_cross"></i>
+                        </button>
+                    </div>
+                    <div class="sidebar--inner" id="sideMenu"></div>
+                </ul>
+                <div class="dropdown--overlay"></div>
+            </div>
+        </nav>
+        <div id="resizer" class="resizer" data-item-type="BAR"></div>
+        <div id="main" data-item-type="SECTION" role="main">
+<div class="main-content" data-page-type="package" id="content" pageids="sqlx4k-sqlite-cipher::io.github.smyrgeorge.sqlx4k.sqlite.cipher////PointingToDeclaration//-440253335">
+  <div class="breadcrumbs"><a href="../index.html">sqlx4k-sqlite-cipher</a><span class="delimiter">/</span><span class="current">io.github.smyrgeorge.sqlx4k.sqlite.cipher</span></div>
+  <div class="cover ">
+    <h1 class="cover"><span><span>Package-level</span></span> <span><span>declarations</span></span></h1>
+  </div>
+  <div class="tabbedcontent">
+    <div class="tabs-section" tabs-section="tabs-section"><button class="section-tab" data-active="" data-togglable="TYPE">Types</button><button class="section-tab" data-togglable="FUNCTION,EXTENSION_FUNCTION">Functions</button><button class="section-tab" data-togglable="PROPERTY,EXTENSION_PROPERTY">Properties</button></div>
+    <div class="tabs-section-body">
+      <div data-togglable="TYPE">
+        <h2 class="tableheader">Types</h2>
+        <div class="table"><a data-name="-1891941977%2FClasslikes%2F336009611" anchor-label="ISQLiteCipher" id="-1891941977%2FClasslikes%2F336009611" data-filterable-set=":sqlx4k-sqlite-cipher/commonMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-sqlite-cipher/commonMain" data-filterable-set=":sqlx4k-sqlite-cipher/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="-i-s-q-lite-cipher/index.html"><span>ISQLite</span><wbr><span><span>Cipher</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1891941977%2FClasslikes%2F336009611"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-sqlite-cipher/commonMain"><div class="symbol monospace"><span class="token keyword">interface </span><a href="-i-s-q-lite-cipher/index.html">ISQLiteCipher</a> : <a href="../../sqlx4k/io.github.smyrgeorge.sqlx4k/-driver/index.html">Driver</a>, <a href="../../sqlx4k/io.github.smyrgeorge.sqlx4k.impl.migrate/-migrator/-driver/index.html">Migrator.Driver</a></div><div class="brief "><p class="paragraph">Driver contract for the encrypted (SQLCipher) SQLite backend.</p></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-41720220%2FClasslikes%2F-1781197354" anchor-label="SQLiteCipher" id="-41720220%2FClasslikes%2F-1781197354" data-filterable-set=":sqlx4k-sqlite-cipher/jniMain,:sqlx4k-sqlite-cipher/nativeMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-sqlite-cipher/jniMain,:sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/jniMain,:sqlx4k-sqlite-cipher/nativeMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="../../sqlx4k-sqlite-cipher/io.github.smyrgeorge.sqlx4k.sqlite.cipher/[native]-s-q-lite-cipher/index.html"><span>SQLite</span><wbr><span><span>Cipher</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-41720220%2FClasslikes%2F-1781197354"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
+                    <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-sqlite-cipher/jniMain" data-filterable-set=":sqlx4k-sqlite-cipher/jniMain" data-active="" data-toggle=":sqlx4k-sqlite-cipher/jniMain">jni</button><button class="platform-bookmark" data-filterable-current=":sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain" data-toggle=":sqlx4k-sqlite-cipher/nativeMain">native</button></div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-sqlite-cipher/jniMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="[jni]-s-q-lite-cipher/index.html">SQLiteCipher</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">url<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">password<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">options<span class="token operator">: </span>ERROR CLASS: Symbol not found for ConnectionPool.Options<span class="token operator"> = </span>ConnectionPool.Options()<span class="token punctuation">, </span></span><span class="parameter "><span class="token keyword">val </span>encoders<span class="token operator">: </span>ERROR CLASS: Symbol not found for ValueEncoderRegistry<span class="token operator"> = </span>ValueEncoderRegistry()</span></span><span class="token punctuation">)</span> : <a href="-i-s-q-lite-cipher/index.html">ISQLiteCipher</a></div><div class="brief "><p class="paragraph">Encrypted SQLite (SQLCipher) driver for the JVM and Android, backed by the Rust <code class="lang-kotlin">sqlx</code> core via JNI. The same Rust engine powers the Kotlin/Native targets through FFI, so behavior is uniform.</p></div></div><div class="content sourceset-dependent-content" data-togglable=":sqlx4k-sqlite-cipher/nativeMain"><div class="symbol monospace"><span class="token keyword">class </span><a href="[native]-s-q-lite-cipher/index.html">SQLiteCipher</a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">url<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">password<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">options<span class="token operator">: </span><a href="../../sqlx4k/io.github.smyrgeorge.sqlx4k/-connection-pool/-options/index.html">ConnectionPool.Options</a><span class="token operator"> = </span>ConnectionPool.Options()<span class="token punctuation">, </span></span><span class="parameter "><span class="token keyword">val </span>encoders<span class="token operator">: </span><a href="../../sqlx4k/io.github.smyrgeorge.sqlx4k/-value-encoder-registry/index.html">ValueEncoderRegistry</a><span class="token operator"> = </span>ValueEncoderRegistry()</span></span><span class="token punctuation">)</span> : <a href="-i-s-q-lite-cipher/index.html">ISQLiteCipher</a></div><div class="brief "><p class="paragraph">Encrypted SQLite (SQLCipher) driver for Kotlin/Native targets, backed by the Rust <code class="lang-kotlin">sqlx</code> core via cinterop FFI. Provides connection pooling and transactional support in a coroutine-based environment.</p></div></div>                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div data-togglable="PROPERTY">
+        <h2 class="tableheader">Properties</h2>
+        <div class="table"><a data-name="-1468237444%2FProperties%2F-1631145633" anchor-label="fn" id="-1468237444%2FProperties%2F-1631145633" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="fn.html"><span><span>fn</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1468237444%2FProperties%2F-1631145633"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
+                    <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain" data-active="" data-toggle=":sqlx4k-sqlite-cipher/nativeMain">native</button></div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-sqlite-cipher/nativeMain"><div class="symbol monospace"><span class="token keyword">val </span><a href="fn.html">fn</a><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlinx.cinterop/-c-pointer/index.html">CPointer</a><span class="token operator">&lt;</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlinx.cinterop/-c-function/index.html">CFunction</a><span class="token operator">&lt;</span><span class="token punctuation">(</span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlinx.cinterop/-c-value/index.html">CValue</a><span class="token operator">&lt;</span><span data-unresolved-link="sqlx4k.sqlite.cipher/Sqlx4kSqliteCipherPtr///PointingToDeclaration/">Sqlx4kSqliteCipherPtr</span><span class="token operator">&gt;</span><span class="token punctuation">, </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlinx.cinterop/-c-pointer/index.html">CPointer</a><span class="token operator">&lt;</span><span data-unresolved-link="sqlx4k.sqlite.cipher/Sqlx4kSqliteCipherResult///PointingToDeclaration/">Sqlx4kSqliteCipherResult</span><span class="token operator">&gt;</span><span class="token operator">?</span><span class="token punctuation">)</span><span class="token operator"> -&gt; </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-unit/index.html">Unit</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span></div></div>                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div data-togglable="FUNCTION">
+        <h2 class="tableheader">Functions</h2>
+        <div class="table"><a data-name="181320063%2FFunctions%2F-1631145633" anchor-label="rowsAffectedOrError" id="181320063%2FFunctions%2F-1631145633" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain"></a>
+          <div class="table-row table-row_content" data-togglable="EXTENSION_FUNCTION" data-filterable-current=":sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="rows-affected-or-error.html"><span>rows</span><wbr><span>Affected</span><wbr><span>Or</span><wbr><span><span>Error</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="181320063%2FFunctions%2F-1631145633"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
+                    <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain" data-active="" data-toggle=":sqlx4k-sqlite-cipher/nativeMain">native</button></div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-sqlite-cipher/nativeMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlinx.cinterop/-c-pointer/index.html">CPointer</a><span class="token operator">&lt;</span><span data-unresolved-link="sqlx4k.sqlite.cipher/Sqlx4kSqliteCipherResult///PointingToDeclaration/">Sqlx4kSqliteCipherResult</span><span class="token operator">&gt;</span><span class="token operator">?</span><span class="token punctuation">.</span><a href="rows-affected-or-error.html"><span class="token function">rowsAffectedOrError</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-long/index.html">Long</a></div></div>                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-1164692726%2FFunctions%2F-1631145633" anchor-label="rtOrError" id="-1164692726%2FFunctions%2F-1631145633" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain"></a>
+          <div class="table-row table-row_content" data-togglable="EXTENSION_FUNCTION" data-filterable-current=":sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="rt-or-error.html"><span>rt</span><wbr><span>Or</span><wbr><span><span>Error</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1164692726%2FFunctions%2F-1631145633"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
+                    <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain" data-active="" data-toggle=":sqlx4k-sqlite-cipher/nativeMain">native</button></div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-sqlite-cipher/nativeMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlinx.cinterop/-c-pointer/index.html">CPointer</a><span class="token operator">&lt;</span><span data-unresolved-link="sqlx4k.sqlite.cipher/Sqlx4kSqliteCipherResult///PointingToDeclaration/">Sqlx4kSqliteCipherResult</span><span class="token operator">&gt;</span><span class="token operator">?</span><span class="token punctuation">.</span><a href="rt-or-error.html"><span class="token function">rtOrError</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlinx.cinterop/-c-pointer/index.html">CPointer</a><span class="token operator">&lt;</span><span class="token keyword">out </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlinx.cinterop/-c-pointed/index.html">CPointed</a><span class="token operator">&gt;</span></div></div>                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="1010613988%2FFunctions%2F-304501444" anchor-label="sqliteCipher" id="1010613988%2FFunctions%2F-304501444" data-filterable-set=":sqlx4k-sqlite-cipher/commonMain,:sqlx4k-sqlite-cipher/androidMain,:sqlx4k-sqlite-cipher/jvmMain,:sqlx4k-sqlite-cipher/nativeMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-sqlite-cipher/commonMain,:sqlx4k-sqlite-cipher/androidMain,:sqlx4k-sqlite-cipher/jvmMain,:sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/commonMain,:sqlx4k-sqlite-cipher/androidMain,:sqlx4k-sqlite-cipher/jvmMain,:sqlx4k-sqlite-cipher/nativeMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="sqlite-cipher.html"><span>sqlite</span><wbr><span><span>Cipher</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1010613988%2FFunctions%2F-304501444"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
+                    <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-sqlite-cipher/androidMain" data-filterable-set=":sqlx4k-sqlite-cipher/androidMain" data-active="" data-toggle=":sqlx4k-sqlite-cipher/androidMain">android</button><button class="platform-bookmark" data-filterable-current=":sqlx4k-sqlite-cipher/commonMain" data-filterable-set=":sqlx4k-sqlite-cipher/commonMain" data-toggle=":sqlx4k-sqlite-cipher/commonMain">common</button><button class="platform-bookmark" data-filterable-current=":sqlx4k-sqlite-cipher/jvmMain" data-filterable-set=":sqlx4k-sqlite-cipher/jvmMain" data-toggle=":sqlx4k-sqlite-cipher/jvmMain">jvm</button><button class="platform-bookmark" data-filterable-current=":sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain" data-toggle=":sqlx4k-sqlite-cipher/nativeMain">native</button></div>
+<div class="content sourceset-dependent-content" data-togglable=":sqlx4k-sqlite-cipher/androidMain"><div class="symbol monospace"><span class="token keyword">actual </span><span class="token keyword">fun </span><a href="sqlite-cipher.html"><span class="token function">sqliteCipher</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">url<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">password<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">options<span class="token operator">: </span><a href="../../sqlx4k/io.github.smyrgeorge.sqlx4k/-connection-pool/-options/index.html">ConnectionPool.Options</a><span class="token punctuation">, </span></span><span class="parameter ">encoders<span class="token operator">: </span><a href="../../sqlx4k/io.github.smyrgeorge.sqlx4k/-value-encoder-registry/index.html">ValueEncoderRegistry</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="-i-s-q-lite-cipher/index.html">ISQLiteCipher</a></div><div class="brief "><p class="paragraph">Creates an encrypted SQLite (SQLCipher) driver.</p></div><div class="symbol monospace"><span class="token keyword">fun </span><a href="sqlite-cipher.html"><span class="token function">sqliteCipher</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">context<span class="token operator">: </span><a href="https://developer.android.com/reference/kotlin/android/content/Context.html">Context</a><span class="token punctuation">, </span></span><span class="parameter ">url<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">password<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">options<span class="token operator">: </span><a href="../../sqlx4k/io.github.smyrgeorge.sqlx4k/-connection-pool/-options/index.html">ConnectionPool.Options</a><span class="token operator"> = </span>ConnectionPool.Options()<span class="token punctuation">, </span></span><span class="parameter ">encoders<span class="token operator">: </span><a href="../../sqlx4k/io.github.smyrgeorge.sqlx4k/-value-encoder-registry/index.html">ValueEncoderRegistry</a><span class="token operator"> = </span>ValueEncoderRegistry()</span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="-i-s-q-lite-cipher/index.html">ISQLiteCipher</a></div><div class="brief "><p class="paragraph">Creates an encrypted SQLite (SQLCipher) driver on Android.</p></div></div><div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-sqlite-cipher/commonMain"><div class="symbol monospace"><span class="token keyword">expect </span><span class="token keyword">fun </span><a href="sqlite-cipher.html"><span class="token function">sqliteCipher</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">url<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">password<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">options<span class="token operator">: </span><a href="../../sqlx4k/io.github.smyrgeorge.sqlx4k/-connection-pool/-options/index.html">ConnectionPool.Options</a><span class="token operator"> = </span>ConnectionPool.Options()<span class="token punctuation">, </span></span><span class="parameter ">encoders<span class="token operator">: </span><a href="../../sqlx4k/io.github.smyrgeorge.sqlx4k/-value-encoder-registry/index.html">ValueEncoderRegistry</a><span class="token operator"> = </span>ValueEncoderRegistry()</span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="-i-s-q-lite-cipher/index.html">ISQLiteCipher</a></div><div class="brief "><p class="paragraph">Creates an encrypted SQLite (SQLCipher) driver.</p></div></div><div class="content sourceset-dependent-content" data-togglable=":sqlx4k-sqlite-cipher/jvmMain"><div class="symbol monospace"><span class="token keyword">actual </span><span class="token keyword">fun </span><a href="sqlite-cipher.html"><span class="token function">sqliteCipher</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">url<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">password<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">options<span class="token operator">: </span><a href="../../sqlx4k/io.github.smyrgeorge.sqlx4k/-connection-pool/-options/index.html">ConnectionPool.Options</a><span class="token punctuation">, </span></span><span class="parameter ">encoders<span class="token operator">: </span><a href="../../sqlx4k/io.github.smyrgeorge.sqlx4k/-value-encoder-registry/index.html">ValueEncoderRegistry</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="-i-s-q-lite-cipher/index.html">ISQLiteCipher</a></div><div class="brief "><p class="paragraph">Creates an encrypted SQLite (SQLCipher) driver.</p></div></div><div class="content sourceset-dependent-content" data-togglable=":sqlx4k-sqlite-cipher/nativeMain"><div class="symbol monospace"><span class="token keyword">actual </span><span class="token keyword">fun </span><a href="sqlite-cipher.html"><span class="token function">sqliteCipher</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">url<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">password<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/index.html">String</a><span class="token punctuation">, </span></span><span class="parameter ">options<span class="token operator">: </span><a href="../../sqlx4k/io.github.smyrgeorge.sqlx4k/-connection-pool/-options/index.html">ConnectionPool.Options</a><span class="token punctuation">, </span></span><span class="parameter ">encoders<span class="token operator">: </span><a href="../../sqlx4k/io.github.smyrgeorge.sqlx4k/-value-encoder-registry/index.html">ValueEncoderRegistry</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="-i-s-q-lite-cipher/index.html">ISQLiteCipher</a></div><div class="brief "><p class="paragraph">Creates an encrypted SQLite (SQLCipher) driver.</p></div></div>                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="512320585%2FFunctions%2F-1631145633" anchor-label="sqlx" id="512320585%2FFunctions%2F-1631145633" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain"></a>
+          <div class="table-row table-row_content" data-filterable-current=":sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="sqlx.html"><span><span>sqlx</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="512320585%2FFunctions%2F-1631145633"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
+                    <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain" data-active="" data-toggle=":sqlx4k-sqlite-cipher/nativeMain">native</button></div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-sqlite-cipher/nativeMain"><div class="symbol monospace"><span class="token keyword">inline suspend </span><span class="token keyword">fun </span><a href="sqlx.html"><span class="token function">sqlx</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword">crossinline </span>operation<span class="token operator">: </span><span class="token punctuation">(</span>continuationPtr<span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlinx.cinterop/-c-pointer/index.html">CPointer</a><span class="token operator">&lt;</span><span class="token keyword">out </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlinx.cinterop/-c-pointed/index.html">CPointed</a><span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token operator"> -&gt; </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-unit/index.html">Unit</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlinx.cinterop/-c-pointer/index.html">CPointer</a><span class="token operator">&lt;</span><span data-unresolved-link="sqlx4k.sqlite.cipher/Sqlx4kSqliteCipherResult///PointingToDeclaration/">Sqlx4kSqliteCipherResult</span><span class="token operator">&gt;</span><span class="token operator">?</span></div></div>                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="549090158%2FFunctions%2F-1631145633" anchor-label="throwIfError" id="549090158%2FFunctions%2F-1631145633" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain"></a>
+          <div class="table-row table-row_content" data-togglable="EXTENSION_FUNCTION" data-filterable-current=":sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="throw-if-error.html"><span>throw</span><wbr><span>If</span><wbr><span><span>Error</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="549090158%2FFunctions%2F-1631145633"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
+                    <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain" data-active="" data-toggle=":sqlx4k-sqlite-cipher/nativeMain">native</button></div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-sqlite-cipher/nativeMain"><div class="symbol monospace"><span class="token keyword">fun </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlinx.cinterop/-c-pointer/index.html">CPointer</a><span class="token operator">&lt;</span><span data-unresolved-link="sqlx4k.sqlite.cipher/Sqlx4kSqliteCipherResult///PointingToDeclaration/">Sqlx4kSqliteCipherResult</span><span class="token operator">&gt;</span><span class="token operator">?</span><span class="token punctuation">.</span><a href="throw-if-error.html"><span class="token function">throwIfError</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span></div><div class="symbol monospace"><span class="token keyword">fun </span><span data-unresolved-link="sqlx4k.sqlite.cipher/Sqlx4kSqliteCipherResult///PointingToDeclaration/">Sqlx4kSqliteCipherResult</span><span class="token punctuation">.</span><a href="throw-if-error.html"><span class="token function">throwIfError</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span></div></div>                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-1697952845%2FFunctions%2F-1631145633" anchor-label="toResultSet" id="-1697952845%2FFunctions%2F-1631145633" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain"></a>
+          <div class="table-row table-row_content" data-togglable="EXTENSION_FUNCTION" data-filterable-current=":sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="to-result-set.html"><span>to</span><wbr><span>Result</span><wbr><span><span>Set</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1697952845%2FFunctions%2F-1631145633"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
+                    <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain" data-active="" data-toggle=":sqlx4k-sqlite-cipher/nativeMain">native</button></div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-sqlite-cipher/nativeMain"><div class="symbol monospace"><span class="token keyword">fun </span><span data-unresolved-link="sqlx4k.sqlite.cipher/Sqlx4kSqliteCipherResult///PointingToDeclaration/">Sqlx4kSqliteCipherResult</span><span class="token punctuation">.</span><a href="to-result-set.html"><span class="token function">toResultSet</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">: </span><a href="../../sqlx4k/io.github.smyrgeorge.sqlx4k/-result-set/index.html">ResultSet</a></div></div>                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="-1896563581%2FFunctions%2F-1631145633" anchor-label="use" id="-1896563581%2FFunctions%2F-1631145633" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain"></a>
+          <div class="table-row table-row_content" data-togglable="EXTENSION_FUNCTION" data-filterable-current=":sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="use.html"><span><span>use</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1896563581%2FFunctions%2F-1631145633"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted  with-platform-tabs" data-platform-hinted="data-platform-hinted">
+                    <div class="platform-bookmarks-row" data-toggle-list="data-toggle-list"><button class="platform-bookmark" data-filterable-current=":sqlx4k-sqlite-cipher/nativeMain" data-filterable-set=":sqlx4k-sqlite-cipher/nativeMain" data-active="" data-toggle=":sqlx4k-sqlite-cipher/nativeMain">native</button></div>
+<div class="content sourceset-dependent-content" data-active="" data-togglable=":sqlx4k-sqlite-cipher/nativeMain"><div class="symbol monospace"><span class="token keyword">inline </span><span class="token keyword">fun </span><span class="token operator">&lt;</span><a href="use.html">T</a><span class="token operator">&gt; </span><a href="https://kotlinlang.org/api/core/kotlin-stdlib/kotlinx.cinterop/-c-pointer/index.html">CPointer</a><span class="token operator">&lt;</span><span data-unresolved-link="sqlx4k.sqlite.cipher/Sqlx4kSqliteCipherResult///PointingToDeclaration/">Sqlx4kSqliteCipherResult</span><span class="token operator">&gt;</span><span class="token operator">?</span><span class="token punctuation">.</span><a href="use.html"><span class="token function">use</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter ">block<span class="token operator">: </span><span class="token punctuation">(</span><span data-unresolved-link="sqlx4k.sqlite.cipher/Sqlx4kSqliteCipherResult///PointingToDeclaration/">Sqlx4kSqliteCipherResult</span><span class="token punctuation">)</span><span class="token operator"> -&gt; </span><a href="use.html">T</a></span></span><span class="token punctuation">)</span><span class="token operator">: </span><a href="use.html">T</a></div></div>                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    <div class="footer">
+        <div class="footer--container">
+            <a href="#content" id="go-to-top-link" class="footer--button footer--button_go-to-top"></a>
+            <div class="footer--content">
+                <div>
+                    <span>Generated by </span>
+                    <a class="footer--link footer--link_external" href="https://github.com/Kotlin/dokka">
+                        Dokka
+                    </a>
+                    <div>© 2026 Copyright</div>
+                </div>
+            </div>
+        </div>
+    </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
