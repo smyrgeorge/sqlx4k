@@ -10,6 +10,7 @@ import io.github.smyrgeorge.sqlx4k.annotation.Id
 import io.github.smyrgeorge.sqlx4k.annotation.Query
 import io.github.smyrgeorge.sqlx4k.annotation.Repository
 import io.github.smyrgeorge.sqlx4k.annotation.Table
+import io.github.smyrgeorge.sqlx4k.annotation.Version
 
 /**
  * Minimal entity used to exercise the in-memory repository generator.
@@ -21,6 +22,27 @@ data class User(
     val name: String,
     val email: String
 )
+
+/**
+ * Entity with a @Version property, used to exercise optimistic locking in the in-memory doubles.
+ */
+@Table("documents")
+data class Document(
+    @Id
+    val id: Long,
+    val title: String,
+    @Version
+    val version: Long = 0,
+)
+
+/**
+ * CrudRepository fixture for the @Version-ed Document entity.
+ */
+@Repository
+interface DocumentCrudRepository : CrudRepository<Document> {
+    @Query("SELECT * FROM documents WHERE id = :id")
+    suspend fun findOneById(context: QueryExecutor, id: Long): Result<Document?>
+}
 
 /**
  * CrudRepository fixture (explicit context parameter style).

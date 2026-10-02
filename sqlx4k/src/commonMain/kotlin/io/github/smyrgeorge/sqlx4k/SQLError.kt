@@ -63,6 +63,7 @@ class SQLError(
         InvalidIdentifier,
         UnsafeStringContent,
         EmptyCollection,
+        OptimisticLockFailed,
         UnknownError,
     }
 }

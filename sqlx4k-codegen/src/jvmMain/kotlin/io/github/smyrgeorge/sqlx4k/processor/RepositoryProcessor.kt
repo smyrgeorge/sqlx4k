@@ -103,7 +103,7 @@ class RepositoryProcessor(
         if (globalCheckSqlSchema) SqlValidator.loadSchema(schemaMigrationsPath)
 
         // For each repository interface, find methods annotated with @Query
-        val validatedRepos = repoSymbols.filter { it.validate() }
+        val validatedRepos = repoSymbols.filter { it.validate(enableNewFeatures = true) }
         validatedRepos.forEach { repo ->
             if (repo.classKind != ClassKind.INTERFACE)
                 error("@Repository is only supported on interfaces (${repo.qualifiedName()}).")
@@ -197,7 +197,7 @@ class RepositoryProcessor(
             file.close()
         }
 
-        return repoSymbols.filterNot { it.validate() }.toList()
+        return repoSymbols.filterNot { it.validate(enableNewFeatures = true) }.toList()
     }
 
     /**
@@ -912,6 +912,12 @@ class RepositoryProcessor(
         // Check if aroundQuery hook is overridden (used in all CRUD operations)
         val hasAroundQueryHook = isHookOverridden(repo, "aroundQuery")
 
+        // Optimistic locking: when the entity declares a @Version property, a write that matches no row is a
+        // concurrent-modification failure (OptimisticLockFailed) rather than a plain "not found".
+        val versionName: String? = domainDecl.getAllProperties()
+            .firstOrNull { p -> p.annotations.any { it.qualifiedName() == TypeNames.VERSION_ANNOTATION } }
+            ?.simpleName?.getShortName()
+
         // insert
         logger.info("[RepositoryProcessor] Emitting CRUD method: insert($domainQn)")
         file += "    /**\n"
@@ -983,6 +989,12 @@ class RepositoryProcessor(
         file += "     * the updated entity with any modified values. Validates that the returned\n"
         file += "     * ID matches the original entity's ID.\n"
         file += "     *\n"
+        if (versionName != null) {
+            file += "     * Optimistic locking: fails with [SQLError.Code.OptimisticLockFailed] when the row no longer\n"
+            file += "     * carries the entity's `$versionName` (it was modified or deleted concurrently). On success\n"
+            file += "     * the returned entity carries the incremented `$versionName`.\n"
+            file += "     *\n"
+        }
         if (!useContextParameters) {
             file += "     * @param context The query executor (database connection or transaction)\n"
         }
@@ -1023,7 +1035,11 @@ class RepositoryProcessor(
         file += "            onSuccess = { rows ->\n"
         file += "                val row = rows.firstOrNull()\n"
         file += "                if (row == null) {\n"
-        file += "                    Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Update query returned no rows\"))\n"
+        file += if (versionName != null && updateIdName != null) {
+            $$"                    Result.failure(SQLError(SQLError.Code.OptimisticLockFailed, \"Update affected 0 rows: $$domainSimpleName with $$updateIdName=${$$updateEntityVar.$$updateIdName} was modified or deleted concurrently (expected $$versionName=${$$updateEntityVar.$$versionName})\"))\n"
+        } else {
+            "                    Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Update query returned no rows\"))\n"
+        }
         file += "                } else {\n"
         file += "                    val result = $updateEntityVar.applyUpdateResult(row, context.encoders)\n"
         // Add ID validation if @Id property exists
@@ -1061,6 +1077,11 @@ class RepositoryProcessor(
         file += "     * Executes a DELETE statement based on the entity's ID. Validates that\n"
         file += "     * exactly one row was deleted.\n"
         file += "     *\n"
+        if (versionName != null) {
+            file += "     * Optimistic locking: fails with [SQLError.Code.OptimisticLockFailed] when the row no longer\n"
+            file += "     * carries the entity's `$versionName` (it was modified or deleted concurrently).\n"
+            file += "     *\n"
+        }
         if (!useContextParameters) {
             file += "     * @param context The query executor (database connection or transaction)\n"
         }
@@ -1083,6 +1104,7 @@ class RepositoryProcessor(
             file += "        val statement = entity.delete()\n"
         }
 
+        val deleteEntityVar = if (hasPreDeleteHook) "e" else "entity"
         if (hasAroundQueryHook) {
             file += "        aroundQuery(\"delete\", statement) {\n"
             file += "            context.execute(statement)\n"
@@ -1092,7 +1114,11 @@ class RepositoryProcessor(
         }
         file += "            onSuccess = { rowsDeleted ->\n"
         file += "                when (rowsDeleted) {\n"
-        file += "                    0L -> Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Delete affected 0 rows - entity not found\"))\n"
+        file += if (versionName != null && updateIdName != null) {
+            $$"                    0L -> Result.failure(SQLError(SQLError.Code.OptimisticLockFailed, \"Delete affected 0 rows: $$domainSimpleName with $$updateIdName=${$$deleteEntityVar.$$updateIdName} was modified or deleted concurrently (expected $$versionName=${$$deleteEntityVar.$$versionName})\"))\n"
+        } else {
+            "                    0L -> Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Delete affected 0 rows - entity not found\"))\n"
+        }
         file += "                    1L -> Result.success(kotlin.Unit)\n"
         file += $$"                    else -> Result.failure(SQLError(SQLError.Code.RowMismatch, \"Delete affected $rowsDeleted rows instead of 1\"))\n"
         file += "                }\n"
@@ -1102,7 +1128,6 @@ class RepositoryProcessor(
 
         val hasAfterDeleteHook = isHookOverridden(repo, "afterDeleteHook")
         if (hasAfterDeleteHook) {
-            val deleteEntityVar = if (hasPreDeleteHook) "e" else "entity"
             file += ".map {\n"
             file += "            afterDeleteHook(context, $deleteEntityVar)\n"
             file += "            kotlin.Unit\n"
@@ -1262,6 +1287,13 @@ class RepositoryProcessor(
             file += "     * Executes a batch UPDATE statement and returns the updated entities with any\n"
             file += "     * modified values.\n"
             file += "     *\n"
+            if (versionName != null) {
+                file += "     * Optimistic locking: every row is matched on the entity's `$versionName`. Fails with\n"
+                file += "     * [SQLError.Code.OptimisticLockFailed] when fewer rows than entities were updated. The rows\n"
+                file += "     * that did match are already updated at that point, so run this inside a transaction and\n"
+                file += "     * roll it back on failure if you need all-or-nothing semantics.\n"
+                file += "     *\n"
+            }
             file += "     * Note: Supported for PostgreSQL, SQLite, and Generic dialects (requires FROM VALUES with RETURNING).\n"
             file += "     *\n"
             if (!useContextParameters) {
@@ -1295,12 +1327,28 @@ class RepositoryProcessor(
             if (hasAroundQueryHook) {
                 file += "        aroundQuery(\"batchUpdate\", statement) {\n"
                 file += "            context.fetchAll(statement)\n"
-                file += "        }.map { rs ->\n"
+                file += "        }"
             } else {
-                file += "        context.fetchAll(statement).map { rs ->\n"
+                file += "        context.fetchAll(statement)"
             }
-            file += "            $updateEntitiesVar.applyUpdateResult(rs.rows, context.encoders)\n"
-            file += "        }"
+            if (versionName != null) {
+                // A versioned batch update is a single statement: rows whose version matched were updated, the
+                // others were not. Fewer returned rows than entities therefore means at least one entity was stale.
+                file += ".fold(\n"
+                file += "            onSuccess = { rs ->\n"
+                file += "                if (rs.rows.size != items.size) {\n"
+                file += $$"                    Result.failure(SQLError(SQLError.Code.OptimisticLockFailed, \"Batch update matched ${rs.rows.size} of ${items.size} rows: one or more $$domainSimpleName entities were modified or deleted concurrently (checked $$versionName)\"))\n"
+                file += "                } else {\n"
+                file += "                    Result.success($updateEntitiesVar.applyUpdateResult(rs.rows, context.encoders))\n"
+                file += "                }\n"
+                file += "            },\n"
+                file += "            onFailure = { Result.failure(it) }\n"
+                file += "        )"
+            } else {
+                file += ".map { rs ->\n"
+                file += "            $updateEntitiesVar.applyUpdateResult(rs.rows, context.encoders)\n"
+                file += "        }"
+            }
 
             val hasAfterUpdateHook = isHookOverridden(repo, "afterUpdateHook")
             if (hasAfterUpdateHook) {

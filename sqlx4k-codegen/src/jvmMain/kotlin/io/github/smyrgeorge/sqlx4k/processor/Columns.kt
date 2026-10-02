@@ -20,7 +20,7 @@ internal object Columns {
     /** The persisted properties of a `@Table` entity, in declaration order (excludes `@Transient`). */
     fun persistedProperties(clazz: KSClassDeclaration): List<KSPropertyDeclaration> =
         clazz.getAllProperties()
-            .filter { it.validate() }
+            .filter { it.validate(enableNewFeatures = true) }
             .filterNot { p -> p.annotations.any { it.qualifiedName() == TypeNames.TRANSIENT_ANNOTATION } }
             .toList()
 

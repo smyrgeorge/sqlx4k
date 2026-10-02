@@ -88,6 +88,15 @@ interface UserContextCrudRepository : ContextCrudRepository<User> {
 }
 
 /**
+ * CrudRepository test interface for the @Version-ed Document entity (optimistic locking).
+ */
+@Repository
+interface DocumentCrudRepository : CrudRepository<Document> {
+    @Query("SELECT * FROM documents WHERE id = :id")
+    suspend fun findOneById(context: QueryExecutor, id: Long): Result<Document?>
+}
+
+/**
  * Global tracker for hook invocations in tests.
  */
 object HooksTracker {

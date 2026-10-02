@@ -86,7 +86,7 @@ class TableProcessor(
             file.close()
         }
 
-        return symbols.filterNot { it.validate() }.toList()
+        return symbols.filterNot { it.validate(enableNewFeatures = true) }.toList()
     }
 
     /**
@@ -123,7 +123,7 @@ class TableProcessor(
         // they are not part of INSERT/UPDATE/RETURNING and are not mapped from query results.
         val properties: Sequence<KSPropertyDeclaration> = classDeclaration
             .getAllProperties()
-            .filter { it.validate() }
+            .filter { it.validate(enableNewFeatures = true) }
             .filterNot { it.isTransient() }
             .toList()
             .asSequence()
@@ -134,6 +134,9 @@ class TableProcessor(
 
         // Two properties must not resolve to the same column (e.g. via @Column(name = ...)).
         validateUniqueColumnNames(classDeclaration, properties)
+
+        // The optional @Version (optimistic locking) property must be well-formed.
+        validateVersionProperty(classDeclaration, properties)
 
         // Make queries.
         emitInsert(file, tableName, classDeclaration, properties)
@@ -257,10 +260,18 @@ class TableProcessor(
     ) {
         val ctx = prepareUpdateContext(table, clazz, props) ?: return
         val (allProps, id, updatePropDeclarations, updateColumns, className, idName, idColumn) = ctx
+        val version = ctx.version
+        val versionColumn = ctx.versionColumn
         // Get DB-generated columns for RETURNING clause
         val returningColumns = findUpdateReturningProps(allProps)
             .ifEmpty { error("RETURNING SQL clause cannot be empty for entity (check that a property marked with @Id exists): $className") }
             .joinToString { it.columnName() }
+
+        // Optimistic locking (@Version): the version is incremented in SQL (no bind) and the row must still
+        // carry the entity's current version, otherwise the UPDATE matches no rows.
+        val setClause = (updateColumns.map { c -> "$c = ?" } + listOfNotNull(versionColumn?.let { "$it = $it + 1" }))
+            .joinToString()
+        val whereClause = if (versionColumn != null) "$idColumn = ? and $versionColumn = ?" else "$idColumn = ?"
 
         file += "\n"
         file += "/**\n"
@@ -269,6 +280,12 @@ class TableProcessor(
         file += " * Generates a prepared SQL UPDATE statement with placeholders for the entity's\n"
         file += " * updatable properties. The entity is identified by its @Id property `$idName`.\n"
         file += " * Properties marked with `@Column(update = false)` are excluded from the update.\n"
+        if (version != null) {
+            file += " *\n"
+            file += " * Optimistic locking: the row is also matched on its @Version property `${version.simpleName()}`,\n"
+            file += " * and the statement increments the version. When the stored version differs from the entity's\n"
+            file += " * (the row was modified or deleted concurrently), the statement matches no rows.\n"
+        }
         file += " *\n"
         file += " * The statement includes a RETURNING clause (or equivalent for MySQL/MariaDB) to fetch\n"
         file += " * the updated row with any modified values.\n"
@@ -278,20 +295,31 @@ class TableProcessor(
         file += "fun ${clazz.qualifiedName()}.update(): Statement {\n"
         file += "    // language=SQL\n"
         file += if (!supportsUpdateReturning) {
-            "    val sql = \"update $table set ${updateColumns.joinToString { c -> "$c = ?" }} where $idColumn = ?; select $returningColumns from $table where $idColumn = ?;\"\n"
+            // MySQL/MariaDB have no UPDATE ... RETURNING, so the row is re-selected. With @Version the SELECT is
+            // keyed on the expected *new* version (entity.version + 1): a stale UPDATE (0 rows matched) then yields
+            // no row instead of silently returning the unchanged one.
+            "    val sql = \"update $table set $setClause where $whereClause; select $returningColumns from $table where $whereClause;\"\n"
         } else {
-            "    val sql = \"update $table set ${updateColumns.joinToString { c -> "$c = ?" }} where $idColumn = ? returning $returningColumns;\"\n"
+            "    val sql = \"update $table set $setClause where $whereClause returning $returningColumns;\"\n"
         }
 
         file += "    val statement = Statement.create(sql)\n"
-        updatePropDeclarations.forEachIndexed { index, prop ->
+        var index = 0
+        updatePropDeclarations.forEach { prop ->
             val bindExpr = generateBindExpression(prop)
-            file += "    statement.bind($index, $bindExpr)\n"
+            file += "    statement.bind(${index++}, $bindExpr)\n"
         }
         val idBindExpr = generateBindExpression(id)
-        file += "    statement.bind(${updateColumns.size}, $idBindExpr)\n"
+        file += "    statement.bind(${index++}, $idBindExpr)\n"
+        val versionBindExpr = version?.let { generateBindExpression(it) }
+        if (versionBindExpr != null) {
+            file += "    statement.bind(${index++}, $versionBindExpr)\n"
+        }
         if (!supportsUpdateReturning) {
-            file += "    statement.bind(${updateColumns.size + 1}, $idBindExpr)\n"
+            file += "    statement.bind(${index++}, $idBindExpr)\n"
+            if (versionBindExpr != null) {
+                file += "    statement.bind($index, $versionBindExpr + 1)\n"
+            }
         }
         file += "    return statement\n"
         file += "}\n"
@@ -335,30 +363,43 @@ class TableProcessor(
         clazz: KSClassDeclaration,
         props: Sequence<KSPropertyDeclaration>
     ) {
-        val id: KSPropertyDeclaration = props.find {
-            it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
-        } ?: run {
+        val allProps = props.toList()
+        val id: KSPropertyDeclaration = findIdProperty(allProps) ?: run {
             logger.warn("Skipping $table.delete() because no property found annotated with @Id.")
             return
         }
+        val version = findVersionProperty(allProps)
 
         val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
         val idName = id.simpleName.getShortName()
+        val whereClause = if (version != null) {
+            "${id.columnName()} = ? and ${version.columnName()} = ?"
+        } else {
+            "${id.columnName()} = ?"
+        }
         file += "\n"
         file += "/**\n"
         file += " * Creates a DELETE statement for this [$className] entity.\n"
         file += " *\n"
         file += " * Generates a prepared SQL DELETE statement that removes the entity\n"
         file += " * from the database. The entity is identified by its @Id property `$idName`.\n"
+        if (version != null) {
+            file += " *\n"
+            file += " * Optimistic locking: the row is also matched on its @Version property `${version.simpleName()}`,\n"
+            file += " * so a stale entity (modified or deleted concurrently) deletes nothing.\n"
+        }
         file += " *\n"
         file += " * @return A prepared [Statement] with bound values ready for execution\n"
         file += " */\n"
         file += "fun ${clazz.qualifiedName()}.delete(): Statement {\n"
         file += "    // language=SQL\n"
-        file += "    val sql = \"delete from $table where ${id.columnName()} = ?;\"\n"
+        file += "    val sql = \"delete from $table where $whereClause;\"\n"
         file += "    val statement = Statement.create(sql)\n"
         val idBindExpr = generateBindExpression(id)
         file += "    statement.bind(0, $idBindExpr)\n"
+        if (version != null) {
+            file += "    statement.bind(1, ${generateBindExpression(version)})\n"
+        }
         file += "    return statement\n"
         file += "}\n"
     }
@@ -467,9 +508,11 @@ class TableProcessor(
 
         val ctx = prepareUpdateContext(table, clazz, props) ?: return
         val (allProps, id, updatePropDeclarations, updateColumns, className, idName, idColumn) = ctx
+        val version = ctx.version
+        val versionColumn = ctx.versionColumn
 
-        // Build the VALUES column list: (id, col1, col2, ...)
-        val valueColumns = listOf(idColumn) + updateColumns
+        // Build the VALUES column list: (id, col1, col2, ..., [version])
+        val valueColumns = listOf(idColumn) + updateColumns + listOfNotNull(versionColumn)
         val valueColumnsList = valueColumns.joinToString(", ")
         val propsCount = valueColumns.size
         val singleValuePlaceholder = "(${valueColumns.joinToString { "?" }})"
@@ -481,6 +524,12 @@ class TableProcessor(
         file += " * Generates a prepared SQL UPDATE statement using the FROM VALUES syntax\n"
         file += " * for efficient batch updates. Each entity is identified by its @Id property `$idName`.\n"
         file += " * Properties marked with `@Column(update = false)` are excluded from the update.\n"
+        if (version != null) {
+            file += " *\n"
+            file += " * Optimistic locking: each row is also matched on its @Version property `${version.simpleName()}`\n"
+            file += " * and the statement increments the version. Rows whose stored version differs from the\n"
+            file += " * entity's are left untouched and are missing from the returned rows.\n"
+        }
         file += " *\n"
         file += " * The statement includes a RETURNING clause to fetch the updated rows.\n"
         file += " *\n"
@@ -499,14 +548,17 @@ class TableProcessor(
         val returningColumns = findUpdateReturningProps(allProps)
             .ifEmpty { error("RETURNING SQL clause cannot be empty for entity (check that a property marked with @Id exists): $className") }
             .joinToString { "$tableRef.${it.columnName()}" }
-        val setClause = updateColumns.joinToString(", ") { c -> "$c = v.$c" }
+        val setClause = (updateColumns.map { c -> "$c = v.$c" } + listOfNotNull(versionColumn?.let { "$it = $tableRef.$it + 1" }))
+            .joinToString(", ")
+        val joinClause = "$tableRef.$idColumn = v.$idColumn" +
+                (versionColumn?.let { " and $tableRef.$it = v.$it" } ?: "")
 
         file += "    // language=SQL\n"
         file += if (dialect == Dialect.SQLite) {
             // SQLite requires CTE (WITH clause) for column aliases on VALUES
-            $$"    val sql = \"with v($$valueColumnsList) as (values $valuePlaceholders) update $$table set $$setClause from v where $$table.$$idColumn = v.$$idColumn returning $$returningColumns;\"\n"
+            $$"    val sql = \"with v($$valueColumnsList) as (values $valuePlaceholders) update $$table set $$setClause from v where $$joinClause returning $$returningColumns;\"\n"
         } else {
-            $$"    val sql = \"update $$table as t set $$setClause from (values $valuePlaceholders) as v($$valueColumnsList) where t.$$idColumn = v.$$idColumn returning $$returningColumns;\"\n"
+            $$"    val sql = \"update $$table as t set $$setClause from (values $valuePlaceholders) as v($$valueColumnsList) where $$joinClause returning $$returningColumns;\"\n"
         }
 
         file += "    val statement = Statement.create(sql)\n"
@@ -519,6 +571,10 @@ class TableProcessor(
         updatePropDeclarations.forEachIndexed { index, prop ->
             val bindExpr = generateBindExpression(prop, "item")
             file += "        statement.bind(offset + ${index + 1}, $bindExpr)\n"
+        }
+        // Finally bind the expected (current) version
+        if (version != null) {
+            file += "        statement.bind(offset + ${updateColumns.size + 1}, ${generateBindExpression(version, "item")})\n"
         }
         file += "    }\n"
 
@@ -707,7 +763,11 @@ class TableProcessor(
         val updateColumns: List<String>,
         val className: String,
         val idName: String,
-        val idColumn: String
+        val idColumn: String,
+        /** The @Version (optimistic locking) property, if the entity declares one. */
+        val version: KSPropertyDeclaration?,
+        /** The column name of [version], if any. */
+        val versionColumn: String?,
     )
 
     /**
@@ -733,7 +793,11 @@ class TableProcessor(
         val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
         val idName = id.simpleName.getShortName()
         val idColumn = id.columnName()
-        return UpdateContext(allProps, id, updatePropDeclarations, updateColumns, className, idName, idColumn)
+        val version = findVersionProperty(allProps)
+        return UpdateContext(
+            allProps, id, updatePropDeclarations, updateColumns, className, idName, idColumn,
+            version, version?.columnName()
+        )
     }
 
     /**
@@ -780,7 +844,8 @@ class TableProcessor(
 
     /**
      * Finds properties that should be included in UPDATE statements.
-     * Excludes the @Id property and properties with @Column(update = false).
+     * Excludes the @Id property, the @Version property (its SET expression is generated in SQL),
+     * and properties with @Column(update = false).
      *
      * @param allProps All properties of the entity.
      * @param id The @Id property to exclude.
@@ -792,6 +857,7 @@ class TableProcessor(
     ): List<KSPropertyDeclaration> =
         allProps.asSequence()
             .filter { it.simpleName() != id.simpleName() }
+            .filter { !it.isVersion() }
             .filter {
                 val column = it.annotations.find { a ->
                     a.qualifiedName() == TypeNames.COLUMN_ANNOTATION
@@ -807,7 +873,8 @@ class TableProcessor(
 
     /**
      * Finds properties that INSERT should return (DB-generated columns).
-     * These are columns with @Id(insert = false) or @Column(insert = false).
+     * These are columns with @Id(insert = false) or @Column(insert = false), plus the @Version
+     * property (always read back so the entity carries the stored value).
      *
      * @param allProps All properties of the entity.
      * @return List of properties that should be in the RETURNING clause for INSERT.
@@ -815,6 +882,8 @@ class TableProcessor(
     private fun findInsertReturningProps(allProps: List<KSPropertyDeclaration>): List<KSPropertyDeclaration> =
         allProps.asSequence()
             .filter { prop ->
+                if (prop.isVersion()) return@filter true
+
                 val id = prop.annotations.find { a ->
                     a.qualifiedName() == TypeNames.ID_ANNOTATION
                 }
@@ -845,7 +914,8 @@ class TableProcessor(
 
     /**
      * Finds properties that UPDATE should return (DB-generated columns).
-     * These are @Id properties and columns with @Column(update = false).
+     * These are @Id properties, the @Version property (incremented in SQL), and columns with
+     * @Column(update = false).
      *
      * @param allProps All properties of the entity.
      * @return List of properties that should be in the RETURNING clause for UPDATE.
@@ -853,10 +923,11 @@ class TableProcessor(
     private fun findUpdateReturningProps(allProps: List<KSPropertyDeclaration>): List<KSPropertyDeclaration> =
         allProps.asSequence()
             .filter { prop ->
-                // Always include @Id
+                // Always include @Id and @Version
                 if (prop.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }) {
                     return@filter true
                 }
+                if (prop.isVersion()) return@filter true
 
                 val column = prop.annotations.find { a ->
                     a.qualifiedName() == TypeNames.COLUMN_ANNOTATION
@@ -962,6 +1033,87 @@ class TableProcessor(
      */
     private fun KSPropertyDeclaration.isTransient(): Boolean =
         annotations.any { it.qualifiedName() == TypeNames.TRANSIENT_ANNOTATION }
+
+    /**
+     * Returns true if the property is annotated with @Version (optimistic-locking column).
+     */
+    private fun KSPropertyDeclaration.isVersion(): Boolean =
+        annotations.any { it.qualifiedName() == TypeNames.VERSION_ANNOTATION }
+
+    /**
+     * Finds the property annotated with @Version, if any.
+     *
+     * @param allProps All (non-transient) properties of the entity.
+     * @return The @Version property, or null if the entity is not versioned.
+     */
+    private fun findVersionProperty(allProps: List<KSPropertyDeclaration>): KSPropertyDeclaration? =
+        allProps.find { it.isVersion() }
+
+    /**
+     * Validates the optional `@Version` (optimistic locking) property of a `@Table` entity.
+     *
+     * The generator manages the version column itself (`SET version = version + 1`,
+     * `WHERE ... AND version = ?`), which only works for a single, non-nullable integer property
+     * that is a real, updatable column, on an entity that also declares an `@Id` (without one there
+     * is no generated UPDATE/DELETE to guard).
+     *
+     * @param clazz The @Table class declaration to validate.
+     * @param props The (non-transient) properties of the entity.
+     * @throws IllegalStateException if the @Version declaration is invalid.
+     */
+    private fun validateVersionProperty(clazz: KSClassDeclaration, props: Sequence<KSPropertyDeclaration>) {
+        val className = clazz.qualifiedName()
+
+        // Transient properties were filtered out of [props]; a @Version among them is a contradiction.
+        clazz.getAllProperties()
+            .filter { it.isTransient() && it.isVersion() }
+            .forEach {
+                error(
+                    "@Version property '${it.simpleName()}' in $className cannot also be @Transient: " +
+                            "the version must be a real database column."
+                )
+            }
+
+        val versions = props.filter { it.isVersion() }.toList()
+        if (versions.isEmpty()) return
+        if (versions.size > 1) {
+            val names = versions.joinToString { "'${it.simpleName()}'" }
+            error(
+                "@Table entity '$className' declares ${versions.size} @Version properties ($names), " +
+                        "but at most one is supported."
+            )
+        }
+
+        val version = versions.single()
+        val name = version.simpleName()
+        if (version.annotations.any { it.qualifiedName() == TypeNames.ID_ANNOTATION }) {
+            error("@Version property '$name' in $className cannot also be @Id.")
+        }
+
+        val type = version.type.resolve()
+        val typeQn = type.declaration.qualifiedName?.asString()
+        if (type.isMarkedNullable || (typeQn != TypeNames.KOTLIN_INT && typeQn != TypeNames.KOTLIN_LONG)) {
+            error("@Version property '$name' in $className must be a non-nullable Int or Long (found '$type').")
+        }
+
+        val column = version.annotations.find { it.qualifiedName() == TypeNames.COLUMN_ANNOTATION }
+        val updatable = column?.arguments
+            ?.find { it.name?.asString() == UPDATE_PROPERTY_NAME }
+            ?.value as? Boolean ?: true
+        if (!updatable) {
+            error(
+                "@Version property '$name' in $className must not be @Column(update = false): " +
+                        "the generator increments the version column on UPDATE."
+            )
+        }
+
+        if (findIdProperty(props.toList()) == null) {
+            error(
+                "@Version property '$name' in $className requires an @Id property: optimistic locking " +
+                        "guards the generated UPDATE and DELETE statements, which are keyed on the id."
+            )
+        }
+    }
 
     /**
      * Validates that any @Transient primary-constructor parameter declares a default value.

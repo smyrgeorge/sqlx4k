@@ -17,6 +17,7 @@ import io.github.smyrgeorge.sqlx4k.annotation.Query
 import io.github.smyrgeorge.sqlx4k.annotation.Repository
 import io.github.smyrgeorge.sqlx4k.annotation.Table
 import io.github.smyrgeorge.sqlx4k.annotation.Transient
+import io.github.smyrgeorge.sqlx4k.annotation.Version
 import io.github.smyrgeorge.sqlx4k.arrow.ArrowContextCrudRepository
 import io.github.smyrgeorge.sqlx4k.arrow.ArrowCrudRepository
 
@@ -30,6 +31,7 @@ object TypeNames {
     val ID_ANNOTATION = Id::class.qualifiedName!!
     val COLUMN_ANNOTATION = Column::class.qualifiedName!!
     val TRANSIENT_ANNOTATION = Transient::class.qualifiedName!!
+    val VERSION_ANNOTATION = Version::class.qualifiedName!!
     val CONVERTER_ANNOTATION = Converter::class.qualifiedName!!
     val QUERY_ANNOTATION = Query::class.qualifiedName!!
 

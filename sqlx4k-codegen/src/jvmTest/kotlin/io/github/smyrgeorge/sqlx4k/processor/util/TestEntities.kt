@@ -4,6 +4,7 @@ import io.github.smyrgeorge.sqlx4k.annotation.Column
 import io.github.smyrgeorge.sqlx4k.annotation.Id
 import io.github.smyrgeorge.sqlx4k.annotation.Table
 import io.github.smyrgeorge.sqlx4k.annotation.Transient
+import io.github.smyrgeorge.sqlx4k.annotation.Version
 import kotlinx.datetime.LocalDateTime
 
 /**
@@ -48,8 +49,8 @@ data class Article(
 )
 
 /**
- * Entity with a version column for optimistic locking.
- * Version is managed by the database.
+ * Entity with a database-managed version column (e.g. bumped by a trigger).
+ * This is NOT @Version: the generator never touches it, it is only read back via RETURNING.
  */
 @Table("orders")
 data class Order(
@@ -133,3 +134,30 @@ data class Account(
     @Transient
     val domain: String by lazy { email.substringAfter('@') }
 }
+
+/**
+ * Entity with a generator-managed @Version column (optimistic locking), Long-typed,
+ * next to an auto-generated @Id.
+ */
+@Table("documents")
+data class Document(
+    @Id
+    val id: Long,
+    val title: String,
+    val body: String,
+    @Version
+    val version: Long = 0,
+)
+
+/**
+ * Entity with an Int-typed @Version under a non-default column name, next to an
+ * application-provided (String) @Id. Exercises the INSERT RETURNING of the version alone.
+ */
+@Table("settings")
+data class Setting(
+    @Id(insert = true)
+    val name: String,
+    val content: String,
+    @Version
+    val revision: Int = 0,
+)

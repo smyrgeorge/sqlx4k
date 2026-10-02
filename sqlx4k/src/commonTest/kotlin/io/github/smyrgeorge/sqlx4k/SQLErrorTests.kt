@@ -111,6 +111,7 @@ class SQLErrorTests {
             "InvalidIdentifier",
             "UnsafeStringContent",
             "EmptyCollection",
+            "OptimisticLockFailed",
             "UnknownError",
         )
     }

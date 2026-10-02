@@ -16,6 +16,8 @@ package io.github.smyrgeorge.sqlx4k.annotation
  * - **Must be applied to a `data class`** (required for the generated `copy()` calls)
  * - Properties are mapped to columns using snake_case conversion (e.g., `createdAt` → `created_at`),
  *   unless overridden with [@Column(name = "...")][Column]
+ * - Optionally mark one `Int`/`Long` property with [@Version][Version] to enable optimistic locking
+ *   for the generated UPDATE and DELETE statements
  *
  * ## Example
  *
@@ -39,6 +41,7 @@ package io.github.smyrgeorge.sqlx4k.annotation
  *
  * @see Id For marking the primary key property.
  * @see Column For configuring individual column behavior.
+ * @see Version For optimistic locking.
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.SOURCE)

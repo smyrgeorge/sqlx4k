@@ -62,6 +62,7 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 - [Code generation: CRUD and @Repository implementations](#code-generation-crud-and-repository-implementations)
     - [Customizing columns with @Column](#customizing-columns-with-column)
     - [Excluding properties with @Transient](#excluding-properties-with-transient)
+    - [Optimistic locking with @Version](#optimistic-locking-with-version)
     - [Auto-Generated RowMapper](#auto-generated-rowmapper)
     - [Batch Operations](#batch-operations)
     - [Property-Level Converters](#property-level-converters-converter)
@@ -615,6 +616,67 @@ data class Account(
 }
 ```
 
+##### Optimistic locking with `@Version`
+
+Mark a single non-nullable `Int` or `Long` property with `@Version` to enable optimistic locking for the generated
+CRUD operations. The generator manages the column for you — never set it yourself, just keep the entity instance
+returned by the repository for the next write:
+
+- `insert()` writes the entity's value as-is (start new entities at `0`) and reads the column back via `RETURNING`.
+- `update()` sets `version = version + 1` and adds `AND version = ?` (the entity's current value) to the `WHERE`
+  clause. The incremented value is read back via `RETURNING` and merged into the returned entity.
+- `delete()` adds `AND version = ?` to the `WHERE` clause as well.
+- `batchUpdate()` matches every row on both the id and the version, and increments the version.
+
+When the row has been modified — or deleted — since the entity was read, the statement matches no rows and the
+repository method fails with an `SQLError` whose code is `OptimisticLockFailed`:
+
+```kotlin
+@Table("documents")
+data class Document(
+    @Id
+    val id: Long,
+    val title: String,
+    @Version
+    val version: Long = 0,
+)
+
+@Repository
+interface DocumentRepository : CrudRepository<Document> {
+    @Query("SELECT * FROM documents WHERE id = :id")
+    suspend fun findOneById(context: QueryExecutor, id: Long): Result<Document?>
+}
+
+val doc = DocumentRepositoryImpl.findOneById(db, 1).getOrThrow()!!                   // version = 3
+val updated = DocumentRepositoryImpl.update(db, doc.copy(title = "v2")).getOrThrow() // version = 4
+
+// `doc` still carries version 3, so this write is stale:
+val stale = DocumentRepositoryImpl.update(db, doc.copy(title = "v3"))
+val error = stale.exceptionOrNull() as SQLError
+check(error.code == SQLError.Code.OptimisticLockFailed)
+```
+
+The generated `update()` statement looks like this:
+
+```sql
+update documents set title = ?, version = version + 1 where id = ? and version = ? returning id, version;
+```
+
+> [!NOTE]
+> Rules enforced at compile time: at most one `@Version` per entity, it must be a non-nullable `Int` or `Long`, the
+> entity must also declare an `@Id`, and it cannot be combined with `@Id`, `@Transient` or `@Column(update = false)`.
+> `@Column(name = "...")` and `@Column(insert = false)` (to rely on a database default) are fine.
+
+> [!WARNING]
+> A batch update is a single statement: the rows whose version matched **are** updated, the stale ones are not, and the
+> call fails with `OptimisticLockFailed`. Run versioned `batchUpdate` calls inside a transaction and roll back on
+> failure if you need all-or-nothing semantics.
+
+> [!NOTE]
+> MySQL and MariaDB have no `UPDATE ... RETURNING`, so `update()` re-selects the row afterwards. For versioned entities
+> that `SELECT` is keyed on the expected *new* version, so a stale update still surfaces as `OptimisticLockFailed`
+> instead of silently returning the unchanged row.
+
 #### Auto-Generated RowMapper
 
 When you annotate a class with `@Table`, the code generator automatically creates a `RowMapper` implementation for
@@ -1010,6 +1072,8 @@ What the generated implementation provides:
 - **Thread-safe storage** — entities live in a `HashMap` guarded by a `Mutex`.
 - **Full CRUD** — `insert`, `update`, `delete`, `save`, `batchInsert`, `batchUpdate`. Numeric `@Id` keys with
   `insert = false` get auto-incrementing ids; application-provided ids (`@Id(insert = true)`) are stored as given.
+  `@Version` entities get the same optimistic locking as the real implementation: `update`/`delete` only apply when
+  the stored version matches (failing with `OptimisticLockFailed` otherwise) and `update` increments it.
 - **Whole-table queries** — `findAll`, `countAll`, `deleteAll`.
 - **Derived `@Query` methods** — the in-memory behavior is derived from each method's `@Query` **SQL**: the statement is
   parsed and its `WHERE` clause becomes a predicate over the stored entities (columns are mapped back to properties via

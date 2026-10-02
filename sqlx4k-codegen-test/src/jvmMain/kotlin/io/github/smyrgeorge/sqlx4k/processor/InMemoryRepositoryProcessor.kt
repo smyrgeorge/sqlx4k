@@ -59,7 +59,7 @@ class InMemoryRepositoryProcessor(
         // Symbols that are not yet fully resolvable are deferred to a later processing round.
         val deferred = mutableListOf<KSAnnotated>()
         repoSymbols.forEach { repo ->
-            if (!repo.validate()) deferred.add(repo)
+            if (!repo.validate(enableNewFeatures = true)) deferred.add(repo)
             else generate(repo, resolver, outputPackage)
         }
         return deferred
@@ -108,6 +108,12 @@ class InMemoryRepositoryProcessor(
         val autoGen = !idInsert && (idTypeQn == TypeNames.KOTLIN_INT || idTypeQn == TypeNames.KOTLIN_LONG)
         val zeroLiteral = if (idTypeQn == TypeNames.KOTLIN_LONG) "0L" else "0"
         val oneLiteral = if (idTypeQn == TypeNames.KOTLIN_LONG) "1L" else "1"
+
+        // Optional @Version (optimistic locking) property. Like @Id it has SOURCE retention, so it is only
+        // honored when the entity is compiled in the same round; otherwise the double behaves as unversioned.
+        val versionName: String? = domainDecl.getAllProperties()
+            .firstOrNull { p -> p.annotations.any { it.qualifiedName() == TypeNames.VERSION_ANNOTATION } }
+            ?.simpleName?.asString()
 
         // Maps each entity column name (lowercased) to its Kotlin property, so parsed SQL WHERE/SET
         // clauses can be translated into in-memory predicates and copies.
@@ -194,13 +200,7 @@ class InMemoryRepositoryProcessor(
         }
         file += "    }\n\n"
 
-        file += "    private fun MutableMap<$idType, $domainQn>.doUpdate(entity: $domainQn): Result<$domainQn> =\n"
-        file += "        if (containsKey(entity.$idName)) {\n"
-        file += "            this[entity.$idName] = entity\n"
-        file += "            Result.success(entity)\n"
-        file += "        } else {\n"
-        file += "            Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Update affected 0 rows - entity not found\"))\n"
-        file += "        }\n\n"
+        emitUpdateDeleteHelpers(file, idType, domainQn, idName, versionName)
 
         // --- CRUD ---
         emitCrudMethods(file, repo, domainQn, idName, autoGen, zeroLiteral, useContext, resultType, toResult)
@@ -268,16 +268,11 @@ class InMemoryRepositoryProcessor(
         val hasPreDeleteHook = isHookOverridden(repo, "preDeleteHook")
         val hasAfterDeleteHook = isHookOverridden(repo, "afterDeleteHook")
         emitSignature(file, useContext, "delete", "entity: $domainQn", "$resultType<Unit>")
-        val deleteFail = "Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Delete affected 0 rows - entity not found\"))"
         if (!hasPreDeleteHook && !hasAfterDeleteHook && !hasAroundQueryHook) {
-            file += " =\n        withStore {\n"
-            file += "            if (remove(entity.$idName) != null) Result.success(Unit)\n"
-            file += "            else $deleteFail\n"
-            file += "        }$toResult\n\n"
+            file += " =\n        withStore { doDelete(entity) }$toResult\n\n"
         } else {
             val v = if (hasPreDeleteHook) "e" else "entity"
-            val op = "withStore { if (remove($v.$idName) != null) Result.success(Unit) else $deleteFail }"
-            val body = wrapAround(hasAroundQueryHook, "delete", op)
+            val body = wrapAround(hasAroundQueryHook, "delete", "withStore { doDelete($v) }")
             file += " = run {\n"
             if (hasPreDeleteHook) file += "        val e = preDeleteHook(context, entity)\n"
             file += "        $body"
@@ -325,6 +320,59 @@ class InMemoryRepositoryProcessor(
             if (hasAfterUpdateHook) file += ".map { list -> list.map { afterUpdateHook(context, it) } }"
             file += "\n    }$toResult\n\n"
         }
+    }
+
+    /**
+     * Emits the private `doUpdate`/`doDelete` map-extension helpers.
+     *
+     * With a `@Version` property ([versionName] non-null) the double mirrors the real implementation's
+     * optimistic locking: an update or delete only applies when the stored entity carries the same
+     * version as the given one, an update stores (and returns) the entity with the version incremented,
+     * and a mismatch — or a missing row, which the database cannot tell apart — fails with
+     * [io.github.smyrgeorge.sqlx4k.SQLError.Code.OptimisticLockFailed].
+     */
+    private fun emitUpdateDeleteHelpers(
+        file: OutputStream,
+        idType: String,
+        domainQn: String,
+        idName: String,
+        versionName: String?,
+    ) {
+        val domainSimple = domainQn.substringAfterLast('.')
+
+        file += "    private fun MutableMap<$idType, $domainQn>.doUpdate(entity: $domainQn): Result<$domainQn> {\n"
+        if (versionName != null) {
+            file += "        val existing = this[entity.$idName]\n"
+            file += "        if (existing == null || existing.$versionName != entity.$versionName) {\n"
+            file += $$"            return Result.failure(SQLError(SQLError.Code.OptimisticLockFailed, \"Update affected 0 rows: $$domainSimple with $$idName=${entity.$$idName} was modified or deleted concurrently (expected $$versionName=${entity.$$versionName})\"))\n"
+            file += "        }\n"
+            file += "        val stored = entity.copy($versionName = entity.$versionName + 1)\n"
+            file += "        this[entity.$idName] = stored\n"
+            file += "        return Result.success(stored)\n"
+        } else {
+            file += "        if (!containsKey(entity.$idName)) {\n"
+            file += "            return Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Update affected 0 rows - entity not found\"))\n"
+            file += "        }\n"
+            file += "        this[entity.$idName] = entity\n"
+            file += "        return Result.success(entity)\n"
+        }
+        file += "    }\n\n"
+
+        file += "    private fun MutableMap<$idType, $domainQn>.doDelete(entity: $domainQn): Result<Unit> {\n"
+        if (versionName != null) {
+            file += "        val existing = this[entity.$idName]\n"
+            file += "        if (existing == null || existing.$versionName != entity.$versionName) {\n"
+            file += $$"            return Result.failure(SQLError(SQLError.Code.OptimisticLockFailed, \"Delete affected 0 rows: $$domainSimple with $$idName=${entity.$$idName} was modified or deleted concurrently (expected $$versionName=${entity.$$versionName})\"))\n"
+            file += "        }\n"
+            file += "        remove(entity.$idName)\n"
+            file += "        return Result.success(Unit)\n"
+        } else {
+            file += "        if (remove(entity.$idName) == null) {\n"
+            file += "            return Result.failure(SQLError(SQLError.Code.EmptyResultSet, \"Delete affected 0 rows - entity not found\"))\n"
+            file += "        }\n"
+            file += "        return Result.success(Unit)\n"
+        }
+        file += "    }\n\n"
     }
 
     /**

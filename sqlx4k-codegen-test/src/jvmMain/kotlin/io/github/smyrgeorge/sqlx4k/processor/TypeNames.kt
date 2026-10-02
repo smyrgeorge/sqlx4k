@@ -10,6 +10,7 @@ import io.github.smyrgeorge.sqlx4k.annotation.Column
 import io.github.smyrgeorge.sqlx4k.annotation.Id
 import io.github.smyrgeorge.sqlx4k.annotation.Query
 import io.github.smyrgeorge.sqlx4k.annotation.Repository
+import io.github.smyrgeorge.sqlx4k.annotation.Version
 
 /**
  * Fully qualified names used by [InMemoryRepositoryProcessor].
@@ -26,6 +27,7 @@ internal object TypeNames {
     val ID_ANNOTATION = Id::class.qualifiedName!!
     val QUERY_ANNOTATION = Query::class.qualifiedName!!
     val COLUMN_ANNOTATION = Column::class.qualifiedName!!
+    val VERSION_ANNOTATION = Version::class.qualifiedName!!
 
     // Repository base interfaces
     val CRUD_REPOSITORY_HOOKS = CrudRepositoryHooks::class.qualifiedName!!
