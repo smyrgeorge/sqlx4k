@@ -24,4 +24,12 @@ class NativePostgreSQLErrorTests {
     @Test
     fun `refused connection should be returned as an SQLError`() =
         runner.`refused connection should be returned as an SQLError`(SQLError.Code.PoolTimedOut)
+
+    @Test
+    fun `duplicate key should expose the driver error codes`() =
+        runner.`duplicate key should expose the driver error codes`()
+
+    @Test
+    fun `unmapped database error should expose the codes`() =
+        runner.`unmapped database error should expose the codes`()
 }

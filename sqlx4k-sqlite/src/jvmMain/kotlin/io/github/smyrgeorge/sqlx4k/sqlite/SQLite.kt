@@ -132,7 +132,7 @@ class SQLite(
         try {
             connection.execute(sql).getOrThrow()
         } catch (e: Exception) {
-            SQLError(SQLError.Code.Database, e.message, e).raise()
+            e.toSQLError().raise()
         } finally {
             connection.close()
         }
@@ -143,7 +143,7 @@ class SQLite(
         try {
             connection.fetchAll(sql).getOrThrow()
         } catch (e: Exception) {
-            SQLError(SQLError.Code.Database, e.message, e).raise()
+            e.toSQLError().raise()
         } finally {
             connection.close()
         }
@@ -154,7 +154,7 @@ class SQLite(
         try {
             connection.execute(statement).getOrThrow()
         } catch (e: Exception) {
-            SQLError(SQLError.Code.Database, e.message, e).raise()
+            e.toSQLError().raise()
         } finally {
             connection.close()
         }
@@ -165,7 +165,7 @@ class SQLite(
         try {
             connection.fetchAll(statement).getOrThrow()
         } catch (e: Exception) {
-            SQLError(SQLError.Code.Database, e.message, e).raise()
+            e.toSQLError().raise()
         } finally {
             connection.close()
         }
@@ -179,7 +179,7 @@ class SQLite(
             PooledTransaction(tx, connection)
         } catch (e: Exception) {
             connection.close()
-            SQLError(SQLError.Code.Database, e.message, e).raise()
+            e.toSQLError().raise()
         }
     }
 
@@ -217,7 +217,7 @@ class SQLite(
                         }
                     }
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -232,7 +232,7 @@ class SQLite(
                         }
                     }.toResult()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -247,7 +247,7 @@ class SQLite(
                         }
                     }
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -262,7 +262,7 @@ class SQLite(
                         }
                     }.toResult()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -274,7 +274,7 @@ class SQLite(
                     try {
                         connection.autoCommit = false
                     } catch (e: Exception) {
-                        SQLError(SQLError.Code.Database, e.message, e).raise()
+                        e.toSQLError().raise()
                     }
                     JdbcTransaction(connection, false, encoders)
                 }
@@ -306,7 +306,7 @@ class SQLite(
                         connection.autoCommit = true
                         _commited = true
                     } catch (e: Exception) {
-                        SQLError(SQLError.Code.Database, e.message, e).raise()
+                        e.toSQLError().raise()
                     } finally {
                         if (closeConnectionAfterTx) connection.close()
                     }
@@ -325,7 +325,7 @@ class SQLite(
                         connection.autoCommit = true
                         _rollbacked = true
                     } catch (e: Exception) {
-                        SQLError(SQLError.Code.Database, e.message, e).raise()
+                        e.toSQLError().raise()
                     } finally {
                         if (closeConnectionAfterTx) connection.close()
                     }
@@ -343,7 +343,7 @@ class SQLite(
                         }
                     }
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -358,7 +358,7 @@ class SQLite(
                         }
                     }.toResult()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -373,7 +373,7 @@ class SQLite(
                         }
                     }
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -388,7 +388,7 @@ class SQLite(
                         }
                     }.toResult()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
             }
         }

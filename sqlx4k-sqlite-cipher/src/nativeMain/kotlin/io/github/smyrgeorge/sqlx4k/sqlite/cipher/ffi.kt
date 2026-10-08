@@ -27,7 +27,12 @@ private fun Sqlx4kSqliteCipherResult.isError(): Boolean = error >= 0
 private fun Sqlx4kSqliteCipherResult.toError(): SQLError {
     val code = SQLError.Code.entries[error]
     val message = error_message?.toKString()
-    return SQLError(code, message)
+    // Database errors also carry what the database reported (see `SQLError`); the Rust side uses
+    // null / -1 when a value is not available for this driver.
+    val sqlState = error_sql_state?.toKString()
+    val nativeCode = error_native_code.takeIf { it >= 0 }
+    val kind = SQLError.Kind.entries.getOrElse(error_kind) { SQLError.Kind.Other }
+    return SQLError(code = code, message = message, sqlState = sqlState, nativeCode = nativeCode, kind = kind)
 }
 
 fun Sqlx4kSqliteCipherResult.throwIfError() {

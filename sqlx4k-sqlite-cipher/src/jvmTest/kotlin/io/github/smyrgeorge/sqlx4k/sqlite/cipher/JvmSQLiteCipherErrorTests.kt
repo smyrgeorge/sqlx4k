@@ -23,4 +23,12 @@ class JvmSQLiteCipherErrorTests {
     @Test
     fun `protocol error should be returned as a Database error`() =
         runner.`protocol error should be returned as a Database error`()
+
+    @Test
+    fun `duplicate key should expose the driver error codes`() =
+        runner.`duplicate key should expose the driver error codes`()
+
+    @Test
+    fun `unmapped database error should expose the codes`() =
+        runner.`unmapped database error should expose the codes`()
 }

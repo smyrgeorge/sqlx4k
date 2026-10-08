@@ -1,3 +1,4 @@
+use sqlx::error::ErrorKind;
 use sqlx::migrate::MigrateDatabase;
 use sqlx::pool::PoolConnection;
 use sqlx::sqlite::{
@@ -31,6 +32,20 @@ pub const ERROR_POOL_CLOSED: c_int = 2;
 pub const ERROR_WORKER_CRASHED: c_int = 3;
 pub const ERROR_POOL: c_int = 5;
 
+/// Reported in `error_native_code` when the database has no numeric error code.
+pub const NO_NATIVE_CODE: c_int = -1;
+
+// `SQLError.Kind` ordinals (IMPORTANT: keep in sync with the Kotlin enum; do not reorder).
+pub const KIND_UNIQUE_VIOLATION: c_int = 0;
+pub const KIND_FOREIGN_KEY_VIOLATION: c_int = 1;
+pub const KIND_NOT_NULL_VIOLATION: c_int = 2;
+pub const KIND_CHECK_VIOLATION: c_int = 3;
+pub const KIND_EXCLUSION_VIOLATION: c_int = 4;
+pub const KIND_DEADLOCK: c_int = 5;
+pub const KIND_SERIALIZATION_FAILURE: c_int = 6;
+pub const KIND_LOCK_TIMEOUT: c_int = 7;
+pub const KIND_OTHER: c_int = 8;
+
 #[repr(C)]
 pub struct Sqlx4kSqlitePtr {
     pub ptr: *mut c_void,
@@ -42,6 +57,12 @@ unsafe impl Sync for Sqlx4kSqlitePtr {}
 pub struct Sqlx4kSqliteResult {
     pub error: c_int,
     pub error_message: *mut c_char,
+    /// SQLSTATE reported by the database, or null (SQLite has none).
+    pub error_sql_state: *mut c_char,
+    /// The database's own numeric error code, or `NO_NATIVE_CODE` (PostgreSQL has none).
+    pub error_native_code: c_int,
+    /// `SQLError.Kind` ordinal (`KIND_*`).
+    pub error_kind: c_int,
     pub rows_affected: c_ulonglong,
     pub cn: *mut c_void,
     pub tx: *mut c_void,
@@ -64,6 +85,9 @@ impl Default for Sqlx4kSqliteResult {
         Self {
             error: OK,
             error_message: null_mut(),
+            error_sql_state: null_mut(),
+            error_native_code: NO_NATIVE_CODE,
+            error_kind: KIND_OTHER,
             rows_affected: 0,
             cn: null_mut(),
             tx: null_mut(),
@@ -213,6 +237,10 @@ pub extern "C" fn sqlx4k_sqlite_free_result(ptr: *mut Sqlx4kSqliteResult) {
     if ptr.error >= 0 {
         let error_message = unsafe { CString::from_raw(ptr.error_message) };
         std::mem::drop(error_message);
+        if !ptr.error_sql_state.is_null() {
+            let error_sql_state = unsafe { CString::from_raw(ptr.error_sql_state) };
+            std::mem::drop(error_sql_state);
+        }
     }
 
     if ptr.schema == null_mut() {
@@ -248,6 +276,18 @@ pub extern "C" fn sqlx4k_sqlite_free_result(ptr: *mut Sqlx4kSqliteResult) {
 }
 
 pub fn sqlx4k_sqlite_error_result_of(err: sqlx::Error) -> Sqlx4kSqliteResult {
+    // A database error also carries what SQLite reported: the extended result code (which sqlx
+    // exposes through `code()` as a decimal string) and a portable kind (unique violation, foreign
+    // key violation, ...), surfaced on `SQLError`. SQLite has no SQLSTATE.
+    let (sql_state, native_code, kind): (Option<String>, c_int, c_int) = match &err {
+        Error::Database(e) => {
+            let code = e.code().and_then(|c| c.parse::<c_int>().ok());
+            let kind = sqlx4k_sqlite_kind_of(e.kind(), code);
+            (None, code.unwrap_or(NO_NATIVE_CODE), kind)
+        }
+        _ => (None, NO_NATIVE_CODE, KIND_OTHER),
+    };
+
     let (code, message) = match err {
         Error::Configuration(e) => (ERROR_POOL, format!("Invalid SQLite URL :: {}", e)),
         Error::Database(e) => match e.code() {
@@ -267,10 +307,45 @@ pub fn sqlx4k_sqlite_error_result_of(err: sqlx::Error) -> Sqlx4kSqliteResult {
 
     // CString::new fails on interior NUL bytes, which may appear in values echoed back by the database.
     let message = CString::new(message.replace('\0', "")).unwrap();
+    let sql_state = sql_state
+        .map(|s| CString::new(s.replace('\0', "")).unwrap().into_raw())
+        .unwrap_or(null_mut());
     Sqlx4kSqliteResult {
         error: code,
         error_message: message.into_raw(),
+        error_sql_state: sql_state,
+        error_native_code: native_code,
+        error_kind: kind,
         ..Default::default()
+    }
+}
+
+/// Maps sqlx's portable [`ErrorKind`] (constraint violations) to the `SQLError.Kind` ordinal, or
+/// `None` when sqlx does not classify the error.
+fn sqlx4k_sqlite_constraint_kind_of(kind: ErrorKind) -> Option<c_int> {
+    match kind {
+        ErrorKind::UniqueViolation => Some(KIND_UNIQUE_VIOLATION),
+        ErrorKind::ForeignKeyViolation => Some(KIND_FOREIGN_KEY_VIOLATION),
+        ErrorKind::NotNullViolation => Some(KIND_NOT_NULL_VIOLATION),
+        ErrorKind::CheckViolation => Some(KIND_CHECK_VIOLATION),
+        ErrorKind::ExclusionViolation => Some(KIND_EXCLUSION_VIOLATION),
+        // `ErrorKind` is `#[non_exhaustive]`.
+        _ => None,
+    }
+}
+
+/// Classifies a SQLite error as a `SQLError.Kind` ordinal: constraint violations come from sqlx,
+/// lock failures from the primary result code (the low byte of the extended code). Mirrors
+/// `sqliteKindOf` in the Kotlin driver.
+/// https://www.sqlite.org/rescode.html
+fn sqlx4k_sqlite_kind_of(kind: ErrorKind, code: Option<c_int>) -> c_int {
+    if let Some(kind) = sqlx4k_sqlite_constraint_kind_of(kind) {
+        return kind;
+    }
+    match code.map(|c| c & 0xff) {
+        // SQLITE_BUSY, SQLITE_LOCKED
+        Some(5 | 6) => KIND_LOCK_TIMEOUT,
+        _ => KIND_OTHER,
     }
 }
 

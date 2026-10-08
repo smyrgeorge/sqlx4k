@@ -5,6 +5,7 @@
 //! Both [`crate::ffi`] (cinterop) and [`crate::jni`] (JVM/Android) call into here, so this is
 //! the single source of truth for query execution and result shaping.
 
+use sqlx::error::ErrorKind;
 use sqlx::pool::PoolConnection;
 use sqlx::sqlite::{
     SqliteConnectOptions, SqlitePool, SqlitePoolOptions, SqliteRow, SqliteTypeInfo, SqliteValueRef,
@@ -32,6 +33,22 @@ pub const ERROR_POOL_CLOSED: c_int = 2;
 pub const ERROR_WORKER_CRASHED: c_int = 3;
 pub const ERROR_POOL: c_int = 5;
 
+/// Reported in `error_native_code` when the database has no numeric error code.
+pub const NO_NATIVE_CODE: c_int = -1;
+
+// `SQLError.Kind` ordinals (IMPORTANT: keep in sync with the Kotlin enum; do not reorder).
+pub const KIND_UNIQUE_VIOLATION: c_int = 0;
+pub const KIND_FOREIGN_KEY_VIOLATION: c_int = 1;
+pub const KIND_NOT_NULL_VIOLATION: c_int = 2;
+pub const KIND_CHECK_VIOLATION: c_int = 3;
+pub const KIND_EXCLUSION_VIOLATION: c_int = 4;
+#[allow(dead_code)] // SQLite has no deadlock detection; kept so the ordinals stay in sync.
+pub const KIND_DEADLOCK: c_int = 5;
+#[allow(dead_code)] // SQLite has no serializable isolation failures; kept so the ordinals stay in sync.
+pub const KIND_SERIALIZATION_FAILURE: c_int = 6;
+pub const KIND_LOCK_TIMEOUT: c_int = 7;
+pub const KIND_OTHER: c_int = 8;
+
 #[repr(C)]
 pub struct Sqlx4kSqliteCipherPtr {
     pub ptr: *mut c_void,
@@ -43,6 +60,12 @@ unsafe impl Sync for Sqlx4kSqliteCipherPtr {}
 pub struct Sqlx4kSqliteCipherResult {
     pub error: c_int,
     pub error_message: *mut c_char,
+    /// SQLSTATE reported by the database, or null (SQLite has none).
+    pub error_sql_state: *mut c_char,
+    /// The database's own numeric error code, or `NO_NATIVE_CODE` (PostgreSQL has none).
+    pub error_native_code: c_int,
+    /// `SQLError.Kind` ordinal (`KIND_*`).
+    pub error_kind: c_int,
     pub rows_affected: c_ulonglong,
     pub cn: *mut c_void,
     pub tx: *mut c_void,
@@ -64,6 +87,9 @@ impl Default for Sqlx4kSqliteCipherResult {
         Self {
             error: OK,
             error_message: null_mut(),
+            error_sql_state: null_mut(),
+            error_native_code: NO_NATIVE_CODE,
+            error_kind: KIND_OTHER,
             rows_affected: 0,
             cn: null_mut(),
             tx: null_mut(),
@@ -210,6 +236,10 @@ pub fn free_result(ptr: *mut Sqlx4kSqliteCipherResult) {
     if ptr.error >= 0 {
         let error_message = unsafe { CString::from_raw(ptr.error_message) };
         std::mem::drop(error_message);
+        if !ptr.error_sql_state.is_null() {
+            let error_sql_state = unsafe { CString::from_raw(ptr.error_sql_state) };
+            std::mem::drop(error_sql_state);
+        }
     }
 
     if ptr.schema == null_mut() {
@@ -245,6 +275,18 @@ pub fn free_result(ptr: *mut Sqlx4kSqliteCipherResult) {
 }
 
 pub fn error_result_of(err: sqlx::Error) -> Sqlx4kSqliteCipherResult {
+    // A database error also carries what SQLite reported: the extended result code (which sqlx
+    // exposes through `code()` as a decimal string) and a portable kind (unique violation, foreign
+    // key violation, ...), surfaced on `SQLError`. SQLite has no SQLSTATE.
+    let (sql_state, native_code, kind): (Option<String>, c_int, c_int) = match &err {
+        Error::Database(e) => {
+            let code = e.code().and_then(|c| c.parse::<c_int>().ok());
+            let kind = kind_of(e.kind(), code);
+            (None, code.unwrap_or(NO_NATIVE_CODE), kind)
+        }
+        _ => (None, NO_NATIVE_CODE, KIND_OTHER),
+    };
+
     let (code, message) = match err {
         Error::Configuration(e) => (ERROR_POOL, format!("Invalid SQLite URL :: {}", e)),
         Error::Database(e) => match e.code() {
@@ -264,10 +306,45 @@ pub fn error_result_of(err: sqlx::Error) -> Sqlx4kSqliteCipherResult {
 
     // CString::new fails on interior NUL bytes, which may appear in values echoed back by the database.
     let message = CString::new(message.replace('\0', "")).unwrap();
+    let sql_state = sql_state
+        .map(|s| CString::new(s.replace('\0', "")).unwrap().into_raw())
+        .unwrap_or(null_mut());
     Sqlx4kSqliteCipherResult {
         error: code,
         error_message: message.into_raw(),
+        error_sql_state: sql_state,
+        error_native_code: native_code,
+        error_kind: kind,
         ..Default::default()
+    }
+}
+
+/// Maps sqlx's portable [`ErrorKind`] (constraint violations) to the `SQLError.Kind` ordinal, or
+/// `None` when sqlx does not classify the error.
+fn constraint_kind_of(kind: ErrorKind) -> Option<c_int> {
+    match kind {
+        ErrorKind::UniqueViolation => Some(KIND_UNIQUE_VIOLATION),
+        ErrorKind::ForeignKeyViolation => Some(KIND_FOREIGN_KEY_VIOLATION),
+        ErrorKind::NotNullViolation => Some(KIND_NOT_NULL_VIOLATION),
+        ErrorKind::CheckViolation => Some(KIND_CHECK_VIOLATION),
+        ErrorKind::ExclusionViolation => Some(KIND_EXCLUSION_VIOLATION),
+        // `ErrorKind` is `#[non_exhaustive]`.
+        _ => None,
+    }
+}
+
+/// Classifies a SQLite error as a `SQLError.Kind` ordinal: constraint violations come from sqlx,
+/// lock failures from the primary result code (the low byte of the extended code). Mirrors
+/// `sqliteKindOf` in the Kotlin driver.
+/// https://www.sqlite.org/rescode.html
+fn kind_of(kind: ErrorKind, code: Option<c_int>) -> c_int {
+    if let Some(kind) = constraint_kind_of(kind) {
+        return kind;
+    }
+    match code.map(|c| c & 0xff) {
+        // SQLITE_BUSY, SQLITE_LOCKED
+        Some(5 | 6) => KIND_LOCK_TIMEOUT,
+        _ => KIND_OTHER,
     }
 }
 
@@ -799,6 +876,9 @@ fn row_of(row: &SqliteRow) -> Sqlx4kSqliteCipherRow {
 // Layout:
 //   i32 error                         (-1 = OK; >= 0 maps to SQLError.Code ordinal)
 //   u8  has_error_message; [str]
+//   u8  has_error_sql_state; [str]   (always absent for SQLite; kept for layout symmetry)
+//   i32 error_native_code             (-1 = none; otherwise the SQLite extended result code)
+//   i32 error_kind                    (SQLError.Kind ordinal)
 //   i64 rows_affected
 //   i64 cn  (pointer as i64, 0 = null)
 //   i64 tx
@@ -862,9 +942,13 @@ pub fn serialize_result(ptr: *const Sqlx4kSqliteCipherResult) -> Vec<u8> {
     buf.put_i32(result.error);
     if result.error >= 0 {
         buf.put_opt_cstr(result.error_message);
+        buf.put_opt_cstr(result.error_sql_state);
     } else {
         buf.put_u8(0);
+        buf.put_u8(0);
     }
+    buf.put_i32(result.error_native_code);
+    buf.put_i32(result.error_kind);
     buf.put_i64(result.rows_affected as i64);
     buf.put_i64(result.cn as usize as i64);
     buf.put_i64(result.tx as usize as i64);

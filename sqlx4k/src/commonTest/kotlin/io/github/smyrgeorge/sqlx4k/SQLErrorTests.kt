@@ -52,6 +52,43 @@ class SQLErrorTests {
     }
 
     // ========================================================================================
+    // driver-reported details (sqlState / nativeCode / kind)
+    // ========================================================================================
+
+    @Test
+    fun `driver details are absent by default`() {
+        val error = SQLError(SQLError.Code.Database, "boom")
+        assertThat(error.sqlState).isNull()
+        assertThat(error.nativeCode).isNull()
+        assertThat(error.kind).isEqualTo(SQLError.Kind.Other)
+    }
+
+    @Test
+    fun `driver details are retained when supplied`() {
+        val error = SQLError(
+            code = SQLError.Code.Database,
+            message = "Duplicate entry '1' for key 'PRIMARY'",
+            sqlState = "23000",
+            nativeCode = 1062,
+            kind = SQLError.Kind.UniqueViolation,
+        )
+        assertThat(error.sqlState).isEqualTo("23000")
+        assertThat(error.nativeCode).isEqualTo(1062)
+        assertThat(error.kind).isEqualTo(SQLError.Kind.UniqueViolation)
+        // The rendered message is not affected by the extra details.
+        assertThat(error.message).isEqualTo("[Database] :: Duplicate entry '1' for key 'PRIMARY'")
+    }
+
+    @Test
+    fun `positional construction is still supported`() {
+        // Existing call sites pass (code, message, cause) positionally; the new properties are trailing defaults.
+        val cause = IllegalStateException("root cause")
+        val error = SQLError(SQLError.Code.Database, "boom", cause)
+        assertThat(error.cause).isSameInstanceAs(cause)
+        assertThat(error.kind).isEqualTo(SQLError.Kind.Other)
+    }
+
+    // ========================================================================================
     // raise()
     // ========================================================================================
 
@@ -83,6 +120,23 @@ class SQLErrorTests {
         assertThat(SQLError.Code.Pool.ordinal).isEqualTo(5)
         assertThat(SQLError.Code.CannotDecode.ordinal).isEqualTo(10)
         assertThat(SQLError.Code.UnknownError.ordinal).isEqualTo(SQLError.Code.entries.size - 1)
+    }
+
+    @Test
+    fun `full kind entries order is pinned`() {
+        // `Kind` crosses the FFI boundary by ordinal as well.
+        assertThat(SQLError.Kind.entries.map { it.name }).containsExactly(
+            "UniqueViolation",
+            "ForeignKeyViolation",
+            "NotNullViolation",
+            "CheckViolation",
+            "ExclusionViolation",
+            "Deadlock",
+            "SerializationFailure",
+            "LockTimeout",
+            "Other",
+        )
+        assertThat(SQLError.Kind.Other.ordinal).isEqualTo(SQLError.Kind.entries.size - 1)
     }
 
     @Test

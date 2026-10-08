@@ -1,4 +1,4 @@
-package io.github.smyrgeorge.sqlx4k.sqlite.cipher
+package io.github.smyrgeorge.sqlx4k.sqlite
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
@@ -11,7 +11,7 @@ import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
-class AndroidSQLiteCipherErrorTests {
+class AndroidSQLiteErrorTests {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
 
@@ -19,25 +19,20 @@ class AndroidSQLiteCipherErrorTests {
         .maxConnections(1)
         .build()
 
-    private val dbFile = File(context.cacheDir, "sqlx4k-error-tests.db").apply {
-        if (exists()) delete()
+    private val db: SQLite
+
+    init {
+        val dbFile = File(context.cacheDir, "sqlx4k-error-tests.db").apply {
+            if (exists()) delete()
+        }
+        db = SQLite(
+            context = context,
+            url = "sqlite:${dbFile.absolutePath}",
+            options = options
+        )
     }
 
-    private fun open(query: String): ISQLiteCipher = sqliteCipher(
-        context = context,
-        url = "sqlite:${dbFile.absolutePath}?$query",
-        password = "test-passphrase",
-        options = options
-    )
-
-    private val runner = CommonSQLiteCipherErrorTests(open("mode=rwc"), ::open)
-
-    @Test
-    fun `invalid URL should be returned as a Pool error`() = runner.`invalid URL should be returned as a Pool error`()
-
-    @Test
-    fun `protocol error should be returned as a Database error`() =
-        runner.`protocol error should be returned as a Database error`()
+    private val runner = CommonSQLiteErrorTests(db)
 
     @Test
     fun `duplicate key should expose the driver error codes`() =

@@ -133,7 +133,7 @@ class PostgreSQLImpl(
             val res = try {
                 createStatement(sql).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message, e).raise()
+                e.toSQLError().raise()
             } finally {
                 close().toMono().awaitSingleOrNull()
             }
@@ -146,7 +146,7 @@ class PostgreSQLImpl(
             try {
                 createStatement(sql).execute().awaitLast().toResultSet()
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message, e).raise()
+                e.toSQLError().raise()
             } finally {
                 close().toMono().awaitSingleOrNull()
             }
@@ -158,7 +158,7 @@ class PostgreSQLImpl(
             val res = try {
                 createStatement(statement, encoders).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message, e).raise()
+                e.toSQLError().raise()
             } finally {
                 close().toMono().awaitSingleOrNull()
             }
@@ -171,7 +171,7 @@ class PostgreSQLImpl(
             try {
                 createStatement(statement, encoders).execute().awaitLast().toResultSet()
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message, e).raise()
+                e.toSQLError().raise()
             } finally {
                 close().toMono().awaitSingleOrNull()
             }
@@ -184,7 +184,7 @@ class PostgreSQLImpl(
                 beginTransaction().toMono().awaitSingleOrNull()
             } catch (e: Exception) {
                 close().toMono().awaitSingleOrNull()
-                SQLError(SQLError.Code.Database, e.message, e).raise()
+                e.toSQLError().raise()
             }
             R2dbcTransaction(this, true, encoders)
         }
@@ -360,7 +360,7 @@ class PostgreSQLImpl(
                 try {
                     connection.createStatement(sql).execute().awaitLast().toResultSet().toResult()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -372,7 +372,7 @@ class PostgreSQLImpl(
                     connection.createStatement(statement, encoders).execute().awaitLast().rowsUpdated.toMono()
                         .awaitSingleOrNull() ?: 0
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -383,7 +383,7 @@ class PostgreSQLImpl(
                 try {
                     connection.createStatement(statement, encoders).execute().awaitLast().toResultSet().toResult()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -394,7 +394,7 @@ class PostgreSQLImpl(
                 try {
                     connection.beginTransaction().toMono().awaitSingleOrNull()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
                 R2dbcTransaction(connection, false, encoders)
             }
@@ -423,7 +423,7 @@ class PostgreSQLImpl(
                     connection.commitTransaction().toMono().awaitSingleOrNull()
                     _commited = true
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 } finally {
                     if (closeConnectionAfterTx) connection.close().toMono().awaitSingleOrNull()
                 }
@@ -439,7 +439,7 @@ class PostgreSQLImpl(
                     connection.rollbackTransaction().toMono().awaitSingleOrNull()
                     _rollbacked = true
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 } finally {
                     if (closeConnectionAfterTx) connection.close().toMono().awaitSingleOrNull()
                 }
@@ -452,7 +452,7 @@ class PostgreSQLImpl(
                 try {
                     connection.createStatement(sql).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -463,7 +463,7 @@ class PostgreSQLImpl(
                 try {
                     connection.createStatement(sql).execute().awaitLast().toResultSet().toResult()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -475,7 +475,7 @@ class PostgreSQLImpl(
                     connection.createStatement(statement, encoders).execute().awaitLast().rowsUpdated.toMono()
                         .awaitSingleOrNull() ?: 0
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -486,7 +486,7 @@ class PostgreSQLImpl(
                 try {
                     connection.createStatement(statement, encoders).execute().awaitLast().toResultSet().toResult()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
             }
         }

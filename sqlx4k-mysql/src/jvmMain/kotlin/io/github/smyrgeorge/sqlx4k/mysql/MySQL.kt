@@ -164,7 +164,7 @@ class MySQL(
             val res = try {
                 createStatement(sql).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message, e).raise()
+                e.toSQLError().raise()
             } finally {
                 close().toMono().awaitSingleOrNull()
             }
@@ -177,7 +177,7 @@ class MySQL(
             try {
                 createStatement(sql).execute().awaitLast().toResultSet()
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message, e).raise()
+                e.toSQLError().raise()
             } finally {
                 close().toMono().awaitSingleOrNull()
             }
@@ -189,7 +189,7 @@ class MySQL(
             val res = try {
                 createStatement(statement, encoders).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message, e).raise()
+                e.toSQLError().raise()
             } finally {
                 close().toMono().awaitSingleOrNull()
             }
@@ -202,7 +202,7 @@ class MySQL(
             try {
                 createStatement(statement, encoders).execute().awaitLast().toResultSet()
             } catch (e: Exception) {
-                SQLError(SQLError.Code.Database, e.message, e).raise()
+                e.toSQLError().raise()
             } finally {
                 close().toMono().awaitSingleOrNull()
             }
@@ -215,7 +215,7 @@ class MySQL(
                 beginTransaction().toMono().awaitSingleOrNull()
             } catch (e: Exception) {
                 close().toMono().awaitSingleOrNull()
-                SQLError(SQLError.Code.Database, e.message, e).raise()
+                e.toSQLError().raise()
             }
             R2dbcTransaction(this, true, encoders)
         }
@@ -291,7 +291,7 @@ class MySQL(
                 try {
                     connection.createStatement(sql).execute().awaitLast().toResultSet().toResult()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -303,7 +303,7 @@ class MySQL(
                     connection.createStatement(statement, encoders).execute().awaitLast().rowsUpdated.toMono()
                         .awaitSingleOrNull() ?: 0
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -314,7 +314,7 @@ class MySQL(
                 try {
                     connection.createStatement(statement, encoders).execute().awaitLast().toResultSet().toResult()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -325,7 +325,7 @@ class MySQL(
                 try {
                     connection.beginTransaction().toMono().awaitSingleOrNull()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
                 R2dbcTransaction(connection, false, encoders)
             }
@@ -354,7 +354,7 @@ class MySQL(
                     connection.commitTransaction().toMono().awaitSingleOrNull()
                     _commited = true
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 } finally {
                     if (closeConnectionAfterTx) connection.close().toMono().awaitSingleOrNull()
                 }
@@ -370,7 +370,7 @@ class MySQL(
                     connection.rollbackTransaction().toMono().awaitSingleOrNull()
                     _rollbacked = true
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 } finally {
                     if (closeConnectionAfterTx) connection.close().toMono().awaitSingleOrNull()
                 }
@@ -383,7 +383,7 @@ class MySQL(
                 try {
                     connection.createStatement(sql).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -394,7 +394,7 @@ class MySQL(
                 try {
                     connection.createStatement(sql).execute().awaitLast().toResultSet().toResult()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -406,7 +406,7 @@ class MySQL(
                     connection.createStatement(statement, encoders).execute().awaitLast().rowsUpdated.toMono()
                         .awaitSingleOrNull() ?: 0
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
             }
         }
@@ -417,7 +417,7 @@ class MySQL(
                 try {
                     connection.createStatement(statement, encoders).execute().awaitLast().toResultSet().toResult()
                 } catch (e: Exception) {
-                    SQLError(SQLError.Code.Database, e.message, e).raise()
+                    e.toSQLError().raise()
                 }
             }
         }

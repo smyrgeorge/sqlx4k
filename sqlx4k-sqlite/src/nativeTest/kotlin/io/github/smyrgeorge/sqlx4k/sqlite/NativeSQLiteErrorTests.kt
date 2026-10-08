@@ -28,6 +28,12 @@ class NativeSQLiteErrorTests {
         options = options
     )
 
+    private val runner = CommonSQLiteErrorTests(db)
+
+    @Test
+    fun `duplicate key should expose the driver error codes`() =
+        runner.`duplicate key should expose the driver error codes`()
+
     @Test
     fun `protocol error should be returned as a Database error`() = runBlocking {
         // SQLite also accepts `@name` parameters, but sqlx only binds `?`, `?NNN` and `$NNN`,
@@ -39,4 +45,8 @@ class NativeSQLiteErrorTests {
         assertThat(error.code).isEqualTo(SQLError.Code.Database)
         assertThat(error.message).isNotNull().contains("unsupported SQL parameter format")
     }
+
+    @Test
+    fun `unmapped database error should expose the codes`() =
+        runner.`unmapped database error should expose the codes`()
 }

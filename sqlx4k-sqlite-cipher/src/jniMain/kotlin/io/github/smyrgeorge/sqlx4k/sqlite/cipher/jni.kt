@@ -128,6 +128,9 @@ private fun writeParam(out: DataOutputStream, value: Any?) {
 internal class JniResult(
     val error: Int,
     private val errorMessage: String?,
+    private val errorSqlState: String?,
+    private val errorNativeCode: Int,
+    private val errorKind: Int,
     val rowsAffected: Long,
     val cn: Long,
     val tx: Long,
@@ -136,7 +139,13 @@ internal class JniResult(
     private val rows: List<ResultSet.Row>,
 ) {
     private fun isError(): Boolean = error >= 0
-    private fun toError(): SQLError = SQLError(SQLError.Code.entries[error], errorMessage)
+    private fun toError(): SQLError = SQLError(
+        code = SQLError.Code.entries[error],
+        message = errorMessage,
+        sqlState = errorSqlState,
+        nativeCode = errorNativeCode.takeIf { it >= 0 },
+        kind = SQLError.Kind.entries.getOrElse(errorKind) { SQLError.Kind.Other },
+    )
 
     fun throwIfError() {
         if (isError()) toError().raise()
@@ -187,6 +196,10 @@ internal fun decodeResult(bytes: ByteArray): JniResult {
     val error = inp.readInt()
     val hasMessage = inp.readByte().toInt()
     val errorMessage = if (hasMessage == 1) readStr(inp) else null
+    val hasSqlState = inp.readByte().toInt()
+    val errorSqlState = if (hasSqlState == 1) readStr(inp) else null
+    val errorNativeCode = inp.readInt()
+    val errorKind = inp.readInt()
     val rowsAffected = inp.readLong()
     val cn = inp.readLong()
     val tx = inp.readLong()
@@ -226,6 +239,9 @@ internal fun decodeResult(bytes: ByteArray): JniResult {
     return JniResult(
         error = error,
         errorMessage = errorMessage,
+        errorSqlState = errorSqlState,
+        errorNativeCode = errorNativeCode,
+        errorKind = errorKind,
         rowsAffected = rowsAffected,
         cn = cn,
         tx = tx,
