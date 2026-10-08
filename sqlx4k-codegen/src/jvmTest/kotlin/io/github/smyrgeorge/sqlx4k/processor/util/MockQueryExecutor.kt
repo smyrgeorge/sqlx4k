@@ -1,5 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.processor.util
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.ResultSet
@@ -87,6 +89,14 @@ class MockQueryExecutor : QueryExecutor {
         val nq = statement.renderNativeQuery(Dialect.PostgreSQL, encoders)
         _lastBoundValues = nq.values
         return execute(nq.sql)
+    }
+
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        fetchAll(sql).getOrThrow().forEach { emit(it) }
+    }
+
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        fetchAll(statement).getOrThrow().forEach { emit(it) }
     }
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> {

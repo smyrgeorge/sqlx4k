@@ -1,5 +1,6 @@
 package io.github.smyrgeorge.sqlx4k
 
+import kotlinx.coroutines.flow.Flow
 import assertk.assertThat
 import assertk.assertions.containsExactly
 import assertk.assertions.hasSize
@@ -62,6 +63,8 @@ class TransactionSavepointTests {
         override suspend fun execute(statement: Statement): Result<Long> = execute(statement.sql)
         override suspend fun fetchAll(sql: String): Result<ResultSet> = error("unused")
         override suspend fun fetchAll(statement: Statement): Result<ResultSet> = error("unused")
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = error("unused")
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = error("unused")
     }
 
     @Test

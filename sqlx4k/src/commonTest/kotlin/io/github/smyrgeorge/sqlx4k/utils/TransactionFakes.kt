@@ -1,5 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.utils
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.Driver
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
@@ -55,6 +57,14 @@ class ControllableTransaction(
         Result.success(ResultSet(emptyList(), null, ResultSet.Metadata(emptyList())))
 
     override suspend fun fetchAll(statement: Statement): Result<ResultSet> = fetchAll("")
+
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        fetchAll(sql).getOrThrow().forEach { emit(it) }
+    }
+
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        fetchAll(statement).getOrThrow().forEach { emit(it) }
+    }
 }
 
 /** A minimal [QueryExecutor.Transactional] whose `begin()` result is supplied by [onBegin]. */
@@ -91,6 +101,8 @@ class FakeDriver(
     override suspend fun execute(statement: Statement): Result<Long> = error("unused")
     override suspend fun fetchAll(sql: String): Result<ResultSet> = error("unused")
     override suspend fun fetchAll(statement: Statement): Result<ResultSet> = error("unused")
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = error("unused")
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = error("unused")
 
     override fun poolSize(): Int = 0
     override fun poolIdleSize(): Int = 0

@@ -98,10 +98,8 @@ interface QueryExecutor {
      * @param sql the SQL query to be executed.
      * @param fetchSize the number of rows fetched from the driver at a time (a hint some drivers ignore).
      * @return a cold flow of the rows of the result set.
-     * @throws UnsupportedOperationException if the driver does not implement streaming.
      */
-    fun fetch(@Language("SQL") sql: String, fetchSize: Int = DEFAULT_FETCH_SIZE): Flow<ResultSet.Row> =
-        throw UnsupportedOperationException(FETCH_NOT_SUPPORTED)
+    fun fetch(@Language("SQL") sql: String, fetchSize: Int = DEFAULT_FETCH_SIZE): Flow<ResultSet.Row>
 
     /**
      * Streams the rows of the given SQL statement as a cold [Flow]. See [fetch].
@@ -109,10 +107,8 @@ interface QueryExecutor {
      * @param statement the SQL statement to be executed.
      * @param fetchSize the number of rows fetched from the driver at a time (a hint some drivers ignore).
      * @return a cold flow of the rows of the result set.
-     * @throws UnsupportedOperationException if the driver does not implement streaming.
      */
-    fun fetch(statement: Statement, fetchSize: Int = DEFAULT_FETCH_SIZE): Flow<ResultSet.Row> =
-        throw UnsupportedOperationException(FETCH_NOT_SUPPORTED)
+    fun fetch(statement: Statement, fetchSize: Int = DEFAULT_FETCH_SIZE): Flow<ResultSet.Row>
 
     /**
      * Streams the rows of the given SQL query, mapping each row with the provided [RowMapper]. See [fetch].
@@ -308,8 +304,5 @@ interface QueryExecutor {
     companion object {
         /** The default number of rows [fetch] fetches from the driver at a time. */
         const val DEFAULT_FETCH_SIZE: Int = 1_000
-
-        /** The message of the [UnsupportedOperationException] thrown by [fetch] on drivers that do not stream. */
-        const val FETCH_NOT_SUPPORTED: String = "Streaming query results (fetch) is not supported by this driver."
     }
 }

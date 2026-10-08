@@ -1,5 +1,6 @@
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl
 
+import kotlinx.coroutines.flow.Flow
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
@@ -16,4 +17,6 @@ class PgmqDbAdapterImpl(private val pg: IPostgresSQL) : PgmqDbAdapter {
     override suspend fun execute(statement: Statement): Result<Long> = pg.execute(statement)
     override suspend fun fetchAll(sql: String): Result<ResultSet> = pg.fetchAll(sql)
     override suspend fun fetchAll(statement: Statement): Result<ResultSet> = pg.fetchAll(statement)
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = pg.fetch(sql, fetchSize)
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = pg.fetch(statement, fetchSize)
 }

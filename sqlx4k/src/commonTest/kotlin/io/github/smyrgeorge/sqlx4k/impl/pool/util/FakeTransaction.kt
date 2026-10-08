@@ -1,5 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.impl.pool.util
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
@@ -30,4 +32,12 @@ class FakeTransaction : Transaction {
         Result.success(ResultSet(emptyList(), null, ResultSet.Metadata(emptyList())))
 
     override suspend fun fetchAll(statement: Statement): Result<ResultSet> = fetchAll(statement.sql)
+
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        fetchAll(sql).getOrThrow().forEach { emit(it) }
+    }
+
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        fetchAll(statement).getOrThrow().forEach { emit(it) }
+    }
 }

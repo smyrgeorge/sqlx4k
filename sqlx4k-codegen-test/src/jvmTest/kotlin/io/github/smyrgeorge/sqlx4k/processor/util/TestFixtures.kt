@@ -1,5 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.processor.util
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import io.github.smyrgeorge.sqlx4k.ContextCrudRepository
 import io.github.smyrgeorge.sqlx4k.CrudRepository
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
@@ -112,6 +114,14 @@ class MockQueryExecutor : QueryExecutor {
     override suspend fun execute(statement: Statement): Result<Long> = Result.success(0L)
     override suspend fun fetchAll(sql: String): Result<ResultSet> = Result.success(emptyResultSet())
     override suspend fun fetchAll(statement: Statement): Result<ResultSet> = Result.success(emptyResultSet())
+
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        fetchAll(sql).getOrThrow().forEach { emit(it) }
+    }
+
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        fetchAll(statement).getOrThrow().forEach { emit(it) }
+    }
 
     private fun emptyResultSet(): ResultSet =
         ResultSet(rows = emptyList(), error = null, metadata = ResultSet.Metadata(emptyList()))

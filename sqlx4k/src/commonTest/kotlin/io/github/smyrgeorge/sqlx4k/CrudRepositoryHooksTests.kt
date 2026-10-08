@@ -1,5 +1,7 @@
 package io.github.smyrgeorge.sqlx4k
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import assertk.assertThat
 import assertk.assertions.isEqualTo
 import assertk.assertions.isSameInstanceAs
@@ -26,6 +28,14 @@ class CrudRepositoryHooksTests {
             Result.success(ResultSet(emptyList(), null, ResultSet.Metadata(emptyList())))
         override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
             Result.success(ResultSet(emptyList(), null, ResultSet.Metadata(emptyList())))
+
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            fetchAll(sql).getOrThrow().forEach { emit(it) }
+        }
+
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            fetchAll(statement).getOrThrow().forEach { emit(it) }
+        }
     }
 
     private val hooks = BareHooks()
