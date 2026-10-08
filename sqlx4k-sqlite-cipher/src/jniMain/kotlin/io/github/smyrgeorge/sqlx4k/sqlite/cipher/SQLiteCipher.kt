@@ -15,6 +15,9 @@ import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import kotlin.time.Duration
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -154,6 +157,15 @@ class SQLiteCipher(
         return rs.toResult()
     }
 
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = streamFlow(rt) {
+        decodeResult(CipherJni.nativeStreamOpen(rt, sql, encodeParams(emptyList()), fetchSize))
+    }
+
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = streamFlow(rt) {
+        val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
+        decodeResult(CipherJni.nativeStreamOpen(rt, nq.sql, encodeParams(nq.values), fetchSize))
+    }
+
     override suspend fun begin(): Result<Transaction> = runCatching {
         withContext(Dispatchers.IO) {
             val tx = decodeResult(CipherJni.nativeTxBegin(rt)).txOrError()
@@ -224,6 +236,27 @@ class SQLiteCipher(
                             .toResultSet()
                     }.toResult().getOrThrow()
                 }
+            }
+        }
+
+        // The connection is held (its mutex locked) for the whole collection: a stream keeps the
+        // connection busy, exactly as it does in sqlx.
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(streamFlow(rt) {
+                    decodeResult(CipherJni.nativeCnStreamOpen(rt, cn, sql, encodeParams(emptyList()), fetchSize))
+                })
+            }
+        }
+
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(streamFlow(rt) {
+                    val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
+                    decodeResult(CipherJni.nativeCnStreamOpen(rt, cn, nq.sql, encodeParams(nq.values), fetchSize))
+                })
             }
         }
 
@@ -321,6 +354,27 @@ class SQLiteCipher(
                         result.toResultSet()
                     }.toResult().getOrThrow()
                 }
+            }
+        }
+
+        // The transaction is held (its mutex locked) for the whole collection; the stream borrows the
+        // transaction in place, so the `tx` handle is unchanged afterwards.
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(streamFlow(rt) {
+                    decodeResult(CipherJni.nativeTxStreamOpen(rt, tx, sql, encodeParams(emptyList()), fetchSize))
+                })
+            }
+        }
+
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(streamFlow(rt) {
+                    val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
+                    decodeResult(CipherJni.nativeTxStreamOpen(rt, tx, nq.sql, encodeParams(nq.values), fetchSize))
+                })
             }
         }
     }

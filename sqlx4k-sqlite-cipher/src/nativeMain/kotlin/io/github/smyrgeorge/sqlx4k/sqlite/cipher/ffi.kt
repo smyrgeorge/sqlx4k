@@ -4,6 +4,10 @@ package io.github.smyrgeorge.sqlx4k.sqlite.cipher
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
@@ -22,6 +26,8 @@ import sqlx4k.sqlite.cipher.Sqlx4kSqliteCipherPtr
 import sqlx4k.sqlite.cipher.Sqlx4kSqliteCipherResult
 import sqlx4k.sqlite.cipher.Sqlx4kSqliteCipherSchema
 import sqlx4k.sqlite.cipher.sqlx4k_sqlite_cipher_free_result
+import sqlx4k.sqlite.cipher.sqlx4k_sqlite_cipher_stream_close
+import sqlx4k.sqlite.cipher.sqlx4k_sqlite_cipher_stream_next
 
 private fun Sqlx4kSqliteCipherResult.isError(): Boolean = error >= 0
 private fun Sqlx4kSqliteCipherResult.toError(): SQLError {
@@ -121,4 +127,35 @@ val fn = staticCFunction<CValue<Sqlx4kSqliteCipherPtr>, CPointer<Sqlx4kSqliteCip
     val ref = c.useContents { ptr }!!.asStableRef<Continuation<CPointer<Sqlx4kSqliteCipherResult>?>>()
     ref.get().resume(r)
     ref.dispose()
+}
+
+/**
+ * Collects a row stream as a cold flow. [open] calls one of the `sqlx4k_sqlite_cipher_*_stream_open` functions and
+ * returns its result, which carries the stream handle. Rows then arrive in chunks of the requested fetch size, each
+ * chunk crossing the FFI boundary as a regular result that is freed right after its rows are emitted; an empty chunk
+ * marks the end of the stream and an error chunk fails the collection with the [SQLError].
+ *
+ * The stream is always closed, also when the collector is cancelled or fails. Closing waits for the Rust side to stop
+ * using the connection, so the caller may release the connection (or commit the transaction) right after.
+ */
+internal fun streamFlow(
+    rt: CPointer<out CPointed>,
+    open: suspend () -> CPointer<Sqlx4kSqliteCipherResult>?,
+): Flow<ResultSet.Row> = flow {
+    val stream: CPointer<out CPointed> = open().use {
+        it.throwIfError()
+        it.stream ?: SQLError(SQLError.Code.Database, "Unexpected behaviour while opening the row stream.").raise()
+    }
+    try {
+        while (true) {
+            val chunk = sqlx { c -> sqlx4k_sqlite_cipher_stream_next(rt, stream, c, fn) }.use { it.toResultSet() }
+            chunk.throwIfError()
+            if (chunk.size == 0) break
+            chunk.rows.forEach { emit(it) }
+        }
+    } finally {
+        withContext(NonCancellable) {
+            sqlx { c -> sqlx4k_sqlite_cipher_stream_close(rt, stream, c, fn) }.use { it.throwIfError() }
+        }
+    }
 }

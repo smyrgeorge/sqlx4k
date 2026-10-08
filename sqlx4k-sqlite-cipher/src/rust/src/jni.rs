@@ -253,6 +253,112 @@ pub extern "system" fn Java_io_github_smyrgeorge_sqlx4k_sqlite_cipher_CipherJni_
 }
 
 // ----------------------------------------------------------------------------
+// Streaming (fetch)
+// ----------------------------------------------------------------------------
+//
+// Each call blocks until its result is ready: `nativeStreamNext` waits for the next chunk of rows,
+// `nativeStreamClose` for the producer task to stop. Kotlin keeps them on `Dispatchers.IO`.
+
+#[no_mangle]
+pub extern "system" fn Java_io_github_smyrgeorge_sqlx4k_sqlite_cipher_CipherJni_nativeStreamOpen<
+    'local,
+>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    rt: jlong,
+    sql: JString<'local>,
+    params: JByteArray<'local>,
+    fetch_size: jint,
+) -> jbyteArray {
+    let sql = jstring_to_string(&mut env, &sql);
+    let owned = params_from_bytes(&mut env, &params);
+    let result = RUNTIME.get().unwrap().block_on(engine(rt).stream_open(
+        sql,
+        owned,
+        stream_fetch_size(fetch_size),
+    ));
+    finish(&mut env, result)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_github_smyrgeorge_sqlx4k_sqlite_cipher_CipherJni_nativeCnStreamOpen<
+    'local,
+>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    rt: jlong,
+    cn: jlong,
+    sql: JString<'local>,
+    params: JByteArray<'local>,
+    fetch_size: jint,
+) -> jbyteArray {
+    let sql = jstring_to_string(&mut env, &sql);
+    let owned = params_from_bytes(&mut env, &params);
+    let result = RUNTIME.get().unwrap().block_on(engine(rt).cn_stream_open(
+        ptr_of(cn),
+        sql,
+        owned,
+        stream_fetch_size(fetch_size),
+    ));
+    finish(&mut env, result)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_github_smyrgeorge_sqlx4k_sqlite_cipher_CipherJni_nativeTxStreamOpen<
+    'local,
+>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    rt: jlong,
+    tx: jlong,
+    sql: JString<'local>,
+    params: JByteArray<'local>,
+    fetch_size: jint,
+) -> jbyteArray {
+    let sql = jstring_to_string(&mut env, &sql);
+    let owned = params_from_bytes(&mut env, &params);
+    let result = RUNTIME.get().unwrap().block_on(engine(rt).tx_stream_open(
+        ptr_of(tx),
+        sql,
+        owned,
+        stream_fetch_size(fetch_size),
+    ));
+    finish(&mut env, result)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_github_smyrgeorge_sqlx4k_sqlite_cipher_CipherJni_nativeStreamNext<
+    'local,
+>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    rt: jlong,
+    stream: jlong,
+) -> jbyteArray {
+    let result = RUNTIME
+        .get()
+        .unwrap()
+        .block_on(engine(rt).stream_next(ptr_of(stream)));
+    finish(&mut env, result)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_github_smyrgeorge_sqlx4k_sqlite_cipher_CipherJni_nativeStreamClose<
+    'local,
+>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    rt: jlong,
+    stream: jlong,
+) -> jbyteArray {
+    let result = RUNTIME
+        .get()
+        .unwrap()
+        .block_on(engine(rt).stream_close(ptr_of(stream)));
+    finish(&mut env, result)
+}
+
+// ----------------------------------------------------------------------------
 // Connection-level
 // ----------------------------------------------------------------------------
 

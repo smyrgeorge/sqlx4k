@@ -5,22 +5,28 @@
 //! Both [`crate::ffi`] (cinterop) and [`crate::jni`] (JVM/Android) call into here, so this is
 //! the single source of truth for query execution and result shaping.
 
+use futures_core::Stream;
+use futures_util::TryStreamExt;
 use sqlx::error::ErrorKind;
 use sqlx::pool::PoolConnection;
 use sqlx::sqlite::{
-    SqliteConnectOptions, SqlitePool, SqlitePoolOptions, SqliteRow, SqliteTypeInfo, SqliteValueRef,
+    SqliteConnectOptions, SqliteConnection, SqlitePool, SqlitePoolOptions, SqliteRow,
+    SqliteTypeInfo, SqliteValueRef,
 };
 use sqlx::{
     Acquire, AssertSqlSafe, Column, Error, Executor, Row, Sqlite, Transaction, TypeInfo, ValueRef,
 };
 use std::{
     ffi::{c_char, c_int, c_ulonglong, c_void, CStr, CString},
+    pin::Pin,
     ptr::null_mut,
     slice,
     sync::OnceLock,
     time::Duration,
 };
 use tokio::runtime::Runtime;
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
 
 // ============================================================================
 // Shared constants and types
@@ -56,6 +62,14 @@ pub struct Sqlx4kSqliteCipherPtr {
 unsafe impl Send for Sqlx4kSqliteCipherPtr {}
 unsafe impl Sync for Sqlx4kSqliteCipherPtr {}
 
+impl Sqlx4kSqliteCipherPtr {
+    /// The wrapped pointer. Going through a method (rather than the `ptr` field) inside a spawned
+    /// task captures the whole `Send` wrapper, not the raw pointer field (edition-2021 captures).
+    fn raw(&self) -> *mut c_void {
+        self.ptr
+    }
+}
+
 #[repr(C)]
 pub struct Sqlx4kSqliteCipherResult {
     pub error: c_int,
@@ -70,6 +84,8 @@ pub struct Sqlx4kSqliteCipherResult {
     pub cn: *mut c_void,
     pub tx: *mut c_void,
     pub rt: *mut c_void,
+    /// A row stream opened by `*_stream_open` (see `Sqlx4kSqliteCipherStream`), or null.
+    pub stream: *mut c_void,
     pub schema: *mut Sqlx4kSqliteCipherSchema,
     pub size: c_int,
     pub rows: *mut Sqlx4kSqliteCipherRow,
@@ -94,6 +110,7 @@ impl Default for Sqlx4kSqliteCipherResult {
             cn: null_mut(),
             tx: null_mut(),
             rt: null_mut(),
+            stream: null_mut(),
             schema: null_mut(),
             size: 0,
             rows: null_mut(),
@@ -356,6 +373,104 @@ pub fn c_chars_to_str<'a>(c_chars: *const c_char) -> &'a str {
 // SQLite (SQLCipher) implementation
 // ============================================================================
 
+// ============================================================================
+// Streaming (fetch)
+// ============================================================================
+
+/// Rows are moved to Kotlin in chunks of the requested fetch size; the channel holds at most this
+/// many ready chunks, which is the backpressure that keeps a slow consumer from buffering a large
+/// result on the Rust side.
+const STREAM_CHANNEL_CAPACITY: usize = 2;
+const STREAM_DEFAULT_FETCH_SIZE: usize = 1_000;
+
+type StreamChunk = Result<Vec<SqliteRow>, sqlx::Error>;
+type RowStream<'e> = Pin<Box<dyn Stream<Item = Result<SqliteRow, sqlx::Error>> + Send + 'e>>;
+
+/// A result set being streamed to Kotlin, row chunk by row chunk.
+///
+/// sqlx steps the statement on its SQLite worker thread and hands the rows over a bounded channel;
+/// that stream borrows the connection it runs on, so both live in a spawned task that owns them and
+/// sends the chunks through `rx`. `stream_next` receives one chunk; `stream_close` stops the task
+/// (dropping `cancel`) and joins it before freeing the handle, so the connection or transaction the
+/// task was borrowing is no longer in use once Kotlin continues. Dropping the stream resets the
+/// statement, so a cancelled stream costs nothing and the connection is simply returned to the pool.
+/// Shared by the FFI (cinterop) and the JNI bridge: the handle crosses both as an opaque pointer.
+pub struct Sqlx4kSqliteCipherStream {
+    rx: tokio::sync::Mutex<mpsc::Receiver<StreamChunk>>,
+    cancel: oneshot::Sender<()>,
+    task: JoinHandle<()>,
+}
+
+/// Opens the row stream of a query on the given connection: a plain query (as `fetch_all` does),
+/// or a prepared statement when there are parameters to bind.
+fn stream_rows_of<'e>(
+    cn: &'e mut SqliteConnection,
+    sql: String,
+    params: Vec<OwnedParam>,
+) -> RowStream<'e> {
+    if params.is_empty() {
+        cn.fetch(AssertSqlSafe(sql))
+    } else {
+        bind_params(sqlx::query::<Sqlite>(AssertSqlSafe(sql)), params).fetch(cn)
+    }
+}
+
+/// Drives a row stream, sending chunks of `fetch_size` rows until the stream ends or fails, or the
+/// consumer closes it (`cancel` fires, or the channel is dropped).
+async fn stream_rows(
+    mut rows: RowStream<'_>,
+    fetch_size: usize,
+    tx: mpsc::Sender<StreamChunk>,
+    mut cancel: oneshot::Receiver<()>,
+) {
+    let mut chunk: Vec<SqliteRow> = Vec::with_capacity(fetch_size);
+    loop {
+        let next = tokio::select! {
+            _ = &mut cancel => return,
+            next = rows.try_next() => next,
+        };
+        match next {
+            Ok(Some(row)) => {
+                chunk.push(row);
+                if chunk.len() >= fetch_size {
+                    let full = std::mem::replace(&mut chunk, Vec::with_capacity(fetch_size));
+                    tokio::select! {
+                        _ = &mut cancel => return,
+                        sent = tx.send(Ok(full)) => if sent.is_err() { return },
+                    }
+                }
+            }
+            Ok(None) => {
+                if !chunk.is_empty() {
+                    let _ = tx.send(Ok(chunk)).await;
+                }
+                return;
+            }
+            Err(err) => {
+                let _ = tx.send(Err(err)).await;
+                return;
+            }
+        }
+    }
+}
+
+/// The chunk size of a stream: the requested one, or the default when none (`<= 0`) was given.
+pub fn stream_fetch_size(fetch_size: c_int) -> usize {
+    if fetch_size > 0 {
+        fetch_size as usize
+    } else {
+        STREAM_DEFAULT_FETCH_SIZE
+    }
+}
+
+fn stream_result_of(stream: Sqlx4kSqliteCipherStream) -> *mut Sqlx4kSqliteCipherResult {
+    Sqlx4kSqliteCipherResult {
+        stream: Box::into_raw(Box::new(stream)) as *mut c_void,
+        ..Default::default()
+    }
+    .leak()
+}
+
 pub static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
 #[derive(Debug)]
@@ -532,6 +647,104 @@ impl Sqlx4kSqliteCipher {
             ..result
         };
         result.leak()
+    }
+
+    pub async fn stream_open(
+        &self,
+        sql: String,
+        params: Vec<OwnedParam>,
+        fetch_size: usize,
+    ) -> *mut Sqlx4kSqliteCipherResult {
+        let mut cn: PoolConnection<Sqlite> = match self.pool.acquire().await {
+            Ok(cn) => cn,
+            Err(err) => return error_result_of(err).leak(),
+        };
+        let (tx, rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
+        let (cancel, cancel_rx) = oneshot::channel();
+        let task = RUNTIME.get().unwrap().spawn(async move {
+            // The connection goes back to the pool when the task ends, consumed or cancelled alike
+            // (unlike the network drivers there is nothing to drain: dropping the stream resets the
+            // statement; and closing it would lose an in-memory database).
+            let rows = stream_rows_of(&mut cn, sql, params);
+            stream_rows(rows, fetch_size, tx, cancel_rx).await;
+        });
+        stream_result_of(Sqlx4kSqliteCipherStream {
+            rx: tokio::sync::Mutex::new(rx),
+            cancel,
+            task,
+        })
+    }
+
+    pub async fn cn_stream_open(
+        &self,
+        cn: Sqlx4kSqliteCipherPtr,
+        sql: String,
+        params: Vec<OwnedParam>,
+        fetch_size: usize,
+    ) -> *mut Sqlx4kSqliteCipherResult {
+        let (tx, rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
+        let (cancel, cancel_rx) = oneshot::channel();
+        let task = RUNTIME.get().unwrap().spawn(async move {
+            // The connection stays with Kotlin, which serializes its use and closes this stream
+            // before any other statement.
+            let cn = unsafe { &mut *(cn.raw() as *mut PoolConnection<Sqlite>) };
+            let rows = stream_rows_of(&mut **cn, sql, params);
+            stream_rows(rows, fetch_size, tx, cancel_rx).await;
+        });
+        stream_result_of(Sqlx4kSqliteCipherStream {
+            rx: tokio::sync::Mutex::new(rx),
+            cancel,
+            task,
+        })
+    }
+
+    pub async fn tx_stream_open(
+        &self,
+        tx: Sqlx4kSqliteCipherPtr,
+        sql: String,
+        params: Vec<OwnedParam>,
+        fetch_size: usize,
+    ) -> *mut Sqlx4kSqliteCipherResult {
+        let (chunks, rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
+        let (cancel, cancel_rx) = oneshot::channel();
+        let task = RUNTIME.get().unwrap().spawn(async move {
+            // Borrowed in place (not re-boxed like `tx_fetch_all`), so the Kotlin-held pointer stays valid.
+            let tx = unsafe { &mut *(tx.raw() as *mut Transaction<'static, Sqlite>) };
+            let rows = stream_rows_of(&mut **tx, sql, params);
+            stream_rows(rows, fetch_size, chunks, cancel_rx).await;
+        });
+        stream_result_of(Sqlx4kSqliteCipherStream {
+            rx: tokio::sync::Mutex::new(rx),
+            cancel,
+            task,
+        })
+    }
+
+    pub async fn stream_next(
+        &self,
+        stream: Sqlx4kSqliteCipherPtr,
+    ) -> *mut Sqlx4kSqliteCipherResult {
+        let stream = unsafe { &*(stream.ptr as *const Sqlx4kSqliteCipherStream) };
+        let mut rx = stream.rx.lock().await;
+        match rx.recv().await {
+            Some(chunk) => result_of(chunk).leak(),
+            // End of the stream: an empty result (size 0, no schema).
+            None => Sqlx4kSqliteCipherResult::default().leak(),
+        }
+    }
+
+    pub async fn stream_close(
+        &self,
+        stream: Sqlx4kSqliteCipherPtr,
+    ) -> *mut Sqlx4kSqliteCipherResult {
+        let stream = unsafe { Box::from_raw(stream.ptr as *mut Sqlx4kSqliteCipherStream) };
+        let Sqlx4kSqliteCipherStream { rx, cancel, task } = *stream;
+        // Stop the producer (dropping the sender fires its cancel branch, dropping the receiver fails
+        // its next send) and wait for it: only then is the connection it borrowed free again.
+        drop(cancel);
+        drop(rx);
+        let _ = task.await;
+        Sqlx4kSqliteCipherResult::default().leak()
     }
 
     pub async fn close(&self) -> *mut Sqlx4kSqliteCipherResult {
@@ -883,6 +1096,7 @@ fn row_of(row: &SqliteRow) -> Sqlx4kSqliteCipherRow {
 //   i64 cn  (pointer as i64, 0 = null)
 //   i64 tx
 //   i64 rt
+//   i64 stream (pointer as i64, 0 = null; see `Sqlx4kSqliteCipherStream`)
 //   u8  has_schema; [i32 col_count; { i32 ordinal, str name, str kind } * col_count]
 //   i32 row_count;  [{ i32 col_count; { i32 ordinal, u8 has_value, [str value] } * col_count } * row_count]
 // where str = i32 utf8_len + utf8 bytes.
@@ -953,6 +1167,7 @@ pub fn serialize_result(ptr: *const Sqlx4kSqliteCipherResult) -> Vec<u8> {
     buf.put_i64(result.cn as usize as i64);
     buf.put_i64(result.tx as usize as i64);
     buf.put_i64(result.rt as usize as i64);
+    buf.put_i64(result.stream as usize as i64);
 
     // Schema.
     if result.schema.is_null() {

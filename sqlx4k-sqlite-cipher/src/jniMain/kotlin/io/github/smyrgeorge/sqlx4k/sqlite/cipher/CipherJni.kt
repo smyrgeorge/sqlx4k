@@ -45,4 +45,12 @@ internal object CipherJni {
     external fun nativeTxFetchAll(rt: Long, tx: Long, sql: String): ByteArray
     external fun nativeTxQueryWithParams(rt: Long, tx: Long, sql: String, params: ByteArray): ByteArray
     external fun nativeTxFetchAllWithParams(rt: Long, tx: Long, sql: String, params: ByteArray): ByteArray
+
+    // Streaming (fetch): the open calls return the stream handle, next returns one chunk of rows
+    // (an empty one at the end), close stops the producer. Each call blocks until its result is ready.
+    external fun nativeStreamOpen(rt: Long, sql: String, params: ByteArray, fetchSize: Int): ByteArray
+    external fun nativeCnStreamOpen(rt: Long, cn: Long, sql: String, params: ByteArray, fetchSize: Int): ByteArray
+    external fun nativeTxStreamOpen(rt: Long, tx: Long, sql: String, params: ByteArray, fetchSize: Int): ByteArray
+    external fun nativeStreamNext(rt: Long, stream: Long): ByteArray
+    external fun nativeStreamClose(rt: Long, stream: Long): ByteArray
 }

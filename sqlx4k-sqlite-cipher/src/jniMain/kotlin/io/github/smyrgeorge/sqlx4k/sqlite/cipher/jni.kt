@@ -7,6 +7,11 @@ import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.types.SqlRawLiteral
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
@@ -135,6 +140,7 @@ internal class JniResult(
     val cn: Long,
     val tx: Long,
     val rt: Long,
+    val stream: Long,
     private val metadata: ResultSet.Metadata,
     private val rows: List<ResultSet.Row>,
 ) {
@@ -160,6 +166,12 @@ internal class JniResult(
     fun cnOrError(): Long {
         throwIfError()
         return cn
+    }
+
+    fun streamOrError(): Long {
+        throwIfError()
+        if (stream == 0L) SQLError(SQLError.Code.Database, "Unexpected behaviour while opening the row stream.").raise()
+        return stream
     }
 
     fun txOrError(): Long {
@@ -204,6 +216,7 @@ internal fun decodeResult(bytes: ByteArray): JniResult {
     val cn = inp.readLong()
     val tx = inp.readLong()
     val rt = inp.readLong()
+    val stream = inp.readLong()
 
     val hasSchema = inp.readByte().toInt()
     val schemaColumns: List<ResultSet.Metadata.Column> = if (hasSchema == 1) {
@@ -246,7 +259,34 @@ internal fun decodeResult(bytes: ByteArray): JniResult {
         cn = cn,
         tx = tx,
         rt = rt,
+        stream = stream,
         metadata = ResultSet.Metadata(schemaColumns),
         rows = rows,
     )
+}
+
+/**
+ * Collects a row stream as a cold flow. [open] calls one of the `CipherJni.native*StreamOpen` functions and returns
+ * its decoded result, which carries the stream handle. Rows then arrive in chunks of the requested fetch size, each
+ * chunk crossing the JNI boundary as a regular result; an empty chunk marks the end of the stream and an error chunk
+ * fails the collection with the [SQLError]. The JNI calls block until their result is ready, so they run on
+ * [Dispatchers.IO].
+ *
+ * The stream is always closed, also when the collector is cancelled or fails. Closing waits for the Rust side to stop
+ * using the connection, so the caller may release the connection (or commit the transaction) right after.
+ */
+internal fun streamFlow(rt: Long, open: () -> JniResult): Flow<ResultSet.Row> = flow {
+    val stream: Long = withContext(Dispatchers.IO) { open().streamOrError() }
+    try {
+        while (true) {
+            val chunk = withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeStreamNext(rt, stream)).toResultSet() }
+            chunk.throwIfError()
+            if (chunk.rows.isEmpty()) break
+            chunk.rows.forEach { emit(it) }
+        }
+    } finally {
+        withContext(NonCancellable + Dispatchers.IO) {
+            decodeResult(CipherJni.nativeStreamClose(rt, stream)).throwIfError()
+        }
+    }
 }
