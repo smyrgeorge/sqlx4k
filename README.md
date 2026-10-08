@@ -358,12 +358,13 @@ db.fetch("select * from events order by id;", fetchSize = 1_000)
 db.fetch("select * from users;", UserRowMapper).collect { user -> println(user) }
 ```
 
-Streaming is implemented by the PostgreSQL and MySQL drivers (native and JVM); on the SQLite drivers `fetch` throws
-an `UnsupportedOperationException` until they implement it. On native targets the rows are read off the wire as the server
+Streaming is implemented by the PostgreSQL, MySQL and SQLite drivers (native, JVM and Android); on the SQLCipher
+driver `fetch` throws an `UnsupportedOperationException` until it implements it. On native targets the rows are read off the wire as the server
 sends them, with
-no server-side cursor, and the Rust side holds at most two chunks ahead of the collector. Cancelling a collector
-mid-way closes the pooled connection instead of returning it, since the remaining rows would otherwise have to be
-read and discarded on its next use. On the JVM the R2DBC drivers stream with reactive backpressure, and `fetchSize`
+no server-side cursor, and the Rust side holds at most two chunks ahead of the collector. On PostgreSQL and MySQL,
+cancelling a collector mid-way closes the pooled connection instead of returning it, since the remaining rows would
+otherwise have to be read and discarded on its next use; SQLite just resets the statement. The JDBC and Android SQLite
+drivers step their result set row by row off the caller's thread, buffering `fetchSize` rows ahead of the collector. On the JVM the R2DBC drivers stream with reactive backpressure, and `fetchSize`
 is passed on to the statement (MySQL honours it through a server-side cursor for prepared statements).
 
 ### Prepared Statements

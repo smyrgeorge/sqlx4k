@@ -34,7 +34,14 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -178,6 +185,26 @@ class SQLite(
         }
     }
 
+    // A pooled connection is borrowed for the whole collection and returned when the flow completes,
+    // fails or is cancelled.
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        val connection = pool.acquire().getOrThrow()
+        try {
+            emitAll(connection.fetch(sql, fetchSize))
+        } finally {
+            withContext(NonCancellable) { connection.close() }
+        }
+    }
+
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        val connection = pool.acquire().getOrThrow()
+        try {
+            emitAll(connection.fetch(statement, fetchSize))
+        } finally {
+            withContext(NonCancellable) { connection.close() }
+        }
+    }
+
     override suspend fun begin(): Result<Transaction> = runCatching {
         val connection = pool.acquire().getOrThrow() as PooledConnection
         try {
@@ -293,6 +320,28 @@ class SQLite(
                 } catch (e: Exception) {
                     e.toSQLError().raise()
                 }
+            }
+        }
+
+        // The connection is held (its mutex locked) for the whole collection.
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(cursorRows(fetchSize, dispatcher) { db.rawQuery(sql, null) })
+            }
+        }
+
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(cursorRows(fetchSize, dispatcher) {
+                    val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
+                    val factory = SQLiteDatabase.CursorFactory { _, driver, editTable, query ->
+                        query.bindAll(nq.values)
+                        SQLiteCursor(driver, editTable, query)
+                    }
+                    db.rawQueryWithFactory(factory, nq.sql, null, "")
+                })
             }
         }
 
@@ -458,6 +507,28 @@ class SQLite(
                 }
             }
         }
+
+        // The transaction is held (its mutex locked) for the whole collection.
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(cursorRows(fetchSize, dispatcher) { db.rawQuery(sql, null) })
+            }
+        }
+
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(cursorRows(fetchSize, dispatcher) {
+                    val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
+                    val factory = SQLiteDatabase.CursorFactory { _, driver, editTable, query ->
+                        query.bindAll(nq.values)
+                        SQLiteCursor(driver, editTable, query)
+                    }
+                    db.rawQueryWithFactory(factory, nq.sql, null, "")
+                })
+            }
+        }
     }
 
     companion object {
@@ -502,36 +573,55 @@ class SQLite(
             }
         }
 
-        private fun Cursor.toResultSet(): ResultSet {
-            fun toRow(): ResultSet.Row {
-                val columns = (0 until columnCount).map { i ->
-                    val type = getType(i).toTypeName()
-                    if (getType(i) == Cursor.FIELD_TYPE_BLOB) {
-                        return@map ResultSet.Row.Column(
-                            ordinal = i,
-                            name = getColumnName(i),
-                            type = type,
-                            value = null,
-                            bytes = if (isNull(i)) null else getBlob(i),
-                        )
-                    }
-                    val value = when (getType(i)) {
-                        Cursor.FIELD_TYPE_NULL -> null
-                        Cursor.FIELD_TYPE_INTEGER -> if (isNull(i)) null else getLong(i).toString()
-                        Cursor.FIELD_TYPE_FLOAT -> if (isNull(i)) null else getDouble(i).toString()
-                        Cursor.FIELD_TYPE_STRING -> if (isNull(i)) null else getString(i)
-                        else -> if (isNull(i)) null else getString(i)
-                    }
-                    ResultSet.Row.Column(
+        /** The row the cursor is positioned on. */
+        private fun Cursor.toRow(): ResultSet.Row {
+            val columns = (0 until columnCount).map { i ->
+                val type = getType(i).toTypeName()
+                if (getType(i) == Cursor.FIELD_TYPE_BLOB) {
+                    return@map ResultSet.Row.Column(
                         ordinal = i,
                         name = getColumnName(i),
                         type = type,
-                        value = value,
+                        value = null,
+                        bytes = if (isNull(i)) null else getBlob(i),
                     )
                 }
-                return ResultSet.Row(columns)
+                val value = when (getType(i)) {
+                    Cursor.FIELD_TYPE_NULL -> null
+                    Cursor.FIELD_TYPE_INTEGER -> if (isNull(i)) null else getLong(i).toString()
+                    Cursor.FIELD_TYPE_FLOAT -> if (isNull(i)) null else getDouble(i).toString()
+                    Cursor.FIELD_TYPE_STRING -> if (isNull(i)) null else getString(i)
+                    else -> if (isNull(i)) null else getString(i)
+                }
+                ResultSet.Row.Column(
+                    ordinal = i,
+                    name = getColumnName(i),
+                    type = type,
+                    value = value,
+                )
             }
+            return ResultSet.Row(columns)
+        }
 
+        /**
+         * Streams the rows of a query: the cursor is opened and stepped row by row on the connection's
+         * [dispatcher] (the platform driver is blocking and its transaction state is thread-bound), handing
+         * the rows to the collector through a buffer of [fetchSize] rows; the cursor is closed when the flow
+         * completes, fails or is cancelled. A driver failure fails the collection with the matching [SQLError].
+         *
+         * @param query runs the query and returns its cursor.
+         */
+        private fun cursorRows(
+            fetchSize: Int,
+            dispatcher: CoroutineDispatcher,
+            query: () -> Cursor
+        ): Flow<ResultSet.Row> = flow {
+            query().use { cursor ->
+                while (cursor.moveToNext()) emit(cursor.toRow())
+            }
+        }.buffer(fetchSize.coerceAtLeast(1)).flowOn(dispatcher).catch { e -> throw (e as? SQLError) ?: e.toSQLError() }
+
+        private fun Cursor.toResultSet(): ResultSet {
             val rows = mutableListOf<ResultSet.Row>()
             if (moveToFirst()) {
                 do {

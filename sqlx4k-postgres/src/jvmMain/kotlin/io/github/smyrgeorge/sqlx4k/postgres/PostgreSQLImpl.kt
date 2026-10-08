@@ -615,7 +615,7 @@ class PostgreSQLImpl(
             execute().asFlow().collect { result ->
                 emitAll(result.map { row, _ -> row.toRow() }.asFlow())
             }
-        }.catch { e -> throw e.toSQLError() }
+        }.catch { e -> throw (e as? SQLError) ?: e.toSQLError() }
 
         private suspend fun NativeR2dbcResultSet.toResultSet(): ResultSet {
             val rows = map { r, _ -> r.toRow() }.asFlow().toList()

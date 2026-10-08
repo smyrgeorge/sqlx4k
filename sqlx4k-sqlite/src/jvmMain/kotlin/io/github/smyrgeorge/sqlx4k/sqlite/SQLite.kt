@@ -29,6 +29,13 @@ import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -171,6 +178,26 @@ class SQLite(
         }
     }
 
+    // A pooled connection is borrowed for the whole collection and returned when the flow completes,
+    // fails or is cancelled.
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        val connection = pool.acquire().getOrThrow()
+        try {
+            emitAll(connection.fetch(sql, fetchSize))
+        } finally {
+            withContext(NonCancellable) { connection.close() }
+        }
+    }
+
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        val connection = pool.acquire().getOrThrow()
+        try {
+            emitAll(connection.fetch(statement, fetchSize))
+        } finally {
+            withContext(NonCancellable) { connection.close() }
+        }
+    }
+
     override suspend fun begin(): Result<Transaction> = runCatching {
         val connection = pool.acquire().getOrThrow() as PooledConnection
         try {
@@ -264,6 +291,27 @@ class SQLite(
                 } catch (e: Exception) {
                     e.toSQLError().raise()
                 }
+            }
+        }
+
+        // The connection is held (its mutex locked) for the whole collection.
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(jdbcRows(fetchSize) {
+                    val stmt = connection.createStatement()
+                    stmt to stmt.executeQuery(sql)
+                })
+            }
+        }
+
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(jdbcRows(fetchSize) {
+                    val stmt = connection.prepareStatement(statement, encoders)
+                    stmt to stmt.executeQuery()
+                })
             }
         }
 
@@ -392,6 +440,27 @@ class SQLite(
                 }
             }
         }
+
+        // The transaction is held (its mutex locked) for the whole collection.
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(jdbcRows(fetchSize) {
+                    val stmt = connection.createStatement()
+                    stmt to stmt.executeQuery(sql)
+                })
+            }
+        }
+
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(jdbcRows(fetchSize) {
+                    val stmt = connection.prepareStatement(statement, encoders)
+                    stmt to stmt.executeQuery()
+                })
+            }
+        }
     }
 
     companion object {
@@ -436,33 +505,52 @@ class SQLite(
             return stmt
         }
 
-        private fun NativeJdbcResultSet.toResultSet(): ResultSet {
-            fun toRow(): ResultSet.Row {
-                val metaData = this.metaData
-                val columns = (1..metaData.columnCount).map { i ->
-                    val type = metaData.getColumnTypeName(i)
-                    if (type == "BLOB") {
-                        val raw = getBytes(i)
-                        ResultSet.Row.Column(
-                            ordinal = i - 1,
-                            name = metaData.getColumnName(i),
-                            type = type,
-                            value = null,
-                            bytes = if (wasNull()) null else raw
-                        )
-                    } else {
-                        val raw = getString(i)
-                        ResultSet.Row.Column(
-                            ordinal = i - 1,
-                            name = metaData.getColumnName(i),
-                            type = type,
-                            value = if (wasNull()) null else raw
-                        )
-                    }
+        /** The current row of the result set. */
+        private fun NativeJdbcResultSet.toRow(): ResultSet.Row {
+            val metaData = this.metaData
+            val columns = (1..metaData.columnCount).map { i ->
+                val type = metaData.getColumnTypeName(i)
+                if (type == "BLOB") {
+                    val raw = getBytes(i)
+                    ResultSet.Row.Column(
+                        ordinal = i - 1,
+                        name = metaData.getColumnName(i),
+                        type = type,
+                        value = null,
+                        bytes = if (wasNull()) null else raw
+                    )
+                } else {
+                    val raw = getString(i)
+                    ResultSet.Row.Column(
+                        ordinal = i - 1,
+                        name = metaData.getColumnName(i),
+                        type = type,
+                        value = if (wasNull()) null else raw
+                    )
                 }
-                return ResultSet.Row(columns)
             }
+            return ResultSet.Row(columns)
+        }
 
+        /**
+         * Streams the rows of a JDBC query. The driver is blocking, so the statement is executed and the result
+         * set stepped row by row on [Dispatchers.IO], handing the rows to the collector through a buffer of
+         * [fetchSize] rows; the statement (and with it the result set) is closed when the flow completes, fails
+         * or is cancelled. A driver failure fails the collection with the matching [SQLError].
+         *
+         * @param execute executes the query and returns the statement to close along with its result set.
+         */
+        private fun jdbcRows(
+            fetchSize: Int,
+            execute: () -> Pair<java.sql.Statement, NativeJdbcResultSet>
+        ): Flow<ResultSet.Row> = flow {
+            val (stmt, rs) = execute()
+            stmt.use {
+                while (rs.next()) emit(rs.toRow())
+            }
+        }.buffer(fetchSize.coerceAtLeast(1)).flowOn(Dispatchers.IO).catch { e -> throw (e as? SQLError) ?: e.toSQLError() }
+
+        private fun NativeJdbcResultSet.toResultSet(): ResultSet {
             val rows = mutableListOf<ResultSet.Row>()
             while (next()) {
                 rows.add(toRow())

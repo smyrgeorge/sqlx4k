@@ -1,20 +1,26 @@
+use futures_core::Stream;
+use futures_util::TryStreamExt;
 use sqlx::error::ErrorKind;
 use sqlx::migrate::MigrateDatabase;
 use sqlx::pool::PoolConnection;
 use sqlx::sqlite::{
-    SqliteConnectOptions, SqlitePool, SqlitePoolOptions, SqliteRow, SqliteTypeInfo, SqliteValueRef,
+    SqliteConnectOptions, SqliteConnection, SqlitePool, SqlitePoolOptions, SqliteRow,
+    SqliteTypeInfo, SqliteValueRef,
 };
 use sqlx::{
     Acquire, AssertSqlSafe, Column, Error, Executor, Row, Sqlite, Transaction, TypeInfo, ValueRef,
 };
 use std::{
     ffi::{c_char, c_int, c_ulonglong, c_void, CStr, CString},
+    pin::Pin,
     ptr::null_mut,
     slice,
     sync::OnceLock,
     time::Duration,
 };
 use tokio::runtime::Runtime;
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
 
 // Linux-only: provides the `fcntl64` symbol that the bundled `sqlite3.c` references but
 // Kotlin/Native's bundled glibc sysroot doesn't export. See the module docs for details.
@@ -53,6 +59,14 @@ pub struct Sqlx4kSqlitePtr {
 unsafe impl Send for Sqlx4kSqlitePtr {}
 unsafe impl Sync for Sqlx4kSqlitePtr {}
 
+impl Sqlx4kSqlitePtr {
+    /// The wrapped pointer. Going through a method (rather than the `ptr` field) inside a spawned
+    /// task captures the whole `Send` wrapper, not the raw pointer field (edition-2021 captures).
+    fn raw(&self) -> *mut c_void {
+        self.ptr
+    }
+}
+
 #[repr(C)]
 pub struct Sqlx4kSqliteResult {
     pub error: c_int,
@@ -67,6 +81,8 @@ pub struct Sqlx4kSqliteResult {
     pub cn: *mut c_void,
     pub tx: *mut c_void,
     pub rt: *mut c_void,
+    /// A row stream opened by `sqlx4k_sqlite_*_stream_open` (see `Sqlx4kSqliteStream`), or null.
+    pub stream: *mut c_void,
     pub schema: *mut Sqlx4kSqliteSchema,
     pub size: c_int,
     pub rows: *mut Sqlx4kSqliteRow,
@@ -92,6 +108,7 @@ impl Default for Sqlx4kSqliteResult {
             cn: null_mut(),
             tx: null_mut(),
             rt: null_mut(),
+            stream: null_mut(),
             schema: null_mut(),
             size: 0,
             rows: null_mut(),
@@ -373,6 +390,103 @@ fn sqlite_url_mode(url: &str) -> Option<&str> {
 // SQLite-specific implementation
 // ============================================================================
 
+// ============================================================================
+// Streaming (fetch)
+// ============================================================================
+
+/// Rows are moved to Kotlin in chunks of the requested fetch size; the channel holds at most this
+/// many ready chunks, which is the backpressure that keeps a slow consumer from buffering a large
+/// result on the Rust side.
+const STREAM_CHANNEL_CAPACITY: usize = 2;
+const STREAM_DEFAULT_FETCH_SIZE: usize = 1_000;
+
+type StreamChunk = Result<Vec<SqliteRow>, sqlx::Error>;
+type RowStream<'e> = Pin<Box<dyn Stream<Item = Result<SqliteRow, sqlx::Error>> + Send + 'e>>;
+
+/// A result set being streamed to Kotlin, row chunk by row chunk.
+///
+/// sqlx steps the statement on its SQLite worker thread and hands the rows over a bounded channel;
+/// that stream borrows the connection it runs on, so both live in a spawned task that owns them and
+/// sends the chunks through `rx`. `sqlx4k_sqlite_stream_next` receives one chunk;
+/// `sqlx4k_sqlite_stream_close` stops the task (dropping `cancel`) and joins it before freeing the
+/// handle, so the connection or transaction the task was borrowing is no longer in use once Kotlin
+/// continues. Dropping the stream resets the statement, so a cancelled stream costs nothing and
+/// the connection is simply returned to the pool.
+struct Sqlx4kSqliteStream {
+    rx: tokio::sync::Mutex<mpsc::Receiver<StreamChunk>>,
+    cancel: oneshot::Sender<()>,
+    task: JoinHandle<()>,
+}
+
+/// Opens the row stream of a query on the given connection: a plain query (as `fetch_all` does),
+/// or a prepared statement when there are parameters to bind.
+fn stream_rows_of<'e>(
+    cn: &'e mut SqliteConnection,
+    sql: String,
+    params: Vec<OwnedParam>,
+) -> RowStream<'e> {
+    if params.is_empty() {
+        cn.fetch(AssertSqlSafe(sql))
+    } else {
+        bind_params(sqlx::query::<Sqlite>(AssertSqlSafe(sql)), params).fetch(cn)
+    }
+}
+
+/// Drives a row stream, sending chunks of `fetch_size` rows until the stream ends or fails, or the
+/// consumer closes it (`cancel` fires, or the channel is dropped).
+async fn stream_rows(
+    mut rows: RowStream<'_>,
+    fetch_size: usize,
+    tx: mpsc::Sender<StreamChunk>,
+    mut cancel: oneshot::Receiver<()>,
+) {
+    let mut chunk: Vec<SqliteRow> = Vec::with_capacity(fetch_size);
+    loop {
+        let next = tokio::select! {
+            _ = &mut cancel => return,
+            next = rows.try_next() => next,
+        };
+        match next {
+            Ok(Some(row)) => {
+                chunk.push(row);
+                if chunk.len() >= fetch_size {
+                    let full = std::mem::replace(&mut chunk, Vec::with_capacity(fetch_size));
+                    tokio::select! {
+                        _ = &mut cancel => return,
+                        sent = tx.send(Ok(full)) => if sent.is_err() { return },
+                    }
+                }
+            }
+            Ok(None) => {
+                if !chunk.is_empty() {
+                    let _ = tx.send(Ok(chunk)).await;
+                }
+                return;
+            }
+            Err(err) => {
+                let _ = tx.send(Err(err)).await;
+                return;
+            }
+        }
+    }
+}
+
+fn stream_fetch_size(fetch_size: c_int) -> usize {
+    if fetch_size > 0 {
+        fetch_size as usize
+    } else {
+        STREAM_DEFAULT_FETCH_SIZE
+    }
+}
+
+fn stream_result_of(stream: Sqlx4kSqliteStream) -> *mut Sqlx4kSqliteResult {
+    Sqlx4kSqliteResult {
+        stream: Box::into_raw(Box::new(stream)) as *mut c_void,
+        ..Default::default()
+    }
+    .leak()
+}
+
 static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
 #[derive(Debug)]
@@ -533,6 +647,98 @@ impl Sqlx4kSqlite {
             ..result
         };
         result.leak()
+    }
+
+    async fn stream_open(
+        &self,
+        sql: String,
+        params: Vec<OwnedParam>,
+        fetch_size: usize,
+    ) -> *mut Sqlx4kSqliteResult {
+        let mut cn: PoolConnection<Sqlite> = match self.pool.acquire().await {
+            Ok(cn) => cn,
+            Err(err) => return sqlx4k_sqlite_error_result_of(err).leak(),
+        };
+        let (tx, rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
+        let (cancel, cancel_rx) = oneshot::channel();
+        let task = RUNTIME.get().unwrap().spawn(async move {
+            // The connection goes back to the pool when the task ends, consumed or cancelled alike
+            // (unlike the network drivers there is nothing to drain: dropping the stream resets the
+            // statement; and closing it would lose an in-memory database).
+            let rows = stream_rows_of(&mut cn, sql, params);
+            stream_rows(rows, fetch_size, tx, cancel_rx).await;
+        });
+        stream_result_of(Sqlx4kSqliteStream {
+            rx: tokio::sync::Mutex::new(rx),
+            cancel,
+            task,
+        })
+    }
+
+    async fn cn_stream_open(
+        &self,
+        cn: Sqlx4kSqlitePtr,
+        sql: String,
+        params: Vec<OwnedParam>,
+        fetch_size: usize,
+    ) -> *mut Sqlx4kSqliteResult {
+        let (tx, rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
+        let (cancel, cancel_rx) = oneshot::channel();
+        let task = RUNTIME.get().unwrap().spawn(async move {
+            // The connection stays with Kotlin, which serializes its use and closes this stream
+            // before any other statement.
+            let cn = unsafe { &mut *(cn.raw() as *mut PoolConnection<Sqlite>) };
+            let rows = stream_rows_of(&mut **cn, sql, params);
+            stream_rows(rows, fetch_size, tx, cancel_rx).await;
+        });
+        stream_result_of(Sqlx4kSqliteStream {
+            rx: tokio::sync::Mutex::new(rx),
+            cancel,
+            task,
+        })
+    }
+
+    async fn tx_stream_open(
+        &self,
+        tx: Sqlx4kSqlitePtr,
+        sql: String,
+        params: Vec<OwnedParam>,
+        fetch_size: usize,
+    ) -> *mut Sqlx4kSqliteResult {
+        let (chunks, rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
+        let (cancel, cancel_rx) = oneshot::channel();
+        let task = RUNTIME.get().unwrap().spawn(async move {
+            // Borrowed in place (not re-boxed like `tx_fetch_all`), so the Kotlin-held pointer stays valid.
+            let tx = unsafe { &mut *(tx.raw() as *mut Transaction<'static, Sqlite>) };
+            let rows = stream_rows_of(&mut **tx, sql, params);
+            stream_rows(rows, fetch_size, chunks, cancel_rx).await;
+        });
+        stream_result_of(Sqlx4kSqliteStream {
+            rx: tokio::sync::Mutex::new(rx),
+            cancel,
+            task,
+        })
+    }
+
+    async fn stream_next(&self, stream: Sqlx4kSqlitePtr) -> *mut Sqlx4kSqliteResult {
+        let stream = unsafe { &*(stream.ptr as *const Sqlx4kSqliteStream) };
+        let mut rx = stream.rx.lock().await;
+        match rx.recv().await {
+            Some(chunk) => sqlx4k_sqlite_result_of(chunk).leak(),
+            // End of the stream: an empty result (size 0, no schema).
+            None => Sqlx4kSqliteResult::default().leak(),
+        }
+    }
+
+    async fn stream_close(&self, stream: Sqlx4kSqlitePtr) -> *mut Sqlx4kSqliteResult {
+        let stream = unsafe { Box::from_raw(stream.ptr as *mut Sqlx4kSqliteStream) };
+        let Sqlx4kSqliteStream { rx, cancel, task } = *stream;
+        // Stop the producer (dropping the sender fires its cancel branch, dropping the receiver fails
+        // its next send) and wait for it: only then is the connection it borrowed free again.
+        drop(cancel);
+        drop(rx);
+        let _ = task.await;
+        Sqlx4kSqliteResult::default().leak()
     }
 
     async fn close(&self) -> *mut Sqlx4kSqliteResult {
@@ -813,6 +1019,110 @@ pub extern "C" fn sqlx4k_sqlite_fetch_all(
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
     runtime.spawn(async move {
         let result = sqlx4k.fetch_all(sql).await;
+        fun(callback, result)
+    });
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_sqlite_stream_open(
+    rt: *mut c_void,
+    sql: *const c_char,
+    params: *const Sqlx4kSqliteParam,
+    params_len: c_int,
+    fetch_size: c_int,
+    callback: *mut c_void,
+    fun: extern "C" fn(Sqlx4kSqlitePtr, *mut Sqlx4kSqliteResult),
+) {
+    let callback = Sqlx4kSqlitePtr { ptr: callback };
+    let sql = c_chars_to_str_sqlite(sql).to_owned();
+    let owned = read_params(params, params_len);
+    let fetch_size = stream_fetch_size(fetch_size);
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
+    runtime.spawn(async move {
+        let result = sqlx4k.stream_open(sql, owned, fetch_size).await;
+        fun(callback, result)
+    });
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_sqlite_cn_stream_open(
+    rt: *mut c_void,
+    cn: *mut c_void,
+    sql: *const c_char,
+    params: *const Sqlx4kSqliteParam,
+    params_len: c_int,
+    fetch_size: c_int,
+    callback: *mut c_void,
+    fun: extern "C" fn(Sqlx4kSqlitePtr, *mut Sqlx4kSqliteResult),
+) {
+    let callback = Sqlx4kSqlitePtr { ptr: callback };
+    let cn = Sqlx4kSqlitePtr { ptr: cn };
+    let sql = c_chars_to_str_sqlite(sql).to_owned();
+    let owned = read_params(params, params_len);
+    let fetch_size = stream_fetch_size(fetch_size);
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
+    runtime.spawn(async move {
+        let result = sqlx4k.cn_stream_open(cn, sql, owned, fetch_size).await;
+        fun(callback, result)
+    });
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_sqlite_tx_stream_open(
+    rt: *mut c_void,
+    tx: *mut c_void,
+    sql: *const c_char,
+    params: *const Sqlx4kSqliteParam,
+    params_len: c_int,
+    fetch_size: c_int,
+    callback: *mut c_void,
+    fun: extern "C" fn(Sqlx4kSqlitePtr, *mut Sqlx4kSqliteResult),
+) {
+    let callback = Sqlx4kSqlitePtr { ptr: callback };
+    let tx = Sqlx4kSqlitePtr { ptr: tx };
+    let sql = c_chars_to_str_sqlite(sql).to_owned();
+    let owned = read_params(params, params_len);
+    let fetch_size = stream_fetch_size(fetch_size);
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
+    runtime.spawn(async move {
+        let result = sqlx4k.tx_stream_open(tx, sql, owned, fetch_size).await;
+        fun(callback, result)
+    });
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_sqlite_stream_next(
+    rt: *mut c_void,
+    stream: *mut c_void,
+    callback: *mut c_void,
+    fun: extern "C" fn(Sqlx4kSqlitePtr, *mut Sqlx4kSqliteResult),
+) {
+    let callback = Sqlx4kSqlitePtr { ptr: callback };
+    let stream = Sqlx4kSqlitePtr { ptr: stream };
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
+    runtime.spawn(async move {
+        let result = sqlx4k.stream_next(stream).await;
+        fun(callback, result)
+    });
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_sqlite_stream_close(
+    rt: *mut c_void,
+    stream: *mut c_void,
+    callback: *mut c_void,
+    fun: extern "C" fn(Sqlx4kSqlitePtr, *mut Sqlx4kSqliteResult),
+) {
+    let callback = Sqlx4kSqlitePtr { ptr: callback };
+    let stream = Sqlx4kSqlitePtr { ptr: stream };
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
+    runtime.spawn(async move {
+        let result = sqlx4k.stream_close(stream).await;
         fun(callback, result)
     });
 }

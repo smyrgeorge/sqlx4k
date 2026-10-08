@@ -8,6 +8,9 @@ import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.concurrent.Volatile
@@ -166,6 +169,21 @@ class PooledConnection(
         return mutex.withLock {
             assertIsOpen()
             connection.fetchAll(statement)
+        }
+    }
+
+    // The pooled connection is held (its mutex locked) for the whole collection, like the wrapped one.
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        mutex.withLock {
+            assertIsOpen()
+            emitAll(connection.fetch(sql, fetchSize))
+        }
+    }
+
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        mutex.withLock {
+            assertIsOpen()
+            emitAll(connection.fetch(statement, fetchSize))
         }
     }
 
