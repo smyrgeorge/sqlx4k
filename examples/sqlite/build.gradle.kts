@@ -1,12 +1,9 @@
-import org.gradle.internal.extensions.stdlib.capitalized
-import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 import org.jetbrains.kotlin.konan.target.Family
 
 plugins {
     id("io.github.smyrgeorge.sqlx4k.multiplatform.binaries")
-    alias(libs.plugins.ksp) // We need the KSP plugin for code-generation.
+    alias(libs.plugins.sqlx4k)
 }
 
 kotlin {
@@ -26,69 +23,19 @@ kotlin {
     sourceSets {
         commonMain {
             dependencies {
-                implementation(project(":sqlx4k-sqlite"))
+                // The plugin adds sqlx4k-sqlite (the driver); the cipher driver is linked in as well.
                 implementation(project(":sqlx4k-sqlite-cipher"))
                 implementation(libs.kotlinx.io.core) // For resetting the demo db files between runs.
             }
-            kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
         }
     }
 }
 
-ksp {
-    arg("dialect", "sqlite")
-    arg("output-package", "io.github.smyrgeorge.sqlx4k.examples.sqlite")
-    arg("validate-sql-schema", "false")
-    arg("schema-migrations-path", "./db/migrations")
-}
-
-dependencies {
-    add("kspCommonMainMetadata", project(":sqlx4k-codegen"))
-}
-
-targetsOf(project).forEach {
-    project.tasks.getByName("compileKotlin$it") {
-        dependsOn("kspCommonMainKotlinMetadata")
-    }
-}
-
-tasks.withType<KotlinCompilationTask<*>> {
-    dependsOn("kspCommonMainKotlinMetadata")
-}
-
-tasks.matching { it.name.startsWith("ksp") && it.name != "kspCommonMainKotlinMetadata" }.configureEach {
-    dependsOn("kspCommonMainKotlinMetadata")
-}
-
-fun targetsOf(project: Project): List<String> {
-    val os = DefaultNativePlatform.getCurrentOperatingSystem()
-    val arch = DefaultNativePlatform.getCurrentArchitecture()
-
-    val osString = when {
-        os.isLinux -> "Linux"
-        os.isMacOsX -> "Macos"
-        os.isWindows -> "Mingw"
-        else -> throw GradleException("Unsupported operating system: $os")
-    }
-    val archString = when {
-        arch.isArm64 -> "Arm64"
-        arch.isAmd64 -> "X64"
-        else -> throw GradleException("Unsupported architecture: $arch")
-    }
-    val defaultTarget = "$osString$archString"
-    return (project.findProperty("targets") as? String)?.let {
-        when (it) {
-            "all" -> listOf(
-                "IosArm64",
-                "AndroidNativeX64",
-                "AndroidNativeArm64",
-                "MacosArm64",
-                "LinuxArm64",
-                "LinuxX64",
-                "MingwX64"
-            )
-
-            else -> it.split(",").map { t -> t.trim().capitalized() }
-        }
-    } ?: listOf(defaultTarget) // Default for local development.
+sqlx4k {
+    driver = SQLite
+    generatedCodePackage = "io.github.smyrgeorge.sqlx4k.examples.sqlite"
+    args = mapOf(
+        "validate-sql-schema" to "false",
+        "schema-migrations-path" to "./db/migrations",
+    )
 }

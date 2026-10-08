@@ -1,4 +1,6 @@
 [versions]
+# https://github.com/smyrgeorge/sqlx4k
+sqlx4k = "1.14.0"
 # https://plugins.gradle.org/plugin/org.jetbrains.kotlin.jvm
 kotlin = "2.4.20"
 # https://github.com/Kotlin/kotlinx-io
@@ -51,6 +53,8 @@ androidx-test-core = "1.7.0"
 
 [libraries]
 gradle-kotlin-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+kotlin-gradle-plugin-api = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin-api", version.ref = "kotlin" }
+gradle-ksp-plugin = { module = "com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin", version.ref = "ksp" }
 gradle-publish-plugin = { module = "com.vanniktech:gradle-maven-publish-plugin", version.ref = "publish" }
 gradle-dokka-plugin = { module = "org.jetbrains.dokka:dokka-gradle-plugin", version.ref = "dokka" }
 ksp = { module = "com.google.devtools.ksp:symbol-processing-api", version.ref = "ksp" }
@@ -78,6 +82,8 @@ androidx-test-core-ktx = { module = "androidx.test:core-ktx", version.ref = "and
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+sqlx4k = { id = "io.github.smyrgeorge.sqlx4k", version.ref = "sqlx4k" }
 pubhish = { id = "com.vanniktech.maven.publish", version.ref = "publish" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }

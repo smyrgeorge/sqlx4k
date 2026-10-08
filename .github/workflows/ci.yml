@@ -40,5 +40,8 @@ jobs:
             sqlx4k-sqlite-cipher/src/rust/target
           key: rust-lib-cache-apple-v2
 
+      - name: Bootstrap sqlx4k Gradle plugin
+        run: ./scripts/bootstrap.sh
+
       - name: Gradle Build
         run: ./gradlew build -x test -x jvmTest -x macosArm64Test -x testAndroid -x testAndroidHostTest

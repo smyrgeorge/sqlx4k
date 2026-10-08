@@ -46,10 +46,37 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
   [[Part 1]](https://smyrgeorge.github.io/posts/sqlx4k---interoperability-between-kotlin-and-rust-using-ffi-part-1/),
   (Part 2 soon)
 
+## Usage
+
+```kotlin
+implementation("io.github.smyrgeorge:sqlx4k-postgres:x.y.z")
+// or for MySQL
+implementation("io.github.smyrgeorge:sqlx4k-mysql:x.y.z")
+// or for SQLite
+implementation("io.github.smyrgeorge:sqlx4k-sqlite:x.y.z")
+// or for SQLite with encryption (SQLCipher)
+implementation("io.github.smyrgeorge:sqlx4k-sqlite-cipher:x.y.z")
+```
+
+Or let the [Gradle plugin](#gradle-plugin-sqlx4k-gradle-plugin) add the driver and set up the code generation for you:
+
+```kotlin
+plugins {
+    kotlin("multiplatform") // or kotlin("jvm")
+    id("io.github.smyrgeorge.sqlx4k") version "x.y.z"
+}
+
+sqlx4k {
+    driver = PostgreSQL // also: MySQL, MariaDB, SQLite, SQLiteCipher
+    generatedCodePackage = "com.example.generated"
+}
+```
+
 ## Features
 
+- [Gradle plugin (sqlx4k-gradle-plugin)](#gradle-plugin-sqlx4k-gradle-plugin)
 - [Supported databases](#supported-databases)
-- [Async I/O](#async-io)
+- [Async I/O & coroutines](#async-io--coroutines)
 - [Connection pool and settings](#connection-pool)
 - [Acquiring and using connections](#acquiring-and-using-connections)
 - [Running queries](#running-queries)
@@ -82,7 +109,6 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 
 ### Next Steps (contributions are welcome)
 
-- Create and publish sqlx4k-gradle-plugin
 - Support streaming large tables (e.g. with cursors)
 - Driver-level interceptor. A QueryListener on the driver gives query logging, slow-query warnings, and metrics.
 - Pool lifecycle hooks and health. afterConnect for session setup such as search_path, timezone, or application_name,
@@ -93,6 +119,58 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 - Type coverage, NUMERIC/decimal, Duration or interval, enum or composite types.
 - WASM support (?).
 
+### Gradle plugin (sqlx4k-gradle-plugin)
+
+The Gradle plugin sets up sqlx4k in a project from a single `sqlx4k { }` block, replacing the manual KSP wiring shown
+in [Code-Generation](#code-generation-crud-and-repository-implementations). When applied, it:
+
+- applies the KSP Gradle plugin and registers the sqlx4k code generator (`sqlx4k-codegen`) on the configured source
+  sets (`commonMain` by default), at the plugin's own version,
+- passes to the code generator the SQL dialect of the chosen `driver` and the `generatedCodePackage`, followed by any
+  option you put in `args` (so an `args` entry can override both),
+- adds the generated sources of `commonMain` to the project and orders every Kotlin compilation and KSP task after the
+  `commonMain` code generation, so the generated code exists before anything compiles,
+- adds the driver (e.g. `sqlx4k-postgres`) and the enabled extensions (e.g. `sqlx4k-postgres-pgmq`) as dependencies at
+  the matching version, unless `addDependencies = false`.
+
+A complete build script (see the [examples](examples), which are built with the plugin):
+
+```kotlin
+plugins {
+    kotlin("multiplatform") // or kotlin("jvm")
+    id("io.github.smyrgeorge.sqlx4k") version "x.y.z"
+}
+
+kotlin {
+    jvm()
+    macosArm64 { binaries { executable() } }
+    // Include other targets as needed
+}
+
+sqlx4k {
+    driver = PostgreSQL // also: MySQL, MariaDB, SQLite, SQLiteCipher
+    generatedCodePackage = "io.github.smyrgeorge.sqlx4k.examples.postgres"
+    extensions(Pgmq) // sqlx4k extensions; Pgmq (`sqlx4k-postgres-pgmq`) is PostgreSQL only, Arrow (`sqlx4k-arrow`)
+    // Any sqlx4k code-generator option, applied last.
+    // See "Code-Generation" below for the full list.
+    args = mapOf("expand-select-star" to "false")
+}
+```
+
+| Option                 | Default          | Description                                                                                                                                                        |
+|------------------------|------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `driver`               | required         | The database driver. It also selects the SQL dialect of the code generator.                                                                                        |
+| `generatedCodePackage` | required         | The package of the generated sources (the code generator's `output-package`).                                                                                      |
+| `sourceSets`           | `["commonMain"]` | The source sets the code generator processes: `commonMain` (generated once, visible to every target), a target's `<target>Main`, or `main` for plain JVM projects. |
+| `extensions(...)`      | none             | The sqlx4k extensions to add: `Pgmq` (PostgreSQL only) and `Arrow`.                                                                                                |
+| `args` / `arg(k, v)`   | none             | Code-generator options, applied last (an entry under `dialect` or `output-package` overrides the derived value).                                                   |
+| `addDependencies`      | `true`           | Whether the driver and extension dependencies are added at the plugin's version. Disable to manage them (and their versions) yourself.                             |
+
+The options are documented in detail in
+[Sqlx4kExtension.kt](sqlx4k-gradle-plugin/src/main/kotlin/io/github/smyrgeorge/sqlx4k/gradle/Sqlx4kExtension.kt).
+For a plain JVM project (`kotlin("jvm")`) set `sourceSets = listOf("main")`; KSP then wires the generated sources into
+the compilation itself.
+
 ### Supported Databases
 
 - ![MariaDB](https://img.shields.io/badge/MariaDB-003545?logo=mariadb&logoColor=white)
@@ -102,49 +180,41 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 - ![SQLCipher](https://img.shields.io/badge/SQLCipher-003B57?logo=sqlite&logoColor=white) (encrypted SQLite —
   `sqlx4k-sqlite-cipher`)
 
-### Async-io
+### Async-io & coroutines
 
-The driver is designed with full support for non-blocking I/O, enabling seamless integration with modern,
-high-performance applications. By leveraging asynchronous, non-blocking operations, it ensures efficient resource
-management, reduces latency, and improves scalability.
+Every query API in sqlx4k is a `suspend` function that returns a `Result`: `execute`, `fetchAll`, `begin`,
+`transaction { }` and the generated repository methods suspend instead of blocking the calling thread, and report
+failures through the `Result` instead of throwing. Database calls therefore compose with the rest of your coroutine
+code, from `async` and `withTimeout` to structured concurrency, and the I/O underneath is non-blocking on every
+platform.
 
 ### Connection Pool
 
-### Connection Pool Settings
+Every driver manages a pool of connections. A query issued directly on the driver (`db.fetchAll(...)`) borrows a
+connection for its duration and returns it; `db.acquire()` and `db.begin()` hold one until it is released, committed
+or rolled back. The pool is configured with `ConnectionPool.Options`, passed to the driver's constructor.
 
-The driver allows you to configure connection pool settings directly from its constructor, giving you fine-grained
-control over how database connections are managed. These settings are designed to optimize performance and resource
-utilization for your specific application requirements.
+#### Key configuration options
 
-#### Key Configuration Options:
+| Option           | Default        | What it controls                                                                                                                                                                          |
+|------------------|----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `minConnections` | driver default | The number of connections the pool keeps open at all times, so they are ready during a burst instead of being opened on demand. Must not exceed `maxConnections`.                         |
+| `maxConnections` | `10`           | The upper bound on open connections. Size it to what the database can serve: once reached, callers wait for a connection to be returned.                                                  |
+| `acquireTimeout` | driver default | How long a caller waits for a free connection before the operation fails with `SQLError.Code.PoolTimedOut`. Set it so a saturated pool surfaces as a timely error rather than a hang.     |
+| `idleTimeout`    | driver default | How long an unused connection may stay in the pool before it is closed, letting the pool shrink back after a burst. Must not exceed `maxLifetime`.                                        |
+| `maxLifetime`    | driver default | The maximum age of a connection. Once reached it is closed and replaced, even if healthy, which keeps long-lived connections from accumulating server-side state or outliving a failover. |
 
-- **`minConnections`**  
-  Specifies the minimum number of connections to maintain in the pool at all times. This ensures that a baseline number
-  of connections are always ready to serve requests, reducing the latency for acquiring connections during peak usage.
-
-- **`maxConnections`**  
-  Defines the maximum number of connections that can be maintained in the pool. This setting helps limit resource usage
-  and ensures the pool does not exceed the available database or system capacity.
-
-- **`acquireTimeout`**  
-  Sets the maximum duration to wait when attempting to acquire a connection from the pool. If a connection cannot be
-  acquired within this time, an exception is thrown, allowing you to handle connection timeouts gracefully.
-
-- **`idleTimeout`**  
-  Specifies the maximum duration a connection can remain idle before being closed and removed from the pool. This helps
-  clean up unused connections, freeing up resources.
-
-- **`maxLifetime`**  
-  Defines the maximum lifetime for individual connections. Once a connection reaches this duration, it is closed and
-  replaced, even if it is active, helping prevent issues related to stale or long-lived connections.
-
-By adjusting these parameters, you can fine-tune the driver's behavior to match the specific needs of your application,
-whether you're optimizing for low-latency responses, high-throughput workloads, or efficient resource utilization.
+An option left unset keeps the default of the underlying driver (sqlx on native targets, the R2DBC pool on the JVM).
+Every value must be positive, `minConnections` must not exceed `maxConnections` and `idleTimeout` must not exceed
+`maxLifetime`; a violation fails at construction, before any connection is opened.
 
 ```kotlin
-// Additionally, you can set minConnections, acquireTimeout, idleTimeout, etc. 
-val options = Driver.Pool.Options.builder()
+val options = ConnectionPool.Options.builder()
+    .minConnections(2)
     .maxConnections(10)
+    .acquireTimeout(10.seconds)
+    .idleTimeout(10.minutes)
+    .maxLifetime(30.minutes)
     .build()
 
 /**
@@ -440,6 +510,10 @@ suspend fun doExtraBusinessLogic(): Unit = TransactionContext.withCurrent(db) {
 
 ### Code-Generation, `CRUD` and `@Repository` Implementations
 
+> [!TIP]
+> The [Gradle plugin](#gradle-plugin-sqlx4k-gradle-plugin) does the whole setup below for you from a single
+> `sqlx4k { }` block. The manual setup is shown here for reference, and for the full list of code-generator options.
+
 For this operation you will need to include the `KSP` plugin to your project.
 
 ```kotlin
@@ -659,7 +733,11 @@ check(error.code == SQLError.Code.OptimisticLockFailed)
 The generated `update()` statement looks like this:
 
 ```sql
-update documents set title = ?, version = version + 1 where id = ? and version = ? returning id, version;
+update documents
+set title = ?,
+    version = version + 1
+where id = ?
+  and version = ? returning id, version;
 ```
 
 > [!NOTE]
@@ -1198,16 +1276,6 @@ SQLDelight integration for type-safe SQL queries with sqlx4k.
 - mingwX64
 - wasmWasi (potential future candidate)
 
-## Usage
-
-```kotlin
-implementation("io.github.smyrgeorge:sqlx4k-postgres:x.y.z")
-// or for MySQL
-implementation("io.github.smyrgeorge:sqlx4k-mysql:x.y.z")
-// or for SQLite
-implementation("io.github.smyrgeorge:sqlx4k-sqlite:x.y.z")
-```
-
 ### Windows
 
 If you are building your project on Windows, for target mingwX64, and you encounter the following error:
@@ -1235,6 +1303,14 @@ rustup target add aarch64-apple-darwin
 rustup target add aarch64-unknown-linux-gnu
 rustup target add x86_64-unknown-linux-gnu
 rustup target add x86_64-pc-windows-gnu
+```
+
+On a clean checkout (and after every version bump), bootstrap the build first: it publishes the sqlx4k Gradle plugin
+to mavenLocal, which the example modules apply before the main build can even configure
+(see [bootstrap.sh](scripts/bootstrap.sh)):
+
+```shell
+./scripts/bootstrap.sh
 ```
 
 Then, run the build.
