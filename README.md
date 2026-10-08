@@ -74,8 +74,8 @@ sqlx4k {
 
 ## Features
 
-- [Gradle plugin (sqlx4k-gradle-plugin)](#gradle-plugin-sqlx4k-gradle-plugin)
 - [Supported databases](#supported-databases)
+- [Gradle plugin (sqlx4k-gradle-plugin)](#gradle-plugin-sqlx4k-gradle-plugin)
 - [Async I/O & coroutines](#async-io--coroutines)
 - [Connection pool and settings](#connection-pool)
 - [Acquiring and using connections](#acquiring-and-using-connections)
@@ -118,6 +118,15 @@ sqlx4k {
   any serializable type.
 - Type coverage, NUMERIC/decimal, Duration or interval, enum or composite types.
 - WASM support (?).
+
+### Supported Databases
+
+- ![MariaDB](https://img.shields.io/badge/MariaDB-003545?logo=mariadb&logoColor=white)
+- ![MySQL](https://img.shields.io/badge/MySQL-00758F?logo=mysql&logoColor=white)
+- ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-336791?logo=postgresql&logoColor=white)
+- ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
+- ![SQLCipher](https://img.shields.io/badge/SQLCipher-003B57?logo=sqlite&logoColor=white) (encrypted SQLite —
+  `sqlx4k-sqlite-cipher`)
 
 ### Gradle plugin (sqlx4k-gradle-plugin)
 
@@ -170,15 +179,6 @@ The options are documented in detail in
 [Sqlx4kExtension.kt](sqlx4k-gradle-plugin/src/main/kotlin/io/github/smyrgeorge/sqlx4k/gradle/Sqlx4kExtension.kt).
 For a plain JVM project (`kotlin("jvm")`) set `sourceSets = listOf("main")`; KSP then wires the generated sources into
 the compilation itself.
-
-### Supported Databases
-
-- ![MariaDB](https://img.shields.io/badge/MariaDB-003545?logo=mariadb&logoColor=white)
-- ![MySQL](https://img.shields.io/badge/MySQL-00758F?logo=mysql&logoColor=white)
-- ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-336791?logo=postgresql&logoColor=white)
-- ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
-- ![SQLCipher](https://img.shields.io/badge/SQLCipher-003B57?logo=sqlite&logoColor=white) (encrypted SQLite —
-  `sqlx4k-sqlite-cipher`)
 
 ### Async-io & coroutines
 
