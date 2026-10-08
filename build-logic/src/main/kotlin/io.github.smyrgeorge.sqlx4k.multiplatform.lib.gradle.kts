@@ -1,4 +1,5 @@
 import io.github.smyrgeorge.sqlx4k.multiplatform.Utils
+import io.github.smyrgeorge.sqlx4k.rust.CargoBuildService
 import java.lang.System.getenv
 import org.gradle.nativeplatform.platform.internal.ArchitectureInternal
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
@@ -92,12 +93,16 @@ fun KotlinNativeTarget.rust(target: String) {
                 ?.substringAfter('=')?.trim()
                 ?: error("No `staticLibraries` entry in ${defFile.name}")
 
+            // Every cargo build rewrites the cbindgen header this cinterop reads, so the cargo tasks of all
+            // targets and the cinterop tasks never run concurrently (see CargoBuildService).
+            val cargoLock = CargoBuildService.of(project)
             val cargoTask = tasks.register<Exec>("cargo-$target") {
                 group = "rust"
                 description = "Builds the Rust crate's static library ($staticLib) for $target, " +
                         "linked by the Kotlin/Native cinterop."
                 inputs.files(rustSources).withPathSensitivity(PathSensitivity.RELATIVE)
                 outputs.file(file("src/rust/target/$target/release/$staticLib"))
+                usesService(cargoLock)
                 commandLine(
                     cargo,
                     "build",
@@ -111,6 +116,7 @@ fun KotlinNativeTarget.rust(target: String) {
             tasks.getByName(interopProcessingTaskName) {
                 dependsOn(cargoTask)
                 inputs.files(cargoTask).withPropertyName("rustStaticLibrary").withPathSensitivity(PathSensitivity.NONE)
+                usesService(cargoLock)
             }
         }
     }

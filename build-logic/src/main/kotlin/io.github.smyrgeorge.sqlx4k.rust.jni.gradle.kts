@@ -1,4 +1,5 @@
 import io.github.smyrgeorge.sqlx4k.multiplatform.Utils
+import io.github.smyrgeorge.sqlx4k.rust.CargoBuildService
 import io.github.smyrgeorge.sqlx4k.rust.RustJniExtension
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
@@ -8,8 +9,10 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
  *
  *  - **Android**: `cargo ndk` builds the per-ABI `.so` into `src/androidMain/jniLibs` (packaged
  *    into the AAR; requires the Android NDK + `cargo ndk`). Wired before the JNI-merge tasks.
- *  - **JVM host**: `cargo build` builds the host `dylib`/`so`/`dll`, copies it into the JVM
- *    resources (so it can be extracted from the classpath at runtime), and exposes its directory
+ *  - **JVM host**: `cargo build` builds the host `dylib`/`so`/`dll` (or, when the matching
+ *    Kotlin/Native target is selected, the cinterop cargo build of that triple is reused, since one
+ *    cargo build produces both libraries), copies it into the JVM resources (so it can be extracted
+ *    from the classpath at runtime), and exposes its directory
  *    to `jvmTest` and the Android host (Robolectric) tests via the `<crate>.native.path` system
  *    property, which the runtime loader reads to `System.load` the host library.
  *
@@ -46,6 +49,9 @@ afterEvaluate {
     // `-Ptargets=all` produces the full Android + multi-host JVM build. No separate flag is needed,
     // and the consuming module declares no target lists.
     val selectedTargets = Utils.targetsOf(project)
+    // Every cargo build of the crate rewrites the cbindgen header the cinterop tasks read: all cargo
+    // invocations of this module are serialized with them (see CargoBuildService).
+    val cargoLock = CargoBuildService.of(project)
 
     // ── Android (cargo-ndk → jniLibs) ───────────────────────────────────────────────────────────
     // ABIs are derived from the selected androidNative targets. When none are selected (e.g. the
@@ -72,6 +78,7 @@ afterEvaluate {
             workingDir(rustDir)
             inputs.files(rustSources).withPathSensitivity(PathSensitivity.RELATIVE)
             outputs.dir(jniLibsDir)
+            usesService(cargoLock)
             commandLine(*ndkCommand.toTypedArray())
         }
         // Wire before any task that merges JNI libraries into the AAR.
@@ -133,13 +140,30 @@ afterEvaluate {
 
     val buildJvmTasks = jvmTargets.map { triple ->
         val (libFile, _) = jvmLibInfo(triple)
-        tasks.register<Exec>("buildRustJvm_$triple") {
-            group = "rust"
-            description = "Builds the Rust crate's JVM/desktop shared library for $triple."
-            workingDir(rustDir)
-            inputs.files(rustSources).withPathSensitivity(PathSensitivity.RELATIVE)
-            outputs.file(rustDir.file(libFile))
-            commandLine(cargo, "build", "--release", "--target", triple)
+        // When the matching Kotlin/Native target is selected, the `multiplatform.lib` plugin already
+        // builds this crate for this triple (`cargo-<triple>`, for cinterop). The crate is a staticlib
+        // and a cdylib, so that single cargo build also produces the shared library: reuse it. A second
+        // cargo invocation on the same target directory would run concurrently with the cinterop task
+        // (tasks of one project run in parallel under the configuration cache) and rewrite the cbindgen
+        // header while cinterop reads it, yielding a klib without declarations.
+        val cinteropBuild = "cargo-$triple"
+        if (cinteropBuild in tasks.names) {
+            tasks.register("buildRustJvm_$triple") {
+                group = "rust"
+                description = "Provides the Rust crate's JVM/desktop shared library for $triple (built by $cinteropBuild)."
+                dependsOn(cinteropBuild)
+                outputs.file(rustDir.file(libFile))
+            }
+        } else {
+            tasks.register<Exec>("buildRustJvm_$triple") {
+                group = "rust"
+                description = "Builds the Rust crate's JVM/desktop shared library for $triple."
+                workingDir(rustDir)
+                inputs.files(rustSources).withPathSensitivity(PathSensitivity.RELATIVE)
+                outputs.file(rustDir.file(libFile))
+                usesService(cargoLock)
+                commandLine(cargo, "build", "--release", "--target", triple)
+            }
         }
     }
 
