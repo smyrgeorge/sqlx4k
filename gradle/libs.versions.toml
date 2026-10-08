@@ -1,6 +1,6 @@
 [versions]
 # https://github.com/smyrgeorge/sqlx4k
-sqlx4k = "1.14.0"
+sqlx4k = "1.15.0"
 # https://plugins.gradle.org/plugin/org.jetbrains.kotlin.jvm
 kotlin = "2.4.21"
 # https://github.com/Kotlin/kotlinx-io
