@@ -1,23 +1,29 @@
+use futures_core::Stream;
+use futures_util::TryStreamExt;
 use sqlx::error::ErrorKind;
 use sqlx::mysql::{
-    MySqlConnectOptions, MySqlDatabaseError, MySqlPool, MySqlPoolOptions, MySqlRow, MySqlTypeInfo,
-    MySqlValueRef,
+    MySqlConnectOptions, MySqlConnection, MySqlDatabaseError, MySqlPool, MySqlPoolOptions,
+    MySqlRow, MySqlTypeInfo, MySqlValueRef,
 };
 use sqlx::pool::PoolConnection;
 // Re-export sqlx's chrono feature shim so we don't need a direct dependency on
 // the chrono crate — sqlx already pulls it in when the matching feature is on.
 use sqlx::types::chrono;
 use sqlx::{
-    Acquire, AssertSqlSafe, Column, Error, Executor, MySql, Row, Transaction, TypeInfo, ValueRef,
+    Acquire, AssertSqlSafe, Column, Connection, Error, Executor, MySql, Row, Transaction, TypeInfo,
+    ValueRef,
 };
 use std::{
     ffi::{c_char, c_int, c_ulonglong, c_void, CStr, CString},
+    pin::Pin,
     ptr::null_mut,
     slice,
     sync::OnceLock,
     time::Duration,
 };
 use tokio::runtime::Runtime;
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
 
 // ============================================================================
 // Shared constants and types (inlined from sqlx4k)
@@ -50,6 +56,14 @@ pub struct Sqlx4kMysqlPtr {
 unsafe impl Send for Sqlx4kMysqlPtr {}
 unsafe impl Sync for Sqlx4kMysqlPtr {}
 
+impl Sqlx4kMysqlPtr {
+    /// The wrapped pointer. Going through a method (rather than the `ptr` field) inside a spawned
+    /// task captures the whole `Send` wrapper, not the raw pointer field (edition-2021 captures).
+    fn raw(&self) -> *mut c_void {
+        self.ptr
+    }
+}
+
 #[repr(C)]
 pub struct Sqlx4kMysqlResult {
     pub error: c_int,
@@ -64,6 +78,8 @@ pub struct Sqlx4kMysqlResult {
     pub cn: *mut c_void,
     pub tx: *mut c_void,
     pub rt: *mut c_void,
+    /// A row stream opened by `sqlx4k_mysql_*_stream_open` (see `Sqlx4kMysqlStream`), or null.
+    pub stream: *mut c_void,
     pub schema: *mut Sqlx4kMysqlSchema,
     pub size: c_int,
     pub rows: *mut Sqlx4kMysqlRow,
@@ -89,6 +105,7 @@ impl Default for Sqlx4kMysqlResult {
             cn: null_mut(),
             tx: null_mut(),
             rt: null_mut(),
+            stream: null_mut(),
             schema: null_mut(),
             size: 0,
             rows: null_mut(),
@@ -357,6 +374,102 @@ pub fn c_chars_to_str_mysql<'a>(c_chars: *const c_char) -> &'a str {
 // MySQL-specific implementation
 // ============================================================================
 
+// ============================================================================
+// Streaming (fetch)
+// ============================================================================
+
+/// Rows are moved to Kotlin in chunks of the requested fetch size; the channel holds at most this
+/// many ready chunks, which is the backpressure that keeps a slow consumer from buffering a large
+/// result on the Rust side.
+const STREAM_CHANNEL_CAPACITY: usize = 2;
+const STREAM_DEFAULT_FETCH_SIZE: usize = 1_000;
+
+type StreamChunk = Result<Vec<MySqlRow>, sqlx::Error>;
+type RowStream<'e> = Pin<Box<dyn Stream<Item = Result<MySqlRow, sqlx::Error>> + Send + 'e>>;
+
+/// A result set being streamed to Kotlin, row chunk by row chunk.
+///
+/// sqlx streams rows straight off the wire (no server-side cursor), and the stream borrows the
+/// connection it runs on, so both live in a spawned task that owns them and sends the chunks through
+/// `rx`. `sqlx4k_mysql_stream_next` receives one chunk; `sqlx4k_mysql_stream_close` stops the task
+/// (dropping `cancel`) and joins it before freeing the handle, so the connection or transaction the
+/// task was borrowing is no longer in use once Kotlin continues.
+struct Sqlx4kMysqlStream {
+    rx: tokio::sync::Mutex<mpsc::Receiver<StreamChunk>>,
+    cancel: oneshot::Sender<()>,
+    task: JoinHandle<()>,
+}
+
+/// Opens the row stream of a query on the given connection: the text protocol for a plain query
+/// (as `fetch_all` does), a prepared statement when there are parameters to bind.
+fn stream_rows_of<'e>(
+    cn: &'e mut MySqlConnection,
+    sql: String,
+    params: Vec<OwnedParam>,
+) -> RowStream<'e> {
+    if params.is_empty() {
+        cn.fetch(AssertSqlSafe(sql))
+    } else {
+        bind_params(sqlx::query::<MySql>(AssertSqlSafe(sql)), params).fetch(cn)
+    }
+}
+
+/// Drives a row stream, sending chunks of `fetch_size` rows until the stream ends or fails, or the
+/// consumer closes it (`cancel` fires, or the channel is dropped). Returns whether the stream was
+/// consumed to its end (an error counts as the end: the connection is in a clean state again).
+async fn stream_rows(
+    mut rows: RowStream<'_>,
+    fetch_size: usize,
+    tx: mpsc::Sender<StreamChunk>,
+    mut cancel: oneshot::Receiver<()>,
+) -> bool {
+    let mut chunk: Vec<MySqlRow> = Vec::with_capacity(fetch_size);
+    loop {
+        let next = tokio::select! {
+            _ = &mut cancel => return false,
+            next = rows.try_next() => next,
+        };
+        match next {
+            Ok(Some(row)) => {
+                chunk.push(row);
+                if chunk.len() >= fetch_size {
+                    let full = std::mem::replace(&mut chunk, Vec::with_capacity(fetch_size));
+                    tokio::select! {
+                        _ = &mut cancel => return false,
+                        sent = tx.send(Ok(full)) => if sent.is_err() { return false },
+                    }
+                }
+            }
+            Ok(None) => {
+                if !chunk.is_empty() {
+                    let _ = tx.send(Ok(chunk)).await;
+                }
+                return true;
+            }
+            Err(err) => {
+                let _ = tx.send(Err(err)).await;
+                return true;
+            }
+        }
+    }
+}
+
+fn stream_fetch_size(fetch_size: c_int) -> usize {
+    if fetch_size > 0 {
+        fetch_size as usize
+    } else {
+        STREAM_DEFAULT_FETCH_SIZE
+    }
+}
+
+fn stream_result_of(stream: Sqlx4kMysqlStream) -> *mut Sqlx4kMysqlResult {
+    Sqlx4kMysqlResult {
+        stream: Box::into_raw(Box::new(stream)) as *mut c_void,
+        ..Default::default()
+    }
+    .leak()
+}
+
 static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
 #[derive(Debug)]
@@ -517,6 +630,104 @@ impl Sqlx4kMySql {
             ..result
         };
         result.leak()
+    }
+
+    async fn stream_open(
+        &self,
+        sql: String,
+        params: Vec<OwnedParam>,
+        fetch_size: usize,
+    ) -> *mut Sqlx4kMysqlResult {
+        let mut cn: PoolConnection<MySql> = match self.pool.acquire().await {
+            Ok(cn) => cn,
+            Err(err) => return sqlx4k_mysql_error_result_of(err).leak(),
+        };
+        let (tx, rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
+        let (cancel, cancel_rx) = oneshot::channel();
+        let task = RUNTIME.get().unwrap().spawn(async move {
+            let exhausted = {
+                let rows = stream_rows_of(&mut cn, sql, params);
+                stream_rows(rows, fetch_size, tx, cancel_rx).await
+            };
+            if !exhausted {
+                // Cancelled with rows pending: sqlx would read and discard the remainder on the next
+                // use of this connection, which for a large result costs far more than a reconnect,
+                // so the connection is closed instead of being returned to the pool.
+                let _ = cn.detach().close().await;
+            }
+        });
+        stream_result_of(Sqlx4kMysqlStream {
+            rx: tokio::sync::Mutex::new(rx),
+            cancel,
+            task,
+        })
+    }
+
+    async fn cn_stream_open(
+        &self,
+        cn: Sqlx4kMysqlPtr,
+        sql: String,
+        params: Vec<OwnedParam>,
+        fetch_size: usize,
+    ) -> *mut Sqlx4kMysqlResult {
+        let (tx, rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
+        let (cancel, cancel_rx) = oneshot::channel();
+        let task = RUNTIME.get().unwrap().spawn(async move {
+            // The connection stays with Kotlin, which serializes its use and closes this stream
+            // before any other statement; a cancelled stream leaves sqlx to drain the remaining
+            // rows on the connection's next use.
+            let cn = unsafe { &mut *(cn.raw() as *mut PoolConnection<MySql>) };
+            let rows = stream_rows_of(&mut **cn, sql, params);
+            stream_rows(rows, fetch_size, tx, cancel_rx).await;
+        });
+        stream_result_of(Sqlx4kMysqlStream {
+            rx: tokio::sync::Mutex::new(rx),
+            cancel,
+            task,
+        })
+    }
+
+    async fn tx_stream_open(
+        &self,
+        tx: Sqlx4kMysqlPtr,
+        sql: String,
+        params: Vec<OwnedParam>,
+        fetch_size: usize,
+    ) -> *mut Sqlx4kMysqlResult {
+        let (chunks, rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
+        let (cancel, cancel_rx) = oneshot::channel();
+        let task = RUNTIME.get().unwrap().spawn(async move {
+            // Borrowed in place (not re-boxed like `tx_fetch_all`), so the Kotlin-held pointer stays valid.
+            let tx = unsafe { &mut *(tx.raw() as *mut Transaction<'static, MySql>) };
+            let rows = stream_rows_of(&mut **tx, sql, params);
+            stream_rows(rows, fetch_size, chunks, cancel_rx).await;
+        });
+        stream_result_of(Sqlx4kMysqlStream {
+            rx: tokio::sync::Mutex::new(rx),
+            cancel,
+            task,
+        })
+    }
+
+    async fn stream_next(&self, stream: Sqlx4kMysqlPtr) -> *mut Sqlx4kMysqlResult {
+        let stream = unsafe { &*(stream.ptr as *const Sqlx4kMysqlStream) };
+        let mut rx = stream.rx.lock().await;
+        match rx.recv().await {
+            Some(chunk) => sqlx4k_mysql_result_of(chunk).leak(),
+            // End of the stream: an empty result (size 0, no schema).
+            None => Sqlx4kMysqlResult::default().leak(),
+        }
+    }
+
+    async fn stream_close(&self, stream: Sqlx4kMysqlPtr) -> *mut Sqlx4kMysqlResult {
+        let stream = unsafe { Box::from_raw(stream.ptr as *mut Sqlx4kMysqlStream) };
+        let Sqlx4kMysqlStream { rx, cancel, task } = *stream;
+        // Stop the producer (dropping the sender fires its cancel branch, dropping the receiver fails
+        // its next send) and wait for it: only then is the connection it borrowed free again.
+        drop(cancel);
+        drop(rx);
+        let _ = task.await;
+        Sqlx4kMysqlResult::default().leak()
     }
 
     async fn close(&self) -> *mut Sqlx4kMysqlResult {
@@ -756,6 +967,110 @@ pub extern "C" fn sqlx4k_mysql_fetch_all(
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
     runtime.spawn(async move {
         let result = sqlx4k.fetch_all(sql).await;
+        fun(callback, result)
+    });
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_mysql_stream_open(
+    rt: *mut c_void,
+    sql: *const c_char,
+    params: *const Sqlx4kMysqlParam,
+    params_len: c_int,
+    fetch_size: c_int,
+    callback: *mut c_void,
+    fun: extern "C" fn(Sqlx4kMysqlPtr, *mut Sqlx4kMysqlResult),
+) {
+    let callback = Sqlx4kMysqlPtr { ptr: callback };
+    let sql = c_chars_to_str_mysql(sql).to_owned();
+    let owned = read_params(params, params_len);
+    let fetch_size = stream_fetch_size(fetch_size);
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
+    runtime.spawn(async move {
+        let result = sqlx4k.stream_open(sql, owned, fetch_size).await;
+        fun(callback, result)
+    });
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_mysql_cn_stream_open(
+    rt: *mut c_void,
+    cn: *mut c_void,
+    sql: *const c_char,
+    params: *const Sqlx4kMysqlParam,
+    params_len: c_int,
+    fetch_size: c_int,
+    callback: *mut c_void,
+    fun: extern "C" fn(Sqlx4kMysqlPtr, *mut Sqlx4kMysqlResult),
+) {
+    let callback = Sqlx4kMysqlPtr { ptr: callback };
+    let cn = Sqlx4kMysqlPtr { ptr: cn };
+    let sql = c_chars_to_str_mysql(sql).to_owned();
+    let owned = read_params(params, params_len);
+    let fetch_size = stream_fetch_size(fetch_size);
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
+    runtime.spawn(async move {
+        let result = sqlx4k.cn_stream_open(cn, sql, owned, fetch_size).await;
+        fun(callback, result)
+    });
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_mysql_tx_stream_open(
+    rt: *mut c_void,
+    tx: *mut c_void,
+    sql: *const c_char,
+    params: *const Sqlx4kMysqlParam,
+    params_len: c_int,
+    fetch_size: c_int,
+    callback: *mut c_void,
+    fun: extern "C" fn(Sqlx4kMysqlPtr, *mut Sqlx4kMysqlResult),
+) {
+    let callback = Sqlx4kMysqlPtr { ptr: callback };
+    let tx = Sqlx4kMysqlPtr { ptr: tx };
+    let sql = c_chars_to_str_mysql(sql).to_owned();
+    let owned = read_params(params, params_len);
+    let fetch_size = stream_fetch_size(fetch_size);
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
+    runtime.spawn(async move {
+        let result = sqlx4k.tx_stream_open(tx, sql, owned, fetch_size).await;
+        fun(callback, result)
+    });
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_mysql_stream_next(
+    rt: *mut c_void,
+    stream: *mut c_void,
+    callback: *mut c_void,
+    fun: extern "C" fn(Sqlx4kMysqlPtr, *mut Sqlx4kMysqlResult),
+) {
+    let callback = Sqlx4kMysqlPtr { ptr: callback };
+    let stream = Sqlx4kMysqlPtr { ptr: stream };
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
+    runtime.spawn(async move {
+        let result = sqlx4k.stream_next(stream).await;
+        fun(callback, result)
+    });
+}
+
+#[no_mangle]
+pub extern "C" fn sqlx4k_mysql_stream_close(
+    rt: *mut c_void,
+    stream: *mut c_void,
+    callback: *mut c_void,
+    fun: extern "C" fn(Sqlx4kMysqlPtr, *mut Sqlx4kMysqlResult),
+) {
+    let callback = Sqlx4kMysqlPtr { ptr: callback };
+    let stream = Sqlx4kMysqlPtr { ptr: stream };
+    let runtime = RUNTIME.get().unwrap();
+    let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
+    runtime.spawn(async move {
+        let result = sqlx4k.stream_close(stream).await;
         fun(callback, result)
     });
 }

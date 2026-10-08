@@ -16,6 +16,9 @@ import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.memScoped
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import sqlx4k.mysql.sqlx4k_mysql_close
@@ -25,6 +28,7 @@ import sqlx4k.mysql.sqlx4k_mysql_cn_fetch_all_with_params
 import sqlx4k.mysql.sqlx4k_mysql_cn_query
 import sqlx4k.mysql.sqlx4k_mysql_cn_query_with_params
 import sqlx4k.mysql.sqlx4k_mysql_cn_release
+import sqlx4k.mysql.sqlx4k_mysql_cn_stream_open
 import sqlx4k.mysql.sqlx4k_mysql_cn_tx_begin
 import sqlx4k.mysql.sqlx4k_mysql_fetch_all
 import sqlx4k.mysql.sqlx4k_mysql_fetch_all_with_params
@@ -33,6 +37,7 @@ import sqlx4k.mysql.sqlx4k_mysql_pool_idle_size
 import sqlx4k.mysql.sqlx4k_mysql_pool_size
 import sqlx4k.mysql.sqlx4k_mysql_query
 import sqlx4k.mysql.sqlx4k_mysql_query_with_params
+import sqlx4k.mysql.sqlx4k_mysql_stream_open
 import sqlx4k.mysql.sqlx4k_mysql_tx_begin
 import sqlx4k.mysql.sqlx4k_mysql_tx_commit
 import sqlx4k.mysql.sqlx4k_mysql_tx_fetch_all
@@ -40,6 +45,7 @@ import sqlx4k.mysql.sqlx4k_mysql_tx_fetch_all_with_params
 import sqlx4k.mysql.sqlx4k_mysql_tx_query
 import sqlx4k.mysql.sqlx4k_mysql_tx_query_with_params
 import sqlx4k.mysql.sqlx4k_mysql_tx_rollback
+import sqlx4k.mysql.sqlx4k_mysql_tx_stream_open
 
 /**
  * The `MySQL` class provides a driver implementation for interacting with a MySQL database.
@@ -175,6 +181,18 @@ class MySQL(
         }
     }
 
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = streamFlow(rt) {
+        sqlx { c -> sqlx4k_mysql_stream_open(rt, sql, null, 0, fetchSize, c, fn) }
+    }
+
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = streamFlow(rt) {
+        val nq = statement.renderNativeQuery(Dialect.MySQL, encoders)
+        memScoped {
+            val (paramsPtr, paramsLen) = allocParams(nq.values)
+            sqlx { c -> sqlx4k_mysql_stream_open(rt, nq.sql, paramsPtr, paramsLen, fetchSize, c, fn) }
+        }
+    }
+
     override suspend fun begin(): Result<Transaction> = runCatching {
         sqlx { c -> sqlx4k_mysql_tx_begin(rt, c, fn) }.use {
             it.throwIfError()
@@ -275,6 +293,32 @@ class MySQL(
             }
         }
 
+        // The connection is held (its mutex locked) for the whole collection: a stream keeps the
+        // connection busy, exactly as it does in sqlx.
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(streamFlow(rt) {
+                    sqlx { c -> sqlx4k_mysql_cn_stream_open(rt, cn, sql, null, 0, fetchSize, c, fn) }
+                })
+            }
+        }
+
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(streamFlow(rt) {
+                    val nq = statement.renderNativeQuery(Dialect.MySQL, encoders)
+                    memScoped {
+                        val (paramsPtr, paramsLen) = allocParams(nq.values)
+                        sqlx { c ->
+                            sqlx4k_mysql_cn_stream_open(rt, cn, nq.sql, paramsPtr, paramsLen, fetchSize, c, fn)
+                        }
+                    }
+                })
+            }
+        }
+
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
                 assertIsOpen()
@@ -371,6 +415,32 @@ class MySQL(
                         it.toResultSet()
                     }.toResult()
                 }
+            }
+        }
+
+        // The transaction is held (its mutex locked) for the whole collection; the stream borrows the
+        // transaction in place, so the `tx` pointer is unchanged afterwards.
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(streamFlow(rt) {
+                    sqlx { c -> sqlx4k_mysql_tx_stream_open(rt, tx, sql, null, 0, fetchSize, c, fn) }
+                })
+            }
+        }
+
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(streamFlow(rt) {
+                    val nq = statement.renderNativeQuery(Dialect.MySQL, encoders)
+                    memScoped {
+                        val (paramsPtr, paramsLen) = allocParams(nq.values)
+                        sqlx { c ->
+                            sqlx4k_mysql_tx_stream_open(rt, tx, nq.sql, paramsPtr, paramsLen, fetchSize, c, fn)
+                        }
+                    }
+                })
             }
         }
     }

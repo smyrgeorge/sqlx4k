@@ -39,6 +39,11 @@ import kotlin.time.Instant
 import kotlin.time.toJavaDuration
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.asFlow
@@ -48,6 +53,7 @@ import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
@@ -209,6 +215,26 @@ class MySQL(
         }
     }
 
+    // A pooled connection is borrowed for the whole collection and returned when the flow completes,
+    // fails or is cancelled.
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        val connection = pool.acquire()
+        try {
+            emitAll(connection.createStatement(sql).fetchSize(fetchSize).streamRows())
+        } finally {
+            withContext(NonCancellable) { connection.close().toMono().awaitSingleOrNull() }
+        }
+    }
+
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        val connection = pool.acquire()
+        try {
+            emitAll(connection.createStatement(statement, encoders).fetchSize(fetchSize).streamRows())
+        } finally {
+            withContext(NonCancellable) { connection.close().toMono().awaitSingleOrNull() }
+        }
+    }
+
     override suspend fun begin(): Result<Transaction> = runCatching {
         with(pool.acquire()) {
             try {
@@ -319,6 +345,21 @@ class MySQL(
             }
         }
 
+        // The connection is held (its mutex locked) for the whole collection.
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(connection.createStatement(sql).fetchSize(fetchSize).streamRows())
+            }
+        }
+
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(connection.createStatement(statement, encoders).fetchSize(fetchSize).streamRows())
+            }
+        }
+
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
                 assertIsOpen()
@@ -419,6 +460,21 @@ class MySQL(
                 } catch (e: Exception) {
                     e.toSQLError().raise()
                 }
+            }
+        }
+
+        // The transaction is held (its mutex locked) for the whole collection.
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(connection.createStatement(sql).fetchSize(fetchSize).streamRows())
+            }
+        }
+
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(connection.createStatement(statement, encoders).fetchSize(fetchSize).streamRows())
             }
         }
     }
@@ -525,19 +581,30 @@ class MySQL(
             }.build()
         }
 
-        private suspend fun NativeR2dbcResultSet.toResultSet(): ResultSet {
-            fun Row.toRow(): ResultSet.Row {
-                val columns = metadata.columnMetadatas.mapIndexed { i, c ->
-                    ResultSet.Row.Column(
-                        ordinal = i,
-                        name = c.name,
-                        type = c.type.name,
-                        value = get(i, String::class.java)
-                    )
-                }
-                return ResultSet.Row(columns)
+        private fun Row.toRow(): ResultSet.Row {
+            val columns = metadata.columnMetadatas.mapIndexed { i, c ->
+                ResultSet.Row.Column(
+                    ordinal = i,
+                    name = c.name,
+                    type = c.type.name,
+                    value = get(i, String::class.java)
+                )
             }
+            return ResultSet.Row(columns)
+        }
 
+        /**
+         * Streams the rows of the statement with reactive backpressure (R2DBC publishes the rows as the
+         * server sends them; prepared statements honour the fetch size through a server-side cursor);
+         * a driver failure fails the collection with the matching [SQLError].
+         */
+        private fun io.r2dbc.spi.Statement.streamRows(): Flow<ResultSet.Row> = flow {
+            execute().asFlow().collect { result ->
+                emitAll(result.map { row, _ -> row.toRow() }.asFlow())
+            }
+        }.catch { e -> throw e.toSQLError() }
+
+        private suspend fun NativeR2dbcResultSet.toResultSet(): ResultSet {
             val rows = map { r, _ -> r.toRow() }.asFlow().toList()
             val meta = if (rows.isEmpty()) ResultSet.Metadata(emptyList())
             else rows.first().toMetadata()
