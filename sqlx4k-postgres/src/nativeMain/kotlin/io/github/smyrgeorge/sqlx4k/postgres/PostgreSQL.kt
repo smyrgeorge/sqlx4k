@@ -25,6 +25,9 @@ import kotlinx.cinterop.staticCFunction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -36,9 +39,11 @@ import sqlx4k.postgresql.sqlx4k_postgresql_cn_fetch_all_with_params
 import sqlx4k.postgresql.sqlx4k_postgresql_cn_query
 import sqlx4k.postgresql.sqlx4k_postgresql_cn_query_with_params
 import sqlx4k.postgresql.sqlx4k_postgresql_cn_release
+import sqlx4k.postgresql.sqlx4k_postgresql_cn_stream_open
 import sqlx4k.postgresql.sqlx4k_postgresql_cn_tx_begin
 import sqlx4k.postgresql.sqlx4k_postgresql_fetch_all
 import sqlx4k.postgresql.sqlx4k_postgresql_fetch_all_with_params
+import sqlx4k.postgresql.sqlx4k_postgresql_stream_open
 import sqlx4k.postgresql.sqlx4k_postgresql_listen
 import sqlx4k.postgresql.sqlx4k_postgresql_of
 import sqlx4k.postgresql.sqlx4k_postgresql_pool_idle_size
@@ -52,6 +57,7 @@ import sqlx4k.postgresql.sqlx4k_postgresql_tx_fetch_all_with_params
 import sqlx4k.postgresql.sqlx4k_postgresql_tx_query
 import sqlx4k.postgresql.sqlx4k_postgresql_tx_query_with_params
 import sqlx4k.postgresql.sqlx4k_postgresql_tx_rollback
+import sqlx4k.postgresql.sqlx4k_postgresql_tx_stream_open
 
 /**
  * PostgreSQL class provides mechanisms to interact with a PostgreSQL database.
@@ -187,6 +193,18 @@ class PostgreSQL(
                 sqlx4k_postgresql_fetch_all_with_params(rt, nq.sql, paramsPtr, paramsLen, c, fn)
             }
             res.use { it.toResultSet() }.toResult()
+        }
+    }
+
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = streamFlow(rt) {
+        sqlx { c -> sqlx4k_postgresql_stream_open(rt, sql, null, 0, fetchSize, c, fn) }
+    }
+
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = streamFlow(rt) {
+        val nq = statement.renderNativeQuery(Dialect.PostgreSQL, encoders)
+        memScoped {
+            val (paramsPtr, paramsLen) = allocParams(nq.values)
+            sqlx { c -> sqlx4k_postgresql_stream_open(rt, nq.sql, paramsPtr, paramsLen, fetchSize, c, fn) }
         }
     }
 
@@ -365,6 +383,32 @@ class PostgreSQL(
             }
         }
 
+        // The connection is held (its mutex locked) for the whole collection: a stream keeps the
+        // connection busy, exactly as it does in sqlx.
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(streamFlow(rt) {
+                    sqlx { c -> sqlx4k_postgresql_cn_stream_open(rt, cn, sql, null, 0, fetchSize, c, fn) }
+                })
+            }
+        }
+
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(streamFlow(rt) {
+                    val nq = statement.renderNativeQuery(Dialect.PostgreSQL, encoders)
+                    memScoped {
+                        val (paramsPtr, paramsLen) = allocParams(nq.values)
+                        sqlx { c ->
+                            sqlx4k_postgresql_cn_stream_open(rt, cn, nq.sql, paramsPtr, paramsLen, fetchSize, c, fn)
+                        }
+                    }
+                })
+            }
+        }
+
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
                 assertIsOpen()
@@ -461,6 +505,32 @@ class PostgreSQL(
                         it.toResultSet()
                     }.toResult()
                 }
+            }
+        }
+
+        // The transaction is held (its mutex locked) for the whole collection; the stream borrows the
+        // transaction in place, so the `tx` pointer is unchanged afterwards.
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(streamFlow(rt) {
+                    sqlx { c -> sqlx4k_postgresql_tx_stream_open(rt, tx, sql, null, 0, fetchSize, c, fn) }
+                })
+            }
+        }
+
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(streamFlow(rt) {
+                    val nq = statement.renderNativeQuery(Dialect.PostgreSQL, encoders)
+                    memScoped {
+                        val (paramsPtr, paramsLen) = allocParams(nq.values)
+                        sqlx { c ->
+                            sqlx4k_postgresql_tx_stream_open(rt, tx, nq.sql, paramsPtr, paramsLen, fetchSize, c, fn)
+                        }
+                    }
+                })
             }
         }
     }

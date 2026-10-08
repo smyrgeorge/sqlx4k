@@ -18,9 +18,15 @@ import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
 import io.r2dbc.spi.Row
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitLast
 import kotlinx.coroutines.reactive.awaitSingle
@@ -175,6 +181,26 @@ class PostgreSQLImpl(
             } finally {
                 close().toMono().awaitSingleOrNull()
             }
+        }
+    }
+
+    // A pooled connection is borrowed for the whole collection and returned when the flow completes,
+    // fails or is cancelled.
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        val connection = pool.acquire()
+        try {
+            emitAll(connection.createStatement(sql).fetchSize(fetchSize).streamRows())
+        } finally {
+            withContext(NonCancellable) { connection.close().toMono().awaitSingleOrNull() }
+        }
+    }
+
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        val connection = pool.acquire()
+        try {
+            emitAll(connection.createStatement(statement, encoders).fetchSize(fetchSize).streamRows())
+        } finally {
+            withContext(NonCancellable) { connection.close().toMono().awaitSingleOrNull() }
         }
     }
 
@@ -388,6 +414,21 @@ class PostgreSQLImpl(
             }
         }
 
+        // The connection is held (its mutex locked) for the whole collection.
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(connection.createStatement(sql).fetchSize(fetchSize).streamRows())
+            }
+        }
+
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(connection.createStatement(statement, encoders).fetchSize(fetchSize).streamRows())
+            }
+        }
+
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
                 assertIsOpen()
@@ -490,6 +531,21 @@ class PostgreSQLImpl(
                 }
             }
         }
+
+        // The transaction is held (its mutex locked) for the whole collection.
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(connection.createStatement(sql).fetchSize(fetchSize).streamRows())
+            }
+        }
+
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+            mutex.withLock {
+                assertIsOpen()
+                emitAll(connection.createStatement(statement, encoders).fetchSize(fetchSize).streamRows())
+            }
+        }
     }
 
     companion object {
@@ -539,19 +595,29 @@ class PostgreSQLImpl(
             error("Publisher is not a Mono: ${this::class.qualifiedName}")
         }
 
-        private suspend fun NativeR2dbcResultSet.toResultSet(): ResultSet {
-            fun Row.toRow(): ResultSet.Row {
-                val columns = metadata.columnMetadatas.mapIndexed { i, c ->
-                    ResultSet.Row.Column(
-                        ordinal = i,
-                        name = c.name,
-                        type = c.type.name,
-                        value = get(i, String::class.java)
-                    )
-                }
-                return ResultSet.Row(columns)
+        private fun Row.toRow(): ResultSet.Row {
+            val columns = metadata.columnMetadatas.mapIndexed { i, c ->
+                ResultSet.Row.Column(
+                    ordinal = i,
+                    name = c.name,
+                    type = c.type.name,
+                    value = get(i, String::class.java)
+                )
             }
+            return ResultSet.Row(columns)
+        }
 
+        /**
+         * Streams the rows of the statement with reactive backpressure (R2DBC publishes the rows as the
+         * server sends them); a driver failure fails the collection with the matching [SQLError].
+         */
+        private fun io.r2dbc.spi.Statement.streamRows(): Flow<ResultSet.Row> = flow {
+            execute().asFlow().collect { result ->
+                emitAll(result.map { row, _ -> row.toRow() }.asFlow())
+            }
+        }.catch { e -> throw e.toSQLError() }
+
+        private suspend fun NativeR2dbcResultSet.toResultSet(): ResultSet {
             val rows = map { r, _ -> r.toRow() }.asFlow().toList()
             val meta = if (rows.isEmpty()) ResultSet.Metadata(emptyList())
             else rows.first().toMetadata()

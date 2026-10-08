@@ -4,10 +4,12 @@ import io.github.smyrgeorge.sqlx4k.impl.coroutines.runSuspendCatching
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
+import kotlin.time.Duration
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import org.intellij.lang.annotations.Language
-import kotlin.time.Duration
 
 /**
  * Represents an interface for executing SQL statements and managing their results.
@@ -82,6 +84,65 @@ interface QueryExecutor {
     suspend fun <T> fetchAll(statement: Statement, rowMapper: RowMapper<T>): Result<List<T>> = runCatching {
         fetchAll(statement).getOrThrow().let { rowMapper.map(it, encoders) }
     }
+
+    /**
+     * Streams the rows of the given SQL query as a cold [Flow].
+     *
+     * Unlike [fetchAll], the rows are not collected in memory: the query starts when the flow is collected, and the
+     * rows are emitted as the database produces them, in chunks of [fetchSize] rows. The connection serving the query
+     * is busy until the flow completes or its collector is cancelled; a flow of a [Connection] or [Transaction] holds
+     * it for the whole collection, so do not issue other statements on it from inside the collector.
+     *
+     * A lazy flow cannot carry a [Result]: a failure, including a bad query, fails the collection with an [SQLError].
+     *
+     * @param sql the SQL query to be executed.
+     * @param fetchSize the number of rows fetched from the driver at a time (a hint some drivers ignore).
+     * @return a cold flow of the rows of the result set.
+     * @throws UnsupportedOperationException if the driver does not implement streaming.
+     */
+    fun fetch(@Language("SQL") sql: String, fetchSize: Int = DEFAULT_FETCH_SIZE): Flow<ResultSet.Row> =
+        throw UnsupportedOperationException(FETCH_NOT_SUPPORTED)
+
+    /**
+     * Streams the rows of the given SQL statement as a cold [Flow]. See [fetch].
+     *
+     * @param statement the SQL statement to be executed.
+     * @param fetchSize the number of rows fetched from the driver at a time (a hint some drivers ignore).
+     * @return a cold flow of the rows of the result set.
+     * @throws UnsupportedOperationException if the driver does not implement streaming.
+     */
+    fun fetch(statement: Statement, fetchSize: Int = DEFAULT_FETCH_SIZE): Flow<ResultSet.Row> =
+        throw UnsupportedOperationException(FETCH_NOT_SUPPORTED)
+
+    /**
+     * Streams the rows of the given SQL query, mapping each row with the provided [RowMapper]. See [fetch].
+     *
+     * @param T The type of the objects to be emitted.
+     * @param sql the SQL query to be executed.
+     * @param rowMapper the RowMapper converting each row to an instance of type T.
+     * @param fetchSize the number of rows fetched from the driver at a time (a hint some drivers ignore).
+     * @return a cold flow of the mapped rows.
+     */
+    fun <T> fetch(
+        @Language("SQL") sql: String,
+        rowMapper: RowMapper<T>,
+        fetchSize: Int = DEFAULT_FETCH_SIZE
+    ): Flow<T> = fetch(sql, fetchSize).map { rowMapper.map(it, encoders) }
+
+    /**
+     * Streams the rows of the given SQL statement, mapping each row with the provided [RowMapper]. See [fetch].
+     *
+     * @param T The type of the objects to be emitted.
+     * @param statement the SQL statement to be executed.
+     * @param rowMapper the RowMapper converting each row to an instance of type T.
+     * @param fetchSize the number of rows fetched from the driver at a time (a hint some drivers ignore).
+     * @return a cold flow of the mapped rows.
+     */
+    fun <T> fetch(
+        statement: Statement,
+        rowMapper: RowMapper<T>,
+        fetchSize: Int = DEFAULT_FETCH_SIZE
+    ): Flow<T> = fetch(statement, fetchSize).map { rowMapper.map(it, encoders) }
 
     /**
      * Represents a transactional interface providing methods for handling transactions.
@@ -242,5 +303,13 @@ interface QueryExecutor {
             afterStatementExecution: suspend (Statement, Duration) -> Unit = { _, _ -> },
             afterFileMigration: suspend (Migration, Duration) -> Unit = { _, _ -> }
         ): Result<Migrator.Results>
+    }
+
+    companion object {
+        /** The default number of rows [fetch] fetches from the driver at a time. */
+        const val DEFAULT_FETCH_SIZE: Int = 1_000
+
+        /** The message of the [UnsupportedOperationException] thrown by [fetch] on drivers that do not stream. */
+        const val FETCH_NOT_SUPPORTED: String = "Streaming query results (fetch) is not supported by this driver."
     }
 }

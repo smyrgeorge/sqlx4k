@@ -109,7 +109,6 @@ sqlx4k {
 
 ### Next Steps (contributions are welcome)
 
-- Support streaming large tables (e.g. with cursors)
 - Driver-level interceptor. A QueryListener on the driver gives query logging, slow-query warnings, and metrics.
 - Pool lifecycle hooks and health. afterConnect for session setup such as search_path, timezone, or application_name,
   plus ping () and acquire-wait metrics.
@@ -341,6 +340,31 @@ Returns a `ResultSet` containing all rows (SELECT queries):
 // With raw SQL string
 val result: ResultSet = db.fetchAll("select * from users;").getOrThrow()
 ```
+
+#### fetch () - For streaming large results
+
+Returns a cold `Flow` of rows (SELECT queries). Unlike `fetchAll`, the rows are not collected in memory: the query
+starts when the flow is collected and the rows are emitted as the database produces them, in chunks of `fetchSize`
+rows (1,000 by default). The connection serving the query is busy until the flow completes or the collector is
+cancelled; a flow of a `Connection` or `Transaction` holds it for the whole collection. A failure fails the
+collection with an `SQLError`.
+
+```kotlin
+db.fetch("select * from events order by id;", fetchSize = 1_000)
+    .map { it.get("payload").asString() }
+    .collect { println(it) }
+
+// With a RowMapper.
+db.fetch("select * from users;", UserRowMapper).collect { user -> println(user) }
+```
+
+Streaming is implemented by the PostgreSQL driver (native and JVM); on the other drivers `fetch` throws an
+`UnsupportedOperationException` until they implement it. On native targets the rows are read off the wire as the server
+sends them, with
+no server-side cursor, and the Rust side holds at most two chunks ahead of the collector. Cancelling a collector
+mid-way closes the pooled connection instead of returning it, since the remaining rows would otherwise have to be
+read and discarded on its next use. On the JVM the R2DBC driver streams with reactive backpressure, and `fetchSize`
+is passed on to the statement.
 
 ### Prepared Statements
 
