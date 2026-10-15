@@ -4,6 +4,9 @@ permissions:
 
 on:
   push:
+    # Caches are saved by the runs on main: a cache written by a pull request is only visible to that
+    # pull request, while one written on main is restored by every pull request.
+    branches: [ main ]
     tags:
       - '[0-9]+.[0-9]+.[0-9]+'
   pull_request:
@@ -12,7 +15,6 @@ on:
 jobs:
   build-apple:
     runs-on: macos-latest
-    environment: Maven Central
     steps:
       - name: Checkout Project
         uses: actions/checkout@v7
@@ -23,22 +25,31 @@ jobs:
           distribution: corretto
           java-version: 21
 
+      # Caches the Gradle user home (wrapper, dependencies, build cache). It is written on the default
+      # branch only and restored everywhere else.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6.4.0
 
-      - name: Setup Rust & cargo
-        run: rustup target add aarch64-apple-ios aarch64-apple-darwin x86_64-apple-darwin
+      # Caches the cargo registry and the target directories of the Rust crates, keyed on the rustc
+      # version and the Cargo.lock files. The crates' own artifacts are dropped before saving, so they
+      # are always rebuilt while their (expensive) dependencies are restored. The build only targets
+      # the JVM and the host (macosArm64), so the preinstalled toolchain needs no extra targets.
+      - name: Setup Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            sqlx4k-mysql/src/rust -> target
+            sqlx4k-postgres/src/rust -> target
+            sqlx4k-sqlite/src/rust -> target
+            sqlx4k-sqlite-cipher/src/rust -> target
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Setup Cache
+      # The Kotlin/Native toolchain and its dependencies, which depend on the Kotlin version only.
+      - name: Setup Kotlin/Native Cache
         uses: actions/cache@v6
         with:
-          path: |
-            ~/.konan
-            sqlx4k-mysql/src/rust/target
-            sqlx4k-postgres/src/rust/target
-            sqlx4k-sqlite/src/rust/target
-            sqlx4k-sqlite-cipher/src/rust/target
-          key: rust-lib-cache-apple-v2
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('gradle/libs.versions.toml') }}
 
       - name: Bootstrap sqlx4k Gradle plugin
         run: ./scripts/bootstrap.sh
