@@ -81,6 +81,7 @@ sqlx4k {
 - [Acquiring and using connections](#acquiring-and-using-connections)
 - [Running queries](#running-queries)
     - [execute() - for SQL statements that modify data](#execute----for-sql-statements-that-modify-data)
+    - [executeWithResult () - For inserts that generate an id](#executeWithResult----for-inserts-that-generate-an-id)
     - [fetchAll() - for queries that return data](#fetchall----for-queries-that-return-data)
     - [fetch() - for streaming large results](#fetch----for-streaming-large-results)
 - [Prepared statements (named and positional parameters)](#prepared-statements)
@@ -335,6 +336,20 @@ Returns the number of affected rows (INSERT, UPDATE, DELETE, DDL statements):
 // With raw SQL string
 val affected: Long = db.execute("insert into users(id, name) values (1, 'Alice');").getOrThrow()
 ```
+
+#### executeWithResult () - For inserts that generate an id
+
+Like `execute`, but also returns the id the database generated for an inserted row (`AUTO_INCREMENT` on
+MySQL/MariaDB, the rowid on SQLite), with no extra query:
+
+```kotlin
+val res: ExecuteResult = db.executeWithResult("insert into users(name) values ('Alice');").getOrThrow()
+res.rowsAffected // 1
+res.lastInsertId // the generated id, or null when the statement generated none
+```
+
+`lastInsertId` is always `null` on PostgreSQL, which has no such value: use `INSERT ... RETURNING id` with `fetchAll`
+there. For a multi-row insert, MySQL reports the first generated id and SQLite the last.
 
 #### fetchAll () - For queries that return data
 

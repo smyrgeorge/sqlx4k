@@ -11,12 +11,14 @@ import android.database.sqlite.SQLiteProgram
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Dialect
+import io.github.smyrgeorge.sqlx4k.ExecuteResult
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
+import io.github.smyrgeorge.sqlx4k.impl.extensions.isInsertStatement
 import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
@@ -151,6 +153,17 @@ class SQLite(
         }
     }
 
+    override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
+        val connection = pool.acquire().getOrThrow()
+        try {
+            connection.executeWithResult(sql).getOrThrow()
+        } catch (e: Exception) {
+            e.toSQLError().raise()
+        } finally {
+            connection.close()
+        }
+    }
+
     override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
         val connection = pool.acquire().getOrThrow()
         try {
@@ -166,6 +179,17 @@ class SQLite(
         val connection = pool.acquire().getOrThrow()
         try {
             connection.execute(statement).getOrThrow()
+        } catch (e: Exception) {
+            e.toSQLError().raise()
+        } finally {
+            connection.close()
+        }
+    }
+
+    override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
+        val connection = pool.acquire().getOrThrow()
+        try {
+            connection.executeWithResult(statement).getOrThrow()
         } catch (e: Exception) {
             e.toSQLError().raise()
         } finally {
@@ -267,15 +291,33 @@ class SQLite(
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+        override suspend fun execute(statement: Statement): Result<Long> =
+            executeWithResult(statement).map { it.rowsAffected }
+
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
+            mutex.withLock {
+                assertIsOpen()
+                try {
+                    withContext(dispatcher) {
+                        db.executeForResult(sql) { db.compileStatement(sql).use { it.executeUpdateDelete() } }
+                    }
+                } catch (e: Exception) {
+                    e.toSQLError().raise()
+                }
+            }
+        }
+
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
             val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
             mutex.withLock {
                 assertIsOpen()
                 try {
                     withContext(dispatcher) {
-                        db.compileStatement(nq.sql).use { stmt ->
-                            stmt.bindAll(nq.values)
-                            stmt.executeUpdateDelete().toLong()
+                        db.executeForResult(nq.sql) {
+                            db.compileStatement(nq.sql).use { stmt ->
+                                stmt.bindAll(nq.values)
+                                stmt.executeUpdateDelete()
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -455,15 +497,33 @@ class SQLite(
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+        override suspend fun execute(statement: Statement): Result<Long> =
+            executeWithResult(statement).map { it.rowsAffected }
+
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
+            mutex.withLock {
+                assertIsOpen()
+                try {
+                    withContext(dispatcher) {
+                        db.executeForResult(sql) { db.compileStatement(sql).use { it.executeUpdateDelete() } }
+                    }
+                } catch (e: Exception) {
+                    e.toSQLError().raise()
+                }
+            }
+        }
+
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
             val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
             mutex.withLock {
                 assertIsOpen()
                 try {
                     withContext(dispatcher) {
-                        db.compileStatement(nq.sql).use { stmt ->
-                            stmt.bindAll(nq.values)
-                            stmt.executeUpdateDelete().toLong()
+                        db.executeForResult(nq.sql) {
+                            db.compileStatement(nq.sql).use { stmt ->
+                                stmt.bindAll(nq.values)
+                                stmt.executeUpdateDelete()
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -569,6 +629,29 @@ class SQLite(
                         message = "Cannot bind value of type ${value::class.simpleName} as a SQLite parameter"
                     ).raise()
                 }
+            }
+        }
+
+        /**
+         * Runs [update] (returning the changed row count) and reports the rowid an `INSERT` generated. SQLite keeps the
+         * last inserted rowid per connection, and outside a transaction SQLiteDatabase may run the follow-up query on
+         * another of its connections: the insert and the read share a transaction, and with it one connection.
+         */
+        private fun SQLiteDatabase.executeForResult(sql: String, update: () -> Int): ExecuteResult {
+            if (!sql.isInsertStatement()) return ExecuteResult(rowsAffected = update().toLong(), lastInsertId = null)
+            val ownTransaction = !inTransaction()
+            if (ownTransaction) beginTransactionNonExclusive()
+            try {
+                val rowsAffected = update().toLong()
+                val lastInsertId = if (rowsAffected > 0) {
+                    compileStatement("select last_insert_rowid()").use { it.simpleQueryForLong() }
+                } else {
+                    null
+                }
+                if (ownTransaction) setTransactionSuccessful()
+                return ExecuteResult(rowsAffected = rowsAffected, lastInsertId = lastInsertId)
+            } finally {
+                if (ownTransaction) endTransaction()
             }
         }
 

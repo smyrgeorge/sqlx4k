@@ -78,6 +78,8 @@ pub struct Sqlx4kSqliteResult {
     /// `SQLError.Kind` ordinal (`KIND_*`).
     pub error_kind: c_int,
     pub rows_affected: c_ulonglong,
+    /// The rowid of the last row inserted on the connection (SQLite tracks it per connection, not per statement).
+    pub last_insert_id: i64,
     pub cn: *mut c_void,
     pub tx: *mut c_void,
     pub rt: *mut c_void,
@@ -105,6 +107,7 @@ impl Default for Sqlx4kSqliteResult {
             error_native_code: NO_NATIVE_CODE,
             error_kind: KIND_OTHER,
             rows_affected: 0,
+            last_insert_id: 0,
             cn: null_mut(),
             tx: null_mut(),
             rt: null_mut(),
@@ -504,6 +507,7 @@ impl Sqlx4kSqlite {
         let result = match result {
             Ok(res) => Sqlx4kSqliteResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_rowid(),
                 ..Default::default()
             },
             Err(err) => sqlx4k_sqlite_error_result_of(err),
@@ -552,6 +556,7 @@ impl Sqlx4kSqlite {
         let result = match result {
             Ok(res) => Sqlx4kSqliteResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_rowid(),
                 ..Default::default()
             },
             Err(err) => sqlx4k_sqlite_error_result_of(err),
@@ -629,6 +634,7 @@ impl Sqlx4kSqlite {
         let result = match result {
             Ok(res) => Sqlx4kSqliteResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_rowid(),
                 ..Default::default()
             },
             Err(err) => sqlx4k_sqlite_error_result_of(err),
@@ -760,6 +766,7 @@ impl Sqlx4kSqlite {
         let result = match result {
             Ok(res) => Sqlx4kSqliteResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_rowid(),
                 ..Default::default()
             },
             Err(err) => sqlx4k_sqlite_error_result_of(err),
@@ -789,6 +796,7 @@ impl Sqlx4kSqlite {
         let result = match result {
             Ok(res) => Sqlx4kSqliteResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_rowid(),
                 ..Default::default()
             },
             Err(err) => sqlx4k_sqlite_error_result_of(err),
@@ -822,6 +830,7 @@ impl Sqlx4kSqlite {
         let result = match result {
             Ok(res) => Sqlx4kSqliteResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_rowid(),
                 ..Default::default()
             },
             Err(err) => sqlx4k_sqlite_error_result_of(err),

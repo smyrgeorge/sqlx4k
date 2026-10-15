@@ -2,12 +2,10 @@
 
 package io.github.smyrgeorge.sqlx4k.sqlite.cipher
 
+import io.github.smyrgeorge.sqlx4k.ExecuteResult
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.withContext
+import io.github.smyrgeorge.sqlx4k.impl.extensions.isInsertStatement
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
@@ -23,6 +21,10 @@ import kotlinx.cinterop.readBytes
 import kotlinx.cinterop.staticCFunction
 import kotlinx.cinterop.toKString
 import kotlinx.cinterop.useContents
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import sqlx4k.sqlite.cipher.Sqlx4kSqliteCipherPtr
 import sqlx4k.sqlite.cipher.Sqlx4kSqliteCipherResult
 import sqlx4k.sqlite.cipher.Sqlx4kSqliteCipherSchema
@@ -106,9 +108,19 @@ fun CPointer<Sqlx4kSqliteCipherResult>?.rtOrError(): CPointer<out CPointed> = us
     it.rt ?: SQLError(SQLError.Code.Pool, "Unexpected behaviour while creating the pool.").raise()
 }
 
-fun CPointer<Sqlx4kSqliteCipherResult>?.rowsAffectedOrError(): Long = use {
+fun CPointer<Sqlx4kSqliteCipherResult>?.executeResultOrError(sql: String): ExecuteResult = use {
     it.throwIfError()
-    it.rows_affected.toLong()
+    it.toExecuteResult(sql)
+}
+
+/**
+ * SQLite keeps the last inserted rowid per connection, so it is the statement's own generated id only for an
+ * `INSERT` that inserted rows; otherwise it would be a previous insert's.
+ */
+fun Sqlx4kSqliteCipherResult.toExecuteResult(sql: String): ExecuteResult {
+    val rowsAffected = rows_affected.toLong()
+    val lastInsertId = last_insert_id.takeIf { rowsAffected > 0 && sql.isInsertStatement() }
+    return ExecuteResult(rowsAffected = rowsAffected, lastInsertId = lastInsertId)
 }
 
 suspend inline fun sqlx(

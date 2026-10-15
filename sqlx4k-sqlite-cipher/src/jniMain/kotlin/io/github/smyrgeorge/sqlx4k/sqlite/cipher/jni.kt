@@ -2,16 +2,13 @@
 
 package io.github.smyrgeorge.sqlx4k.sqlite.cipher
 
+import io.github.smyrgeorge.sqlx4k.ExecuteResult
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.impl.extensions.isInsertStatement
 import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.types.SqlRawLiteral
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
@@ -20,6 +17,11 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
@@ -137,6 +139,7 @@ internal class JniResult(
     private val errorNativeCode: Int,
     private val errorKind: Int,
     val rowsAffected: Long,
+    val lastInsertId: Long,
     val cn: Long,
     val tx: Long,
     val rt: Long,
@@ -179,9 +182,16 @@ internal class JniResult(
         return tx
     }
 
-    fun rowsAffectedOrError(): Long {
+    /**
+     * SQLite keeps the last inserted rowid per connection, so it is the statement's own generated id only for an
+     * `INSERT` that inserted rows; otherwise it would be a previous insert's.
+     */
+    fun executeResultOrError(sql: String): ExecuteResult {
         throwIfError()
-        return rowsAffected
+        return ExecuteResult(
+            rowsAffected = rowsAffected,
+            lastInsertId = lastInsertId.takeIf { rowsAffected > 0 && sql.isInsertStatement() },
+        )
     }
 
     fun toResultSet(): ResultSet {
@@ -213,6 +223,7 @@ internal fun decodeResult(bytes: ByteArray): JniResult {
     val errorNativeCode = inp.readInt()
     val errorKind = inp.readInt()
     val rowsAffected = inp.readLong()
+    val lastInsertId = inp.readLong()
     val cn = inp.readLong()
     val tx = inp.readLong()
     val rt = inp.readLong()
@@ -256,6 +267,7 @@ internal fun decodeResult(bytes: ByteArray): JniResult {
         errorNativeCode = errorNativeCode,
         errorKind = errorKind,
         rowsAffected = rowsAffected,
+        lastInsertId = lastInsertId,
         cn = cn,
         tx = tx,
         rt = rt,

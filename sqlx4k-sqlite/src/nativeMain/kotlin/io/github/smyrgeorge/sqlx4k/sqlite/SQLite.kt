@@ -3,6 +3,7 @@ package io.github.smyrgeorge.sqlx4k.sqlite
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Dialect
+import io.github.smyrgeorge.sqlx4k.ExecuteResult
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
@@ -148,16 +149,21 @@ class SQLite(
         }
     }
 
-    override suspend fun execute(sql: String): Result<Long> = runCatching {
-        sqlx { c -> sqlx4k_sqlite_query(rt, sql, c, fn) }.rowsAffectedOrError()
+    override suspend fun execute(sql: String): Result<Long> = executeWithResult(sql).map { it.rowsAffected }
+
+    override suspend fun execute(statement: Statement): Result<Long> =
+        executeWithResult(statement).map { it.rowsAffected }
+
+    override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
+        sqlx { c -> sqlx4k_sqlite_query(rt, sql, c, fn) }.executeResultOrError(sql)
     }
 
-    override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+    override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
         val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
         memScoped {
             val (paramsPtr, paramsLen) = allocParams(nq.values)
             sqlx { c -> sqlx4k_sqlite_query_with_params(rt, nq.sql, paramsPtr, paramsLen, c, fn) }
-                .rowsAffectedOrError()
+                .executeResultOrError(nq.sql)
         }
     }
 
@@ -220,17 +226,19 @@ class SQLite(
             return Result.success(Unit)
         }
 
-        override suspend fun execute(sql: String): Result<Long> = runCatching {
+        override suspend fun execute(sql: String): Result<Long> = executeWithResult(sql).map { it.rowsAffected }
+
+        override suspend fun execute(statement: Statement): Result<Long> =
+            executeWithResult(statement).map { it.rowsAffected }
+
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
             mutex.withLock {
                 assertIsOpen()
-                sqlx { c -> sqlx4k_sqlite_cn_query(rt, cn, sql, c, fn) }.use {
-                    it.throwIfError()
-                    it.rows_affected.toLong()
-                }
+                sqlx { c -> sqlx4k_sqlite_cn_query(rt, cn, sql, c, fn) }.executeResultOrError(sql)
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
             val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
             mutex.withLock {
                 assertIsOpen()
@@ -238,10 +246,7 @@ class SQLite(
                     val (paramsPtr, paramsLen) = allocParams(nq.values)
                     sqlx { c ->
                         sqlx4k_sqlite_cn_query_with_params(rt, cn, nq.sql, paramsPtr, paramsLen, c, fn)
-                    }.use {
-                        it.throwIfError()
-                        it.rows_affected.toLong()
-                    }
+                    }.executeResultOrError(nq.sql)
                 }
             }
         }
@@ -339,18 +344,23 @@ class SQLite(
             }
         }
 
-        override suspend fun execute(sql: String): Result<Long> = runCatching {
+        override suspend fun execute(sql: String): Result<Long> = executeWithResult(sql).map { it.rowsAffected }
+
+        override suspend fun execute(statement: Statement): Result<Long> =
+            executeWithResult(statement).map { it.rowsAffected }
+
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
             mutex.withLock {
                 assertIsOpen()
                 sqlx { c -> sqlx4k_sqlite_tx_query(rt, tx, sql, c, fn) }.use {
                     tx = it.tx!!
                     it.throwIfError()
-                    it.rows_affected.toLong()
+                    it.toExecuteResult(sql)
                 }
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
             val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
             mutex.withLock {
                 assertIsOpen()
@@ -361,7 +371,7 @@ class SQLite(
                     }.use {
                         tx = it.tx!!
                         it.throwIfError()
-                        it.rows_affected.toLong()
+                        it.toExecuteResult(nq.sql)
                     }
                 }
             }

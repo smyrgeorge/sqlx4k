@@ -230,3 +230,26 @@ internal inline fun String.scanSql(
     }
     return if (writeOutput) sb.toString() else this
 }
+
+/**
+ * Whether the SQL statement is an `INSERT` (or SQLite's `REPLACE`), judged by its first keyword after any leading
+ * whitespace and comments. A statement that starts with a `WITH` clause is not recognised.
+ *
+ * SQLite drivers use it for [io.github.smyrgeorge.sqlx4k.ExecuteResult.lastInsertId]: SQLite keeps the last
+ * inserted rowid per connection, so it would otherwise report a previous insert's id after an `UPDATE`.
+ */
+fun String.isInsertStatement(): Boolean {
+    var i = 0
+    while (i < length) {
+        when {
+            this[i].isWhitespace() -> i++
+            startsWith("--", i) -> i = indexOf('\n', i).let { if (it < 0) return false else it + 1 }
+            startsWith("/*", i) -> i = indexOf("*/", i + 2).let { if (it < 0) return false else it + 2 }
+            else -> break
+        }
+    }
+    val start = i
+    while (i < length && this[i].isIdentPart()) i++
+    val keyword = substring(start, i)
+    return keyword.equals("insert", ignoreCase = true) || keyword.equals("replace", ignoreCase = true)
+}

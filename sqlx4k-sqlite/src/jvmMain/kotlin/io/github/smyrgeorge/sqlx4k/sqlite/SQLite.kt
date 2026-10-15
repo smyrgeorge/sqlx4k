@@ -9,12 +9,14 @@ import com.zaxxer.hikari.pool.HikariPool
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Dialect
+import io.github.smyrgeorge.sqlx4k.ExecuteResult
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
+import io.github.smyrgeorge.sqlx4k.impl.extensions.isInsertStatement
 import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
@@ -162,10 +164,12 @@ class SQLite(
         JdbcConnection(connection, encoders)
     }
 
-    override suspend fun execute(sql: String): Result<Long> = runCatching {
+    override suspend fun execute(sql: String): Result<Long> = executeWithResult(sql).map { it.rowsAffected }
+
+    override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
         val connection = acquire().getOrThrow()
         try {
-            connection.execute(sql).getOrThrow()
+            connection.executeWithResult(sql).getOrThrow()
         } catch (e: Exception) {
             e.toSQLError().raise()
         } finally {
@@ -184,10 +188,12 @@ class SQLite(
         }
     }
 
-    override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+    override suspend fun execute(statement: Statement): Result<Long> = executeWithResult(statement).map { it.rowsAffected }
+
+    override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
         val connection = acquire().getOrThrow()
         try {
-            connection.execute(statement).getOrThrow()
+            connection.executeWithResult(statement).getOrThrow()
         } catch (e: Exception) {
             e.toSQLError().raise()
         } finally {
@@ -262,13 +268,15 @@ class SQLite(
             return Result.success(Unit)
         }
 
-        override suspend fun execute(sql: String): Result<Long> = runCatching {
+        override suspend fun execute(sql: String): Result<Long> = executeWithResult(sql).map { it.rowsAffected }
+
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
             mutex.withLock {
                 assertIsOpen()
                 try {
                     withContext(Dispatchers.IO) {
-                        connection.createStatement().use { statement ->
-                            statement.executeUpdate(sql).toLong()
+                        connection.executeForResult(sql) {
+                            connection.createStatement().use { statement -> statement.executeUpdate(sql) }
                         }
                     }
                 } catch (e: Exception) {
@@ -292,13 +300,16 @@ class SQLite(
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+        override suspend fun execute(statement: Statement): Result<Long> =
+            executeWithResult(statement).map { it.rowsAffected }
+
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
             mutex.withLock {
                 assertIsOpen()
                 try {
                     withContext(Dispatchers.IO) {
-                        connection.prepareStatement(statement, encoders).use { stmt ->
-                            stmt.executeUpdate().toLong()
+                        connection.executeForResult(statement.sql) {
+                            connection.prepareStatement(statement, encoders).use { stmt -> stmt.executeUpdate() }
                         }
                     }
                 } catch (e: Exception) {
@@ -409,13 +420,15 @@ class SQLite(
             }
         }
 
-        override suspend fun execute(sql: String): Result<Long> = runCatching {
+        override suspend fun execute(sql: String): Result<Long> = executeWithResult(sql).map { it.rowsAffected }
+
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
             mutex.withLock {
                 assertIsOpen()
                 try {
                     withContext(Dispatchers.IO) {
-                        connection.createStatement().use { statement ->
-                            statement.executeUpdate(sql).toLong()
+                        connection.executeForResult(sql) {
+                            connection.createStatement().use { statement -> statement.executeUpdate(sql) }
                         }
                     }
                 } catch (e: Exception) {
@@ -439,13 +452,16 @@ class SQLite(
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+        override suspend fun execute(statement: Statement): Result<Long> =
+            executeWithResult(statement).map { it.rowsAffected }
+
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
             mutex.withLock {
                 assertIsOpen()
                 try {
                     withContext(Dispatchers.IO) {
-                        connection.prepareStatement(statement, encoders).use { stmt ->
-                            stmt.executeUpdate().toLong()
+                        connection.executeForResult(statement.sql) {
+                            connection.prepareStatement(statement, encoders).use { stmt -> stmt.executeUpdate() }
                         }
                     }
                 } catch (e: Exception) {
@@ -601,6 +617,22 @@ class SQLite(
                 }
             )
             return ResultSet(rows, null, meta)
+        }
+
+        /**
+         * Runs [update] and reports the rowid it generated, read on the same connection right after. SQLite keeps the
+         * last inserted rowid per connection, so it is the statement's own only for an `INSERT` that inserted rows.
+         */
+        private fun NativeJdbcConnection.executeForResult(sql: String, update: () -> Int): ExecuteResult {
+            val rowsAffected = update().toLong()
+            val lastInsertId = if (rowsAffected > 0 && sql.isInsertStatement()) {
+                createStatement().use { stmt ->
+                    stmt.executeQuery("select last_insert_rowid()").use { rs -> rs.next(); rs.getLong(1) }
+                }
+            } else {
+                null
+            }
+            return ExecuteResult(rowsAffected = rowsAffected, lastInsertId = lastInsertId)
         }
 
         private fun createDataSource(url: String, options: ConnectionPool.Options): HikariDataSource {

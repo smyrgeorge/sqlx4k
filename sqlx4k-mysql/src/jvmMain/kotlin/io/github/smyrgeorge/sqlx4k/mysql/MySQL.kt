@@ -14,6 +14,7 @@ import io.asyncer.r2dbc.mysql.extension.CodecRegistrar
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Dialect
+import io.github.smyrgeorge.sqlx4k.ExecuteResult
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
@@ -164,16 +165,17 @@ class MySQL(
         R2dbcConnection(pool.acquire(), encoders)
     }
 
-    override suspend fun execute(sql: String) = runCatching {
+    override suspend fun execute(sql: String): Result<Long> = executeWithResult(sql).map { it.rowsAffected }
+
+    override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
         with(pool.acquire()) {
-            val res = try {
-                createStatement(sql).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
+            try {
+                createStatement(sql).executeForResult()
             } catch (e: Exception) {
                 e.toSQLError().raise()
             } finally {
                 close().toMono().awaitSingleOrNull()
             }
-            res
         }
     }
 
@@ -189,16 +191,18 @@ class MySQL(
         }
     }
 
-    override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+    override suspend fun execute(statement: Statement): Result<Long> =
+        executeWithResult(statement).map { it.rowsAffected }
+
+    override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
         with(pool.acquire()) {
-            val res = try {
-                createStatement(statement, encoders).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
+            try {
+                createStatement(statement, encoders).executeForResult()
             } catch (e: Exception) {
                 e.toSQLError().raise()
             } finally {
                 close().toMono().awaitSingleOrNull()
             }
-            res
         }
     }
 
@@ -295,12 +299,15 @@ class MySQL(
         override suspend fun setTransactionIsolationLevel(level: IsolationLevel): Result<Unit> =
             setTransactionIsolationLevel(level, true)
 
-        private suspend fun execute(sql: String, lock: Boolean): Result<Long> {
-            suspend fun doExecute(sql: String): Result<Long> = runCatching {
-                connection.createStatement(sql).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
+        private suspend fun execute(sql: String, lock: Boolean): Result<Long> =
+            executeWithResult(sql, lock).map { it.rowsAffected }
+
+        private suspend fun executeWithResult(sql: String, lock: Boolean): Result<ExecuteResult> {
+            suspend fun doExecute(sql: String): Result<ExecuteResult> = runCatching {
+                connection.createStatement(sql).executeForResult()
             }
 
-            suspend fun doExecuteWithLock(sql: String): Result<Long> = runCatching {
+            suspend fun doExecuteWithLock(sql: String): Result<ExecuteResult> = runCatching {
                 mutex.withLock {
                     assertIsOpen()
                     doExecute(sql).getOrThrow()
@@ -311,6 +318,8 @@ class MySQL(
         }
 
         override suspend fun execute(sql: String): Result<Long> = execute(sql, true)
+
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = executeWithResult(sql, true)
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
             return mutex.withLock {
@@ -323,12 +332,14 @@ class MySQL(
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+        override suspend fun execute(statement: Statement): Result<Long> =
+            executeWithResult(statement).map { it.rowsAffected }
+
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
             mutex.withLock {
                 assertIsOpen()
                 try {
-                    connection.createStatement(statement, encoders).execute().awaitLast().rowsUpdated.toMono()
-                        .awaitSingleOrNull() ?: 0
+                    connection.createStatement(statement, encoders).executeForResult()
                 } catch (e: Exception) {
                     e.toSQLError().raise()
                 }
@@ -419,11 +430,13 @@ class MySQL(
             }
         }
 
-        override suspend fun execute(sql: String): Result<Long> = runCatching {
+        override suspend fun execute(sql: String): Result<Long> = executeWithResult(sql).map { it.rowsAffected }
+
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
             mutex.withLock {
                 assertIsOpen()
                 try {
-                    connection.createStatement(sql).execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
+                    connection.createStatement(sql).executeForResult()
                 } catch (e: Exception) {
                     e.toSQLError().raise()
                 }
@@ -441,12 +454,14 @@ class MySQL(
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+        override suspend fun execute(statement: Statement): Result<Long> =
+            executeWithResult(statement).map { it.rowsAffected }
+
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
             mutex.withLock {
                 assertIsOpen()
                 try {
-                    connection.createStatement(statement, encoders).execute().awaitLast().rowsUpdated.toMono()
-                        .awaitSingleOrNull() ?: 0
+                    connection.createStatement(statement, encoders).executeForResult()
                 } catch (e: Exception) {
                     e.toSQLError().raise()
                 }
@@ -484,6 +499,28 @@ class MySQL(
         private fun <T> Publisher<T>.toMono(): Mono<T> {
             if (this is Mono<T>) return this
             error("Publisher is not a Mono: ${this::class.qualifiedName}")
+        }
+
+        /**
+         * Executes the statement and reports its update count and generated id. With returnGeneratedValues(),
+         * r2dbc-mysql reports `LAST_INSERT_ID()` from the server's reply to the statement (no extra query); it is 0
+         * when the statement generated no id.
+         */
+        private suspend fun io.r2dbc.spi.Statement.executeForResult(): ExecuteResult {
+            val segments = returnGeneratedValues().execute().awaitLast()
+                .flatMap { segment ->
+                    // An error arrives as a message segment: fail like rowsUpdated would.
+                    if (segment is NativeR2dbcResultSet.Message) return@flatMap Mono.error(segment.exception())
+                    // A segment may carry both: the update count and the generated id.
+                    val count = (segment as? NativeR2dbcResultSet.UpdateCount)?.value() ?: 0L
+                    val id = (segment as? NativeR2dbcResultSet.RowSegment)?.row()?.get(0, java.lang.Long::class.java)
+                    Mono.just(count to id?.toLong())
+                }
+                .asFlow().toList()
+            return ExecuteResult(
+                rowsAffected = segments.sumOf { it.first },
+                lastInsertId = segments.firstNotNullOfOrNull { it.second }?.takeIf { it != 0L },
+            )
         }
 
         private fun NativeR2dbcConnection.createStatement(

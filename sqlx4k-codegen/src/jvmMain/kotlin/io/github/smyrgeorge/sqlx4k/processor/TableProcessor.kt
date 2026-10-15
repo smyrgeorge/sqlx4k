@@ -189,8 +189,8 @@ class TableProcessor(
             " * The statement includes a RETURNING clause to fetch the inserted row with any\n" +
                     " * database-generated values.\n"
         } else {
-            " * MySQL has no RETURNING clause: read the inserted row back with [selectInserted],\n" +
-                    " * on the same connection (LAST_INSERT_ID() is per connection).\n"
+            " * MySQL has no RETURNING clause: run it with `executeWithResult`, then read the inserted\n" +
+                    " * row back with [selectInserted] and the reported `lastInsertId`.\n"
         }
         file += " *\n"
         file += " * @return A prepared [Statement] with bound values ready for execution\n"
@@ -221,16 +221,15 @@ class TableProcessor(
             file += " * Creates a SELECT statement that reads back the row inserted by [insert], with any\n"
             file += " * database-generated values (MySQL has no RETURNING clause).\n"
             file += " *\n"
-            file += " * Must run on the connection that executed the insert: LAST_INSERT_ID() is per\n"
-            file += " * connection. It is 0 when the insert generated no id, so the entity's own id is used.\n"
-            file += " *\n"
+            file += " * @param generatedId The id the database generated for the row, as reported by\n"
+            file += " * `executeWithResult`; `null` when the insert generated none, so the entity's own id is used.\n"
             file += " * @return A prepared [Statement] with bound values ready for execution\n"
             file += " */\n"
-            file += "fun ${clazz.qualifiedName()}.selectInserted(): Statement {\n"
+            file += "fun ${clazz.qualifiedName()}.selectInserted(generatedId: Long?): Statement {\n"
             file += "    // language=SQL\n"
-            file += "    val sql = \"select $returningColumns from $table where $idCol = coalesce(nullif(last_insert_id(), 0), ?);\"\n"
+            file += "    val sql = \"select $returningColumns from $table where $idCol = ?;\"\n"
             file += "    val statement = Statement.create(sql)\n"
-            file += "    statement.bind(0, ${generateBindExpression(idProp)})\n"
+            file += "    statement.bind(0, generatedId ?: ${generateBindExpression(idProp)})\n"
             file += "    return statement\n"
             file += "}\n"
         }

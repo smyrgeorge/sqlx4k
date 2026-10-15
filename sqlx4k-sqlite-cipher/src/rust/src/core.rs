@@ -81,6 +81,8 @@ pub struct Sqlx4kSqliteCipherResult {
     /// `SQLError.Kind` ordinal (`KIND_*`).
     pub error_kind: c_int,
     pub rows_affected: c_ulonglong,
+    /// The rowid of the last row inserted on the connection (SQLite tracks it per connection, not per statement).
+    pub last_insert_id: i64,
     pub cn: *mut c_void,
     pub tx: *mut c_void,
     pub rt: *mut c_void,
@@ -107,6 +109,7 @@ impl Default for Sqlx4kSqliteCipherResult {
             error_native_code: NO_NATIVE_CODE,
             error_kind: KIND_OTHER,
             rows_affected: 0,
+            last_insert_id: 0,
             cn: null_mut(),
             tx: null_mut(),
             rt: null_mut(),
@@ -488,6 +491,7 @@ impl Sqlx4kSqliteCipher {
         let result = match result {
             Ok(res) => Sqlx4kSqliteCipherResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_rowid(),
                 ..Default::default()
             },
             Err(err) => error_result_of(err),
@@ -540,6 +544,7 @@ impl Sqlx4kSqliteCipher {
         let result = match result {
             Ok(res) => Sqlx4kSqliteCipherResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_rowid(),
                 ..Default::default()
             },
             Err(err) => error_result_of(err),
@@ -625,6 +630,7 @@ impl Sqlx4kSqliteCipher {
         let result = match result {
             Ok(res) => Sqlx4kSqliteCipherResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_rowid(),
                 ..Default::default()
             },
             Err(err) => error_result_of(err),
@@ -766,6 +772,7 @@ impl Sqlx4kSqliteCipher {
         let result = match result {
             Ok(res) => Sqlx4kSqliteCipherResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_rowid(),
                 ..Default::default()
             },
             Err(err) => error_result_of(err),
@@ -795,6 +802,7 @@ impl Sqlx4kSqliteCipher {
         let result = match result {
             Ok(res) => Sqlx4kSqliteCipherResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_rowid(),
                 ..Default::default()
             },
             Err(err) => error_result_of(err),
@@ -828,6 +836,7 @@ impl Sqlx4kSqliteCipher {
         let result = match result {
             Ok(res) => Sqlx4kSqliteCipherResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_rowid(),
                 ..Default::default()
             },
             Err(err) => error_result_of(err),
@@ -1160,6 +1169,7 @@ pub(crate) fn format_sqlite_real(value: f64) -> String {
 //   i32 error_native_code             (-1 = none; otherwise the SQLite extended result code)
 //   i32 error_kind                    (SQLError.Kind ordinal)
 //   i64 rows_affected
+//   i64 last_insert_id                (the connection's last inserted rowid)
 //   i64 cn  (pointer as i64, 0 = null)
 //   i64 tx
 //   i64 rt
@@ -1241,6 +1251,7 @@ pub fn serialize_result(ptr: *const Sqlx4kSqliteCipherResult) -> Vec<u8> {
     buf.put_i32(result.error_native_code);
     buf.put_i32(result.error_kind);
     buf.put_i64(result.rows_affected as i64);
+    buf.put_i64(result.last_insert_id);
     buf.put_i64(result.cn as usize as i64);
     buf.put_i64(result.tx as usize as i64);
     buf.put_i64(result.rt as usize as i64);

@@ -3,16 +3,12 @@
 package io.github.smyrgeorge.sqlx4k.sqlite.pool
 
 import io.github.smyrgeorge.sqlx4k.Connection
+import io.github.smyrgeorge.sqlx4k.ExecuteResult
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlin.concurrent.Volatile
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
@@ -20,6 +16,11 @@ import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * A physical connection owned by the pool. Callers never get it directly: every acquisition hands out a new
@@ -158,6 +159,10 @@ internal class PooledConnection(
         override suspend fun execute(sql: String): Result<Long> = guarded { connection.execute(sql) }
         override suspend fun fetchAll(sql: String): Result<ResultSet> = guarded { connection.fetchAll(sql) }
         override suspend fun execute(statement: Statement): Result<Long> = guarded { connection.execute(statement) }
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> =
+            guarded { connection.executeWithResult(sql) }
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> =
+            guarded { connection.executeWithResult(statement) }
         override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
             guarded { connection.fetchAll(statement) }
 

@@ -5,6 +5,7 @@ package io.github.smyrgeorge.sqlx4k.sqlite.cipher
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Dialect
+import io.github.smyrgeorge.sqlx4k.ExecuteResult
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
@@ -127,17 +128,23 @@ class SQLiteCipher(
         }
     }
 
-    override suspend fun execute(sql: String): Result<Long> = runCatching {
+    override suspend fun execute(sql: String): Result<Long> =
+        executeWithResult(sql).map { it.rowsAffected }
+
+    override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
         withContext(Dispatchers.IO) {
-            decodeResult(CipherJni.nativeQuery(rt, sql)).rowsAffectedOrError()
+            decodeResult(CipherJni.nativeQuery(rt, sql)).executeResultOrError(sql)
         }
     }
 
-    override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+    override suspend fun execute(statement: Statement): Result<Long> =
+        executeWithResult(statement).map { it.rowsAffected }
+
+    override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
         val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
         withContext(Dispatchers.IO) {
             decodeResult(CipherJni.nativeQueryWithParams(rt, nq.sql, encodeParams(nq.values)))
-                .rowsAffectedOrError()
+                .executeResultOrError(nq.sql)
         }
     }
 
@@ -196,22 +203,28 @@ class SQLiteCipher(
             return Result.success(Unit)
         }
 
-        override suspend fun execute(sql: String): Result<Long> = runCatching {
+        override suspend fun execute(sql: String): Result<Long> =
+            executeWithResult(sql).map { it.rowsAffected }
+
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
             mutex.withLock {
                 assertIsOpen()
                 withContext(Dispatchers.IO) {
-                    decodeResult(CipherJni.nativeCnQuery(rt, cn, sql)).rowsAffectedOrError()
+                    decodeResult(CipherJni.nativeCnQuery(rt, cn, sql)).executeResultOrError(sql)
                 }
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+        override suspend fun execute(statement: Statement): Result<Long> =
+            executeWithResult(statement).map { it.rowsAffected }
+
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
             val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
             mutex.withLock {
                 assertIsOpen()
                 withContext(Dispatchers.IO) {
                     decodeResult(CipherJni.nativeCnQueryWithParams(rt, cn, nq.sql, encodeParams(nq.values)))
-                        .rowsAffectedOrError()
+                        .executeResultOrError(nq.sql)
                 }
             }
         }
@@ -304,18 +317,24 @@ class SQLiteCipher(
             }
         }
 
-        override suspend fun execute(sql: String): Result<Long> = runCatching {
+        override suspend fun execute(sql: String): Result<Long> =
+            executeWithResult(sql).map { it.rowsAffected }
+
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
             mutex.withLock {
                 assertIsOpen()
                 withContext(Dispatchers.IO) {
                     val result = decodeResult(CipherJni.nativeTxQuery(rt, tx, sql))
                     if (result.tx != 0L) tx = result.tx
-                    result.rowsAffectedOrError()
+                    result.executeResultOrError(sql)
                 }
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+        override suspend fun execute(statement: Statement): Result<Long> =
+            executeWithResult(statement).map { it.rowsAffected }
+
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
             val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
             mutex.withLock {
                 assertIsOpen()
@@ -324,7 +343,7 @@ class SQLiteCipher(
                         CipherJni.nativeTxQueryWithParams(rt, tx, nq.sql, encodeParams(nq.values))
                     )
                     if (result.tx != 0L) tx = result.tx
-                    result.rowsAffectedOrError()
+                    result.executeResultOrError(nq.sql)
                 }
             }
         }

@@ -46,6 +46,30 @@ interface QueryExecutor {
     suspend fun execute(statement: Statement): Result<Long>
 
     /**
+     * Executes the given SQL statement asynchronously, like [execute], and also reports the id the database
+     * generated for an inserted row (see [ExecuteResult.lastInsertId]).
+     *
+     * The default implementation reports no id: drivers whose database reports one override it.
+     *
+     * @param sql the SQL statement to be executed.
+     * @return a result containing the number of affected rows and the generated id, if any.
+     */
+    suspend fun executeWithResult(@Language("SQL") sql: String): Result<ExecuteResult> =
+        execute(sql).map { ExecuteResult(rowsAffected = it, lastInsertId = null) }
+
+    /**
+     * Executes the given SQL statement asynchronously, like [execute], and also reports the id the database
+     * generated for an inserted row (see [ExecuteResult.lastInsertId]).
+     *
+     * The default implementation reports no id: drivers whose database reports one override it.
+     *
+     * @param statement the SQL statement to be executed.
+     * @return a result containing the number of affected rows and the generated id, if any.
+     */
+    suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> =
+        execute(statement).map { ExecuteResult(rowsAffected = it, lastInsertId = null) }
+
+    /**
      * Fetches all results of the given SQL query asynchronously.
      *
      * @param sql the SQL statement to be executed.

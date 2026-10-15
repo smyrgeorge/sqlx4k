@@ -3,6 +3,7 @@ package io.github.smyrgeorge.sqlx4k.mysql
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Dialect
+import io.github.smyrgeorge.sqlx4k.ExecuteResult
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
@@ -151,16 +152,21 @@ class MySQL(
         }
     }
 
-    override suspend fun execute(sql: String): Result<Long> = runCatching {
-        sqlx { c -> sqlx4k_mysql_query(rt, sql, c, fn) }.rowsAffectedOrError()
+    override suspend fun execute(sql: String): Result<Long> = executeWithResult(sql).map { it.rowsAffected }
+
+    override suspend fun execute(statement: Statement): Result<Long> =
+        executeWithResult(statement).map { it.rowsAffected }
+
+    override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
+        sqlx { c -> sqlx4k_mysql_query(rt, sql, c, fn) }.executeResultOrError()
     }
 
-    override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+    override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
         val nq = statement.renderNativeQuery(Dialect.MySQL, encoders)
         memScoped {
             val (paramsPtr, paramsLen) = allocParams(nq.values)
             sqlx { c -> sqlx4k_mysql_query_with_params(rt, nq.sql, paramsPtr, paramsLen, c, fn) }
-                .rowsAffectedOrError()
+                .executeResultOrError()
         }
     }
 
@@ -234,15 +240,15 @@ class MySQL(
         override suspend fun setTransactionIsolationLevel(level: IsolationLevel): Result<Unit> =
             setTransactionIsolationLevel(level, true)
 
-        private suspend fun execute(sql: String, lock: Boolean): Result<Long> {
-            suspend fun doExecute(sql: String): Result<Long> = runCatching {
-                sqlx { c -> sqlx4k_mysql_cn_query(rt, cn, sql, c, fn) }.use {
-                    it.throwIfError()
-                    it.rows_affected.toLong()
-                }
+        private suspend fun execute(sql: String, lock: Boolean): Result<Long> =
+            executeWithResult(sql, lock).map { it.rowsAffected }
+
+        private suspend fun executeWithResult(sql: String, lock: Boolean): Result<ExecuteResult> {
+            suspend fun doExecute(sql: String): Result<ExecuteResult> = runCatching {
+                sqlx { c -> sqlx4k_mysql_cn_query(rt, cn, sql, c, fn) }.executeResultOrError()
             }
 
-            suspend fun doExecuteWithLock(sql: String): Result<Long> = runCatching {
+            suspend fun doExecuteWithLock(sql: String): Result<ExecuteResult> = runCatching {
                 mutex.withLock {
                     assertIsOpen()
                     return doExecute(sql)
@@ -254,7 +260,12 @@ class MySQL(
 
         override suspend fun execute(sql: String): Result<Long> = execute(sql, true)
 
-        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+        override suspend fun execute(statement: Statement): Result<Long> =
+            executeWithResult(statement).map { it.rowsAffected }
+
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = executeWithResult(sql, true)
+
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
             val nq = statement.renderNativeQuery(Dialect.MySQL, encoders)
             mutex.withLock {
                 assertIsOpen()
@@ -262,10 +273,7 @@ class MySQL(
                     val (paramsPtr, paramsLen) = allocParams(nq.values)
                     sqlx { c ->
                         sqlx4k_mysql_cn_query_with_params(rt, cn, nq.sql, paramsPtr, paramsLen, c, fn)
-                    }.use {
-                        it.throwIfError()
-                        it.rows_affected.toLong()
-                    }
+                    }.executeResultOrError()
                 }
             }
         }
@@ -363,18 +371,23 @@ class MySQL(
             }
         }
 
-        override suspend fun execute(sql: String): Result<Long> = runCatching {
+        override suspend fun execute(sql: String): Result<Long> = executeWithResult(sql).map { it.rowsAffected }
+
+        override suspend fun execute(statement: Statement): Result<Long> =
+            executeWithResult(statement).map { it.rowsAffected }
+
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
             mutex.withLock {
                 assertIsOpen()
                 sqlx { c -> sqlx4k_mysql_tx_query(rt, tx, sql, c, fn) }.use {
                     tx = it.tx!!
                     it.throwIfError()
-                    it.rows_affected.toLong()
+                    it.toExecuteResult()
                 }
             }
         }
 
-        override suspend fun execute(statement: Statement): Result<Long> = runCatching {
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
             val nq = statement.renderNativeQuery(Dialect.MySQL, encoders)
             mutex.withLock {
                 assertIsOpen()
@@ -385,7 +398,7 @@ class MySQL(
                     }.use {
                         tx = it.tx!!
                         it.throwIfError()
-                        it.rows_affected.toLong()
+                        it.toExecuteResult()
                     }
                 }
             }

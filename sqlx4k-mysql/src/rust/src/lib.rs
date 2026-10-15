@@ -75,6 +75,8 @@ pub struct Sqlx4kMysqlResult {
     /// `SQLError.Kind` ordinal (`KIND_*`).
     pub error_kind: c_int,
     pub rows_affected: c_ulonglong,
+    /// `LAST_INSERT_ID()` of the statement: the id generated for an inserted row, or 0.
+    pub last_insert_id: c_ulonglong,
     pub cn: *mut c_void,
     pub tx: *mut c_void,
     pub rt: *mut c_void,
@@ -102,6 +104,7 @@ impl Default for Sqlx4kMysqlResult {
             error_native_code: NO_NATIVE_CODE,
             error_kind: KIND_OTHER,
             rows_affected: 0,
+            last_insert_id: 0,
             cn: null_mut(),
             tx: null_mut(),
             rt: null_mut(),
@@ -483,6 +486,7 @@ impl Sqlx4kMySql {
         let result = match result {
             Ok(res) => Sqlx4kMysqlResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_id(),
                 ..Default::default()
             },
             Err(err) => sqlx4k_mysql_error_result_of(err),
@@ -531,6 +535,7 @@ impl Sqlx4kMySql {
         let result = match result {
             Ok(res) => Sqlx4kMysqlResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_id(),
                 ..Default::default()
             },
             Err(err) => sqlx4k_mysql_error_result_of(err),
@@ -608,6 +613,7 @@ impl Sqlx4kMySql {
         let result = match result {
             Ok(res) => Sqlx4kMysqlResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_id(),
                 ..Default::default()
             },
             Err(err) => sqlx4k_mysql_error_result_of(err),
@@ -745,6 +751,7 @@ impl Sqlx4kMySql {
         let result = match result {
             Ok(res) => Sqlx4kMysqlResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_id(),
                 ..Default::default()
             },
             Err(err) => sqlx4k_mysql_error_result_of(err),
@@ -774,6 +781,7 @@ impl Sqlx4kMySql {
         let result = match result {
             Ok(res) => Sqlx4kMysqlResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_id(),
                 ..Default::default()
             },
             Err(err) => sqlx4k_mysql_error_result_of(err),
@@ -807,6 +815,7 @@ impl Sqlx4kMySql {
         let result = match result {
             Ok(res) => Sqlx4kMysqlResult {
                 rows_affected: res.rows_affected(),
+                last_insert_id: res.last_insert_id(),
                 ..Default::default()
             },
             Err(err) => sqlx4k_mysql_error_result_of(err),

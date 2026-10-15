@@ -2,12 +2,12 @@
 
 package io.github.smyrgeorge.sqlx4k.mysql
 
+import io.github.smyrgeorge.sqlx4k.ExecuteResult
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.withContext
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.CValue
@@ -19,15 +19,16 @@ import kotlinx.cinterop.pointed
 import kotlinx.cinterop.staticCFunction
 import kotlinx.cinterop.toKString
 import kotlinx.cinterop.useContents
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import sqlx4k.mysql.Sqlx4kMysqlPtr
 import sqlx4k.mysql.Sqlx4kMysqlResult
 import sqlx4k.mysql.Sqlx4kMysqlSchema
 import sqlx4k.mysql.sqlx4k_mysql_free_result
 import sqlx4k.mysql.sqlx4k_mysql_stream_close
 import sqlx4k.mysql.sqlx4k_mysql_stream_next
-import kotlin.coroutines.Continuation
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 
 private fun Sqlx4kMysqlResult.isError(): Boolean = error >= 0
 private fun Sqlx4kMysqlResult.toError(): SQLError {
@@ -104,10 +105,14 @@ fun CPointer<Sqlx4kMysqlResult>?.rtOrError(): CPointer<out CPointed> = use {
     it.rt ?: SQLError(SQLError.Code.Pool, "Unexpected behaviour while creating the pool.").raise()
 }
 
-fun CPointer<Sqlx4kMysqlResult>?.rowsAffectedOrError(): Long = use {
+fun CPointer<Sqlx4kMysqlResult>?.executeResultOrError(): ExecuteResult = use {
     it.throwIfError()
-    it.rows_affected.toLong()
+    it.toExecuteResult()
 }
+
+/** MySQL reports `LAST_INSERT_ID()` as 0 when the statement generated no id. */
+fun Sqlx4kMysqlResult.toExecuteResult(): ExecuteResult =
+    ExecuteResult(rowsAffected = rows_affected.toLong(), lastInsertId = last_insert_id.toLong().takeIf { it != 0L })
 
 suspend inline fun sqlx(
     crossinline operation: (continuationPtr: CPointer<out CPointed>) -> Unit
