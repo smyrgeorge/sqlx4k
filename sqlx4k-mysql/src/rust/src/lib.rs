@@ -1362,10 +1362,15 @@ fn decode_mysql_column_value(row: &MySqlRow, ordinal: usize) -> *mut c_char {
         // VARCHAR / CHAR / TEXT (all varieties) / JSON / ENUM / SET / YEAR / BIT
         // and anything else fall through to `&str`. In the text protocol they
         // arrive as text bytes; for text-typed columns this also works in the
-        // binary protocol.
-        _ => row.get_unchecked::<&str, _>(ordinal).to_string(),
+        // binary protocol. Decode leniently so that a binary-only type we don't
+        // model can never abort the host process.
+        _ => match row.try_get_unchecked::<Vec<u8>, _>(ordinal) {
+            Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
+            Err(_) => String::new(),
+        },
     };
-    CString::new(s).unwrap().into_raw()
+    let s = if s.as_bytes().contains(&0) { s.replace('\0', "") } else { s };
+    CString::new(s).unwrap_or_default().into_raw()
 }
 
 fn sqlx4k_mysql_row_of(row: &MySqlRow) -> Sqlx4kMysqlRow {

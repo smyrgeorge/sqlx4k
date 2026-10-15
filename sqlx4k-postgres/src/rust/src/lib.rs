@@ -7,7 +7,7 @@ use sqlx::pool::PoolConnection;
 use sqlx::postgres::types::Oid;
 use sqlx::postgres::{
     PgArgumentBuffer, PgConnectOptions, PgConnection, PgListener, PgNotification, PgPool,
-    PgPoolOptions, PgRow, PgTypeInfo, PgValueRef,
+    PgPoolOptions, PgRow, PgTypeInfo, PgValueFormat, PgValueRef,
 };
 // Re-export sqlx's chrono/uuid feature shims so we don't need direct dependencies
 // on those crates — sqlx already pulls them in when the matching features are on.
@@ -1620,15 +1620,114 @@ fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mut c_char {
             let s = row.get_unchecked::<&str, _>(ordinal);
             s.strip_prefix('\u{1}').unwrap_or(s).to_string()
         }
-        // TEXT/VARCHAR/CHAR/NAME/JSON and anything else (including NUMERIC,
-        // which we don't depend on bigdecimal/rust_decimal for) fall through to
-        // `&str`. In the simple-query / text protocol every value arrives as text;
-        // in extended/prepared mode this works for text-typed columns. Callers
-        // wanting binary-only types via prepared statements can register a custom
-        // row decoder or expose them through cast-to-text in SQL.
-        _ => row.get_unchecked::<&str, _>(ordinal).to_string(),
+        // NUMERIC arrives in binary form through the extended/prepared protocol
+        // (every `_with_params` call, and aggregates such as SUM(bigint)/AVG(..)
+        // return NUMERIC). Decoding it as `&str` used to panic and abort the host
+        // process; decode the wire format into its canonical decimal text instead.
+        "NUMERIC" => decode_numeric_value(row, ordinal),
+        // TEXT/VARCHAR/CHAR/NAME/JSON and anything else fall back to the raw bytes.
+        // In the simple-query / text protocol every value arrives as text; in the
+        // extended protocol a binary-only type we don't model must never take the
+        // process down, so decode leniently instead of unwrapping.
+        _ => decode_text_lossy(row, ordinal),
     };
-    CString::new(s).unwrap().into_raw()
+    // A value may legally contain NUL (e.g. text in a non-UTF8-safe column after
+    // lossy decoding); CString::new would fail on it. Strip rather than abort.
+    let s = if s.as_bytes().contains(&0) { s.replace('\0', "") } else { s };
+    CString::new(s).unwrap_or_default().into_raw()
+}
+
+/// NUMERIC in text or binary format → canonical decimal text (`-12.3400`, `NaN`, `Infinity`).
+fn decode_numeric_value(row: &PgRow, ordinal: usize) -> String {
+    let Ok(value) = row.try_get_raw(ordinal) else { return String::new() };
+    match value.format() {
+        PgValueFormat::Text => value.as_str().map(str::to_string).unwrap_or_default(),
+        PgValueFormat::Binary => value
+            .as_bytes()
+            .ok()
+            .and_then(decode_pg_numeric_binary)
+            .unwrap_or_default(),
+    }
+}
+
+/// Decodes the PostgreSQL NUMERIC binary representation (`numeric_send`):
+/// `ndigits: i16, weight: i16, sign: u16, dscale: u16, digits: [u16; ndigits]`,
+/// where each digit is a base-10000 group and `weight` is the power of 10000 of
+/// the first group. Returns `None` on malformed input.
+pub(crate) fn decode_pg_numeric_binary(bytes: &[u8]) -> Option<String> {
+    if bytes.len() < 8 {
+        return None;
+    }
+    let read_u16 = |i: usize| u16::from_be_bytes([bytes[i], bytes[i + 1]]);
+    let ndigits = read_u16(0) as i16;
+    let weight = read_u16(2) as i16 as i32;
+    let sign = read_u16(4);
+    let dscale = read_u16(6) as usize;
+    match sign {
+        0xC000 => return Some("NaN".to_string()),
+        0xD000 => return Some("Infinity".to_string()),
+        0xF000 => return Some("-Infinity".to_string()),
+        0x0000 | 0x4000 => {}
+        _ => return None,
+    }
+    if ndigits < 0 || bytes.len() < 8 + ndigits as usize * 2 {
+        return None;
+    }
+    let digits: Vec<u16> = (0..ndigits as usize).map(|i| read_u16(8 + i * 2)).collect();
+    if digits.iter().any(|d| *d >= 10000) {
+        return None;
+    }
+    // Integer part: groups with power >= 0 (weight, weight-1, ..., 0).
+    let mut int_part = String::new();
+    if weight >= 0 {
+        for i in 0..=weight {
+            let d = digits.get(i as usize).copied().unwrap_or(0);
+            if int_part.is_empty() {
+                if d != 0 {
+                    int_part.push_str(&d.to_string());
+                }
+            } else {
+                int_part.push_str(&format!("{d:04}"));
+            }
+        }
+    }
+    if int_part.is_empty() {
+        int_part.push('0');
+    }
+    // Fraction part: groups with power < 0, padded/truncated to dscale digits.
+    let mut frac = String::new();
+    if dscale > 0 {
+        let mut power = -1;
+        while frac.len() < dscale {
+            // digit i carries power (weight - i), so the group with this power is i = weight - power
+            let group_index = weight - power;
+            let d = if group_index >= 0 { digits.get(group_index as usize).copied().unwrap_or(0) } else { 0 };
+            frac.push_str(&format!("{d:04}"));
+            power -= 1;
+        }
+        frac.truncate(dscale);
+    }
+    let mut out = String::new();
+    if sign == 0x4000 && (int_part != "0" || frac.chars().any(|c| c != '0')) {
+        out.push('-');
+    }
+    out.push_str(&int_part);
+    if dscale > 0 {
+        out.push('.');
+        out.push_str(&frac);
+    }
+    Some(out)
+}
+
+/// Text-ish fallback that never panics: UTF-8 when valid, lossy otherwise.
+fn decode_text_lossy(row: &PgRow, ordinal: usize) -> String {
+    match row.try_get_raw(ordinal) {
+        Ok(value) => match value.as_bytes() {
+            Ok(bytes) => String::from_utf8_lossy(bytes).into_owned(),
+            Err(_) => String::new(),
+        },
+        Err(_) => String::new(),
+    }
 }
 
 fn format_pg_array<'a, T: 'a + ToString, I: Iterator<Item = &'a T>>(iter: I) -> String {
@@ -1808,4 +1907,49 @@ pub extern "C" fn sqlx4k_postgresql_tx_fetch_all_with_params(
         let result = sqlx4k.tx_fetch_all_with_params(tx, sql, owned).await;
         fun(callback, result)
     });
+}
+
+#[cfg(test)]
+mod numeric_tests {
+    use super::decode_pg_numeric_binary;
+
+    fn enc(ndigits: i16, weight: i16, sign: u16, dscale: u16, digits: &[u16]) -> Vec<u8> {
+        let mut v = Vec::new();
+        for x in [ndigits as u16, weight as u16, sign, dscale] {
+            v.extend_from_slice(&x.to_be_bytes());
+        }
+        for d in digits {
+            v.extend_from_slice(&d.to_be_bytes());
+        }
+        v
+    }
+
+    #[test]
+    fn decodes_postgres_numeric_wire_format() {
+        // 7 (SUM of bigint)
+        assert_eq!(decode_pg_numeric_binary(&enc(1, 0, 0, 0, &[7])).unwrap(), "7");
+        // 1.5 -> groups [1, 5000], weight 0, dscale 1
+        assert_eq!(decode_pg_numeric_binary(&enc(2, 0, 0, 1, &[1, 5000])).unwrap(), "1.5");
+        // 2.3333333333333333 (AVG) -> [2, 3333, 3333, 3333, 3333], dscale 16
+        assert_eq!(decode_pg_numeric_binary(&enc(5, 0, 0, 16, &[2, 3333, 3333, 3333, 3333])).unwrap(), "2.3333333333333333");
+        // 123456789.0001 -> [1, 2345, 6789, 1], weight 2, dscale 4
+        assert_eq!(decode_pg_numeric_binary(&enc(4, 2, 0, 4, &[1, 2345, 6789, 1])).unwrap(), "123456789.0001");
+        // -0.0042 -> [42], weight -1, dscale 4
+        assert_eq!(decode_pg_numeric_binary(&enc(1, -1, 0x4000, 4, &[42])).unwrap(), "-0.0042");
+        // 0.00000123 -> [123], weight -2, dscale 8
+        assert_eq!(decode_pg_numeric_binary(&enc(1, -2, 0, 8, &[123])).unwrap(), "0.00000123");
+        // 10000 -> [1], weight 1 (trailing zero groups are omitted)
+        assert_eq!(decode_pg_numeric_binary(&enc(1, 1, 0, 0, &[1])).unwrap(), "10000");
+        // 0 and 0.00
+        assert_eq!(decode_pg_numeric_binary(&enc(0, 0, 0, 0, &[])).unwrap(), "0");
+        assert_eq!(decode_pg_numeric_binary(&enc(0, 0, 0, 2, &[])).unwrap(), "0.00");
+        // special values
+        assert_eq!(decode_pg_numeric_binary(&enc(0, 0, 0xC000, 0, &[])).unwrap(), "NaN");
+        assert_eq!(decode_pg_numeric_binary(&enc(0, 0, 0xD000, 0, &[])).unwrap(), "Infinity");
+        assert_eq!(decode_pg_numeric_binary(&enc(0, 0, 0xF000, 0, &[])).unwrap(), "-Infinity");
+        // malformed input is rejected instead of panicking
+        assert!(decode_pg_numeric_binary(&[0, 1]).is_none());
+        assert!(decode_pg_numeric_binary(&enc(2, 0, 0, 0, &[1])).is_none());
+        assert!(decode_pg_numeric_binary(&enc(1, 0, 0, 0, &[10000])).is_none());
+    }
 }
