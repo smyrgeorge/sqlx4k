@@ -1,3 +1,5 @@
+@file:Suppress("SqlDialectInspection")
+
 package io.github.smyrgeorge.sqlx4k.postgres
 
 import assertk.assertThat
@@ -12,16 +14,6 @@ import kotlin.test.Test
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.runBlocking
 
-/**
- * Driver failures that are not database errors (TLS, refused connections, ...) must be returned as an [SQLError].
- * The native driver is built with `panic = "abort"`, so a panic on any of them would terminate the process.
- *
- * Native and JVM report these failures with different codes (see [tlsFailureCode] and [refusedConnectionCode]).
- * Native creates the pool eagerly and fails at construction, while the JVM fails on the first query.
- *
- * Database errors must also carry what the server reported (SQLSTATE and portable kind), identically on both
- * platforms.
- */
 class PostgreSQLErrorTests {
 
     private val options = ConnectionPool.Options.builder()
@@ -79,6 +71,28 @@ class PostgreSQLErrorTests {
             assertThat(error.kind).isEqualTo(SQLError.Kind.UniqueViolation)
         } finally {
             db.execute("drop table $table;").getOrThrow()
+        }
+    }
+
+    @Test
+    fun `foreign key violation should expose the driver error codes`(): Unit = runBlocking {
+        val db = connect("postgresql://localhost:15432/test")
+        val parent = "p_err_${Random.nextInt(1_000_000)}"
+        val child = "c_err_${Random.nextInt(1_000_000)}"
+        db.execute("create table $parent (id int primary key);").getOrThrow()
+        db.execute("create table $child (id int primary key, parent_id int references $parent (id));").getOrThrow()
+        try {
+            val res = db.execute("insert into $child (id, parent_id) values (1, 42);")
+            assertThat(res).isFailure()
+            val error = res.exceptionOrNull() as SQLError
+            assertThat(error.code).isEqualTo(SQLError.Code.Database)
+            // foreign_key_violation.
+            assertThat(error.sqlState).isEqualTo("23503")
+            assertThat(error.nativeCode).isNull()
+            assertThat(error.kind).isEqualTo(SQLError.Kind.ForeignKeyViolation)
+        } finally {
+            db.execute("drop table $child;").getOrThrow()
+            db.execute("drop table $parent;").getOrThrow()
         }
     }
 

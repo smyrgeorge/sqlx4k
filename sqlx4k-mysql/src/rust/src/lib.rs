@@ -10,8 +10,8 @@ use sqlx::pool::PoolConnection;
 // the chrono crate — sqlx already pulls it in when the matching feature is on.
 use sqlx::types::chrono;
 use sqlx::{
-    Acquire, AssertSqlSafe, Column, Connection, Error, Executor, MySql, Row, Transaction, TypeInfo,
-    ValueRef,
+    Acquire, AssertSqlSafe, Column, Connection, Error, Executor, MySql, Row, Transaction, Type,
+    TypeInfo, ValueRef,
 };
 use std::{
     ffi::{c_char, c_int, c_ulonglong, c_void, CStr, CString},
@@ -1320,12 +1320,13 @@ fn sqlx4k_mysql_schema_of(row: &MySqlRow) -> Sqlx4kMysqlSchema {
 /// payloads but the resulting string contains embedded NULs that crash
 /// `CString::new`. Decode by type so both protocols round-trip identically.
 fn decode_mysql_column_value(row: &MySqlRow, ordinal: usize) -> *mut c_char {
-    let type_name: String = {
+    let (type_name, is_text): (String, bool) = {
         let value_ref = row.try_get_raw(ordinal).unwrap();
         if value_ref.is_null() {
             return null_mut();
         }
-        value_ref.type_info().name().to_string()
+        let info = value_ref.type_info();
+        (info.name().to_string(), <&str as Type<MySql>>::compatible(&info))
     };
 
     let s: String = match type_name.as_str() {
@@ -1342,7 +1343,10 @@ fn decode_mysql_column_value(row: &MySqlRow, ordinal: usize) -> *mut c_char {
         "BIGINT UNSIGNED" => row.get_unchecked::<u64, _>(ordinal).to_string(),
         "FLOAT" => row.get_unchecked::<f32, _>(ordinal).to_string(),
         "DOUBLE" => row.get_unchecked::<f64, _>(ordinal).to_string(),
-        "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" | "VARBINARY" | "BINARY" => {
+        // MySQL also flags text with a binary collation (e.g. `utf8mb4_bin`, which JSON_UNQUOTE returns) as
+        // BINARY, so sqlx names it like a blob. Only the `binary` collation means raw bytes: that is sqlx's own
+        // check for `&str`, so such text falls through to the string decoding below.
+        "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" | "VARBINARY" | "BINARY" if !is_text => {
             let bytes: Vec<u8> = row.get_unchecked(ordinal);
             hex::encode(bytes)
         }

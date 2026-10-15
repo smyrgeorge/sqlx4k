@@ -15,7 +15,7 @@ internal actual val isWindows: Boolean = Platform.osFamily == OsFamily.WINDOWS
 
 actual abstract class SQLiteTestBase actual constructor()
 
-internal actual val testDirectory: String = Path("./build/tmp/sqlite-tests").let {
+internal actual val testDirectory: String = Path("./build/tmp/sqlite-tests-native").let {
     SystemFileSystem.createDirectories(it, mustCreate = false)
     SystemFileSystem.resolve(it).toString()
 }

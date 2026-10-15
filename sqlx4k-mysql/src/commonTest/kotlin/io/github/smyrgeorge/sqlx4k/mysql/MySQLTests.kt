@@ -145,4 +145,28 @@ class MySQLTests {
 
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }
     }
+
+    @Test
+    fun `text with a binary collation decodes as text`(): Unit = runBlocking {
+        // MySQL flags `_bin` collated text as BINARY too; only the `binary` collation (VARBINARY, BLOB) holds bytes.
+        val table = newTable()
+        runCatching { db.execute("drop table if exists $table;") }
+        db.execute("create table $table(id int primary key, name varchar(32) collate utf8mb4_bin, raw varbinary(8));")
+            .getOrThrow()
+        db.execute(
+            Statement.create("insert into $table(id, name, raw) values (1, ?, ?);")
+                .bind(0, "Alice")
+                .bind(1, "Alice".encodeToByteArray())
+        ).getOrThrow()
+
+        val sql = "select name, raw from $table;"
+        for (row in listOf(db.fetchAll(sql).getOrThrow().first(), db.fetchAll(Statement.create(sql)).getOrThrow().first())) {
+            assertAll {
+                assertThat(row.get(0).asString()).isEqualTo("Alice")
+                assertThat(row.get(1).asByteArray()).isEqualTo("Alice".encodeToByteArray())
+            }
+        }
+
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
 }

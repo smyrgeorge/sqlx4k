@@ -30,6 +30,7 @@ import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
 import io.r2dbc.pool.ConnectionPoolConfiguration
 import io.r2dbc.spi.Connection as NativeR2dbcConnection
 import io.r2dbc.spi.ConnectionFactoryOptions
+import io.r2dbc.spi.R2dbcTimeoutException
 import io.r2dbc.spi.Result as NativeR2dbcResultSet
 import io.r2dbc.spi.Row
 import kotlin.jvm.optionals.getOrElse
@@ -252,6 +253,8 @@ class MySQL(
             when (e) {
                 is PoolShutdownException -> SQLError(SQLError.Code.PoolClosed, e.message).raise()
                 is PoolAcquireTimeoutException -> SQLError(SQLError.Code.PoolTimedOut, e.message).raise()
+                // r2dbc-pool enforces the acquire timeout itself and reports it as an R2dbcTimeoutException.
+                is R2dbcTimeoutException -> SQLError(SQLError.Code.PoolTimedOut, e.message).raise()
                 else -> SQLError(SQLError.Code.Pool, e.message, e).raise()
             }
         }
@@ -579,14 +582,27 @@ class MySQL(
             }.build()
         }
 
+        /** Column types that hold raw bytes: r2dbc-mysql tells them from text by the `binary` collation. */
+        private val BINARY_TYPES = setOf("VARBINARY", "TINYBLOB", "BLOB", "MEDIUMBLOB", "LONGBLOB")
+
         private fun Row.toRow(): ResultSet.Row {
             val columns = metadata.columnMetadatas.mapIndexed { i, c ->
-                ResultSet.Row.Column(
-                    ordinal = i,
-                    name = c.name,
-                    type = c.type.name,
-                    value = get(i, String::class.java)
-                )
+                if (c.type.name in BINARY_TYPES) {
+                    ResultSet.Row.Column(
+                        ordinal = i,
+                        name = c.name,
+                        type = c.type.name,
+                        value = null,
+                        bytes = get(i, ByteArray::class.java)
+                    )
+                } else {
+                    ResultSet.Row.Column(
+                        ordinal = i,
+                        name = c.name,
+                        type = c.type.name,
+                        value = get(i, String::class.java)
+                    )
+                }
             }
             return ResultSet.Row(columns)
         }

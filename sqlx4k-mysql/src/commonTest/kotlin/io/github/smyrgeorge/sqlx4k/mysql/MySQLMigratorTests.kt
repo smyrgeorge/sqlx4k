@@ -50,21 +50,23 @@ class MySQLMigratorTests {
         rows.map { it.get(0).asLong() }
     }
 
-    private fun countUsers(): Long = runBlocking {
-        db.fetchAll("SELECT count(*) FROM t_users;").getOrThrow().first().get(0).asLong()
+    private fun countUsers(table: String): Long = runBlocking {
+        db.fetchAll("SELECT count(*) FROM $table;").getOrThrow().first().get(0).asLong()
     }
 
     @Test
     fun `migrate happy path and idempotent`(): Unit = runBlocking {
+        // A table of its own: the JVM and native suites run in parallel against the same database.
+        val users = "t_users_${Random.nextInt(1_000_000)}"
         val table = "_sqlx4k_migr_mysql_${Random.nextInt(100000)}"
         // Pre-clean
-        runCatching { db.execute("DROP TABLE IF EXISTS t_users;").getOrThrow() }
+        runCatching { db.execute("DROP TABLE IF EXISTS $users;").getOrThrow() }
         runCatching { db.execute("DROP TABLE IF EXISTS $table;").getOrThrow() }
         try {
             val dir = newTempDir("mysql-happy")
             write(
                 dir, "1_create_table.sql", """
-            CREATE TABLE IF NOT EXISTS t_users (
+            CREATE TABLE IF NOT EXISTS $users (
                 id BIGINT PRIMARY KEY AUTO_INCREMENT,
                 name TEXT NOT NULL
             );
@@ -72,25 +74,25 @@ class MySQLMigratorTests {
             )
             write(
                 dir, "2_insert.sql", """
-            INSERT INTO t_users(name) VALUES ('alice');
-            INSERT INTO t_users(name) VALUES ('bob');
+            INSERT INTO $users(name) VALUES ('alice');
+            INSERT INTO $users(name) VALUES ('bob');
         """.trimIndent()
             )
 
             assertThat(db.migrate(path = dir.toString(), table = table)).isSuccess()
             assertAll {
                 assertThat(listApplied(table)).containsExactly(1L, 2L)
-                assertThat(countUsers()).isEqualTo(2L)
+                assertThat(countUsers(users)).isEqualTo(2L)
             }
 
             // Re-run should be idempotent
             assertThat(db.migrate(path = dir.toString(), table = table)).isSuccess()
             assertAll {
                 assertThat(listApplied(table)).containsExactly(1L, 2L)
-                assertThat(countUsers()).isEqualTo(2L)
+                assertThat(countUsers(users)).isEqualTo(2L)
             }
         } finally {
-            runCatching { db.execute("DROP TABLE IF EXISTS t_users;").getOrThrow() }
+            runCatching { db.execute("DROP TABLE IF EXISTS $users;").getOrThrow() }
             runCatching { db.execute("DROP TABLE IF EXISTS $table;").getOrThrow() }
         }
     }
@@ -135,23 +137,25 @@ class MySQLMigratorTests {
 
     @Test
     fun `checksum mismatch should fail on re-run`(): Unit = runBlocking {
+        // A table of its own: the JVM and native suites run in parallel against the same database.
+        val users = "t_users_${Random.nextInt(1_000_000)}"
         val table = "_sqlx4k_migr_mysql_${Random.nextInt(100000)}"
         // Pre-clean
-        runCatching { db.execute("DROP TABLE IF EXISTS t_users;").getOrThrow() }
+        runCatching { db.execute("DROP TABLE IF EXISTS $users;").getOrThrow() }
         runCatching { db.execute("DROP TABLE IF EXISTS $table;").getOrThrow() }
         try {
             val dir = newTempDir("mysql-chk")
             write(
                 dir = dir,
                 name = "1_create.sql",
-                content = "create table if not exists t_users (id BIGINT primary key auto_increment, name text not null);"
+                content = "create table if not exists $users (id BIGINT primary key auto_increment, name text not null);"
             )
             db.migrate(path = dir.toString(), table = table).getOrThrow()
 
             write(
                 dir = dir,
                 name = "1_create.sql",
-                content = "create table if not exists t_users (id BIGINT primary key auto_increment, name text not null); -- changed\n"
+                content = "create table if not exists $users (id BIGINT primary key auto_increment, name text not null); -- changed\n"
             )
 
             val res = db.migrate(path = dir.toString(), table = table)
@@ -159,7 +163,7 @@ class MySQLMigratorTests {
             val ex = res.exceptionOrNull() as SQLError
             assertThat(ex.code).isEqualTo(SQLError.Code.Migrate)
         } finally {
-            runCatching { db.execute("DROP TABLE IF EXISTS t_users;").getOrThrow() }
+            runCatching { db.execute("DROP TABLE IF EXISTS $users;").getOrThrow() }
             runCatching { db.execute("DROP TABLE IF EXISTS $table;").getOrThrow() }
         }
     }
@@ -189,27 +193,29 @@ class MySQLMigratorTests {
 
     @Test
     fun `file level transaction rollback on failure`(): Unit = runBlocking {
+        // A table of its own: the JVM and native suites run in parallel against the same database.
+        val users = "t_users_${Random.nextInt(1_000_000)}"
         val table = "_sqlx4k_migr_mysql_${Random.nextInt(100000)}"
         // Pre-clean
-        runCatching { db.execute("DROP TABLE IF EXISTS t_users;").getOrThrow() }
+        runCatching { db.execute("DROP TABLE IF EXISTS $users;").getOrThrow() }
         runCatching { db.execute("DROP TABLE IF EXISTS $table;").getOrThrow() }
         try {
             val dir = newTempDir("mysql-rollback")
             write(
                 dir, "1_create_and_seed.sql", """
-                CREATE TABLE IF NOT EXISTS t_users (
+                CREATE TABLE IF NOT EXISTS $users (
                     id BIGINT PRIMARY KEY AUTO_INCREMENT,
                     name TEXT NOT NULL
                 );
-                INSERT INTO t_users(name) VALUES ('alice');
+                INSERT INTO $users(name) VALUES ('alice');
             """.trimIndent()
             )
             // Second file: first statement is valid, second one fails -> entire file must roll back
             write(
                 dir, "2_bad.sql", """
-                INSERT INTO t_users(name) VALUES ('bob');
+                INSERT INTO $users(name) VALUES ('bob');
                 -- Force an error (unknown column)
-                INSERT INTO t_users(non_existing_column) VALUES ('oops');
+                INSERT INTO $users(non_existing_column) VALUES ('oops');
             """.trimIndent()
             )
 
@@ -219,10 +225,10 @@ class MySQLMigratorTests {
             // Ensure only v1 recorded and that 'bob' insert from file 2 was rolled back
             assertAll {
                 assertThat(listApplied(table)).containsExactly(1L)
-                assertThat(countUsers()).isEqualTo(1L)
+                assertThat(countUsers(users)).isEqualTo(1L)
             }
         } finally {
-            runCatching { db.execute("DROP TABLE IF EXISTS t_users;").getOrThrow() }
+            runCatching { db.execute("DROP TABLE IF EXISTS $users;").getOrThrow() }
             runCatching { db.execute("DROP TABLE IF EXISTS $table;").getOrThrow() }
         }
     }
@@ -231,6 +237,8 @@ class MySQLMigratorTests {
     @Ignore
     @Test
     fun `migrate with explicit schema and createSchema`(): Unit = runBlocking {
+        // A table of its own: the JVM and native suites run in parallel against the same database.
+        val users = "t_users_${Random.nextInt(1_000_000)}"
         val rnd = Random.nextInt(100000)
         val schema = "s_migr_$rnd"
         val tableName = "_sqlx4k_migr_mysql_$rnd"
@@ -238,12 +246,12 @@ class MySQLMigratorTests {
 
         // Pre-clean in case previous run left schema behind
         runCatching { db.execute("DROP SCHEMA IF EXISTS $schema;").getOrThrow() }
-        runCatching { db.execute("DROP TABLE IF EXISTS t_users;").getOrThrow() }
+        runCatching { db.execute("DROP TABLE IF EXISTS $users;").getOrThrow() }
         try {
             val dir = newTempDir("mysql-schema")
             write(
                 dir, "1_create_table.sql", """
-                CREATE TABLE IF NOT EXISTS t_users (
+                CREATE TABLE IF NOT EXISTS $users (
                     id BIGINT PRIMARY KEY AUTO_INCREMENT,
                     name TEXT NOT NULL
                 );
@@ -251,7 +259,7 @@ class MySQLMigratorTests {
             )
             write(
                 dir, "2_insert.sql", """
-                INSERT INTO t_users(name) VALUES ('alice');
+                INSERT INTO $users(name) VALUES ('alice');
             """.trimIndent()
             )
 
@@ -263,17 +271,17 @@ class MySQLMigratorTests {
                 assertThat(schemaExists(schema)).isEqualTo(true)
                 assertThat(tableExists(qualified)).isEqualTo(true)
                 assertThat(listApplied(qualified)).containsExactly(1L, 2L)
-                assertThat(countUsers()).isEqualTo(1L)
+                assertThat(countUsers(users)).isEqualTo(1L)
             }
 
             // Re-run idempotent with fully qualified table
             assertThat(db.migrate(path = dir.toString(), table = tableName, schema = schema)).isSuccess()
             assertAll {
                 assertThat(listApplied(qualified)).containsExactly(1L, 2L)
-                assertThat(countUsers()).isEqualTo(1L)
+                assertThat(countUsers(users)).isEqualTo(1L)
             }
         } finally {
-            runCatching { db.execute("DROP TABLE IF EXISTS t_users;").getOrThrow() }
+            runCatching { db.execute("DROP TABLE IF EXISTS $users;").getOrThrow() }
             runCatching { db.execute("DROP SCHEMA IF EXISTS $schema;").getOrThrow() }
         }
     }

@@ -18,6 +18,7 @@ import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
 import io.r2dbc.postgresql.api.Notification as NativeR2dbcNotification
 import io.r2dbc.spi.Connection as NativeR2dbcConnection
+import io.r2dbc.spi.R2dbcTimeoutException
 import io.r2dbc.spi.Result as NativeR2dbcResultSet
 import io.r2dbc.spi.Row
 import kotlin.coroutines.CoroutineContext
@@ -305,6 +306,7 @@ class PostgreSQLImpl(
      */
     override suspend fun notify(channel: String, value: String) {
         validateChannelName(channel)
+        @Suppress("SqlResolve")
         val notify = Statement.create("select pg_notify(:channel, :value);")
             .bind("channel", channel)
             .bind("value", value)
@@ -318,6 +320,8 @@ class PostgreSQLImpl(
             when (e) {
                 is PoolShutdownException -> SQLError(SQLError.Code.PoolClosed, e.message, e).raise()
                 is PoolAcquireTimeoutException -> SQLError(SQLError.Code.PoolTimedOut, e.message, e).raise()
+                // r2dbc-pool enforces the acquire timeout itself and reports it as an R2dbcTimeoutException.
+                is R2dbcTimeoutException -> SQLError(SQLError.Code.PoolTimedOut, e.message, e).raise()
                 else -> SQLError(SQLError.Code.Pool, e.message, e).raise()
             }
         }

@@ -7,7 +7,7 @@ import kotlinx.io.files.SystemFileSystem
 
 actual abstract class SQLiteCipherTestBase actual constructor()
 
-internal actual val testDirectory: String = Path("./build/tmp/sqlite-cipher-tests").let {
+internal actual val testDirectory: String = Path("./build/tmp/sqlite-cipher-tests-native").let {
     SystemFileSystem.createDirectories(it, mustCreate = false)
     SystemFileSystem.resolve(it).toString()
 }

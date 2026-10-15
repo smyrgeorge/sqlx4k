@@ -49,21 +49,23 @@ class SQLiteMigratorTests : SQLiteTestBase() {
         rows.map { it.get(0).asLong() }
     }
 
-    private fun countUsers(): Long = runBlocking {
-        db.fetchAll("SELECT count(*) FROM t_users;").getOrThrow().first().get(0).asLong()
+    private fun countUsers(table: String): Long = runBlocking {
+        db.fetchAll("SELECT count(*) FROM $table;").getOrThrow().first().get(0).asLong()
     }
 
     @Test
     fun `migrate happy path and idempotent`(): Unit = runBlocking {
+        // A table of its own: the JVM and native suites run in parallel against the same database.
+        val users = "t_users_${Random.nextInt(1_000_000)}"
         val table = "_sqlx4k_migr_sqlite_${Random.nextInt(100000)}"
         // Pre-clean
-        runCatching { db.execute("DROP TABLE IF EXISTS t_users;").getOrThrow() }
+        runCatching { db.execute("DROP TABLE IF EXISTS $users;").getOrThrow() }
         runCatching { db.execute("DROP TABLE IF EXISTS $table;").getOrThrow() }
         try {
             val dir = newTempDir("sqlite-happy")
             write(
                 dir, "1_create_table.sql", """
-            CREATE TABLE IF NOT EXISTS t_users (
+            CREATE TABLE IF NOT EXISTS $users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL
             );
@@ -71,25 +73,25 @@ class SQLiteMigratorTests : SQLiteTestBase() {
             )
             write(
                 dir, "2_insert.sql", """
-            INSERT INTO t_users(name) VALUES ('alice');
-            INSERT INTO t_users(name) VALUES ('bob');
+            INSERT INTO $users(name) VALUES ('alice');
+            INSERT INTO $users(name) VALUES ('bob');
         """.trimIndent()
             )
 
             assertThat(db.migrate(path = dir.toString(), table = table)).isSuccess()
             assertAll {
                 assertThat(listApplied(table)).containsExactly(1L, 2L)
-                assertThat(countUsers()).isEqualTo(2L)
+                assertThat(countUsers(users)).isEqualTo(2L)
             }
 
             // Re-run should be idempotent
             assertThat(db.migrate(path = dir.toString(), table = table)).isSuccess()
             assertAll {
                 assertThat(listApplied(table)).containsExactly(1L, 2L)
-                assertThat(countUsers()).isEqualTo(2L)
+                assertThat(countUsers(users)).isEqualTo(2L)
             }
         } finally {
-            runCatching { db.execute("DROP TABLE IF EXISTS t_users;").getOrThrow() }
+            runCatching { db.execute("DROP TABLE IF EXISTS $users;").getOrThrow() }
             runCatching { db.execute("DROP TABLE IF EXISTS $table;").getOrThrow() }
         }
     }
@@ -134,23 +136,25 @@ class SQLiteMigratorTests : SQLiteTestBase() {
 
     @Test
     fun `checksum mismatch should fail on re-run`(): Unit = runBlocking {
+        // A table of its own: the JVM and native suites run in parallel against the same database.
+        val users = "t_users_${Random.nextInt(1_000_000)}"
         val table = "_sqlx4k_migr_sqlite_${Random.nextInt(100000)}"
         // Pre-clean
-        runCatching { db.execute("DROP TABLE IF EXISTS t_users;").getOrThrow() }
+        runCatching { db.execute("DROP TABLE IF EXISTS $users;").getOrThrow() }
         runCatching { db.execute("DROP TABLE IF EXISTS $table;").getOrThrow() }
         try {
             val dir = newTempDir("sqlite-chk")
             write(
                 dir = dir,
                 name = "1_create.sql",
-                content = "create table if not exists t_users (id integer primary key autoincrement, name text not null);"
+                content = "create table if not exists $users (id integer primary key autoincrement, name text not null);"
             )
             db.migrate(path = dir.toString(), table = table).getOrThrow()
 
             write(
                 dir = dir,
                 name = "1_create.sql",
-                content = "create table if not exists t_users (id integer primary key autoincrement, name text not null); -- changed\n"
+                content = "create table if not exists $users (id integer primary key autoincrement, name text not null); -- changed\n"
             )
 
             val res = db.migrate(path = dir.toString(), table = table)
@@ -158,7 +162,7 @@ class SQLiteMigratorTests : SQLiteTestBase() {
             val ex = res.exceptionOrNull() as SQLError
             assertThat(ex.code).isEqualTo(SQLError.Code.Migrate)
         } finally {
-            runCatching { db.execute("DROP TABLE IF EXISTS t_users;").getOrThrow() }
+            runCatching { db.execute("DROP TABLE IF EXISTS $users;").getOrThrow() }
             runCatching { db.execute("DROP TABLE IF EXISTS $table;").getOrThrow() }
         }
     }

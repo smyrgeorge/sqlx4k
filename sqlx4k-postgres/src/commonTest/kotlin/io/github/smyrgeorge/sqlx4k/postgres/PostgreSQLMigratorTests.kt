@@ -49,21 +49,23 @@ class PostgreSQLMigratorTests {
         rows.map { it.get(0).asLong() }
     }
 
-    private fun countUsers(table: String = "t_users"): Long = runBlocking {
+    private fun countUsers(table: String): Long = runBlocking {
         db.fetchAll("SELECT count(*) FROM $table;").getOrThrow().first().get(0).asLong()
     }
 
     @Test
     fun `migrate happy path and idempotent`(): Unit = runBlocking {
+        // A table of its own: the JVM and native suites run in parallel against the same database.
+        val users = "t_users_${Random.nextInt(1_000_000)}"
         val table = "_sqlx4k_migr_pg_${Random.nextInt(100000)}"
         // Pre-clean in case leftovers exist from previous runs
-        runCatching { db.execute("DROP TABLE IF EXISTS t_users CASCADE;").getOrThrow() }
+        runCatching { db.execute("DROP TABLE IF EXISTS $users CASCADE;").getOrThrow() }
         runCatching { db.execute("DROP TABLE IF EXISTS $table CASCADE;").getOrThrow() }
         try {
             val dir = newTempDir("pg-happy")
             write(
                 dir, "1_create_table.sql", """
-            CREATE TABLE IF NOT EXISTS t_users (
+            CREATE TABLE IF NOT EXISTS $users (
                 id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL
             );
@@ -71,26 +73,26 @@ class PostgreSQLMigratorTests {
             )
             write(
                 dir, "2_insert.sql", """
-            INSERT INTO t_users(name) VALUES ('alice');
-            INSERT INTO t_users(name) VALUES ('bob');
+            INSERT INTO $users(name) VALUES ('alice');
+            INSERT INTO $users(name) VALUES ('bob');
         """.trimIndent()
             )
 
             assertThat(db.migrate(path = dir.toString(), table = table)).isSuccess()
             assertAll {
                 assertThat(listApplied(table)).containsExactly(1L, 2L)
-                assertThat(countUsers()).isEqualTo(2L)
+                assertThat(countUsers(users)).isEqualTo(2L)
             }
 
             // Re-run should be idempotent
             assertThat(db.migrate(path = dir.toString(), table = table)).isSuccess()
             assertAll {
                 assertThat(listApplied(table)).containsExactly(1L, 2L)
-                assertThat(countUsers()).isEqualTo(2L)
+                assertThat(countUsers(users)).isEqualTo(2L)
             }
         } finally {
             // Post-clean
-            runCatching { db.execute("DROP TABLE IF EXISTS t_users CASCADE;").getOrThrow() }
+            runCatching { db.execute("DROP TABLE IF EXISTS $users CASCADE;").getOrThrow() }
             runCatching { db.execute("DROP TABLE IF EXISTS $table CASCADE;").getOrThrow() }
         }
     }
@@ -135,23 +137,25 @@ class PostgreSQLMigratorTests {
 
     @Test
     fun `checksum mismatch should fail on re-run`(): Unit = runBlocking {
+        // A table of its own: the JVM and native suites run in parallel against the same database.
+        val users = "t_users_${Random.nextInt(1_000_000)}"
         val table = "_sqlx4k_migr_pg_${Random.nextInt(100000)}"
         // Pre-clean
-        runCatching { db.execute("DROP TABLE IF EXISTS t_users CASCADE;").getOrThrow() }
+        runCatching { db.execute("DROP TABLE IF EXISTS $users CASCADE;").getOrThrow() }
         runCatching { db.execute("DROP TABLE IF EXISTS $table CASCADE;").getOrThrow() }
         try {
             val dir = newTempDir("pg-chk")
             write(
                 dir = dir,
                 name = "1_create.sql",
-                content = "create table if not exists t_users (id serial primary key, name text not null);"
+                content = "create table if not exists $users (id serial primary key, name text not null);"
             )
             db.migrate(path = dir.toString(), table = table).getOrThrow()
 
             write(
                 dir = dir,
                 name = "1_create.sql",
-                content = "create table if not exists t_users (id serial primary key, name text not null); -- changed\n"
+                content = "create table if not exists $users (id serial primary key, name text not null); -- changed\n"
             )
 
             val res = db.migrate(path = dir.toString(), table = table)
@@ -159,7 +163,7 @@ class PostgreSQLMigratorTests {
             val ex = res.exceptionOrNull() as SQLError
             assertThat(ex.code).isEqualTo(SQLError.Code.Migrate)
         } finally {
-            runCatching { db.execute("DROP TABLE IF EXISTS t_users CASCADE;").getOrThrow() }
+            runCatching { db.execute("DROP TABLE IF EXISTS $users CASCADE;").getOrThrow() }
             runCatching { db.execute("DROP TABLE IF EXISTS $table CASCADE;").getOrThrow() }
         }
     }
@@ -186,27 +190,29 @@ class PostgreSQLMigratorTests {
 
     @Test
     fun `file level transaction rollback on failure`(): Unit = runBlocking {
+        // A table of its own: the JVM and native suites run in parallel against the same database.
+        val users = "t_users_${Random.nextInt(1_000_000)}"
         val table = "_sqlx4k_migr_pg_${Random.nextInt(100000)}"
         // Pre-clean
-        runCatching { db.execute("DROP TABLE IF EXISTS t_users CASCADE;").getOrThrow() }
+        runCatching { db.execute("DROP TABLE IF EXISTS $users CASCADE;").getOrThrow() }
         runCatching { db.execute("DROP TABLE IF EXISTS $table CASCADE;").getOrThrow() }
         try {
             val dir = newTempDir("pg-rollback")
             write(
                 dir, "1_create_and_seed.sql", """
-                CREATE TABLE IF NOT EXISTS t_users (
+                CREATE TABLE IF NOT EXISTS $users (
                     id SERIAL PRIMARY KEY,
                     name TEXT NOT NULL
                 );
-                INSERT INTO t_users(name) VALUES ('alice');
+                INSERT INTO $users(name) VALUES ('alice');
             """.trimIndent()
             )
             // Second file: first statement is valid, second one fails -> entire file must roll back
             write(
                 dir, "2_bad.sql", """
-                INSERT INTO t_users(name) VALUES ('bob');
+                INSERT INTO $users(name) VALUES ('bob');
                 -- Force an error (invalid type reference)
-                ALTER TABLE t_users ADD COLUMN bad WRONGTYPE;
+                ALTER TABLE $users ADD COLUMN bad WRONGTYPE;
             """.trimIndent()
             )
 
@@ -216,16 +222,18 @@ class PostgreSQLMigratorTests {
             // Ensure only v1 recorded and that 'bob' insert from file 2 was rolled back
             assertAll {
                 assertThat(listApplied(table)).containsExactly(1L)
-                assertThat(countUsers()).isEqualTo(1L)
+                assertThat(countUsers(users)).isEqualTo(1L)
             }
         } finally {
-            runCatching { db.execute("DROP TABLE IF EXISTS t_users CASCADE;").getOrThrow() }
+            runCatching { db.execute("DROP TABLE IF EXISTS $users CASCADE;").getOrThrow() }
             runCatching { db.execute("DROP TABLE IF EXISTS $table CASCADE;").getOrThrow() }
         }
     }
 
     @Test
     fun `migrate with explicit schema and createSchema`(): Unit = runBlocking {
+        // A table of its own: the JVM and native suites run in parallel against the same database.
+        val users = "t_users_${Random.nextInt(1_000_000)}"
         val rnd = Random.nextInt(100000)
         val schema = "s_migr_$rnd"
         val tableName = "_sqlx4k_migr_pg_$rnd"
@@ -233,12 +241,12 @@ class PostgreSQLMigratorTests {
 
         // Pre-clean in case previous run left schema behind
         runCatching { db.execute("DROP SCHEMA IF EXISTS $schema CASCADE;").getOrThrow() }
-        runCatching { db.execute("DROP TABLE IF EXISTS t_users CASCADE;").getOrThrow() }
+        runCatching { db.execute("DROP TABLE IF EXISTS $users CASCADE;").getOrThrow() }
         try {
             val dir = newTempDir("pg-schema")
             write(
                 dir, "1_create_table.sql", """
-                CREATE TABLE IF NOT EXISTS t_users (
+                CREATE TABLE IF NOT EXISTS $users (
                     id SERIAL PRIMARY KEY,
                     name TEXT NOT NULL
                 );
@@ -246,7 +254,7 @@ class PostgreSQLMigratorTests {
             )
             write(
                 dir, "2_insert.sql", """
-                INSERT INTO t_users(name) VALUES ('alice');
+                INSERT INTO $users(name) VALUES ('alice');
             """.trimIndent()
             )
 
@@ -258,17 +266,17 @@ class PostgreSQLMigratorTests {
                 assertThat(schemaExists(schema)).isEqualTo(true)
                 assertThat(tableExists(qualified)).isEqualTo(true)
                 assertThat(listApplied(qualified)).containsExactly(1L, 2L)
-                assertThat(countUsers("$schema.t_users")).isEqualTo(1L)
+                assertThat(countUsers("$schema.$users")).isEqualTo(1L)
             }
 
             // Re-run idempotent with fully qualified table
             assertThat(db.migrate(path = dir.toString(), table = tableName, schema = schema)).isSuccess()
             assertAll {
                 assertThat(listApplied(qualified)).containsExactly(1L, 2L)
-                assertThat(countUsers("$schema.t_users")).isEqualTo(1L)
+                assertThat(countUsers("$schema.$users")).isEqualTo(1L)
             }
         } finally {
-            runCatching { db.execute("DROP TABLE IF EXISTS t_users CASCADE;").getOrThrow() }
+            runCatching { db.execute("DROP TABLE IF EXISTS $users CASCADE;").getOrThrow() }
             runCatching { db.execute("DROP SCHEMA IF EXISTS $schema CASCADE;").getOrThrow() }
         }
     }
