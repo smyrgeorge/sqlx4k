@@ -589,7 +589,7 @@ class SQLite(
                 val value = when (getType(i)) {
                     Cursor.FIELD_TYPE_NULL -> null
                     Cursor.FIELD_TYPE_INTEGER -> if (isNull(i)) null else getLong(i).toString()
-                    Cursor.FIELD_TYPE_FLOAT -> if (isNull(i)) null else getDouble(i).toString()
+                    Cursor.FIELD_TYPE_FLOAT -> if (isNull(i)) null else formatSqliteReal(getDouble(i))
                     Cursor.FIELD_TYPE_STRING -> if (isNull(i)) null else getString(i)
                     else -> if (isNull(i)) null else getString(i)
                 }

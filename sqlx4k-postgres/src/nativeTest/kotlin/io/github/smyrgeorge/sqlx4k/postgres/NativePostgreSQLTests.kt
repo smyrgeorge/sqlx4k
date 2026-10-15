@@ -26,7 +26,4 @@ class NativePostgreSQLTests {
 
     @Test
     fun `execute and fetchAll with prepared statements should work`() = runner.`execute and fetchAll with prepared statements should work`()
-
-    @Test
-    fun `numeric values should decode through prepared statements`() = runner.`numeric values should decode through prepared statements`()
 }

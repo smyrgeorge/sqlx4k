@@ -22,9 +22,11 @@ import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asShort
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asUuid
 import kotlin.random.Random
+import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -36,7 +38,7 @@ class CommonSQLiteCipherTests(
 
     private fun newTable(): String = "t_${Random.nextInt(1_000_000)}"
 
-    @OptIn(ExperimentalUuidApi::class)
+    @OptIn(ExperimentalUuidApi::class, ExperimentalTime::class)
     fun `Test basic type mappings`() = runBlocking {
         // language=SQLite
         val types = """
@@ -73,7 +75,7 @@ class CommonSQLiteCipherTests(
             assertThat(row.get(4).asLong()).isEqualTo(1L)
             assertThat(row.get(5).asFloat()).isEqualTo(1.0f)
             assertThat(row.get(6).asDouble()).isEqualTo(1.0)
-//            assertThat(row.get(7).asString()).isEqualTo("1.00") // Add BigDecimal support
+            assertThat(row.get(7).asString()).isEqualTo("1") // SQLite has no decimal type: numeric(10,2) stores INTEGER 1
             assertThat(row.get(8).asChar()).isEqualTo('a')
             assertThat(row.get(9).asString()).isEqualTo("")
             assertThat(row.get(10).asString()).isEqualTo("aa")
@@ -142,5 +144,57 @@ class CommonSQLiteCipherTests(
         assertThat(vRow.get(0).asInt()).isEqualTo(25)
 
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
+
+    fun `text with embedded NUL should decode in full`(): Unit = runBlocking {
+        val table = newTable()
+        runCatching { db.execute("drop table if exists $table;") }
+        db.execute("create table $table(id integer primary key, v text);").getOrThrow()
+        db.execute("insert into $table(id, v) values (1, 'x' || char(0) || 'y'), (2, char(0)), (3, 'z');").getOrThrow()
+
+        val literal = "select 'a' || char(0) || 'b'"
+        val sql = "select v from $table order by id"
+        val expected = listOf("x\u0000y", "\u0000", "z")
+        assertAll {
+            assertThat(db.fetchAll(literal).getOrThrow().first().get(0).asString(), "simple").isEqualTo("a\u0000b")
+            assertThat(db.fetchAll(Statement.create(literal)).getOrThrow().first().get(0).asString(), "prepared")
+                .isEqualTo("a\u0000b")
+            assertThat(db.fetchAll(sql).getOrThrow().map { it.get(0).asString() }, "table").isEqualTo(expected)
+            assertThat(db.fetch(Statement.create(sql)).toList().map { it.get(0).asString() }, "stream").isEqualTo(expected)
+        }
+
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
+
+    fun `text with embedded NUL should round-trip through bound parameters`(): Unit = runBlocking {
+        val table = newTable()
+        runCatching { db.execute("drop table if exists $table;") }
+        db.execute("create table $table(id integer primary key, v text);").getOrThrow()
+
+        val values = listOf("x\u0000y", "\u0000", "", "naïve ✓\u0000end")
+        values.forEachIndexed { i, v ->
+            db.execute(Statement.create("insert into $table(id, v) values (:id, :v);").bind("id", i).bind("v", v)).getOrThrow()
+        }
+
+        val rows = db.fetchAll(Statement.create("select v, hex(v) from $table order by id")).getOrThrow()
+        val echoed = db.fetchAll(Statement.create("select :v").bind("v", "a\u0000b")).getOrThrow().first().get(0).asString()
+        assertAll {
+            assertThat(rows.map { it.get(0).asString() }, "stored").isEqualTo(values)
+            assertThat(rows.map { it.get(1).asString() }, "hex").isEqualTo(listOf("780079", "00", "", "6E61C3AF766520E29C9300656E64"))
+            assertThat(echoed, "echoed").isEqualTo("a\u0000b")
+        }
+
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
+
+    fun `invalid UTF-8 text should decode with replacement characters`(): Unit = runBlocking {
+        val sql = "select cast(x'ff' as text), cast(x'61ff62' as text), cast(x'61c3' as text)"
+        for (row in listOf(db.fetchAll(sql).getOrThrow().first(), db.fetchAll(Statement.create(sql)).getOrThrow().first())) {
+            assertAll {
+                assertThat(row.get(0).asString()).isEqualTo("\uFFFD")
+                assertThat(row.get(1).asString()).isEqualTo("a\uFFFDb")
+                assertThat(row.get(2).asString()).isEqualTo("a\uFFFD")
+            }
+        }
     }
 }

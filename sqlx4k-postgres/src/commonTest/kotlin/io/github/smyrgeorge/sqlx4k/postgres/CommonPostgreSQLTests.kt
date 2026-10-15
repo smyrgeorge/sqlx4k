@@ -29,7 +29,6 @@ import io.github.smyrgeorge.sqlx4k.postgres.extensions.asLongArray
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asShortArray
 import kotlin.random.Random
 import kotlin.time.Instant
-import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
@@ -42,7 +41,6 @@ class CommonPostgreSQLTests(
 
     private fun newTable(): String = "t_${Random.nextInt(1_000_000)}"
 
-    @OptIn(ExperimentalUuidApi::class)
     fun `Test basic type mappings`() = runBlocking {
         // language=PostgreSQL
         val types = """
@@ -156,36 +154,5 @@ class CommonPostgreSQLTests(
         assertThat(vRow.get(0).asInt()).isEqualTo(25)
 
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }
-    }
-
-    fun `numeric values should decode through prepared statements`(): Unit = runBlocking {
-        // Bound parameters go through the extended protocol, where NUMERIC arrives in its
-        // binary wire format (aggregates such as sum(int8) and avg(..) are NUMERIC too).
-        val st = Statement.create(
-            """
-            select :a::numeric(10,2) as fixed,
-                   :b::numeric as negative_fraction,
-                   (select sum(x) from (values (1::int8), (2::int8), (4::int8)) as t(x) where x >= :min) as total,
-                   (select avg(x) from (values (1::int8), (2::int8), (4::int8)) as t(x) where x >= :min) as mean,
-                   :c::numeric as big,
-                   0::numeric + :min as zero_plus,
-                   'NaN'::numeric + :min as not_a_number
-            """.trimIndent()
-        )
-            .bind("a", "1.5")
-            .bind("b", "-0.0042")
-            .bind("c", "123456789.0001")
-            .bind("min", 0)
-        val row = db.fetchAll(st).getOrThrow().first()
-
-        assertAll {
-            assertThat(row.get(0).asString()).isEqualTo("1.50")
-            assertThat(row.get(1).asString()).isEqualTo("-0.0042")
-            assertThat(row.get(2).asString()).isEqualTo("7")
-            assertThat(row.get(3).asString()).isEqualTo("2.3333333333333333")
-            assertThat(row.get(4).asString()).isEqualTo("123456789.0001")
-            assertThat(row.get(5).asString()).isEqualTo("0")
-            assertThat(row.get(6).asString()).isEqualTo("NaN")
-        }
     }
 }

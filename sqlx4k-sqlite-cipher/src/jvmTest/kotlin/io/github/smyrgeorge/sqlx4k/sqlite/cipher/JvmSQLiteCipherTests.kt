@@ -26,4 +26,15 @@ class JvmSQLiteCipherTests {
     @Test
     fun `execute and fetchAll with prepared statements should work`() =
         runner.`execute and fetchAll with prepared statements should work`()
+
+    @Test
+    fun `text with embedded NUL should decode in full`() = runner.`text with embedded NUL should decode in full`()
+
+    @Test
+    fun `text with embedded NUL should round-trip through bound parameters`() =
+        runner.`text with embedded NUL should round-trip through bound parameters`()
+
+    @Test
+    fun `invalid UTF-8 text should decode with replacement characters`() =
+        runner.`invalid UTF-8 text should decode with replacement characters`()
 }

@@ -1624,7 +1624,10 @@ fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mut c_char {
         // (every `_with_params` call, and aggregates such as SUM(bigint)/AVG(..)
         // return NUMERIC). Decoding it as `&str` used to panic and abort the host
         // process; decode the wire format into its canonical decimal text instead.
-        "NUMERIC" => decode_numeric_value(row, ordinal),
+        "NUMERIC" => decode_text_or_binary(row, ordinal, decode_pg_numeric_binary),
+        // NUMERIC[] has the same problem: its binary form is an array of binary NUMERICs.
+        // Render it as the `{1.5,NULL,NaN}` text PostgreSQL prints for the simple protocol.
+        "NUMERIC[]" => decode_text_or_binary(row, ordinal, decode_pg_numeric_array_binary),
         // TEXT/VARCHAR/CHAR/NAME/JSON and anything else fall back to the raw bytes.
         // In the simple-query / text protocol every value arrives as text; in the
         // extended protocol a binary-only type we don't model must never take the
@@ -1637,17 +1640,70 @@ fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mut c_char {
     CString::new(s).unwrap_or_default().into_raw()
 }
 
-/// NUMERIC in text or binary format → canonical decimal text (`-12.3400`, `NaN`, `Infinity`).
-fn decode_numeric_value(row: &PgRow, ordinal: usize) -> String {
+/// Text format is passed through as is; binary format is rendered to the same text by `decode_binary`.
+fn decode_text_or_binary(row: &PgRow, ordinal: usize, decode_binary: fn(&[u8]) -> Option<String>) -> String {
     let Ok(value) = row.try_get_raw(ordinal) else { return String::new() };
     match value.format() {
         PgValueFormat::Text => value.as_str().map(str::to_string).unwrap_or_default(),
-        PgValueFormat::Binary => value
-            .as_bytes()
-            .ok()
-            .and_then(decode_pg_numeric_binary)
-            .unwrap_or_default(),
+        PgValueFormat::Binary => value.as_bytes().ok().and_then(decode_binary).unwrap_or_default(),
     }
+}
+
+/// Decodes a binary NUMERIC[] (`array_send`):
+/// `ndim: i32, has_nulls: i32, elemtype: u32, [len: i32, lbound: i32; ndim]`, followed by the
+/// elements in row-major order, each as `len: i32` (-1 for NULL) and `len` bytes of `numeric_send`.
+/// Renders the canonical text form (`{1.5,NULL}`, `{{1,2},{3,4}}`, `[0:1]={1,2}`).
+pub(crate) fn decode_pg_numeric_array_binary(bytes: &[u8]) -> Option<String> {
+    let read_i32 = |i: usize| -> Option<i32> { Some(i32::from_be_bytes(bytes.get(i..i + 4)?.try_into().ok()?)) };
+    let ndim = read_i32(0)?;
+    if ndim < 0 {
+        return None;
+    }
+    if ndim == 0 {
+        return Some("{}".to_string());
+    }
+    let mut dims = Vec::with_capacity(ndim as usize);
+    let mut bounds = String::new();
+    let mut default_bounds = true;
+    let mut pos = 12;
+    for _ in 0..ndim {
+        let (len, lbound) = (read_i32(pos)?, read_i32(pos + 4)?);
+        if len < 0 {
+            return None;
+        }
+        dims.push(len as usize);
+        default_bounds &= lbound == 1;
+        bounds.push_str(&format!("[{}:{}]", lbound, lbound as i64 + len as i64 - 1));
+        pos += 8;
+    }
+    // Like array_out, spell the bounds out only when some dimension does not start at 1.
+    let mut out = if default_bounds { String::new() } else { bounds + "=" };
+    write_pg_numeric_array_level(bytes, &mut pos, &dims, &mut out)?;
+    Some(out)
+}
+
+fn write_pg_numeric_array_level(bytes: &[u8], pos: &mut usize, dims: &[usize], out: &mut String) -> Option<()> {
+    out.push('{');
+    for i in 0..dims[0] {
+        if i > 0 {
+            out.push(',');
+        }
+        if dims.len() > 1 {
+            write_pg_numeric_array_level(bytes, pos, &dims[1..], out)?;
+            continue;
+        }
+        let len = i32::from_be_bytes(bytes.get(*pos..*pos + 4)?.try_into().ok()?);
+        *pos += 4;
+        if len < 0 {
+            out.push_str("NULL");
+            continue;
+        }
+        let element = bytes.get(*pos..*pos + len as usize)?;
+        *pos += len as usize;
+        out.push_str(&decode_pg_numeric_binary(element)?);
+    }
+    out.push('}');
+    Some(())
 }
 
 /// Decodes the PostgreSQL NUMERIC binary representation (`numeric_send`):
@@ -1911,7 +1967,7 @@ pub extern "C" fn sqlx4k_postgresql_tx_fetch_all_with_params(
 
 #[cfg(test)]
 mod numeric_tests {
-    use super::decode_pg_numeric_binary;
+    use super::{decode_pg_numeric_array_binary, decode_pg_numeric_binary};
 
     fn enc(ndigits: i16, weight: i16, sign: u16, dscale: u16, digits: &[u16]) -> Vec<u8> {
         let mut v = Vec::new();
@@ -1951,5 +2007,50 @@ mod numeric_tests {
         assert!(decode_pg_numeric_binary(&[0, 1]).is_none());
         assert!(decode_pg_numeric_binary(&enc(2, 0, 0, 0, &[1])).is_none());
         assert!(decode_pg_numeric_binary(&enc(1, 0, 0, 0, &[10000])).is_none());
+    }
+
+    fn enc_array(dims: &[(i32, i32)], elements: &[Option<Vec<u8>>]) -> Vec<u8> {
+        let mut v = Vec::new();
+        v.extend_from_slice(&(dims.len() as i32).to_be_bytes());
+        v.extend_from_slice(&(elements.iter().any(Option::is_none) as i32).to_be_bytes());
+        v.extend_from_slice(&1700u32.to_be_bytes()); // NUMERICOID
+        for (len, lbound) in dims {
+            v.extend_from_slice(&len.to_be_bytes());
+            v.extend_from_slice(&lbound.to_be_bytes());
+        }
+        for e in elements {
+            match e {
+                Some(bytes) => {
+                    v.extend_from_slice(&(bytes.len() as i32).to_be_bytes());
+                    v.extend_from_slice(bytes);
+                }
+                None => v.extend_from_slice(&(-1i32).to_be_bytes()),
+            }
+        }
+        v
+    }
+
+    #[test]
+    fn decodes_postgres_numeric_array_wire_format() {
+        let one_five = Some(enc(2, 0, 0, 1, &[1, 5000]));
+        let nan = Some(enc(0, 0, 0xC000, 0, &[]));
+        let neg = Some(enc(2, 0, 0x4000, 2, &[2, 2500]));
+        let zero = Some(enc(0, 0, 0, 3, &[]));
+        // empty array
+        assert_eq!(decode_pg_numeric_array_binary(&enc_array(&[], &[])).unwrap(), "{}");
+        // one dimension, with NULL and NaN
+        let a = enc_array(&[(5, 1)], &[one_five.clone(), neg.clone(), zero.clone(), None, nan.clone()]);
+        assert_eq!(decode_pg_numeric_array_binary(&a).unwrap(), "{1.5,-2.25,0.000,NULL,NaN}");
+        // two dimensions
+        let a = enc_array(&[(2, 1), (2, 1)], &[one_five.clone(), neg.clone(), zero.clone(), nan.clone()]);
+        assert_eq!(decode_pg_numeric_array_binary(&a).unwrap(), "{{1.5,-2.25},{0.000,NaN}}");
+        // non-default lower bound
+        let a = enc_array(&[(2, 0)], &[one_five.clone(), nan.clone()]);
+        assert_eq!(decode_pg_numeric_array_binary(&a).unwrap(), "[0:1]={1.5,NaN}");
+        // malformed input is rejected instead of panicking
+        assert!(decode_pg_numeric_array_binary(&[0, 0]).is_none());
+        let truncated = enc_array(&[(2, 1)], &[one_five.clone(), nan.clone()]);
+        assert!(decode_pg_numeric_array_binary(&truncated[..truncated.len() - 1]).is_none());
+        assert!(decode_pg_numeric_array_binary(&enc_array(&[(1, 1)], &[Some(vec![0, 1])])).is_none());
     }
 }

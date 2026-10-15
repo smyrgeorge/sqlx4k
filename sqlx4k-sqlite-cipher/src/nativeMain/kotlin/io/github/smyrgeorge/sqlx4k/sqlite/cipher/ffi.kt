@@ -19,6 +19,7 @@ import kotlinx.cinterop.StableRef
 import kotlinx.cinterop.asStableRef
 import kotlinx.cinterop.get
 import kotlinx.cinterop.pointed
+import kotlinx.cinterop.readBytes
 import kotlinx.cinterop.staticCFunction
 import kotlinx.cinterop.toKString
 import kotlinx.cinterop.useContents
@@ -73,7 +74,8 @@ fun Sqlx4kSqliteCipherResult.toResultSet(): ResultSet {
                 ordinal = column.ordinal,
                 name = requireNotNull(schemaColumn.name) { "Column name cannot be null" }.toKString(),
                 type = requireNotNull(schemaColumn.kind) { "Column type cannot be null" }.toKString(),
-                value = column.value?.toKString()
+                // TEXT may contain NUL bytes, so read the full length rather than up to the first NUL.
+                value = column.value?.readBytes(column.value_len)?.decodeToString()
             )
         }
 

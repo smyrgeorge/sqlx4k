@@ -48,7 +48,7 @@ class CommonMySQLTests(
                    1 as bigint_V,
                    1 as float_v,
                    1 as double_v,
-                   1 as numeric_v,
+                   cast(1 as decimal(10,2)) as numeric_v,
                    'a' as char_v,
                    '' as string_1,
                    'aa' as string_2,
@@ -72,7 +72,7 @@ class CommonMySQLTests(
             assertThat(row.get(4).asLong()).isEqualTo(1L)
             assertThat(row.get(5).asFloat()).isEqualTo(1.0f)
             assertThat(row.get(6).asDouble()).isEqualTo(1.0)
-//            assertThat(row.get(7).asString()).isEqualTo("1.00") // Add BigDecimal support
+            assertThat(row.get(7).asString()).isEqualTo("1.00")
             assertThat(row.get(8).asChar()).isEqualTo('a')
             assertThat(row.get(9).asString()).isEqualTo("")
             assertThat(row.get(10).asString()).isEqualTo("aa")

@@ -118,7 +118,8 @@ sqlx4k {
 - Postgres COPY. COPY FROM STDIN is an order of magnitude faster than multi-row INSERT for bulk loads.
 - `kotlinx.serialization` module. JSON and JSONB columns to and from @Serializable classes, and a generic @Converter for
   any serializable type.
-- Type coverage, NUMERIC/decimal, Duration or interval, enum or composite types.
+- Type coverage: a Kotlin decimal type for NUMERIC/decimal (values already decode as exact text), Duration or interval,
+  enum or composite types.
 - WASM support (?).
 
 ### Supported Databases

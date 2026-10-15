@@ -520,12 +520,17 @@ class SQLite(
                         bytes = if (wasNull()) null else raw
                     )
                 } else {
-                    val raw = getString(i)
+                    // getObject reflects the value's storage class; render REAL values ourselves (see formatSqliteReal).
+                    val raw = getObject(i)
                     ResultSet.Row.Column(
                         ordinal = i - 1,
                         name = metaData.getColumnName(i),
                         type = type,
-                        value = if (wasNull()) null else raw
+                        value = when (raw) {
+                            null -> null
+                            is Double -> formatSqliteReal(raw)
+                            else -> getString(i)
+                        }
                     )
                 }
             }

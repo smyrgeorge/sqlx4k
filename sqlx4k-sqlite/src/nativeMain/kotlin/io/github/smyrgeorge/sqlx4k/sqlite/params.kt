@@ -15,7 +15,6 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.MemScope
 import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.allocArrayOf
-import kotlinx.cinterop.cstr
 import kotlinx.cinterop.get
 import kotlinx.cinterop.reinterpret
 import kotlinx.datetime.LocalDate
@@ -87,13 +86,11 @@ private fun MemScope.bindParam(p: Sqlx4kSqliteParam, value: Any?) {
         }
 
         is String -> {
-            p.kind = PARAM_TEXT
-            p.text = value.cstr.ptr
+            bindText(p, value)
         }
 
         is Char -> {
-            p.kind = PARAM_TEXT
-            p.text = value.toString().cstr.ptr
+            bindText(p, value.toString())
         }
 
         is ByteArray -> {
@@ -108,33 +105,27 @@ private fun MemScope.bindParam(p: Sqlx4kSqliteParam, value: Any?) {
         }
 
         is Instant -> {
-            p.kind = PARAM_TEXT
-            p.text = value.toTimestampString().cstr.ptr
+            bindText(p, value.toTimestampString())
         }
 
         is LocalDate -> {
-            p.kind = PARAM_TEXT
-            p.text = value.toString().cstr.ptr
+            bindText(p, value.toString())
         }
 
         is LocalTime -> {
-            p.kind = PARAM_TEXT
-            p.text = value.toString().cstr.ptr
+            bindText(p, value.toString())
         }
 
         is LocalDateTime -> {
-            p.kind = PARAM_TEXT
-            p.text = value.toString().replace('T', ' ').cstr.ptr
+            bindText(p, value.toString().replace('T', ' '))
         }
 
         is Uuid -> {
-            p.kind = PARAM_TEXT
-            p.text = value.toString().cstr.ptr
+            bindText(p, value.toString())
         }
 
         is SqlRawLiteral -> {
-            p.kind = PARAM_TEXT
-            p.text = value.sql.cstr.ptr
+            bindText(p, value.sql)
         }
 
         else -> SQLError(
@@ -142,4 +133,12 @@ private fun MemScope.bindParam(p: Sqlx4kSqliteParam, value: Any?) {
             message = "Cannot bind value of type ${value::class.simpleName} as a SQLite parameter"
         ).raise()
     }
+}
+
+/** Binds [value] as TEXT with its byte length: TEXT may contain NUL, which would end a C string early. */
+private fun MemScope.bindText(p: Sqlx4kSqliteParam, value: String) {
+    val bytes = value.encodeToByteArray()
+    p.kind = PARAM_TEXT
+    p.text = if (bytes.isEmpty()) null else allocArrayOf(bytes)
+    p.text_len = bytes.size
 }
