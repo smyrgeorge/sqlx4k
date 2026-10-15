@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalUuidApi::class)
-
 package io.github.smyrgeorge.sqlx4k.impl.extensions
 
 import assertk.assertThat
@@ -10,16 +8,15 @@ import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.ValueEncoder
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
+import kotlin.test.Test
+import kotlin.time.Instant
+import kotlin.uuid.Uuid
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.UtcOffset
 import kotlinx.datetime.toInstant
-import kotlin.test.Test
-import kotlin.time.Instant
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 class EncodeExtensionsTests {
 
@@ -47,6 +44,7 @@ class EncodeExtensionsTests {
         override fun encode(value: Inner): Any = "inner:${value.v}"
         override fun decode(value: ResultSet.Row.Column): Inner = error("not needed")
     }
+
     private class OuterEncoder : ValueEncoder<Outer> {
         override fun encode(value: Outer): Any = value.inner
         override fun decode(value: ResultSet.Row.Column): Outer = error("not needed")

@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalForeignApi::class, ExperimentalTime::class, ExperimentalUuidApi::class)
+@file:OptIn(ExperimentalForeignApi::class)
 
 package io.github.smyrgeorge.sqlx4k.postgres
 
@@ -7,9 +7,7 @@ import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.types.SqlRawLiteral
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import kotlin.reflect.KClass
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
-import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -66,10 +64,12 @@ private fun MemScope.bindParam(p: Sqlx4kPostgresParam, value: Any?) {
             p.kind = PARAM_NULL
             p.null_type = PARAM_NULL
         }
+
         is TypedNull -> {
             p.kind = PARAM_NULL
             p.null_type = nullTypeFor(value.type)
         }
+
         is Boolean -> {
             p.kind = PARAM_BOOL
             p.i64_val = if (value) 1L else 0L

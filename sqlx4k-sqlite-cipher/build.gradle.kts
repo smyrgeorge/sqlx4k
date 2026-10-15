@@ -7,6 +7,10 @@ plugins {
 }
 
 kotlin {
+    compilerOptions {
+        // The tests run under Robolectric on Android through an expect/actual base class.
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
     android {
         namespace = "io.github.smyrgeorge.sqlx4k.sqlite.cipher"
         compileSdk = 36

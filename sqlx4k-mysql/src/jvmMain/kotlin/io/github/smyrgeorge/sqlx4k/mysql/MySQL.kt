@@ -1,4 +1,3 @@
-@file:OptIn(ExperimentalUuidApi::class)
 @file:Suppress("SqlSourceToSinkFlow", "DuplicatedCode")
 
 package io.github.smyrgeorge.sqlx4k.mysql
@@ -37,7 +36,6 @@ import kotlin.jvm.optionals.getOrElse
 import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlin.time.toJavaDuration
-import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow

@@ -5,9 +5,6 @@ import assertk.assertions.isEqualTo
 import io.github.smyrgeorge.sqlx4k.SQLError
 import kotlin.test.Test
 
-/**
- * The Kotlin mapping (JDBC and Android drivers) must agree with the Rust one (`sqlx4k_sqlite_kind_of`).
- */
 class SQLiteKindTests {
 
     @Test

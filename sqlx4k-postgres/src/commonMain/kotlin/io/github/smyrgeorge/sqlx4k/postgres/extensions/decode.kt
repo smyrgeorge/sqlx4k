@@ -1,4 +1,3 @@
-@file:OptIn(ExperimentalUuidApi::class)
 @file:Suppress("unused")
 
 package io.github.smyrgeorge.sqlx4k.postgres.extensions
@@ -7,7 +6,6 @@ import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInstant
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalDateTime
 import kotlin.time.Instant
-import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.datetime.LocalDateTime
 

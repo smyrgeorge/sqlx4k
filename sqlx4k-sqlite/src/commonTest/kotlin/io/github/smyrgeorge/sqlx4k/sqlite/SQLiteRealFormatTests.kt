@@ -5,7 +5,6 @@ import assertk.assertThat
 import assertk.assertions.isEqualTo
 import kotlin.test.Test
 
-/** Mirrors `real_tests` in the Rust driver, so every platform renders REAL values identically. */
 class SQLiteRealFormatTests {
 
     @Test

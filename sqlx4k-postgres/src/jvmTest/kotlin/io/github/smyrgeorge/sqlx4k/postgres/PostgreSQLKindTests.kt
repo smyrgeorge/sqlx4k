@@ -5,9 +5,6 @@ import assertk.assertions.isEqualTo
 import io.github.smyrgeorge.sqlx4k.SQLError
 import kotlin.test.Test
 
-/**
- * The JVM mapping must agree with the Rust one (`sqlx4k_postgres_kind_of`).
- */
 class PostgreSQLKindTests {
 
     @Test
