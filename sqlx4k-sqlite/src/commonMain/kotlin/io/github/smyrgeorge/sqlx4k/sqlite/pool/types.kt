@@ -1,4 +1,4 @@
-package io.github.smyrgeorge.sqlx4k.impl.pool
+package io.github.smyrgeorge.sqlx4k.sqlite.pool
 
 import io.github.smyrgeorge.sqlx4k.Connection
 
@@ -15,4 +15,4 @@ import io.github.smyrgeorge.sqlx4k.Connection
  * @see Connection
  * @see ConnectionPoolImpl
  */
-typealias ConnectionFactory = suspend () -> Connection
+internal typealias ConnectionFactory = suspend () -> Connection

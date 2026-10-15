@@ -1,0 +1,43 @@
+package io.github.smyrgeorge.sqlx4k.utils
+
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
+
+class FakeTransaction : Transaction {
+    override var status: Transaction.Status = Transaction.Status.Open
+    override var commited: Boolean = false
+    override var rollbacked: Boolean = false
+
+    override suspend fun commit(): Result<Unit> {
+        status = Transaction.Status.Closed
+        commited = true
+        return Result.success(Unit)
+    }
+
+    override suspend fun rollback(): Result<Unit> {
+        status = Transaction.Status.Closed
+        rollbacked = true
+        return Result.success(Unit)
+    }
+
+    override val encoders: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY
+
+    override suspend fun execute(sql: String): Result<Long> = Result.success(0)
+    override suspend fun execute(statement: Statement): Result<Long> = execute(statement.sql)
+    override suspend fun fetchAll(sql: String): Result<ResultSet> =
+        Result.success(ResultSet(emptyList(), null, ResultSet.Metadata(emptyList())))
+
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> = fetchAll(statement.sql)
+
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        fetchAll(sql).getOrThrow().forEach { emit(it) }
+    }
+
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        fetchAll(statement).getOrThrow().forEach { emit(it) }
+    }
+}

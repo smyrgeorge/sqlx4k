@@ -1,4 +1,4 @@
-package io.github.smyrgeorge.sqlx4k.impl.pool.util
+package io.github.smyrgeorge.sqlx4k.sqlite.pool.util
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow

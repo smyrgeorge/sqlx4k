@@ -1,6 +1,5 @@
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.extensions
 
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -9,7 +8,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-@OptIn(ExperimentalSerializationApi::class)
 private fun primitive(value: Any): JsonPrimitive = when (value) {
     is Number -> JsonPrimitive(value)
     is UByte -> JsonPrimitive(value)

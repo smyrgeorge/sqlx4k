@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalAtomicApi::class)
 
-package io.github.smyrgeorge.sqlx4k.impl.pool
+package io.github.smyrgeorge.sqlx4k.sqlite.pool
 
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ResultSet
@@ -21,7 +21,7 @@ import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
-class PooledConnection(
+internal class PooledConnection(
     private val connection: Connection,
     private val pool: ConnectionPoolImpl
 ) : Connection {

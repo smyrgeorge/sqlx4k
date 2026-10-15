@@ -16,10 +16,10 @@ import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
-import io.github.smyrgeorge.sqlx4k.impl.pool.ConnectionPoolImpl
-import io.github.smyrgeorge.sqlx4k.impl.pool.PooledConnection
-import io.github.smyrgeorge.sqlx4k.impl.pool.PooledTransaction
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
+import io.github.smyrgeorge.sqlx4k.sqlite.pool.ConnectionPoolImpl
+import io.github.smyrgeorge.sqlx4k.sqlite.pool.PooledConnection
+import io.github.smyrgeorge.sqlx4k.sqlite.pool.PooledTransaction
 import java.sql.Connection as NativeJdbcConnection
 import java.sql.DriverManager
 import java.sql.ResultSet as NativeJdbcResultSet

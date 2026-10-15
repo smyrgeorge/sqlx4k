@@ -1,4 +1,4 @@
-package io.github.smyrgeorge.sqlx4k.impl.pool
+package io.github.smyrgeorge.sqlx4k.sqlite.pool
 
 import assertk.assertThat
 import assertk.assertions.isEqualTo
@@ -6,7 +6,7 @@ import assertk.assertions.isGreaterThan
 import assertk.assertions.isNotEqualTo
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
-import io.github.smyrgeorge.sqlx4k.impl.pool.util.FakeConnection
+import io.github.smyrgeorge.sqlx4k.sqlite.pool.util.FakeConnection
 import kotlin.test.Test
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds

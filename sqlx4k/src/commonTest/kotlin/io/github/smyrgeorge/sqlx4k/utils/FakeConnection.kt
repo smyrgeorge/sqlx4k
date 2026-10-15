@@ -1,0 +1,61 @@
+package io.github.smyrgeorge.sqlx4k.utils
+
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import io.github.smyrgeorge.sqlx4k.Connection
+import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.Transaction
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
+
+class FakeConnection(val id: Long) : Connection {
+    override var status: Connection.Status = Connection.Status.Open
+    override var transactionIsolationLevel: Transaction.IsolationLevel? = null
+    var onClose: (() -> Unit)? = null
+    private var closed = false
+    private var releases = 0
+    private var begins = 0
+    private var executes = 0L
+
+    override suspend fun close(): Result<Unit> {
+        // Treat pool close or direct close identically for tests
+        if (!closed) {
+            closed = true
+            onClose?.invoke()
+        }
+        status = Connection.Status.Closed
+        releases++
+        return Result.success(Unit)
+    }
+
+    override suspend fun begin(): Result<Transaction> {
+        begins++
+        return Result.success(FakeTransaction())
+    }
+
+    override val encoders: ValueEncoderRegistry = ValueEncoderRegistry.EMPTY
+
+    override suspend fun execute(sql: String): Result<Long> {
+        return if (sql == "id") Result.success(id) else Result.success(++executes)
+    }
+
+    override suspend fun execute(statement: Statement): Result<Long> = execute(statement.sql)
+
+    override suspend fun fetchAll(sql: String): Result<ResultSet> =
+        Result.success(ResultSet(emptyList(), null, ResultSet.Metadata(emptyList())))
+
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> = fetchAll(statement.sql)
+
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        fetchAll(sql).getOrThrow().forEach { emit(it) }
+    }
+
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        fetchAll(statement).getOrThrow().forEach { emit(it) }
+    }
+
+    override suspend fun setTransactionIsolationLevel(level: Transaction.IsolationLevel): Result<Unit> {
+        transactionIsolationLevel = level
+        return Result.success(Unit)
+    }
+}

@@ -1,4 +1,4 @@
-package io.github.smyrgeorge.sqlx4k.impl.pool
+package io.github.smyrgeorge.sqlx4k.sqlite.pool
 
 import io.github.smyrgeorge.sqlx4k.Transaction
 
@@ -16,7 +16,7 @@ import io.github.smyrgeorge.sqlx4k.Transaction
  * @param transaction The underlying transaction to which operations are delegated.
  * @param connection The pooled connection associated with the transaction.
  */
-class PooledTransaction(
+internal class PooledTransaction(
     private val transaction: Transaction,
     private val connection: PooledConnection
 ) : Transaction by transaction {

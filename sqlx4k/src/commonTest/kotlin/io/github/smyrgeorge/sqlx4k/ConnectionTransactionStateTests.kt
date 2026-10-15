@@ -3,7 +3,7 @@ package io.github.smyrgeorge.sqlx4k
 import assertk.assertThat
 import assertk.assertions.isEqualTo
 import io.github.smyrgeorge.sqlx4k.utils.ControllableTransaction
-import io.github.smyrgeorge.sqlx4k.impl.pool.util.FakeConnection
+import io.github.smyrgeorge.sqlx4k.utils.FakeConnection
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 

@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalAtomicApi::class)
 
-package io.github.smyrgeorge.sqlx4k.impl.pool
+package io.github.smyrgeorge.sqlx4k.sqlite.pool
 
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
@@ -50,7 +50,7 @@ import kotlin.time.Duration.Companion.seconds
  * @param log Optional logger to record connection pool activities and errors.
  * @param connectionFactory Factory function to create new connections on demand.
  */
-class ConnectionPoolImpl(
+internal class ConnectionPoolImpl(
     val options: ConnectionPool.Options,
     val encoders: ValueEncoderRegistry,
     private val log: Logger? = null,
@@ -101,7 +101,8 @@ class ConnectionPoolImpl(
         val handoff = AtomicReference<PooledConnection?>(null)
         return runCatching {
             if (closed.load()) SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").raise()
-            if (options.acquireTimeout != null) withTimeout(options.acquireTimeout) { acquireConnection(handoff) }
+            val acquireTimeout = options.acquireTimeout
+            if (acquireTimeout != null) withTimeout(acquireTimeout) { acquireConnection(handoff) }
             else acquireConnection(handoff)
         }.recoverCatching { error ->
             // On any failure, if a connection was already handed off, it never reached the caller, so
