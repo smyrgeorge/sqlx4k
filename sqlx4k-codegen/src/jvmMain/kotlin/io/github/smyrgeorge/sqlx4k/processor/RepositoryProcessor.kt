@@ -141,6 +141,10 @@ class RepositoryProcessor(
             file += "import ${TypeNames.QUERY_EXECUTOR}\n"
             file += "import ${TypeNames.SQL_ERROR}\n"
             file += "import io.github.smyrgeorge.sqlx4k.impl.extensions.*\n"
+            if (dialect == Dialect.MySQL || dialect == Dialect.MariaDB) {
+                // The generated insert/update read their row back on a single connection (no RETURNING).
+                file += "import ${TypeNames.WITH_SINGLE_CONNECTION}\n"
+            }
             if (useArrow) {
                 // DbResult is referenced explicitly by the MySQL/MariaDB batchInsert/batchUpdate stubs.
                 file += "import ${TypeNames.DB_RESULT}\n"
@@ -950,12 +954,20 @@ class RepositoryProcessor(
 
         // Use applyInsertResult to merge DB-generated columns back into the entity
         val entityVar = if (hasPreInsertHook) "e" else "entity"
+        // MySQL has no RETURNING: the row is read back with a second statement, on the connection that ran the
+        // insert (LAST_INSERT_ID() is per connection). Both statements are sent separately, since a prepared
+        // statement cannot hold two.
+        val insertQuery = if (dialect == Dialect.MySQL) {
+            "context.withSingleConnection { cx -> cx.execute(statement).mapCatching { cx.fetchAll($entityVar.selectInserted()).getOrThrow() } }"
+        } else {
+            "context.fetchAll(statement)"
+        }
         if (hasAroundQueryHook) {
             file += "        aroundQuery(\"insert\", statement) {\n"
-            file += "            context.fetchAll(statement)\n"
+            file += "            $insertQuery\n"
             file += "        }.fold(\n"
         } else {
-            file += "        context.fetchAll(statement).fold(\n"
+            file += "        $insertQuery.fold(\n"
         }
         file += "            onSuccess = { rows ->\n"
         file += "                val row = rows.firstOrNull()\n"
@@ -1025,12 +1037,19 @@ class RepositoryProcessor(
 
         // Use applyUpdateResult to merge DB-generated columns back into the entity
         val updateEntityVar = if (hasPreUpdateHook) "e" else "entity"
+        // MySQL/MariaDB have no UPDATE ... RETURNING: the row is read back with a second statement, sent
+        // separately (a prepared statement cannot hold two), on the same connection as the update.
+        val updateQuery = if (dialect == Dialect.MySQL || dialect == Dialect.MariaDB) {
+            "context.withSingleConnection { cx -> cx.execute(statement).mapCatching { cx.fetchAll($updateEntityVar.selectUpdated()).getOrThrow() } }"
+        } else {
+            "context.fetchAll(statement)"
+        }
         if (hasAroundQueryHook) {
             file += "        aroundQuery(\"update\", statement) {\n"
-            file += "            context.fetchAll(statement)\n"
+            file += "            $updateQuery\n"
             file += "        }.fold(\n"
         } else {
-            file += "        context.fetchAll(statement).fold(\n"
+            file += "        $updateQuery.fold(\n"
         }
         file += "            onSuccess = { rows ->\n"
         file += "                val row = rows.firstOrNull()\n"

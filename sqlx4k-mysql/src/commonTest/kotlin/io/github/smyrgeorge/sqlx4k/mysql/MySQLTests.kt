@@ -26,6 +26,8 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -165,6 +167,33 @@ class MySQLTests {
                 assertThat(row.get(0).asString()).isEqualTo("Alice")
                 assertThat(row.get(1).asByteArray()).isEqualTo("Alice".encodeToByteArray())
             }
+        }
+
+        runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
+
+    @Test
+    fun `generated ids are read back on the connection that inserted them`(): Unit = runBlocking {
+        // How the generated MySQL insert() reads its row back: LAST_INSERT_ID() is per connection, and a prepared
+        // statement cannot hold the insert and the select together.
+        val table = newTable()
+        runCatching { db.execute("drop table if exists $table;") }
+        db.execute("create table $table(id bigint primary key auto_increment, v varchar(16) not null);").getOrThrow()
+
+        val inserted = (1..20).map { i ->
+            async {
+                db.withSingleConnection { cx ->
+                    cx.execute(Statement.create("insert into $table(v) values (?);").bind(0, "v$i")).mapCatching {
+                        cx.fetchAll(Statement.create("select id, v from $table where id = last_insert_id();")).getOrThrow()
+                    }
+                }.getOrThrow().first().let { it.get(0).asLong() to it.get(1).asString() }
+            }
+        }.awaitAll()
+
+        assertAll {
+            // Each insert reads back its own row.
+            assertThat(inserted.map { it.second }).isEqualTo((1..20).map { "v$it" })
+            assertThat(inserted.map { it.first }.toSet().size).isEqualTo(20)
         }
 
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }

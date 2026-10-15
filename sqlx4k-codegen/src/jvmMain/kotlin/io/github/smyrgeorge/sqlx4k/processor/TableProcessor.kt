@@ -185,20 +185,21 @@ class TableProcessor(
         file += " * insertable properties. Properties marked with `@Id(insert = false)` or\n"
         file += " * `@Column(insert = false)` are excluded from the insert.\n"
         file += " *\n"
-        file += " * The statement includes a RETURNING clause (or equivalent for MySQL) to fetch\n"
-        file += " * the inserted row with any database-generated values.\n"
+        file += if (supportsInsertReturning) {
+            " * The statement includes a RETURNING clause to fetch the inserted row with any\n" +
+                    " * database-generated values.\n"
+        } else {
+            " * MySQL has no RETURNING clause: read the inserted row back with [selectInserted],\n" +
+                    " * on the same connection (LAST_INSERT_ID() is per connection).\n"
+        }
         file += " *\n"
         file += " * @return A prepared [Statement] with bound values ready for execution\n"
         file += " */\n"
         file += "fun ${clazz.qualifiedName()}.insert(): Statement {\n"
         file += "    // language=SQL\n"
         file += if (!supportsInsertReturning) {
-            // For MySQL, use LAST_INSERT_ID() since RETURNING is not supported
-            val idProp = allProps.find {
-                it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
-            } ?: error("MySQL dialect requires an @Id property for insert() on table: $table")
-            val idCol = idProp.columnName()
-            "    val sql = \"insert into $table(${insertColumns.joinToString()}) values (${insertColumns.joinToString { "?" }}); select $returningColumns from $table where $idCol = coalesce(nullif(last_insert_id(), 0), ?);\"\n"
+            // MySQL has no RETURNING; the row is read back with selectInserted() (emitted below).
+            "    val sql = \"insert into $table(${insertColumns.joinToString()}) values (${insertColumns.joinToString { "?" }});\"\n"
         } else {
             "    val sql = \"insert into $table(${insertColumns.joinToString()}) values (${insertColumns.joinToString { "?" }}) returning $returningColumns;\"\n"
         }
@@ -207,16 +208,32 @@ class TableProcessor(
             val bindExpr = generateBindExpression(prop)
             file += "    statement.bind($index, $bindExpr)\n"
         }
-        if (!supportsInsertReturning) {
-            // idProp is guaranteed to exist for MySQL (error thrown above if missing)
-            val idProp = allProps.first {
-                it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
-            }
-            val idBindExpr = generateBindExpression(idProp)
-            file += "    statement.bind(${insertColumns.size}, $idBindExpr)\n"
-        }
         file += "    return statement\n"
         file += "}\n"
+
+        if (!supportsInsertReturning) {
+            val idProp = allProps.find {
+                it.annotations.any { a -> a.qualifiedName() == TypeNames.ID_ANNOTATION }
+            } ?: error("MySQL dialect requires an @Id property for insert() on table: $table")
+            val idCol = idProp.columnName()
+            file += "\n"
+            file += "/**\n"
+            file += " * Creates a SELECT statement that reads back the row inserted by [insert], with any\n"
+            file += " * database-generated values (MySQL has no RETURNING clause).\n"
+            file += " *\n"
+            file += " * Must run on the connection that executed the insert: LAST_INSERT_ID() is per\n"
+            file += " * connection. It is 0 when the insert generated no id, so the entity's own id is used.\n"
+            file += " *\n"
+            file += " * @return A prepared [Statement] with bound values ready for execution\n"
+            file += " */\n"
+            file += "fun ${clazz.qualifiedName()}.selectInserted(): Statement {\n"
+            file += "    // language=SQL\n"
+            file += "    val sql = \"select $returningColumns from $table where $idCol = coalesce(nullif(last_insert_id(), 0), ?);\"\n"
+            file += "    val statement = Statement.create(sql)\n"
+            file += "    statement.bind(0, ${generateBindExpression(idProp)})\n"
+            file += "    return statement\n"
+            file += "}\n"
+        }
     }
 
     /**
@@ -287,18 +304,19 @@ class TableProcessor(
             file += " * (the row was modified or deleted concurrently), the statement matches no rows.\n"
         }
         file += " *\n"
-        file += " * The statement includes a RETURNING clause (or equivalent for MySQL/MariaDB) to fetch\n"
-        file += " * the updated row with any modified values.\n"
+        file += if (supportsUpdateReturning) {
+            " * The statement includes a RETURNING clause to fetch the updated row with any modified values.\n"
+        } else {
+            " * MySQL/MariaDB have no UPDATE ... RETURNING: read the updated row back with [selectUpdated].\n"
+        }
         file += " *\n"
         file += " * @return A prepared [Statement] with bound values ready for execution\n"
         file += " */\n"
         file += "fun ${clazz.qualifiedName()}.update(): Statement {\n"
         file += "    // language=SQL\n"
         file += if (!supportsUpdateReturning) {
-            // MySQL/MariaDB have no UPDATE ... RETURNING, so the row is re-selected. With @Version the SELECT is
-            // keyed on the expected *new* version (entity.version + 1): a stale UPDATE (0 rows matched) then yields
-            // no row instead of silently returning the unchanged one.
-            "    val sql = \"update $table set $setClause where $whereClause; select $returningColumns from $table where $whereClause;\"\n"
+            // MySQL/MariaDB have no UPDATE ... RETURNING; the row is read back with selectUpdated() (emitted below).
+            "    val sql = \"update $table set $setClause where $whereClause;\"\n"
         } else {
             "    val sql = \"update $table set $setClause where $whereClause returning $returningColumns;\"\n"
         }
@@ -313,16 +331,35 @@ class TableProcessor(
         file += "    statement.bind(${index++}, $idBindExpr)\n"
         val versionBindExpr = version?.let { generateBindExpression(it) }
         if (versionBindExpr != null) {
-            file += "    statement.bind(${index++}, $versionBindExpr)\n"
-        }
-        if (!supportsUpdateReturning) {
-            file += "    statement.bind(${index++}, $idBindExpr)\n"
-            if (versionBindExpr != null) {
-                file += "    statement.bind($index, $versionBindExpr + 1)\n"
-            }
+            file += "    statement.bind($index, $versionBindExpr)\n"
         }
         file += "    return statement\n"
         file += "}\n"
+
+        if (!supportsUpdateReturning) {
+            file += "\n"
+            file += "/**\n"
+            file += " * Creates a SELECT statement that reads back the row updated by [update], with any modified\n"
+            file += " * values (MySQL/MariaDB have no UPDATE ... RETURNING).\n"
+            if (version != null) {
+                file += " *\n"
+                file += " * The row is matched on the expected *new* version (the entity's version + 1): after a stale\n"
+                file += " * update (no row matched), it yields no row instead of silently returning the unchanged one.\n"
+            }
+            file += " *\n"
+            file += " * @return A prepared [Statement] with bound values ready for execution\n"
+            file += " */\n"
+            file += "fun ${clazz.qualifiedName()}.selectUpdated(): Statement {\n"
+            file += "    // language=SQL\n"
+            file += "    val sql = \"select $returningColumns from $table where $whereClause;\"\n"
+            file += "    val statement = Statement.create(sql)\n"
+            file += "    statement.bind(0, $idBindExpr)\n"
+            if (versionBindExpr != null) {
+                file += "    statement.bind(1, $versionBindExpr + 1)\n"
+            }
+            file += "    return statement\n"
+            file += "}\n"
+        }
     }
 
     /**

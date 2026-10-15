@@ -63,6 +63,7 @@ object TypeNames {
     val QUERY_EXECUTOR = QueryExecutor::class.qualifiedName!!
     val STATEMENT = Statement::class.qualifiedName!!
     val SQL_ERROR = SQLError::class.qualifiedName!!
+    const val WITH_SINGLE_CONNECTION = "io.github.smyrgeorge.sqlx4k.mysql.withSingleConnection"
     const val DB_RESULT = "io.github.smyrgeorge.sqlx4k.arrow.impl.extensions.DbResult"
     const val TO_DB_RESULT = "io.github.smyrgeorge.sqlx4k.arrow.impl.extensions.toDbResult"
     val ROW_MAPPER = RowMapper::class.qualifiedName!!
