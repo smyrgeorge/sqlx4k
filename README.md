@@ -596,6 +596,9 @@ interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
 > A `@Query` method's name prefix determines its shape and expected return type: `findAll`/`findAllBy…` →
 > `Result<List<T>>`, `findOneBy…` → `Result<T?>`, `countAll`/`countBy…` → `Result<Long>`, `existsBy…` →
 > `Result<Boolean>`, `deleteAll`/`deleteBy…` and `execute…` → `Result<Long>` (affected rows).
+> `streamAll`/`streamAllBy…` stream the rows instead of loading them all: declare them as non-`suspend`
+> functions returning `Flow<T>`; the query runs when the flow is collected, and a failure fails the collection.
+> They fetch rows in chunks of `@Query(fetchSize = …)` rows (the driver's default when unset).
 
 > [!NOTE]
 > Besides your @Query methods, because your interface extends `CrudRepository<T>`, the generator also adds the CRUD

@@ -15,6 +15,7 @@ import com.google.devtools.ksp.symbol.KSPropertyDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSValueArgument
 import com.google.devtools.ksp.symbol.KSValueParameter
+import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.validate
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.processor.utils.Quadruple
@@ -141,6 +142,9 @@ class RepositoryProcessor(
             file += "import ${TypeNames.QUERY_EXECUTOR}\n"
             file += "import ${TypeNames.SQL_ERROR}\n"
             file += "import io.github.smyrgeorge.sqlx4k.impl.extensions.*\n"
+            // Streams wrapped by the aroundQuery hook are built with flow { emitAll(...) }.
+            file += "import ${TypeNames.KOTLIN_FLOW_EMIT_ALL}\n"
+            file += "import ${TypeNames.KOTLIN_FLOW_BUILDER}\n"
             if (dialect == Dialect.MySQL || dialect == Dialect.MariaDB) {
                 // The generated insert/update read their row back on a single connection (no RETURNING).
                 file += "import ${TypeNames.WITH_SINGLE_CONNECTION}\n"
@@ -221,6 +225,8 @@ class RepositoryProcessor(
      * - `DELETE_BY`: Indicates methods that delete instances of a domain model based on certain conditions.
      * - `COUNT_BY`: Indicates methods that count instances of a domain model based on certain conditions.
      * - `EXISTS_BY`: Indicates methods that check whether any instance matching certain conditions exists.
+     * - `STREAM_ALL`: Indicates methods that stream all instances of a domain model as a cold `Flow`.
+     * - `STREAM_ALL_BY`: Indicates methods that stream the instances matching certain conditions as a cold `Flow`.
      * - `EXECUTE`: Indicates methods that perform a custom execution, typically associated with annotated SQL queries.
      *
      * This enum is used internally by the `RepositoryProcessor` to parse method names, validate method
@@ -235,6 +241,8 @@ class RepositoryProcessor(
         COUNT_BY,
         COUNT_ALL,
         EXISTS_BY,
+        STREAM_ALL,
+        STREAM_ALL_BY,
         EXECUTE
     }
 
@@ -252,13 +260,15 @@ class RepositoryProcessor(
         name == "findAll" -> Prefix.FIND_ALL
         name == "deleteAll" -> Prefix.DELETE_ALL
         name == "countAll" -> Prefix.COUNT_ALL
+        name == "streamAll" -> Prefix.STREAM_ALL
         name.startsWith("findAllBy") -> Prefix.FIND_ALL_BY
         name.startsWith("findOneBy") -> Prefix.FIND_ONE_BY
         name.startsWith("deleteBy") -> Prefix.DELETE_BY
         name.startsWith("countBy") -> Prefix.COUNT_BY
         name.startsWith("existsBy") -> Prefix.EXISTS_BY
+        name.startsWith("streamAllBy") -> Prefix.STREAM_ALL_BY
         name.startsWith("execute") -> Prefix.EXECUTE
-        else -> error("Invalid repository method name '$name'. Must start with one of: findAll, deleteAll, countAll or start with: findAllBy, findOneBy, deleteBy, countBy, existsBy, execute.")
+        else -> error("Invalid repository method name '$name'. Must start with one of: findAll, deleteAll, countAll, streamAll or start with: findAllBy, findOneBy, deleteBy, countBy, existsBy, streamAllBy, execute.")
     }
 
     /**
@@ -448,8 +458,13 @@ class RepositoryProcessor(
         val resultQName = returnType.declaration.qualifiedName()
             ?: error("Unable to resolve return type declaration for method '$name'")
 
-        // Check the return type.
-        if (useArrow) {
+        // Streams return a cold Flow<T>: a failure fails the collection, so there is no Result to wrap it in.
+        if (prefix == Prefix.STREAM_ALL || prefix == Prefix.STREAM_ALL_BY) {
+            if (resultQName != TypeNames.KOTLIN_FLOW || returnType.isMarkedNullable)
+                error("Repository method '$name' must return ${TypeNames.KOTLIN_FLOW}<T> where T is the repository domain type, but returns '$returnType'")
+            if (Modifier.SUSPEND in fn.modifiers)
+                error("Repository method '$name' must not be suspend: it returns a cold ${TypeNames.KOTLIN_FLOW}")
+        } else if (useArrow) {
             if (resultQName != TypeNames.DB_RESULT)
                 error("Repository method '$name' must return ${TypeNames.DB_RESULT}<...> but returns '$returnType'")
         } else {
@@ -474,6 +489,8 @@ class RepositoryProcessor(
         }
 
         when (prefix) {
+            Prefix.STREAM_ALL, Prefix.STREAM_ALL_BY -> ensureDomain(r0, allowNullable = false)
+
             Prefix.FIND_ALL, Prefix.FIND_ALL_BY -> {
                 val listQn = r0.declaration.qualifiedName()
                     ?: error("Unable to resolve inner type for method '$name'")
@@ -523,10 +540,11 @@ class RepositoryProcessor(
         val params = fn.parameters
         val nonContextCount = if (useContextParameters) params.size else params.size - 1
         when (prefix) {
-            Prefix.FIND_ALL, Prefix.DELETE_ALL, Prefix.COUNT_ALL -> {
+            Prefix.FIND_ALL, Prefix.DELETE_ALL, Prefix.COUNT_ALL, Prefix.STREAM_ALL -> {
                 if (nonContextCount != 0) error("Method '$name' must not have parameters other than context")
             }
-            Prefix.FIND_ALL_BY, Prefix.FIND_ONE_BY, Prefix.DELETE_BY, Prefix.COUNT_BY, Prefix.EXISTS_BY, Prefix.EXECUTE -> {
+            Prefix.FIND_ALL_BY, Prefix.FIND_ONE_BY, Prefix.DELETE_BY, Prefix.COUNT_BY, Prefix.EXISTS_BY,
+            Prefix.STREAM_ALL_BY, Prefix.EXECUTE -> {
                 // *By methods may have zero parameters when the WHERE clause is self-contained
                 // (e.g. "WHERE x IS NOT NULL"); validateParameters checks the parameters
                 // against the named parameters of the SQL statement.
@@ -639,6 +657,10 @@ class RepositoryProcessor(
         val localCheckSchema = queryAnn.arguments
             .firstOrNull { it.name?.asString() == "checkSchema" }
             ?.value as? Boolean ?: true
+        // 0 (the default) means unset: the stream uses the driver's default fetch size.
+        val fetchSize = queryAnn.arguments
+            .firstOrNull { it.name?.asString() == "fetchSize" }
+            ?.value as? Int ?: 0
         // Extract validation flags.
         val validateSyntax = globalCheckSqlSyntax && localCheckSyntax
         val validateSchema = globalCheckSqlSchema && localCheckSchema
@@ -670,7 +692,14 @@ class RepositoryProcessor(
         val entityTable = tableNameOf(domainDecl)
         val entityColumns = Columns.columnNames(domainDecl)
 
-        val isFind = prefix == Prefix.FIND_ALL || prefix == Prefix.FIND_ALL_BY || prefix == Prefix.FIND_ONE_BY
+        val isStream = prefix == Prefix.STREAM_ALL || prefix == Prefix.STREAM_ALL_BY
+        if (fetchSize != 0) {
+            if (!isStream)
+                error("Method '$name' sets @Query(fetchSize = $fetchSize), but fetchSize only applies to the stream methods (streamAll, streamAllBy…)")
+            if (fetchSize < 0)
+                error("Method '$name' has @Query(fetchSize = $fetchSize), but it must be positive (or 0 for the default)")
+        }
+        val isFind = prefix == Prefix.FIND_ALL || prefix == Prefix.FIND_ALL_BY || prefix == Prefix.FIND_ONE_BY || isStream
         val usesAutoMapper = mapperTypeName == "${domainDecl.simpleName()}AutoRowMapper"
 
         // Structural checks that need the parsed statement (skipped when it could not be parsed).
@@ -756,14 +785,20 @@ class RepositoryProcessor(
             Prefix.DELETE_ALL, Prefix.DELETE_BY, Prefix.EXECUTE -> "Result containing the number of affected rows"
             Prefix.COUNT_ALL, Prefix.COUNT_BY -> "Result containing the count"
             Prefix.EXISTS_BY -> "Result containing true if a matching row exists, false otherwise"
+            Prefix.STREAM_ALL, Prefix.STREAM_ALL_BY -> "A cold flow of ${domainDecl.simpleName()} entities"
         }
-        file += "     * @return $returnDesc, or an error if the operation fails\n"
+        file += if (isStream) {
+            "     * @return $returnDesc; a failure fails the collection\n"
+        } else {
+            "     * @return $returnDesc, or an error if the operation fails\n"
+        }
         file += "     */\n"
 
         if (useContextParameters) {
             file += "    context(context: QueryExecutor)\n"
         }
-        file += "    override suspend fun $name($paramSig) = run {\n"
+        file += if (isStream) "    override fun $name($paramSig) = run {\n"
+        else "    override suspend fun $name($paramSig) = run {\n"
         file += "        // language=SQL\n"
         file += "        val statement = Statement.create(\"$sql\")\n"
         emitNamedParameterBindings(file, params, useContextParameters)
@@ -775,6 +810,14 @@ class RepositoryProcessor(
         val hasAroundQueryHook = isHookOverridden(repo, "aroundQuery")
 
         when (prefix) {
+            Prefix.STREAM_ALL, Prefix.STREAM_ALL_BY -> {
+                val fetchSizeArg = if (fetchSize == 0) "" else ", fetchSize = $fetchSize"
+                val fetch = "$contextParamName.fetch(statement, $mapperTypeName$fetchSizeArg)"
+                // aroundQuery wraps the whole collection of the stream (it runs when the flow is collected).
+                file += if (hasAroundQueryHook) "        flow { aroundQuery(\"$name\", statement) { emitAll($fetch) } }\n"
+                else "        $fetch\n"
+            }
+
             Prefix.FIND_ALL, Prefix.FIND_ALL_BY ->
                 emitDbCall(file, hasAroundQueryHook, name, "$contextParamName.fetchAll(statement, $mapperTypeName)", "\n")
 
@@ -818,7 +861,7 @@ class RepositoryProcessor(
             }
         }
         file += "    }"
-        if (useArrow) file += ".toDbResult()"
+        if (useArrow && !isStream) file += ".toDbResult()"
         file += "\n\n"
     }
 

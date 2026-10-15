@@ -3,6 +3,7 @@ package io.github.smyrgeorge.sqlx4k.processor
 import assertk.assertThat
 import assertk.assertions.contains
 import assertk.assertions.containsExactly
+import assertk.assertions.isEmpty
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFailure
 import assertk.assertions.isNotNull
@@ -16,9 +17,10 @@ import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.co
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.row
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.userRow
 import io.github.smyrgeorge.sqlx4k.processor.util.User
-import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runTest
 
 /**
  * End-to-end tests for generated ContextCrudRepository implementations.
@@ -595,5 +597,28 @@ class ContextCrudRepositoryTests {
             val findResult = repository.findOneById(1)
             assertThat(findResult).isSuccess()
         }
+    }
+
+    // ==================== Stream Tests ====================
+
+    @Test
+    fun `streamAll is lazy and streams the mapped rows`() = runTest {
+        mockExecutor.setFetchAllRows(userRow(1, "Alice", "alice@example.com"), userRow(2, "Bob", "bob@example.com"))
+
+        val users = with(mockExecutor) { repository.streamAll() }
+        assertThat(mockExecutor.fetchAllCalls).isEmpty()
+
+        assertThat(users.toList().map { it.name }).containsExactly("Alice", "Bob")
+        assertThat(mockExecutor.hasExecuted("select id, name, email from users")).isTrue()
+    }
+
+    @Test
+    fun `streamAllByName binds the named parameter`() = runTest {
+        mockExecutor.setFetchAllRows(userRow(1, "Alice", "alice@example.com"))
+
+        val users = with(mockExecutor) { repository.streamAllByName("Alice") }.toList()
+
+        assertThat(users.single().id).isEqualTo(1L)
+        assertThat(mockExecutor.lastBoundValues).containsExactly("Alice")
     }
 }

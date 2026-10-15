@@ -91,11 +91,17 @@ class MockQueryExecutor : QueryExecutor {
         return execute(nq.sql)
     }
 
+    // The fetch size of the last streamed query.
+    var lastFetchSize: Int? = null
+        private set
+
     override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        lastFetchSize = fetchSize
         fetchAll(sql).getOrThrow().forEach { emit(it) }
     }
 
     override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        lastFetchSize = fetchSize
         fetchAll(statement).getOrThrow().forEach { emit(it) }
     }
 

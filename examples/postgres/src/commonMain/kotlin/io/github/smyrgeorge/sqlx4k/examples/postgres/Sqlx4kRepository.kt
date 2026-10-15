@@ -6,6 +6,7 @@ import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.annotation.Query
 import io.github.smyrgeorge.sqlx4k.annotation.Repository
+import kotlinx.coroutines.flow.Flow
 
 @Repository
 interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
@@ -14,6 +15,9 @@ interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
 
     @Query("SELECT * FROM sqlx4k")
     suspend fun findAll(context: QueryExecutor): Result<List<Sqlx4k>>
+
+    @Query("SELECT * FROM sqlx4k WHERE id >= :minId ORDER BY id", fetchSize = 2)
+    fun streamAllByMinId(context: QueryExecutor, minId: Int): Flow<Sqlx4k>
 
     @Query("SELECT count(*) FROM sqlx4k")
     suspend fun countAll(context: QueryExecutor): Result<Long>

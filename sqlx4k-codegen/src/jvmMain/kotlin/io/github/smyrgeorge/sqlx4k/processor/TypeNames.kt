@@ -20,6 +20,7 @@ import io.github.smyrgeorge.sqlx4k.annotation.Transient
 import io.github.smyrgeorge.sqlx4k.annotation.Version
 import io.github.smyrgeorge.sqlx4k.arrow.ArrowContextCrudRepository
 import io.github.smyrgeorge.sqlx4k.arrow.ArrowCrudRepository
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Centralized fully qualified names used by codegen processors to avoid magic strings.
@@ -75,6 +76,11 @@ object TypeNames {
     // Kotlin stdlib
     val KOTLIN_RESULT = Result::class.qualifiedName!!
     val KOTLIN_LIST = List::class.qualifiedName!!
+    val KOTLIN_FLOW = Flow::class.qualifiedName!!
+
+    // Top-level functions have no class to take their name from: they live in the package of Flow.
+    val KOTLIN_FLOW_BUILDER = "${Flow::class.java.packageName}.flow"
+    val KOTLIN_FLOW_EMIT_ALL = "${Flow::class.java.packageName}.emitAll"
     val KOTLIN_LONG = Long::class.qualifiedName!!
     val KOTLIN_INT = Int::class.qualifiedName!!
     val KOTLIN_BOOLEAN = Boolean::class.qualifiedName!!

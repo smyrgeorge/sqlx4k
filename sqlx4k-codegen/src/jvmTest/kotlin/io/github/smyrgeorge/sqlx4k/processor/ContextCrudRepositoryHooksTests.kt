@@ -3,6 +3,7 @@ package io.github.smyrgeorge.sqlx4k.processor
 import assertk.assertThat
 import assertk.assertions.contains
 import assertk.assertions.containsExactly
+import assertk.assertions.isEmpty
 import assertk.assertions.isEqualTo
 import assertk.assertions.isSuccess
 import assertk.assertions.isTrue
@@ -12,9 +13,10 @@ import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.row
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.userRow
 import io.github.smyrgeorge.sqlx4k.processor.util.User
-import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runTest
 
 /**
  * Comprehensive tests for ContextCrudRepository hooks functionality.
@@ -478,5 +480,16 @@ class ContextCrudRepositoryHooksTests {
         assertThat(HooksTracker.hooksCalled.any { it.startsWith("afterInsert:") }).isTrue()
         assertThat(HooksTracker.hooksCalled.any { it.startsWith("afterUpdate:") }).isTrue()
         assertThat(HooksTracker.hooksCalled).contains("afterDelete:Alice")
+    }
+
+    @Test
+    fun `aroundQuery hook wraps the collection of a stream`() = runTest {
+        mockExecutor.setFetchAllRows(userRow(1, "Alice", "alice@example.com"))
+
+        val users = with(mockExecutor) { repository.streamAll() }
+        assertThat(HooksTracker.hooksCalled).isEmpty()
+
+        assertThat(users.toList().map { it.name }).containsExactly("Alice")
+        assertThat(HooksTracker.hooksCalled).containsExactly("aroundQuery:streamAll")
     }
 }

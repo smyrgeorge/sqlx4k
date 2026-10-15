@@ -234,6 +234,9 @@ object Examples {
         val all = repo.findAll(db).getOrThrow()
         println("findAll => ${all.size} items: $all")
 
+        // Streams the rows instead of loading them all; the query runs when the flow is collected.
+        repo.streamAllByMinId(db, 2).collect { println("streamAllByMinId(2) => $it") }
+
         val count = repo.countAll(db).getOrThrow()
         println("countAll => $count")
     }

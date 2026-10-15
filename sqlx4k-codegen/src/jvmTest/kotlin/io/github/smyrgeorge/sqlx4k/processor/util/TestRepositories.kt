@@ -6,6 +6,7 @@ import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.annotation.Query
 import io.github.smyrgeorge.sqlx4k.annotation.Repository
+import kotlinx.coroutines.flow.Flow
 
 /**
  * CrudRepository test interface for User entity.
@@ -42,6 +43,15 @@ interface UserCrudRepository : CrudRepository<User> {
 
     @Query("UPDATE users SET name = :newName WHERE name = :oldName")
     suspend fun executeUpdateName(context: QueryExecutor, oldName: String, newName: String): Result<Long>
+
+    @Query("SELECT * FROM users")
+    fun streamAll(context: QueryExecutor): Flow<User>
+
+    @Query("SELECT * FROM users WHERE name = :name")
+    fun streamAllByName(context: QueryExecutor, name: String): Flow<User>
+
+    @Query("SELECT * FROM users WHERE email IS NOT NULL", fetchSize = 50)
+    fun streamAllByEmailNotNull(context: QueryExecutor): Flow<User>
 }
 
 /**
@@ -85,6 +95,14 @@ interface UserContextCrudRepository : ContextCrudRepository<User> {
     @Query("UPDATE users SET name = :newName WHERE name = :oldName")
     context(context: QueryExecutor)
     suspend fun executeUpdateName(oldName: String, newName: String): Result<Long>
+
+    @Query("SELECT * FROM users")
+    context(context: QueryExecutor)
+    fun streamAll(): Flow<User>
+
+    @Query("SELECT * FROM users WHERE name = :name")
+    context(context: QueryExecutor)
+    fun streamAllByName(name: String): Flow<User>
 }
 
 /**
@@ -153,6 +171,9 @@ interface UserRepositoryWithHooks : CrudRepository<User> {
 
     @Query("SELECT * FROM users")
     suspend fun findAll(context: QueryExecutor): Result<List<User>>
+
+    @Query("SELECT * FROM users")
+    fun streamAll(context: QueryExecutor): Flow<User>
 }
 
 /**
@@ -203,4 +224,8 @@ interface UserContextRepositoryWithHooks : ContextCrudRepository<User> {
     @Query("SELECT * FROM users")
     context(context: QueryExecutor)
     suspend fun findAll(): Result<List<User>>
+
+    @Query("SELECT * FROM users")
+    context(context: QueryExecutor)
+    fun streamAll(): Flow<User>
 }

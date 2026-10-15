@@ -3,12 +3,14 @@ package io.github.smyrgeorge.sqlx4k.processor
 import assertk.assertThat
 import assertk.assertions.contains
 import assertk.assertions.containsExactly
+import assertk.assertions.isEmpty
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFailure
 import assertk.assertions.isNotNull
 import assertk.assertions.isNull
 import assertk.assertions.isSuccess
 import assertk.assertions.isTrue
+import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.UserCrudRepositoryImpl
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor
@@ -16,9 +18,11 @@ import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.co
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.row
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.userRow
 import io.github.smyrgeorge.sqlx4k.processor.util.User
-import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runTest
 
 /**
  * End-to-end tests for generated CrudRepository implementations.
@@ -514,5 +518,49 @@ class CrudRepositoryTests {
 
         assertThat(result).isFailure()
         assertThat(result.exceptionOrNull()).isEqualTo(error)
+    }
+
+    // ==================== Stream Tests ====================
+
+    @Test
+    fun `streamAll is lazy and streams the mapped rows`() = runTest {
+        mockExecutor.setFetchAllRows(userRow(1, "Alice", "alice@example.com"), userRow(2, "Bob", "bob@example.com"))
+
+        val users = repository.streamAll(mockExecutor)
+        assertThat(mockExecutor.fetchAllCalls).isEmpty()
+
+        assertThat(users.toList().map { it.name }).containsExactly("Alice", "Bob")
+        assertThat(mockExecutor.hasExecuted("select id, name, email from users")).isTrue()
+    }
+
+    @Test
+    fun `streamAllByName binds the named parameter`() = runTest {
+        mockExecutor.setFetchAllRows(userRow(1, "Alice", "alice@example.com"))
+
+        val users = repository.streamAllByName(mockExecutor, "Alice").toList()
+
+        assertThat(users.single().id).isEqualTo(1L)
+        assertThat(mockExecutor.hasExecuted("where name")).isTrue()
+        assertThat(mockExecutor.lastBoundValues).containsExactly("Alice")
+    }
+
+    @Test
+    fun `streamAll failure fails the collection`() = runTest {
+        mockExecutor.setFetchAllResponse(Result.failure(SQLError(SQLError.Code.Database, "boom")))
+
+        val error = assertFailsWith<SQLError> { repository.streamAll(mockExecutor).toList() }
+
+        assertThat(error.code).isEqualTo(SQLError.Code.Database)
+    }
+
+    @Test
+    fun `stream uses the default fetch size unless the query sets one`() = runTest {
+        mockExecutor.setFetchAllRows(userRow(1, "Alice", "alice@example.com"))
+
+        repository.streamAll(mockExecutor).toList()
+        assertThat(mockExecutor.lastFetchSize).isEqualTo(QueryExecutor.DEFAULT_FETCH_SIZE)
+
+        repository.streamAllByEmailNotNull(mockExecutor).toList()
+        assertThat(mockExecutor.lastFetchSize).isEqualTo(50)
     }
 }
