@@ -3,6 +3,9 @@
 
 package io.github.smyrgeorge.sqlx4k.sqlite
 
+import com.zaxxer.hikari.HikariConfig
+import com.zaxxer.hikari.HikariDataSource
+import com.zaxxer.hikari.pool.HikariPool
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Dialect
@@ -17,17 +20,18 @@ import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
-import io.github.smyrgeorge.sqlx4k.sqlite.pool.ConnectionPoolImpl
-import io.github.smyrgeorge.sqlx4k.sqlite.pool.PooledConnection
 import io.github.smyrgeorge.sqlx4k.sqlite.pool.PooledTransaction
 import java.sql.Connection as NativeJdbcConnection
-import java.sql.DriverManager
 import java.sql.ResultSet as NativeJdbcResultSet
+import java.sql.SQLException
+import java.sql.SQLTransientConnectionException
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
@@ -36,6 +40,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -62,6 +67,10 @@ import kotlinx.datetime.toJavaLocalTime
  * well and skips that check, so JDBC-style URLs with driver-specific parameters (e.g. xerial pragmas
  * such as `?journal_mode=WAL`) keep working. See [SQLiteUrl] and [toJdbcUrl] for the translation.
  *
+ * Connections are pooled with HikariCP, which raises timeouts below its minimums: `acquireTimeout` to 250 ms,
+ * `idleTimeout` to 10 seconds and `maxLifetime` to 30 seconds. The database is opened when the instance is
+ * created, so a database that cannot be opened fails right away.
+ *
  * @param url The URL of the SQLite database to connect to.
  * @param options Optional pool configuration, defaulting to `ConnectionPool.Options`.
  * @param encoders Optional registry of value encoders to use for encoding query parameters.
@@ -71,7 +80,7 @@ class SQLite(
     options: ConnectionPool.Options = ConnectionPool.Options(),
     override val encoders: ValueEncoderRegistry = ValueEncoderRegistry()
 ) : ISQLite {
-    private val pool: ConnectionPoolImpl = createConnectionPool(url, options, encoders)
+    private val dataSource: HikariDataSource = createDataSource(url, options)
 
     override suspend fun migrate(
         path: String,
@@ -127,15 +136,34 @@ class SQLite(
         afterFileMigration = afterFileMigration
     )
 
-    override suspend fun close(): Result<Unit> = pool.close()
+    override suspend fun close(): Result<Unit> = runCatching {
+        withContext(Dispatchers.IO) { dataSource.close() }
+    }
 
-    override fun poolSize(): Int = pool.poolSize()
-    override fun poolIdleSize(): Int = pool.poolIdleSize()
+    override fun poolSize(): Int = dataSource.hikariPoolMXBean?.totalConnections ?: 0
+    override fun poolIdleSize(): Int = dataSource.hikariPoolMXBean?.idleConnections ?: 0
 
-    override suspend fun acquire(): Result<Connection> = pool.acquire()
+    override suspend fun acquire(): Result<Connection> = runCatching {
+        // Taken on an IO thread, interruptibly, so a cancelled caller stops waiting for the pool. A connection
+        // handed over just as the caller is cancelled goes straight back to the pool instead of leaking.
+        val taken = AtomicReference<NativeJdbcConnection?>(null)
+        val connection = try {
+            runInterruptible(Dispatchers.IO) { dataSource.connection.also { taken.set(it) } }
+        } catch (e: CancellationException) {
+            taken.get()?.close()
+            throw e
+        } catch (e: SQLException) {
+            when {
+                dataSource.isClosed -> SQLError(SQLError.Code.PoolClosed, "Connection pool is closed", e).raise()
+                e is SQLTransientConnectionException -> SQLError(SQLError.Code.PoolTimedOut, e.message, e).raise()
+                else -> e.toSQLError().raise()
+            }
+        }
+        JdbcConnection(connection, encoders)
+    }
 
     override suspend fun execute(sql: String): Result<Long> = runCatching {
-        val connection = pool.acquire().getOrThrow()
+        val connection = acquire().getOrThrow()
         try {
             connection.execute(sql).getOrThrow()
         } catch (e: Exception) {
@@ -146,7 +174,7 @@ class SQLite(
     }
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
-        val connection = pool.acquire().getOrThrow()
+        val connection = acquire().getOrThrow()
         try {
             connection.fetchAll(sql).getOrThrow()
         } catch (e: Exception) {
@@ -157,7 +185,7 @@ class SQLite(
     }
 
     override suspend fun execute(statement: Statement): Result<Long> = runCatching {
-        val connection = pool.acquire().getOrThrow()
+        val connection = acquire().getOrThrow()
         try {
             connection.execute(statement).getOrThrow()
         } catch (e: Exception) {
@@ -168,7 +196,7 @@ class SQLite(
     }
 
     override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
-        val connection = pool.acquire().getOrThrow()
+        val connection = acquire().getOrThrow()
         try {
             connection.fetchAll(statement).getOrThrow()
         } catch (e: Exception) {
@@ -181,7 +209,7 @@ class SQLite(
     // A pooled connection is borrowed for the whole collection and returned when the flow completes,
     // fails or is cancelled.
     override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
-        val connection = pool.acquire().getOrThrow()
+        val connection = acquire().getOrThrow()
         try {
             emitAll(connection.fetch(sql, fetchSize))
         } finally {
@@ -190,7 +218,7 @@ class SQLite(
     }
 
     override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
-        val connection = pool.acquire().getOrThrow()
+        val connection = acquire().getOrThrow()
         try {
             emitAll(connection.fetch(statement, fetchSize))
         } finally {
@@ -199,7 +227,7 @@ class SQLite(
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
-        val connection = pool.acquire().getOrThrow() as PooledConnection
+        val connection = acquire().getOrThrow()
         try {
             val tx = connection.begin().getOrThrow()
             // Wrap the transaction to ensure the pooled connection is released
@@ -575,11 +603,7 @@ class SQLite(
             return ResultSet(rows, null, meta)
         }
 
-        private fun createConnectionPool(
-            url: String,
-            options: ConnectionPool.Options,
-            encoders: ValueEncoderRegistry
-        ): ConnectionPoolImpl {
+        private fun createDataSource(url: String, options: ConnectionPool.Options): HikariDataSource {
             // Accept both the sqlx-style URL shared with the other targets and a JDBC-style one. An
             // sqlx-style URL is validated exactly like on native and Android (only the parameters
             // SQLite defines are allowed); a `jdbc:` URL is the escape hatch for driver-specific
@@ -587,7 +611,6 @@ class SQLite(
             val isJdbc = url.startsWith(JDBC_PREFIX)
             val parsed = SQLiteUrl.parse(url.removePrefix(JDBC_PREFIX))
             if (!isJdbc) parsed.requireKnownParams()
-            val jdbcUrl = parsed.toJdbcUrl()
 
             // Validate in-memory database configuration
             // In-memory SQLite databases are isolated per connection, so pool size must be 1
@@ -600,23 +623,32 @@ class SQLite(
                 )
             }
 
-            // Connection factory that creates JDBC connections
-            val connectionFactory: suspend () -> Connection = {
-                withContext(Dispatchers.IO) {
-                    val connection = DriverManager.getConnection(jdbcUrl)
-                    connection.autoCommit = true
-                    JdbcConnection(connection, encoders).apply {
-                        // Enable WAL mode for file-based databases to improve concurrency.
-                        // In-memory databases don't support WAL mode, and switching the journal mode
-                        // writes to the database header, which a read-only (`mode=ro`) connection cannot do.
-                        if (!isInMemory && !parsed.isReadOnly) {
-                            execute("PRAGMA journal_mode=WAL").getOrThrow()
-                        }
-                    }
-                }
+            // The pool is HikariCP. A missing option disables the matching HikariCP setting (0), so connections
+            // are kept and waited for indefinitely, as on the other targets; an in-memory database lives only as
+            // long as its connection. HikariCP enforces minimums on the others, so shorter values are raised to
+            // them (below its minimum it would otherwise fall back to its 30-minute default lifetime).
+            val config = HikariConfig().apply {
+                jdbcUrl = parsed.toJdbcUrl()
+                poolName = "sqlx4k-sqlite"
+                maximumPoolSize = options.maxConnections
+                minimumIdle = options.minConnections ?: 0
+                connectionTimeout = options.acquireTimeout?.inWholeMilliseconds?.coerceAtLeast(250) ?: 0
+                idleTimeout = options.idleTimeout?.inWholeMilliseconds?.coerceAtLeast(10_000) ?: 0
+                maxLifetime = options.maxLifetime?.inWholeMilliseconds?.coerceAtLeast(30_000) ?: 0
+                isAutoCommit = true
+                // Enable WAL mode for file-based databases to improve concurrency. In-memory databases
+                // don't support WAL mode, and switching the journal mode writes to the database header,
+                // which a read-only (`mode=ro`) connection cannot do.
+                if (!isInMemory && !parsed.isReadOnly) connectionInitSql = "PRAGMA journal_mode=WAL"
             }
 
-            return ConnectionPoolImpl(options, encoders, null, connectionFactory)
+            // HikariCP opens a first connection here, so a database that cannot be opened fails right away
+            // instead of every acquire waiting for its timeout.
+            return try {
+                HikariDataSource(config)
+            } catch (e: HikariPool.PoolInitializationException) {
+                (e.cause ?: e).toSQLError(SQLError.Code.Pool).raise()
+            }
         }
     }
 }

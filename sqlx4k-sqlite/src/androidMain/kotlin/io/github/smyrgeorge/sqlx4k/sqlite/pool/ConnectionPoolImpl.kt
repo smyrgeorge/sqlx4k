@@ -7,6 +7,13 @@ import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.logging.Logger
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.AtomicReference
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.concurrent.atomics.decrementAndFetch
+import kotlin.concurrent.atomics.incrementAndFetch
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,17 +25,11 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
-import kotlin.concurrent.atomics.AtomicBoolean
-import kotlin.concurrent.atomics.AtomicInt
-import kotlin.concurrent.atomics.AtomicReference
-import kotlin.concurrent.atomics.ExperimentalAtomicApi
-import kotlin.concurrent.atomics.decrementAndFetch
-import kotlin.concurrent.atomics.incrementAndFetch
-import kotlin.time.Duration.Companion.seconds
 
 /**
  * Represents an implementation of a connection pool that manages a pool of connections and provides
@@ -65,6 +66,12 @@ internal class ConnectionPoolImpl(
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val idleConnections = Channel<PooledConnection>(options.maxConnections)
 
+    // Signals that a connection was closed for good, which frees capacity for a new one. A waiter at full
+    // capacity wakes on it as well as on a connection returned to [idleConnections]: otherwise it would wait for
+    // its acquire timeout (or forever) while a new connection could be opened. Bounded, as surplus signals only
+    // make a waiter check again.
+    private val capacityFreed = Channel<Unit>(options.maxConnections)
+
     init {
         cleanupJob = scope.launch { cleanupLoop() }
         options.minConnections?.let { min -> if (min > 0) scope.launch { warmup(min) } }
@@ -99,38 +106,46 @@ internal class ConnectionPoolImpl(
         // result is discarded while the coroutine unwinds — either acquireTimeout firing at the
         // withTimeout boundary or the caller's coroutine being canceled during/after acquire().
         val handoff = AtomicReference<PooledConnection?>(null)
-        return runCatching {
+        val result = runCatching {
             if (closed.load()) SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").raise()
             val acquireTimeout = options.acquireTimeout
             if (acquireTimeout != null) withTimeout(acquireTimeout) { acquireConnection(handoff) }
             else acquireConnection(handoff)
-        }.recoverCatching { error ->
-            // On any failure, if a connection was already handed off, it never reached the caller, so
-            // close it to avoid leaking it (and its semaphore permit). closeInternal() is idempotent,
-            // so this is safe even when the failing path already tore the connection down.
-            handoff.exchange(null)?.let { orphan -> withContext(NonCancellable) { orphan.closeInternal() } }
-            when (error) {
-                is TimeoutCancellationException -> {
-                    SQLError(
-                        code = SQLError.Code.PoolTimedOut,
-                        message = "Timed out waiting for connection after ${options.acquireTimeout}",
-                        cause = error
-                    ).raise()
-                }
+        }
+        val error = result.exceptionOrNull() ?: return result
 
-                else -> throw error
-            }
+        // On any failure, if a connection was already handed off, it never reached the caller, so
+        // close it to avoid leaking it (and its semaphore permit). closeInternal() is idempotent,
+        // so this is safe even when the failing path already tore the connection down.
+        handoff.exchange(null)?.let { orphan -> withContext(NonCancellable) { orphan.closeInternal() } }
+        return when (error) {
+            is TimeoutCancellationException -> Result.failure(
+                SQLError(
+                    code = SQLError.Code.PoolTimedOut,
+                    message = "Timed out waiting for connection after ${options.acquireTimeout}",
+                    cause = error
+                )
+            )
+            // A cancelled caller must see the cancellation, not a failed Result it might carry on with.
+            is CancellationException -> throw error
+            else -> result
         }
     }
 
     // Publishes the connection to the hand-off holder before activating it, so acquire()'s
     // cancellation cleanup can find and release it if this coroutine is cancelled during acquire().
-    private suspend fun handOff(
+    private fun handOff(
         pooled: PooledConnection,
         handoff: AtomicReference<PooledConnection?>
     ): Connection {
         handoff.store(pooled)
         return pooled.acquire()
+    }
+
+    /** Gives back a permit of a connection closed for good, and wakes a waiter that can now open a new one. */
+    internal fun releasePermit() {
+        semaphore.release()
+        capacityFreed.trySend(Unit)
     }
 
     private suspend fun acquireConnection(handoff: AtomicReference<PooledConnection?>): Connection {
@@ -168,26 +183,24 @@ internal class ConnectionPoolImpl(
                     semaphoreOwned = false // PooledConnection now owns the semaphore lifecycle
                     return handOff(pooled, handoff)
                 } catch (e: Exception) {
-                    if (semaphoreOwned) semaphore.release()
+                    if (semaphoreOwned) releasePermit()
                     throw e
                 }
             }
 
-            // 3) We are at max capacity. Wait for an idle connection to be returned.
-            val received = idleConnections.receiveCatching()
-            if (received.isClosed) {
-                // Channel closed (pool is closing/closed) — abort acquire
-                SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").raise()
-            }
-
-            // Atomically decrement counter when we receive a connection
-            val pooled = received.getOrNull()?.also {
-                idleCount.decrementAndFetch()
-            }
-
-            // If getOrNull() returned null (shouldn't happen with receiveCatching),
-            // loop back to try again
-            if (pooled == null) continue
+            // 3) We are at max capacity. Wait for an idle connection to be returned, or for capacity to be freed
+            //    (a connection closed for good), in which case loop back to open a new one.
+            val pooled = select<PooledConnection?> {
+                idleConnections.onReceiveCatching { received ->
+                    if (received.isClosed) {
+                        // Channel closed (pool is closing/closed) — abort acquire
+                        SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").raise()
+                    }
+                    // Atomically decrement counter when we receive a connection
+                    received.getOrNull()?.also { idleCount.decrementAndFetch() }
+                }
+                capacityFreed.onReceive { null }
+            } ?: continue
 
             if (pooled.isExpired()) {
                 // Expired: close and loop to try again
@@ -262,7 +275,7 @@ internal class ConnectionPoolImpl(
 
                 // Check again after potentially blocking on semaphore
                 if (closed.load()) {
-                    semaphore.release()
+                    releasePermit()
                     return
                 }
 
@@ -286,7 +299,7 @@ internal class ConnectionPoolImpl(
                     }
                 } else if (acquired) {
                     // Only semaphore was acquired, release it
-                    semaphore.release()
+                    releasePermit()
                 }
 
                 log?.error("Failed to warm up connection: ${e.message}", e)

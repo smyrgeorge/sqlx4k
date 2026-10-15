@@ -40,6 +40,8 @@ calcite = "1.42.0"
 log4k = "2.5.0"
 # https://github.com/xerial/sqlite-jdbc
 sqlite-jdbc = "3.53.4.0"
+# https://github.com/brettwooldridge/HikariCP
+hikaricp = "7.1.0"
 # https://github.com/arrow-kt/arrow
 arrow = "2.2.3"
 # https://mvnrepository.com/artifact/org.jetbrains/annotations
@@ -74,6 +76,7 @@ jsqlparser = { module = "com.github.jsqlparser:jsqlparser", version.ref = "jsqlp
 calcite-core = { module = "org.apache.calcite:calcite-core", version.ref = "calcite" }
 log4k-slf4j = { module = "io.github.smyrgeorge:log4k-slf4j", version.ref = "log4k" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
+hikaricp = { module = "com.zaxxer:HikariCP", version.ref = "hikaricp" }
 arrow-core = { module = "io.arrow-kt:arrow-core", version.ref = "arrow" }
 jetbrains-annotations = { module = "org.jetbrains:annotations", version.ref = "jetbrains" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }

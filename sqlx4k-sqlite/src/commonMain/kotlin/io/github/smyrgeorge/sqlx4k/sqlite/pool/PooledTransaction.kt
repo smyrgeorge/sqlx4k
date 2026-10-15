@@ -1,10 +1,11 @@
 package io.github.smyrgeorge.sqlx4k.sqlite.pool
 
+import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.Transaction
 
 /**
  * A wrapper around a `Transaction` that ensures proper resource management by closing the associated
- * `PooledConnection` upon completion of transactional operations such as commit or rollback.
+ * pooled connection upon completion of transactional operations such as commit or rollback.
  *
  * This class delegates transactional operations to an underlying `Transaction`, while also handling
  * the lifecycle of the pooled database connection. It guarantees that the connection is closed and
@@ -12,13 +13,13 @@ import io.github.smyrgeorge.sqlx4k.Transaction
  * reuse of database connections within a connection pool.
  *
  * @constructor Creates a `PooledTransaction` instance by delegating to the provided `Transaction`
- * and associating it with the provided `PooledConnection`.
+ * and associating it with the provided pooled connection.
  * @param transaction The underlying transaction to which operations are delegated.
  * @param connection The pooled connection associated with the transaction.
  */
 internal class PooledTransaction(
     private val transaction: Transaction,
-    private val connection: PooledConnection
+    private val connection: Connection
 ) : Transaction by transaction {
     override suspend fun commit(): Result<Unit> = runCatching {
         try {

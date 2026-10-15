@@ -35,6 +35,7 @@ kotlin {
         jvmMain {
             dependencies {
                 implementation(libs.sqlite.jdbc)
+                implementation(libs.hikaricp)
             }
         }
         named("androidHostTest") {

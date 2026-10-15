@@ -24,7 +24,6 @@ import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.github.smyrgeorge.sqlx4k.impl.types.SqlRawLiteral
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.github.smyrgeorge.sqlx4k.sqlite.pool.ConnectionPoolImpl
-import io.github.smyrgeorge.sqlx4k.sqlite.pool.PooledConnection
 import io.github.smyrgeorge.sqlx4k.sqlite.pool.PooledTransaction
 import java.util.concurrent.Executors
 import kotlin.time.Duration
@@ -206,7 +205,7 @@ class SQLite(
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
-        val connection = pool.acquire().getOrThrow() as PooledConnection
+        val connection = pool.acquire().getOrThrow()
         try {
             val tx = connection.begin().getOrThrow()
             // Wrap the transaction to ensure the pooled connection is released
