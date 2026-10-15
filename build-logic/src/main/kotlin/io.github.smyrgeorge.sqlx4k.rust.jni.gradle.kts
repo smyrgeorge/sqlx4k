@@ -79,6 +79,11 @@ afterEvaluate {
             inputs.files(rustSources).withPathSensitivity(PathSensitivity.RELATIVE)
             outputs.dir(jniLibsDir)
             usesService(cargoLock)
+            // cargo-ndk builds the same Android triples as the Kotlin/Native cinterop tasks (`cargo-<triple>`),
+            // but with its own compiler settings: in a shared target directory each build would find the other's
+            // artifacts stale, rebuild everything and overwrite the cinterop task's output, so that task would
+            // rerun (a full rebuild) on the next build. A target directory of its own keeps both up to date.
+            environment("CARGO_TARGET_DIR", rustDir.dir("target/ndk").asFile.absolutePath)
             commandLine(*ndkCommand.toTypedArray())
         }
         // Wire before any task that merges JNI libraries into the AAR.
