@@ -1299,7 +1299,7 @@ fn sqlx4k_mysql_schema_of(row: &MySqlRow) -> Sqlx4kMysqlSchema {
                 let name: &str = c.name();
                 let value_ref: MySqlValueRef = row.try_get_raw(c.ordinal()).unwrap();
                 let info: std::borrow::Cow<MySqlTypeInfo> = value_ref.type_info();
-                let kind: &str = info.name();
+                let kind: &str = mysql_type_name(&info);
                 Sqlx4kMysqlSchemaColumn {
                     ordinal: c.ordinal() as c_int,
                     name: CString::new(name).unwrap().into_raw(),
@@ -1320,6 +1320,28 @@ fn sqlx4k_mysql_schema_of(row: &MySqlRow) -> Sqlx4kMysqlSchema {
     }
 }
 
+/// The column's type name, as reported in the result metadata.
+///
+/// MySQL also flags text with a binary collation (e.g. `utf8mb4_bin`, which `->>` / JSON_UNQUOTE returns) as
+/// BINARY, so sqlx names it like a blob (`LONGBLOB`, `VARBINARY`, ...). Only the `binary` collation means raw
+/// bytes: that is sqlx's own check for `&str`, so such text is reported under its text name instead (as the
+/// JVM driver does).
+fn mysql_type_name(info: &MySqlTypeInfo) -> &str {
+    let name = info.name();
+    if !<&str as Type<MySql>>::compatible(info) {
+        return name;
+    }
+    match name {
+        "BINARY" => "CHAR",
+        "VARBINARY" => "VARCHAR",
+        "TINYBLOB" => "TINYTEXT",
+        "BLOB" => "TEXT",
+        "MEDIUMBLOB" => "MEDIUMTEXT",
+        "LONGBLOB" => "LONGTEXT",
+        _ => name,
+    }
+}
+
 /// Decodes a single MySQL column value into a heap-allocated C string.
 ///
 /// `row.get_unchecked::<&str>` only works reliably when the result is in the
@@ -1329,13 +1351,12 @@ fn sqlx4k_mysql_schema_of(row: &MySqlRow) -> Sqlx4kMysqlSchema {
 /// payloads but the resulting string contains embedded NULs that crash
 /// `CString::new`. Decode by type so both protocols round-trip identically.
 fn decode_mysql_column_value(row: &MySqlRow, ordinal: usize) -> *mut c_char {
-    let (type_name, is_text): (String, bool) = {
+    let type_name: String = {
         let value_ref = row.try_get_raw(ordinal).unwrap();
         if value_ref.is_null() {
             return null_mut();
         }
-        let info = value_ref.type_info();
-        (info.name().to_string(), <&str as Type<MySql>>::compatible(&info))
+        mysql_type_name(&value_ref.type_info()).to_string()
     };
 
     let s: String = match type_name.as_str() {
@@ -1352,10 +1373,8 @@ fn decode_mysql_column_value(row: &MySqlRow, ordinal: usize) -> *mut c_char {
         "BIGINT UNSIGNED" => row.get_unchecked::<u64, _>(ordinal).to_string(),
         "FLOAT" => row.get_unchecked::<f32, _>(ordinal).to_string(),
         "DOUBLE" => row.get_unchecked::<f64, _>(ordinal).to_string(),
-        // MySQL also flags text with a binary collation (e.g. `utf8mb4_bin`, which JSON_UNQUOTE returns) as
-        // BINARY, so sqlx names it like a blob. Only the `binary` collation means raw bytes: that is sqlx's own
-        // check for `&str`, so such text falls through to the string decoding below.
-        "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" | "VARBINARY" | "BINARY" if !is_text => {
+        // Only the `binary` collation reaches here: `mysql_type_name` renames binary-collated text.
+        "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" | "VARBINARY" | "BINARY" => {
             let bytes: Vec<u8> = row.get_unchecked(ordinal);
             hex::encode(bytes)
         }

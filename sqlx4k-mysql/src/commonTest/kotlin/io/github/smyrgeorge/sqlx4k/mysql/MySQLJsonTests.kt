@@ -148,6 +148,30 @@ class MySQLJsonTests {
     }
 
     @Test
+    fun `json values report a text type and not a blob`(): Unit = runBlocking {
+        // `->>` (JSON_UNQUOTE) returns `utf8mb4_bin` text, which MySQL flags BINARY like a LONGBLOB.
+        val table = newTable()
+        try {
+            db.execute("create table $table(id int primary key, doc json)").getOrThrow()
+            db.execute(Statement.create("insert into $table(id, doc) values (1, ?)").bind(0, """{"name":"alice"}"""))
+                .getOrThrow()
+
+            val sql = "select doc, doc->>'$.name' from $table"
+            for ((protocol, result) in listOf("text" to db.fetchAll(sql), "binary" to db.fetchAll(Statement.create(sql)))) {
+                val rs = result.getOrThrow()
+                assertAll {
+                    assertThat(rs.metadata.getColumn(0).type, "$protocol: doc type").isEqualTo("JSON")
+                    assertThat(rs.metadata.getColumn(1).type, "$protocol: ->> type").isEqualTo("LONGTEXT")
+                    assertThat(rs.first().get(0).asString(), "$protocol: doc").isEqualTo("""{"name": "alice"}""")
+                    assertThat(rs.first().get(1).asString(), "$protocol: ->>").isEqualTo("alice")
+                }
+            }
+        } finally {
+            runCatching { db.execute("drop table if exists $table").getOrThrow() }
+        }
+    }
+
+    @Test
     fun `json column can be filtered by a path`(): Unit = runBlocking {
         val table = newTable()
         try {
