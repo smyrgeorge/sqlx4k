@@ -1,3 +1,5 @@
+@file:Suppress("SqlNoDataSourceInspection")
+
 package io.github.smyrgeorge.sqlx4k.mysql
 
 import io.github.smyrgeorge.sqlx4k.Connection
@@ -12,16 +14,13 @@ import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
-import kotlin.time.Duration
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.memScoped
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import sqlx4k.mysql.Sqlx4kMysqlResult
 import sqlx4k.mysql.sqlx4k_mysql_close
 import sqlx4k.mysql.sqlx4k_mysql_cn_acquire
 import sqlx4k.mysql.sqlx4k_mysql_cn_fetch_all
@@ -47,6 +46,7 @@ import sqlx4k.mysql.sqlx4k_mysql_tx_query
 import sqlx4k.mysql.sqlx4k_mysql_tx_query_with_params
 import sqlx4k.mysql.sqlx4k_mysql_tx_rollback
 import sqlx4k.mysql.sqlx4k_mysql_tx_stream_open
+import kotlin.time.Duration
 
 /**
  * The `MySQL` class provides a driver implementation for interacting with a MySQL database.
@@ -162,28 +162,18 @@ class MySQL(
     }
 
     override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
-        val nq = statement.renderNativeQuery(Dialect.MySQL, encoders)
-        memScoped {
-            val (paramsPtr, paramsLen) = allocParams(nq.values)
-            sqlx { c -> sqlx4k_mysql_query_with_params(rt, nq.sql, paramsPtr, paramsLen, c, fn) }
-                .executeResultOrError()
+        statement.withNativeQuery(encoders) { sql, params, paramsLen ->
+            sqlx { c -> sqlx4k_mysql_query_with_params(rt, sql, params, paramsLen, c, fn) }.executeResultOrError()
         }
     }
 
-    override suspend fun fetchAll(sql: String): Result<ResultSet> {
-        val res = sqlx { c -> sqlx4k_mysql_fetch_all(rt, sql, c, fn) }
-        return res.use { it.toResultSet() }.toResult()
+    override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
+        sqlx { c -> sqlx4k_mysql_fetch_all(rt, sql, c, fn) }.resultSetOrError()
     }
 
-    override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
-        val nq = runCatching { statement.renderNativeQuery(Dialect.MySQL, encoders) }
-            .getOrElse { return Result.failure(it) }
-        return memScoped {
-            val (paramsPtr, paramsLen) = allocParams(nq.values)
-            val res = sqlx { c ->
-                sqlx4k_mysql_fetch_all_with_params(rt, nq.sql, paramsPtr, paramsLen, c, fn)
-            }
-            res.use { it.toResultSet() }.toResult()
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
+        statement.withNativeQuery(encoders) { sql, params, paramsLen ->
+            sqlx { c -> sqlx4k_mysql_fetch_all_with_params(rt, sql, params, paramsLen, c, fn) }.resultSetOrError()
         }
     }
 
@@ -192,10 +182,8 @@ class MySQL(
     }
 
     override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = streamFlow(rt) {
-        val nq = statement.renderNativeQuery(Dialect.MySQL, encoders)
-        memScoped {
-            val (paramsPtr, paramsLen) = allocParams(nq.values)
-            sqlx { c -> sqlx4k_mysql_stream_open(rt, nq.sql, paramsPtr, paramsLen, fetchSize, c, fn) }
+        statement.withNativeQuery(encoders) { sql, params, paramsLen ->
+            sqlx { c -> sqlx4k_mysql_stream_open(rt, sql, params, paramsLen, fetchSize, c, fn) }
         }
     }
 
@@ -244,18 +232,10 @@ class MySQL(
             executeWithResult(sql, lock).map { it.rowsAffected }
 
         private suspend fun executeWithResult(sql: String, lock: Boolean): Result<ExecuteResult> {
-            suspend fun doExecute(sql: String): Result<ExecuteResult> = runCatching {
+            suspend fun doExecute(): ExecuteResult =
                 sqlx { c -> sqlx4k_mysql_cn_query(rt, cn, sql, c, fn) }.executeResultOrError()
-            }
 
-            suspend fun doExecuteWithLock(sql: String): Result<ExecuteResult> = runCatching {
-                mutex.withLock {
-                    assertIsOpen()
-                    return doExecute(sql)
-                }
-            }
-
-            return if (lock) doExecuteWithLock(sql) else doExecute(sql)
+            return if (lock) mutex.withLockCatching(::assertIsOpen) { doExecute() } else runCatching { doExecute() }
         }
 
         override suspend fun execute(sql: String): Result<Long> = execute(sql, true)
@@ -265,75 +245,47 @@ class MySQL(
 
         override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = executeWithResult(sql, true)
 
-        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
-            val nq = statement.renderNativeQuery(Dialect.MySQL, encoders)
-            mutex.withLock {
-                assertIsOpen()
-                memScoped {
-                    val (paramsPtr, paramsLen) = allocParams(nq.values)
-                    sqlx { c ->
-                        sqlx4k_mysql_cn_query_with_params(rt, cn, nq.sql, paramsPtr, paramsLen, c, fn)
-                    }.executeResultOrError()
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> =
+            mutex.withLockCatching(::assertIsOpen) {
+                statement.withNativeQuery(encoders) { sql, params, paramsLen ->
+                    sqlx { c -> sqlx4k_mysql_cn_query_with_params(rt, cn, sql, params, paramsLen, c, fn) }
+                        .executeResultOrError()
                 }
             }
+
+        override suspend fun fetchAll(sql: String): Result<ResultSet> = mutex.withLockCatching(::assertIsOpen) {
+            sqlx { c -> sqlx4k_mysql_cn_fetch_all(rt, cn, sql, c, fn) }.resultSetOrError()
         }
 
-        override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
-            return mutex.withLock {
-                assertIsOpen()
-                sqlx { c -> sqlx4k_mysql_cn_fetch_all(rt, cn, sql, c, fn) }
-                    .use { it.toResultSet() }
-                    .toResult()
-            }
-        }
-
-        override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
-            val nq = runCatching { statement.renderNativeQuery(Dialect.MySQL, encoders) }
-                .getOrElse { return Result.failure(it) }
-            return mutex.withLock {
-                assertIsOpen()
-                memScoped {
-                    val (paramsPtr, paramsLen) = allocParams(nq.values)
-                    sqlx { c ->
-                        sqlx4k_mysql_cn_fetch_all_with_params(rt, cn, nq.sql, paramsPtr, paramsLen, c, fn)
-                    }.use { it.toResultSet() }.toResult()
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+            mutex.withLockCatching(::assertIsOpen) {
+                statement.withNativeQuery(encoders) { sql, params, paramsLen ->
+                    sqlx { c -> sqlx4k_mysql_cn_fetch_all_with_params(rt, cn, sql, params, paramsLen, c, fn) }
+                        .resultSetOrError()
                 }
             }
-        }
 
         // The connection is held (its mutex locked) for the whole collection: a stream keeps the
         // connection busy, exactly as it does in sqlx.
-        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(streamFlow(rt) {
-                    sqlx { c -> sqlx4k_mysql_cn_stream_open(rt, cn, sql, null, 0, fetchSize, c, fn) }
-                })
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = mutex.flowWithLock(::assertIsOpen) {
+            streamFlow(rt) {
+                sqlx { c -> sqlx4k_mysql_cn_stream_open(rt, cn, sql, null, 0, fetchSize, c, fn) }
             }
         }
 
-        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(streamFlow(rt) {
-                    val nq = statement.renderNativeQuery(Dialect.MySQL, encoders)
-                    memScoped {
-                        val (paramsPtr, paramsLen) = allocParams(nq.values)
-                        sqlx { c ->
-                            sqlx4k_mysql_cn_stream_open(rt, cn, nq.sql, paramsPtr, paramsLen, fetchSize, c, fn)
-                        }
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> =
+            mutex.flowWithLock(::assertIsOpen) {
+                streamFlow(rt) {
+                    statement.withNativeQuery(encoders) { sql, params, paramsLen ->
+                        sqlx { c -> sqlx4k_mysql_cn_stream_open(rt, cn, sql, params, paramsLen, fetchSize, c, fn) }
                     }
-                })
-            }
-        }
-
-        override suspend fun begin(): Result<Transaction> = runCatching {
-            mutex.withLock {
-                assertIsOpen()
-                sqlx { c -> sqlx4k_mysql_cn_tx_begin(rt, cn, c, fn) }.use {
-                    it.throwIfError()
-                    SqlxTransaction(rt, it.tx!!, encoders)
                 }
+            }
+
+        override suspend fun begin(): Result<Transaction> = mutex.withLockCatching(::assertIsOpen) {
+            sqlx { c -> sqlx4k_mysql_cn_tx_begin(rt, cn, c, fn) }.use {
+                it.throwIfError()
+                SqlxTransaction(rt, it.tx!!, encoders)
             }
         }
     }
@@ -376,85 +328,55 @@ class MySQL(
         override suspend fun execute(statement: Statement): Result<Long> =
             executeWithResult(statement).map { it.rowsAffected }
 
-        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
-            mutex.withLock {
-                assertIsOpen()
-                sqlx { c -> sqlx4k_mysql_tx_query(rt, tx, sql, c, fn) }.use {
-                    tx = it.tx!!
-                    it.throwIfError()
-                    it.toExecuteResult()
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> =
+            mutex.withLockCatching(::assertIsOpen) {
+                sqlx { c -> sqlx4k_mysql_tx_query(rt, tx, sql, c, fn) }.useTx { it.toExecuteResultOrError() }
+            }
+
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> =
+            mutex.withLockCatching(::assertIsOpen) {
+                statement.withNativeQuery(encoders) { sql, params, paramsLen ->
+                    sqlx { c -> sqlx4k_mysql_tx_query_with_params(rt, tx, sql, params, paramsLen, c, fn) }
+                        .useTx { it.toExecuteResultOrError() }
                 }
             }
+
+        override suspend fun fetchAll(sql: String): Result<ResultSet> = mutex.withLockCatching(::assertIsOpen) {
+            sqlx { c -> sqlx4k_mysql_tx_fetch_all(rt, tx, sql, c, fn) }.useTx { it.toResultSetOrError() }
         }
 
-        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
-            val nq = statement.renderNativeQuery(Dialect.MySQL, encoders)
-            mutex.withLock {
-                assertIsOpen()
-                memScoped {
-                    val (paramsPtr, paramsLen) = allocParams(nq.values)
-                    sqlx { c ->
-                        sqlx4k_mysql_tx_query_with_params(rt, tx, nq.sql, paramsPtr, paramsLen, c, fn)
-                    }.use {
-                        tx = it.tx!!
-                        it.throwIfError()
-                        it.toExecuteResult()
-                    }
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+            mutex.withLockCatching(::assertIsOpen) {
+                statement.withNativeQuery(encoders) { sql, params, paramsLen ->
+                    sqlx { c -> sqlx4k_mysql_tx_fetch_all_with_params(rt, tx, sql, params, paramsLen, c, fn) }
+                        .useTx { it.toResultSetOrError() }
                 }
             }
-        }
-
-        override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
-            return mutex.withLock {
-                assertIsOpen()
-                sqlx { c -> sqlx4k_mysql_tx_fetch_all(rt, tx, sql, c, fn) }.use {
-                    tx = it.tx!!
-                    it.toResultSet()
-                }.toResult()
-            }
-        }
-
-        override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
-            val nq = runCatching { statement.renderNativeQuery(Dialect.MySQL, encoders) }
-                .getOrElse { return Result.failure(it) }
-            return mutex.withLock {
-                assertIsOpen()
-                memScoped {
-                    val (paramsPtr, paramsLen) = allocParams(nq.values)
-                    sqlx { c ->
-                        sqlx4k_mysql_tx_fetch_all_with_params(rt, tx, nq.sql, paramsPtr, paramsLen, c, fn)
-                    }.use {
-                        tx = it.tx!!
-                        it.toResultSet()
-                    }.toResult()
-                }
-            }
-        }
 
         // The transaction is held (its mutex locked) for the whole collection; the stream borrows the
         // transaction in place, so the `tx` pointer is unchanged afterwards.
-        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(streamFlow(rt) {
-                    sqlx { c -> sqlx4k_mysql_tx_stream_open(rt, tx, sql, null, 0, fetchSize, c, fn) }
-                })
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = mutex.flowWithLock(::assertIsOpen) {
+            streamFlow(rt) {
+                sqlx { c -> sqlx4k_mysql_tx_stream_open(rt, tx, sql, null, 0, fetchSize, c, fn) }
             }
         }
 
-        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(streamFlow(rt) {
-                    val nq = statement.renderNativeQuery(Dialect.MySQL, encoders)
-                    memScoped {
-                        val (paramsPtr, paramsLen) = allocParams(nq.values)
-                        sqlx { c ->
-                            sqlx4k_mysql_tx_stream_open(rt, tx, nq.sql, paramsPtr, paramsLen, fetchSize, c, fn)
-                        }
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> =
+            mutex.flowWithLock(::assertIsOpen) {
+                streamFlow(rt) {
+                    statement.withNativeQuery(encoders) { sql, params, paramsLen ->
+                        sqlx { c -> sqlx4k_mysql_tx_stream_open(rt, tx, sql, params, paramsLen, fetchSize, c, fn) }
                     }
-                })
+                }
             }
+
+        /**
+         * Like [use], also taking back the transaction handle: every query call moves the transaction to the Rust
+         * side, which hands it back with the result.
+         */
+        private inline fun <T> CPointer<Sqlx4kMysqlResult>?.useTx(block: (Sqlx4kMysqlResult) -> T): T = use {
+            tx = it.tx!!
+            block(it)
         }
     }
 }

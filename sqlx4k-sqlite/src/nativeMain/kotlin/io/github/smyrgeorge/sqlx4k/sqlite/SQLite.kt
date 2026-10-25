@@ -16,12 +16,10 @@ import kotlin.time.Duration
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.memScoped
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import sqlx4k.sqlite.Sqlx4kSqliteResult
 import sqlx4k.sqlite.sqlx4k_sqlite_close
 import sqlx4k.sqlite.sqlx4k_sqlite_cn_acquire
 import sqlx4k.sqlite.sqlx4k_sqlite_cn_fetch_all
@@ -159,28 +157,20 @@ class SQLite(
     }
 
     override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
-        val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
-        memScoped {
-            val (paramsPtr, paramsLen) = allocParams(nq.values)
-            sqlx { c -> sqlx4k_sqlite_query_with_params(rt, nq.sql, paramsPtr, paramsLen, c, fn) }
-                .executeResultOrError(nq.sql)
+        statement.withNativeQuery(encoders) { sql, params, paramsLen ->
+            sqlx { c -> sqlx4k_sqlite_query_with_params(rt, sql, params, paramsLen, c, fn) }
+                .executeResultOrError(sql)
         }
     }
 
-    override suspend fun fetchAll(sql: String): Result<ResultSet> {
-        val res = sqlx { c -> sqlx4k_sqlite_fetch_all(rt, sql, c, fn) }
-        return res.use { it.toResultSet() }.toResult()
+    override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
+        sqlx { c -> sqlx4k_sqlite_fetch_all(rt, sql, c, fn) }.resultSetOrError()
     }
 
-    override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
-        val nq = runCatching { statement.renderNativeQuery(Dialect.SQLite, encoders) }
-            .getOrElse { return Result.failure(it) }
-        return memScoped {
-            val (paramsPtr, paramsLen) = allocParams(nq.values)
-            val res = sqlx { c ->
-                sqlx4k_sqlite_fetch_all_with_params(rt, nq.sql, paramsPtr, paramsLen, c, fn)
-            }
-            res.use { it.toResultSet() }.toResult()
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
+        statement.withNativeQuery(encoders) { sql, params, paramsLen ->
+            sqlx { c -> sqlx4k_sqlite_fetch_all_with_params(rt, sql, params, paramsLen, c, fn) }
+                .resultSetOrError()
         }
     }
 
@@ -189,10 +179,8 @@ class SQLite(
     }
 
     override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = streamFlow(rt) {
-        val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
-        memScoped {
-            val (paramsPtr, paramsLen) = allocParams(nq.values)
-            sqlx { c -> sqlx4k_sqlite_stream_open(rt, nq.sql, paramsPtr, paramsLen, fetchSize, c, fn) }
+        statement.withNativeQuery(encoders) { sql, params, paramsLen ->
+            sqlx { c -> sqlx4k_sqlite_stream_open(rt, sql, params, paramsLen, fetchSize, c, fn) }
         }
     }
 
@@ -231,82 +219,54 @@ class SQLite(
         override suspend fun execute(statement: Statement): Result<Long> =
             executeWithResult(statement).map { it.rowsAffected }
 
-        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
-            mutex.withLock {
-                assertIsOpen()
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> =
+            mutex.withLockCatching(::assertIsOpen) {
                 sqlx { c -> sqlx4k_sqlite_cn_query(rt, cn, sql, c, fn) }.executeResultOrError(sql)
             }
-        }
 
-        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
-            val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
-            mutex.withLock {
-                assertIsOpen()
-                memScoped {
-                    val (paramsPtr, paramsLen) = allocParams(nq.values)
-                    sqlx { c ->
-                        sqlx4k_sqlite_cn_query_with_params(rt, cn, nq.sql, paramsPtr, paramsLen, c, fn)
-                    }.executeResultOrError(nq.sql)
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> =
+            mutex.withLockCatching(::assertIsOpen) {
+                statement.withNativeQuery(encoders) { sql, params, paramsLen ->
+                    sqlx { c -> sqlx4k_sqlite_cn_query_with_params(rt, cn, sql, params, paramsLen, c, fn) }
+                        .executeResultOrError(sql)
                 }
             }
+
+        override suspend fun fetchAll(sql: String): Result<ResultSet> = mutex.withLockCatching(::assertIsOpen) {
+            sqlx { c -> sqlx4k_sqlite_cn_fetch_all(rt, cn, sql, c, fn) }.resultSetOrError()
         }
 
-        override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
-            return mutex.withLock {
-                assertIsOpen()
-                sqlx { c -> sqlx4k_sqlite_cn_fetch_all(rt, cn, sql, c, fn) }
-                    .use { it.toResultSet() }
-                    .toResult()
-            }
-        }
-
-        override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
-            val nq = runCatching { statement.renderNativeQuery(Dialect.SQLite, encoders) }
-                .getOrElse { return Result.failure(it) }
-            return mutex.withLock {
-                assertIsOpen()
-                memScoped {
-                    val (paramsPtr, paramsLen) = allocParams(nq.values)
-                    sqlx { c ->
-                        sqlx4k_sqlite_cn_fetch_all_with_params(rt, cn, nq.sql, paramsPtr, paramsLen, c, fn)
-                    }.use { it.toResultSet() }.toResult()
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+            mutex.withLockCatching(::assertIsOpen) {
+                statement.withNativeQuery(encoders) { sql, params, paramsLen ->
+                    sqlx { c -> sqlx4k_sqlite_cn_fetch_all_with_params(rt, cn, sql, params, paramsLen, c, fn) }
+                        .resultSetOrError()
                 }
             }
-        }
 
         // The connection is held (its mutex locked) for the whole collection: a stream keeps the
         // connection busy, exactly as it does in sqlx.
-        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(streamFlow(rt) {
-                    sqlx { c -> sqlx4k_sqlite_cn_stream_open(rt, cn, sql, null, 0, fetchSize, c, fn) }
-                })
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = mutex.flowWithLock(::assertIsOpen) {
+            streamFlow(rt) {
+                sqlx { c -> sqlx4k_sqlite_cn_stream_open(rt, cn, sql, null, 0, fetchSize, c, fn) }
             }
         }
 
-        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(streamFlow(rt) {
-                    val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
-                    memScoped {
-                        val (paramsPtr, paramsLen) = allocParams(nq.values)
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> =
+            mutex.flowWithLock(::assertIsOpen) {
+                streamFlow(rt) {
+                    statement.withNativeQuery(encoders) { sql, params, paramsLen ->
                         sqlx { c ->
-                            sqlx4k_sqlite_cn_stream_open(rt, cn, nq.sql, paramsPtr, paramsLen, fetchSize, c, fn)
+                            sqlx4k_sqlite_cn_stream_open(rt, cn, sql, params, paramsLen, fetchSize, c, fn)
                         }
                     }
-                })
-            }
-        }
-
-        override suspend fun begin(): Result<Transaction> = runCatching {
-            mutex.withLock {
-                assertIsOpen()
-                sqlx { c -> sqlx4k_sqlite_cn_tx_begin(rt, cn, c, fn) }.use {
-                    it.throwIfError()
-                    SqlxTransaction(rt, it.tx!!, encoders)
                 }
+            }
+
+        override suspend fun begin(): Result<Transaction> = mutex.withLockCatching(::assertIsOpen) {
+            sqlx { c -> sqlx4k_sqlite_cn_tx_begin(rt, cn, c, fn) }.use {
+                it.throwIfError()
+                SqlxTransaction(rt, it.tx!!, encoders)
             }
         }
     }
@@ -349,85 +309,57 @@ class SQLite(
         override suspend fun execute(statement: Statement): Result<Long> =
             executeWithResult(statement).map { it.rowsAffected }
 
-        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
-            mutex.withLock {
-                assertIsOpen()
-                sqlx { c -> sqlx4k_sqlite_tx_query(rt, tx, sql, c, fn) }.use {
-                    tx = it.tx!!
-                    it.throwIfError()
-                    it.toExecuteResult(sql)
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> =
+            mutex.withLockCatching(::assertIsOpen) {
+                sqlx { c -> sqlx4k_sqlite_tx_query(rt, tx, sql, c, fn) }.useTx { it.toExecuteResultOrError(sql) }
+            }
+
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> =
+            mutex.withLockCatching(::assertIsOpen) {
+                statement.withNativeQuery(encoders) { sql, params, paramsLen ->
+                    sqlx { c -> sqlx4k_sqlite_tx_query_with_params(rt, tx, sql, params, paramsLen, c, fn) }
+                        .useTx { it.toExecuteResultOrError(sql) }
                 }
             }
+
+        override suspend fun fetchAll(sql: String): Result<ResultSet> = mutex.withLockCatching(::assertIsOpen) {
+            sqlx { c -> sqlx4k_sqlite_tx_fetch_all(rt, tx, sql, c, fn) }.useTx { it.toResultSetOrError() }
         }
 
-        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
-            val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
-            mutex.withLock {
-                assertIsOpen()
-                memScoped {
-                    val (paramsPtr, paramsLen) = allocParams(nq.values)
-                    sqlx { c ->
-                        sqlx4k_sqlite_tx_query_with_params(rt, tx, nq.sql, paramsPtr, paramsLen, c, fn)
-                    }.use {
-                        tx = it.tx!!
-                        it.throwIfError()
-                        it.toExecuteResult(nq.sql)
-                    }
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+            mutex.withLockCatching(::assertIsOpen) {
+                statement.withNativeQuery(encoders) { sql, params, paramsLen ->
+                    sqlx { c -> sqlx4k_sqlite_tx_fetch_all_with_params(rt, tx, sql, params, paramsLen, c, fn) }
+                        .useTx { it.toResultSetOrError() }
                 }
             }
-        }
-
-        override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
-            return mutex.withLock {
-                assertIsOpen()
-                sqlx { c -> sqlx4k_sqlite_tx_fetch_all(rt, tx, sql, c, fn) }.use {
-                    tx = it.tx!!
-                    it.toResultSet()
-                }.toResult()
-            }
-        }
-
-        override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
-            val nq = runCatching { statement.renderNativeQuery(Dialect.SQLite, encoders) }
-                .getOrElse { return Result.failure(it) }
-            return mutex.withLock {
-                assertIsOpen()
-                memScoped {
-                    val (paramsPtr, paramsLen) = allocParams(nq.values)
-                    sqlx { c ->
-                        sqlx4k_sqlite_tx_fetch_all_with_params(rt, tx, nq.sql, paramsPtr, paramsLen, c, fn)
-                    }.use {
-                        tx = it.tx!!
-                        it.toResultSet()
-                    }.toResult()
-                }
-            }
-        }
 
         // The transaction is held (its mutex locked) for the whole collection; the stream borrows the
         // transaction in place, so the `tx` pointer is unchanged afterwards.
-        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(streamFlow(rt) {
-                    sqlx { c -> sqlx4k_sqlite_tx_stream_open(rt, tx, sql, null, 0, fetchSize, c, fn) }
-                })
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = mutex.flowWithLock(::assertIsOpen) {
+            streamFlow(rt) {
+                sqlx { c -> sqlx4k_sqlite_tx_stream_open(rt, tx, sql, null, 0, fetchSize, c, fn) }
             }
         }
 
-        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(streamFlow(rt) {
-                    val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
-                    memScoped {
-                        val (paramsPtr, paramsLen) = allocParams(nq.values)
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> =
+            mutex.flowWithLock(::assertIsOpen) {
+                streamFlow(rt) {
+                    statement.withNativeQuery(encoders) { sql, params, paramsLen ->
                         sqlx { c ->
-                            sqlx4k_sqlite_tx_stream_open(rt, tx, nq.sql, paramsPtr, paramsLen, fetchSize, c, fn)
+                            sqlx4k_sqlite_tx_stream_open(rt, tx, sql, params, paramsLen, fetchSize, c, fn)
                         }
                     }
-                })
+                }
             }
+
+        /**
+         * Like [use], also taking back the transaction handle: every query call moves the transaction to the Rust
+         * side, which hands it back with the result.
+         */
+        private inline fun <T> CPointer<Sqlx4kSqliteResult>?.useTx(block: (Sqlx4kSqliteResult) -> T): T = use {
+            tx = it.tx!!
+            block(it)
         }
     }
 }

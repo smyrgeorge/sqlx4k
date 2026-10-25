@@ -44,7 +44,7 @@ private fun Sqlx4kSqliteResult.toError(): SQLError {
     return SQLError(code = code, message = message, sqlState = sqlState, nativeCode = nativeCode, kind = kind)
 }
 
-fun Sqlx4kSqliteResult.throwIfError() {
+internal fun Sqlx4kSqliteResult.throwIfError() {
     if (isError()) toError().raise()
 }
 
@@ -62,7 +62,7 @@ private fun Sqlx4kSqliteSchema.toMetadata(): ResultSet.Metadata {
     return ResultSet.Metadata(columns)
 }
 
-fun Sqlx4kSqliteResult.toResultSet(): ResultSet {
+private fun Sqlx4kSqliteResult.toResultSet(): ResultSet {
     // Process rows
     val rows = List(size) { rowIndex ->
         val row = requireNotNull(rows) { "Rows cannot be null" }[rowIndex]
@@ -93,7 +93,7 @@ fun Sqlx4kSqliteResult.toResultSet(): ResultSet {
     return ResultSet(rows, error, metadata)
 }
 
-inline fun <T> CPointer<Sqlx4kSqliteResult>?.use(block: (Sqlx4kSqliteResult) -> T): T {
+internal inline fun <T> CPointer<Sqlx4kSqliteResult>?.use(block: (Sqlx4kSqliteResult) -> T): T {
     try {
         return this?.pointed?.let(block)
             ?: throw IllegalStateException("Invalid Sqlx4kSqliteResult pointer: cannot dereference null pointer")
@@ -102,28 +102,38 @@ inline fun <T> CPointer<Sqlx4kSqliteResult>?.use(block: (Sqlx4kSqliteResult) -> 
     }
 }
 
-fun CPointer<Sqlx4kSqliteResult>?.throwIfError(): Unit = use { it.throwIfError() }
-fun CPointer<Sqlx4kSqliteResult>?.rtOrError(): CPointer<out CPointed> = use {
+internal fun CPointer<Sqlx4kSqliteResult>?.throwIfError(): Unit = use { it.throwIfError() }
+internal fun CPointer<Sqlx4kSqliteResult>?.rtOrError(): CPointer<out CPointed> = use {
     it.throwIfError()
     it.rt ?: SQLError(SQLError.Code.Pool, "Unexpected behaviour while creating the pool.").raise()
 }
 
-fun CPointer<Sqlx4kSqliteResult>?.executeResultOrError(sql: String): ExecuteResult = use {
-    it.throwIfError()
-    it.toExecuteResult(sql)
-}
+internal fun CPointer<Sqlx4kSqliteResult>?.executeResultOrError(sql: String): ExecuteResult =
+    use { it.toExecuteResultOrError(sql) }
+
+internal fun CPointer<Sqlx4kSqliteResult>?.resultSetOrError(): ResultSet = use { it.toResultSetOrError() }
 
 /**
  * SQLite keeps the last inserted rowid per connection, so it is the statement's own generated id only for an
  * `INSERT` that inserted rows; otherwise it would be a previous insert's.
  */
-fun Sqlx4kSqliteResult.toExecuteResult(sql: String): ExecuteResult {
+private fun Sqlx4kSqliteResult.toExecuteResult(sql: String): ExecuteResult {
     val rowsAffected = rows_affected.toLong()
     val lastInsertId = last_insert_id.takeIf { rowsAffected > 0 && sql.isInsertStatement() }
     return ExecuteResult(rowsAffected = rowsAffected, lastInsertId = lastInsertId)
 }
 
-suspend inline fun sqlx(
+internal fun Sqlx4kSqliteResult.toExecuteResultOrError(sql: String): ExecuteResult {
+    throwIfError()
+    return toExecuteResult(sql)
+}
+
+internal fun Sqlx4kSqliteResult.toResultSetOrError(): ResultSet {
+    throwIfError()
+    return toResultSet()
+}
+
+internal suspend inline fun sqlx(
     crossinline operation: (continuationPtr: CPointer<out CPointed>) -> Unit
 ): CPointer<Sqlx4kSqliteResult>? = suspendCoroutine { continuation ->
     // Create a stable reference to the continuation that won't be garbage collected
@@ -137,7 +147,7 @@ suspend inline fun sqlx(
     operation(continuationPtr)
 }
 
-val fn = staticCFunction<CValue<Sqlx4kSqlitePtr>, CPointer<Sqlx4kSqliteResult>?, Unit> { c, r ->
+internal val fn = staticCFunction<CValue<Sqlx4kSqlitePtr>, CPointer<Sqlx4kSqliteResult>?, Unit> { c, r ->
     val ref = c.useContents { ptr }!!.asStableRef<Continuation<CPointer<Sqlx4kSqliteResult>?>>()
     ref.get().resume(r)
     ref.dispose()

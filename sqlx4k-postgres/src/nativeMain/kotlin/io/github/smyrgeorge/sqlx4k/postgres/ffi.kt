@@ -41,7 +41,7 @@ private fun Sqlx4kPostgresResult.toError(): SQLError {
     return SQLError(code = code, message = message, sqlState = sqlState, nativeCode = nativeCode, kind = kind)
 }
 
-fun Sqlx4kPostgresResult.throwIfError() {
+internal fun Sqlx4kPostgresResult.throwIfError() {
     if (isError()) toError().raise()
 }
 
@@ -59,7 +59,7 @@ private fun Sqlx4kPostgresSchema.toMetadata(): ResultSet.Metadata {
     return ResultSet.Metadata(columns)
 }
 
-fun Sqlx4kPostgresResult.toResultSet(): ResultSet {
+internal fun Sqlx4kPostgresResult.toResultSet(): ResultSet {
     // Process rows
     val rows = List(size) { rowIndex ->
         val row = requireNotNull(rows) { "Rows cannot be null" }[rowIndex]
@@ -89,7 +89,7 @@ fun Sqlx4kPostgresResult.toResultSet(): ResultSet {
     return ResultSet(rows, error, metadata)
 }
 
-inline fun <T> CPointer<Sqlx4kPostgresResult>?.use(block: (Sqlx4kPostgresResult) -> T): T {
+internal inline fun <T> CPointer<Sqlx4kPostgresResult>?.use(block: (Sqlx4kPostgresResult) -> T): T {
     try {
         return this?.pointed?.let(block)
             ?: throw IllegalStateException("Invalid Sqlx4kPostgresResult pointer: cannot dereference null pointer")
@@ -98,18 +98,26 @@ inline fun <T> CPointer<Sqlx4kPostgresResult>?.use(block: (Sqlx4kPostgresResult)
     }
 }
 
-fun CPointer<Sqlx4kPostgresResult>?.throwIfError(): Unit = use { it.throwIfError() }
-fun CPointer<Sqlx4kPostgresResult>?.rtOrError(): CPointer<out CPointed> = use {
+internal fun CPointer<Sqlx4kPostgresResult>?.throwIfError(): Unit = use { it.throwIfError() }
+internal fun CPointer<Sqlx4kPostgresResult>?.rtOrError(): CPointer<out CPointed> = use {
     it.throwIfError()
     it.rt ?: SQLError(SQLError.Code.Pool, "Unexpected behaviour while creating the pool.").raise()
 }
 
-fun CPointer<Sqlx4kPostgresResult>?.rowsAffectedOrError(): Long = use {
-    it.throwIfError()
-    it.rows_affected.toLong()
+internal fun CPointer<Sqlx4kPostgresResult>?.rowsAffectedOrError(): Long = use { it.toRowsAffectedOrError() }
+internal fun CPointer<Sqlx4kPostgresResult>?.resultSetOrError(): ResultSet = use { it.toResultSetOrError() }
+
+internal fun Sqlx4kPostgresResult.toRowsAffectedOrError(): Long {
+    throwIfError()
+    return rows_affected.toLong()
 }
 
-suspend inline fun sqlx(
+internal fun Sqlx4kPostgresResult.toResultSetOrError(): ResultSet {
+    throwIfError()
+    return toResultSet()
+}
+
+internal suspend inline fun sqlx(
     crossinline operation: (continuationPtr: CPointer<out CPointed>) -> Unit
 ): CPointer<Sqlx4kPostgresResult>? = suspendCoroutine { continuation ->
     // Create a stable reference to the continuation that won't be garbage collected
@@ -123,7 +131,7 @@ suspend inline fun sqlx(
     operation(continuationPtr)
 }
 
-val fn = staticCFunction<CValue<Sqlx4kPostgresPtr>, CPointer<Sqlx4kPostgresResult>?, Unit> { c, r ->
+internal val fn = staticCFunction<CValue<Sqlx4kPostgresPtr>, CPointer<Sqlx4kPostgresResult>?, Unit> { c, r ->
     val ref = c.useContents { ptr }!!.asStableRef<Continuation<CPointer<Sqlx4kPostgresResult>?>>()
     ref.get().resume(r)
     ref.dispose()

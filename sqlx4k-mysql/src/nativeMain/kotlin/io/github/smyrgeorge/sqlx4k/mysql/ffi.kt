@@ -42,7 +42,7 @@ private fun Sqlx4kMysqlResult.toError(): SQLError {
     return SQLError(code = code, message = message, sqlState = sqlState, nativeCode = nativeCode, kind = kind)
 }
 
-fun Sqlx4kMysqlResult.throwIfError() {
+internal fun Sqlx4kMysqlResult.throwIfError() {
     if (isError()) toError().raise()
 }
 
@@ -60,7 +60,7 @@ private fun Sqlx4kMysqlSchema.toMetadata(): ResultSet.Metadata {
     return ResultSet.Metadata(columns)
 }
 
-fun Sqlx4kMysqlResult.toResultSet(): ResultSet {
+private fun Sqlx4kMysqlResult.toResultSet(): ResultSet {
     // Process rows
     val rows = List(size) { rowIndex ->
         val row = requireNotNull(rows) { "Rows cannot be null" }[rowIndex]
@@ -90,7 +90,7 @@ fun Sqlx4kMysqlResult.toResultSet(): ResultSet {
     return ResultSet(rows, error, metadata)
 }
 
-inline fun <T> CPointer<Sqlx4kMysqlResult>?.use(block: (Sqlx4kMysqlResult) -> T): T {
+internal inline fun <T> CPointer<Sqlx4kMysqlResult>?.use(block: (Sqlx4kMysqlResult) -> T): T {
     try {
         return this?.pointed?.let(block)
             ?: throw IllegalStateException("Invalid Sqlx4kMysqlResult pointer: cannot dereference null pointer")
@@ -99,22 +99,30 @@ inline fun <T> CPointer<Sqlx4kMysqlResult>?.use(block: (Sqlx4kMysqlResult) -> T)
     }
 }
 
-fun CPointer<Sqlx4kMysqlResult>?.throwIfError(): Unit = use { it.throwIfError() }
-fun CPointer<Sqlx4kMysqlResult>?.rtOrError(): CPointer<out CPointed> = use {
+internal fun CPointer<Sqlx4kMysqlResult>?.throwIfError(): Unit = use { it.throwIfError() }
+internal fun CPointer<Sqlx4kMysqlResult>?.rtOrError(): CPointer<out CPointed> = use {
     it.throwIfError()
     it.rt ?: SQLError(SQLError.Code.Pool, "Unexpected behaviour while creating the pool.").raise()
 }
 
-fun CPointer<Sqlx4kMysqlResult>?.executeResultOrError(): ExecuteResult = use {
-    it.throwIfError()
-    it.toExecuteResult()
-}
+internal fun CPointer<Sqlx4kMysqlResult>?.executeResultOrError(): ExecuteResult = use { it.toExecuteResultOrError() }
+internal fun CPointer<Sqlx4kMysqlResult>?.resultSetOrError(): ResultSet = use { it.toResultSetOrError() }
 
 /** MySQL reports `LAST_INSERT_ID()` as 0 when the statement generated no id. */
-fun Sqlx4kMysqlResult.toExecuteResult(): ExecuteResult =
+private fun Sqlx4kMysqlResult.toExecuteResult(): ExecuteResult =
     ExecuteResult(rowsAffected = rows_affected.toLong(), lastInsertId = last_insert_id.toLong().takeIf { it != 0L })
 
-suspend inline fun sqlx(
+internal fun Sqlx4kMysqlResult.toExecuteResultOrError(): ExecuteResult {
+    throwIfError()
+    return toExecuteResult()
+}
+
+internal fun Sqlx4kMysqlResult.toResultSetOrError(): ResultSet {
+    throwIfError()
+    return toResultSet()
+}
+
+internal suspend inline fun sqlx(
     crossinline operation: (continuationPtr: CPointer<out CPointed>) -> Unit
 ): CPointer<Sqlx4kMysqlResult>? = suspendCoroutine { continuation ->
     // Create a stable reference to the continuation that won't be garbage collected
@@ -128,7 +136,7 @@ suspend inline fun sqlx(
     operation(continuationPtr)
 }
 
-val fn = staticCFunction<CValue<Sqlx4kMysqlPtr>, CPointer<Sqlx4kMysqlResult>?, Unit> { c, r ->
+internal val fn = staticCFunction<CValue<Sqlx4kMysqlPtr>, CPointer<Sqlx4kMysqlResult>?, Unit> { c, r ->
     val ref = c.useContents { ptr }!!.asStableRef<Continuation<CPointer<Sqlx4kMysqlResult>?>>()
     ref.get().resume(r)
     ref.dispose()
