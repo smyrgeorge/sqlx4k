@@ -1082,7 +1082,17 @@ class RepositoryProcessor(
         // MySQL/MariaDB have no UPDATE ... RETURNING: the row is read back with a second statement, sent
         // separately (a prepared statement cannot hold two), on the same connection as the update.
         val updateQuery = if (dialect == Dialect.MySQL || dialect == Dialect.MariaDB) {
-            "context.withSingleConnection { cx -> cx.execute(statement).mapCatching { cx.fetchAll($updateEntityVar.selectUpdated()).getOrThrow() } }"
+            val readBack = "cx.fetchAll($updateEntityVar.selectUpdated()).getOrThrow()"
+            if (versionName != null) {
+                // A versioned UPDATE that matched no row is stale: report it as no row. Reading the row back anyway
+                // would find another writer's row at the expected new version and report the stale update as a
+                // success. (MySQL counts changed rows, not matched ones; that is sound here because every
+                // versioned update changes the version.)
+                val noRow = "${TypeNames.RESULT_SET}(emptyList(), null, ${TypeNames.RESULT_SET}.Metadata(emptyList()))"
+                "context.withSingleConnection { cx -> cx.execute(statement).mapCatching { n -> if (n == 0L) $noRow else $readBack } }"
+            } else {
+                "context.withSingleConnection { cx -> cx.execute(statement).mapCatching { $readBack } }"
+            }
         } else {
             "context.fetchAll(statement)"
         }
