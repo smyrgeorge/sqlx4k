@@ -1,7 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.impl.migrate.utils
 
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
-import kotlinx.io.Buffer
+import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.readByteArray
@@ -9,17 +9,12 @@ import kotlinx.io.readByteArray
 private val fs = SystemFileSystem
 
 private fun readEntireFileFromDisk(path: Path): String {
-    val buffer = Buffer()
-    val source = fs.source(path)
+    // A single readAtMostTo reads at most one segment (8 KiB on the JVM): read the source until it is exhausted.
     try {
-        source.readAtMostTo(buffer, Int.MAX_VALUE.toLong())
-        return buffer.readByteArray().decodeToString() // UTF-8 by default
+        return fs.source(path).buffered().use { it.readByteArray().decodeToString() } // UTF-8 by default
     } catch (e: Exception) {
         println("Could not read file: ${e.message}")
         throw e
-    } finally {
-        source.close()
-        buffer.close()
     }
 }
 
