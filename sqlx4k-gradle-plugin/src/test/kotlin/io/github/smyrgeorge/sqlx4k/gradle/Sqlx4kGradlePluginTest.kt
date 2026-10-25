@@ -37,6 +37,39 @@ class Sqlx4kGradlePluginTest {
         assertEquals(listOf("io.github.smyrgeorge:sqlx4k-postgres:${BuildConfig.VERSION}"), notations)
         // commonMainImplementation is preferred over implementation when it exists.
         assertTrue(project.configurations.getByName("implementation").dependencies.isEmpty())
+        // Implementation is the default scope.
+        assertTrue(project.configurations.getByName("commonMainApi").dependencies.isEmpty())
+    }
+
+    @Test
+    fun `dependencyScope=Api adds the driver and extensions to commonMainApi`() {
+        val project = kmpLikeProject()
+        project.applySqlx4k {
+            postgres(it)
+            it.extensions(Extension.Pgmq)
+            it.dependencyScope.set(DependencyScope.Api)
+        }
+
+        project.evaluateNow()
+
+        val names = project.configurations.getByName("commonMainApi").dependencies
+            .filterIsInstance<ExternalDependency>().map { it.name }
+        assertEquals(listOf("sqlx4k-postgres", "sqlx4k-postgres-pgmq"), names)
+        assertTrue(project.configurations.getByName("commonMainImplementation").dependencies.isEmpty())
+    }
+
+    @Test
+    fun `dependencyScope=Api fails without an api configuration`() {
+        val project = ProjectBuilder.builder().build()
+        project.configurations.create("implementation")
+        // The `ksp` configuration of the `main` source set is created by the KSP plugin itself.
+        project.applySqlx4k {
+            postgres(it)
+            it.sourceSets.set(listOf("main"))
+            it.dependencyScope.set(DependencyScope.Api)
+        }
+
+        assertEvaluationFails(project, "no 'api' configuration")
     }
 
     @Test
@@ -77,11 +110,13 @@ class Sqlx4kGradlePluginTest {
             postgres(it)
             it.extensions(Extension.Pgmq)
             it.addDependencies.set(false)
+            it.dependencyScope.set(DependencyScope.Api) // ignored
         }
 
         project.evaluateNow()
 
         assertTrue(project.configurations.getByName("commonMainImplementation").dependencies.isEmpty())
+        assertTrue(project.configurations.getByName("commonMainApi").dependencies.isEmpty())
         assertTrue(project.configurations.getByName("implementation").dependencies.isEmpty())
         assertEquals(1, project.configurations.getByName("kspCommonMainMetadata").dependencies.size)
     }

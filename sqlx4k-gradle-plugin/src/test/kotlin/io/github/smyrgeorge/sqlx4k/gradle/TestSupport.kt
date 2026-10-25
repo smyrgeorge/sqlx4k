@@ -29,12 +29,13 @@ internal fun Project.applySqlx4k(configure: (Sqlx4kExtension) -> Unit = {}): Sql
     return extension
 }
 
-/** A bare project with the `implementation` and `kspCommonMainMetadata` configurations of a KMP project. */
+/** A bare project with the dependency and `kspCommonMainMetadata` configurations of a KMP project. */
 internal fun kmpLikeProject(): Project {
     // Not `.apply { }`: on a Project that resolves to Gradle's plugin-applying `Project.apply`.
     val project = ProjectBuilder.builder().build()
     project.configurations.create("implementation")
     project.configurations.create("commonMainImplementation")
+    project.configurations.create("commonMainApi")
     project.configurations.create("kspCommonMainMetadata")
     return project
 }

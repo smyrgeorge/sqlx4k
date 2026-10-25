@@ -144,7 +144,8 @@ in [Code-Generation](#code-generation-crud-and-repository-implementations). When
 - adds the generated sources of `commonMain` to the project and orders every Kotlin compilation and KSP task after the
   `commonMain` code generation, so the generated code exists before anything compiles,
 - adds the driver (e.g. `sqlx4k-postgres`) and the enabled extensions (e.g. `sqlx4k-postgres-pgmq`) as dependencies at
-  the matching version, unless `addDependencies = false`.
+  the matching version, as `implementation` or, with `dependencyScope = Api`, as `api` (for a library module whose
+  public API, e.g. the generated code, exposes sqlx4k types), unless `addDependencies = false`.
 
 A complete build script (see the [examples](examples), which are built with the plugin):
 
@@ -178,6 +179,7 @@ sqlx4k {
 | `extensions(...)`      | none             | The sqlx4k extensions to add: `Pgmq` (PostgreSQL only) and `Arrow`.                                                                                                |
 | `args` / `arg(k, v)`   | none             | Code-generator options, applied last (an entry under `dialect` or `output-package` overrides the derived value).                                                   |
 | `addDependencies`      | `true`           | Whether the driver and extension dependencies are added at the plugin's version. Disable to manage them (and their versions) yourself.                             |
+| `dependencyScope`      | `Implementation` | The configuration the driver and extension dependencies are added to: `Implementation` or `Api` (`commonMainApi`, or `api` for plain JVM projects).                |
 
 The options are documented in detail in
 [Sqlx4kExtension.kt](sqlx4k-gradle-plugin/src/main/kotlin/io/github/smyrgeorge/sqlx4k/gradle/Sqlx4kExtension.kt).

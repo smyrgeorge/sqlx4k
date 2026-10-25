@@ -7,10 +7,23 @@ internal object Sqlx4kDependencies {
 
     const val GROUP: String = "io.github.smyrgeorge"
 
-    /** The implementation configuration of the main sources: commonMain (KMP) or main (JVM). */
-    fun implementationConfiguration(project: Project): String =
-        if (project.configurations.findByName("commonMainImplementation") != null) "commonMainImplementation"
-        else "implementation"
+    /**
+     * The configuration of the main sources for the given [scope]: commonMain (KMP) or main (JVM),
+     * e.g. `commonMainImplementation` or `api`. Fails when the project has no such configuration.
+     */
+    fun configurationName(project: Project, scope: DependencyScope): String {
+        val kmp = project.configurations.findByName(DependencyScope.Implementation.kmpConfiguration) != null
+        val name = if (kmp) scope.kmpConfiguration else scope.jvmConfiguration
+        requireNotNull(project.configurations.findByName(name)) {
+            val hint = if (scope == DependencyScope.Api && !kmp) {
+                "apply the `java-library` plugin, or set dependencyScope = Implementation"
+            } else {
+                "check that the Kotlin multiplatform or jvm plugin is applied"
+            }
+            "sqlx4k { }: no '$name' configuration exists in this project to add the sqlx4k dependencies to — $hint."
+        }
+        return name
+    }
 
     /**
      * The dependency notation of a `io.github.smyrgeorge` artifact.
@@ -23,12 +36,15 @@ internal object Sqlx4kDependencies {
     fun notation(project: Project, name: String, version: String): Any =
         project.findProject(":$name")?.takeIf { it.group == GROUP } ?: "$GROUP:$name:$version"
 
-    /** Adds an implementation dependency on a `io.github.smyrgeorge` artifact (see [notation]). */
+    /**
+     * Adds a dependency on a `io.github.smyrgeorge` artifact (see [notation]) to [configuration],
+     * the implementation configuration by default.
+     */
     fun add(
         project: Project,
         name: String,
         version: String,
-        configuration: String = implementationConfiguration(project),
+        configuration: String = configurationName(project, DependencyScope.Implementation),
     ) {
         project.dependencies.add(configuration, notation(project, name, version))
     }

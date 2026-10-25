@@ -5,18 +5,47 @@ import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.testfixtures.ProjectBuilder
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class Sqlx4kDependenciesTest {
 
     @Test
-    fun `implementationConfiguration prefers commonMainImplementation`() {
+    fun `configurationName prefers commonMainImplementation`() {
         val project = ProjectBuilder.builder().build()
         project.configurations.create("implementation")
-        assertEquals("implementation", Sqlx4kDependencies.implementationConfiguration(project))
+        assertEquals("implementation", Sqlx4kDependencies.configurationName(project, DependencyScope.Implementation))
 
         project.configurations.create("commonMainImplementation")
-        assertEquals("commonMainImplementation", Sqlx4kDependencies.implementationConfiguration(project))
+        assertEquals(
+            "commonMainImplementation",
+            Sqlx4kDependencies.configurationName(project, DependencyScope.Implementation)
+        )
+    }
+
+    @Test
+    fun `configurationName maps Api to commonMainApi or api`() {
+        val jvm = ProjectBuilder.builder().build()
+        jvm.configurations.create("implementation")
+        jvm.configurations.create("api")
+        assertEquals("api", Sqlx4kDependencies.configurationName(jvm, DependencyScope.Api))
+
+        val kmp = ProjectBuilder.builder().build()
+        kmp.configurations.create("commonMainImplementation")
+        kmp.configurations.create("commonMainApi")
+        assertEquals("commonMainApi", Sqlx4kDependencies.configurationName(kmp, DependencyScope.Api))
+    }
+
+    @Test
+    fun `configurationName fails when the configuration does not exist`() {
+        val project = ProjectBuilder.builder().build()
+        project.configurations.create("implementation")
+
+        val e = assertFailsWith<IllegalArgumentException> {
+            Sqlx4kDependencies.configurationName(project, DependencyScope.Api)
+        }
+        assertTrue("no 'api' configuration" in e.message!!)
+        assertTrue("java-library" in e.message!!)
     }
 
     @Test

@@ -37,10 +37,11 @@ class Sqlx4kExtensionTest {
         assertEquals(emptyList(), options.enabledExtensions.get())
         assertEquals(emptyMap(), options.args.get())
         assertTrue(options.addDependencies.get())
+        assertEquals(DependencyScope.Implementation, options.dependencyScope.get())
     }
 
     @Test
-    fun `the driver and extension values are exposed in the dsl scope`() {
+    fun `the driver, extension and dependency scope values are exposed in the dsl scope`() {
         val options = extension()
 
         assertEquals(Driver.MySQL, options.MySQL)
@@ -50,6 +51,17 @@ class Sqlx4kExtensionTest {
         assertEquals(Driver.SQLiteCipher, options.SQLiteCipher)
         assertEquals(Extension.Pgmq, options.Pgmq)
         assertEquals(Extension.Arrow, options.Arrow)
+        assertEquals(DependencyScope.Implementation, options.Implementation)
+        assertEquals(DependencyScope.Api, options.Api)
+    }
+
+    @Test
+    fun `dependency scopes map to their configurations`() {
+        assertEquals(
+            "commonMainImplementation" to "implementation",
+            DependencyScope.Implementation.kmpConfiguration to DependencyScope.Implementation.jvmConfiguration
+        )
+        assertEquals("commonMainApi" to "api", DependencyScope.Api.kmpConfiguration to DependencyScope.Api.jvmConfiguration)
     }
 
     @Test

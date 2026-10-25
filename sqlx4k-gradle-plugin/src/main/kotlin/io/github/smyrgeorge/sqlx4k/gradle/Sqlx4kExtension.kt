@@ -23,7 +23,7 @@ import org.gradle.api.provider.Property
  * `sqlx4k-codegen` processor on the configured [sourceSets], the `dialect` / `output-package`
  * arguments, the generated sources of `commonMain` and the ordering of the KSP tasks. Unless
  * [addDependencies] is disabled, the driver and the enabled extensions are added as well, at the
- * version this plugin was built with.
+ * version this plugin was built with and in the [dependencyScope] configuration.
  */
 public abstract class Sqlx4kExtension {
     // The Driver values, exposed directly in the DSL scope: `driver = PostgreSQL`.
@@ -36,6 +36,10 @@ public abstract class Sqlx4kExtension {
     // The parameterless extensions, exposed directly in the DSL scope: `extensions(Pgmq)`.
     public val Pgmq: Extension.Pgmq = Extension.Pgmq
     public val Arrow: Extension.Arrow = Extension.Arrow
+
+    // The DependencyScope values, exposed directly in the DSL scope: `dependencyScope = Api`.
+    public val Implementation: DependencyScope = DependencyScope.Implementation
+    public val Api: DependencyScope = DependencyScope.Api
 
     /**
      * The sqlx4k database driver (it also determines the SQL dialect of the code generator).
@@ -105,10 +109,20 @@ public abstract class Sqlx4kExtension {
      */
     public abstract val addDependencies: Property<Boolean>
 
+    /**
+     * The configuration the library dependencies are added to (see [addDependencies]):
+     * [Implementation] (`commonMainImplementation`, or `implementation` for plain JVM projects) or
+     * [Api] (`commonMainApi` / `api`). Use [Api] in a library module whose public API exposes
+     * sqlx4k types (the generated code does), so that its consumers see them too. Ignored when
+     * [addDependencies] is disabled. Defaults to [Implementation].
+     */
+    public abstract val dependencyScope: Property<DependencyScope>
+
     init {
         sourceSets.convention(listOf("commonMain"))
         enabledExtensions.convention(emptyList())
         args.convention(emptyMap())
         addDependencies.convention(true)
+        dependencyScope.convention(DependencyScope.Implementation)
     }
 }

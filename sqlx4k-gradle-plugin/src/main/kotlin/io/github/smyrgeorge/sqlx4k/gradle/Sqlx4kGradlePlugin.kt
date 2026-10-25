@@ -14,7 +14,8 @@ import org.gradle.api.Project
  *   (see [Sqlx4kCodegen]).
  * - Adds the generated sources of `commonMain` to the project and orders the KSP tasks accordingly.
  * - Adds the driver and the enabled extensions as dependencies, at the version this plugin was
- *   built with (unless [Sqlx4kExtension.addDependencies] is disabled).
+ *   built with and in the [Sqlx4kExtension.dependencyScope] configuration (unless
+ *   [Sqlx4kExtension.addDependencies] is disabled).
  *
  * The Kotlin multiplatform (or jvm) plugin must be applied by the project itself.
  */
@@ -26,9 +27,10 @@ public class Sqlx4kGradlePlugin : Plugin<Project> {
         // Registered after the codegen's own afterEvaluate, so the options are validated first.
         target.afterEvaluate {
             if (!extension.addDependencies.get()) return@afterEvaluate
-            Sqlx4kDependencies.add(target, extension.driver.get().artifact, BuildConfig.VERSION)
+            val configuration = Sqlx4kDependencies.configurationName(target, extension.dependencyScope.get())
+            Sqlx4kDependencies.add(target, extension.driver.get().artifact, BuildConfig.VERSION, configuration)
             extension.enabledExtensions.get().forEach { ext ->
-                Sqlx4kDependencies.add(target, ext.artifact, BuildConfig.VERSION)
+                Sqlx4kDependencies.add(target, ext.artifact, BuildConfig.VERSION, configuration)
             }
         }
     }
