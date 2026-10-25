@@ -35,12 +35,10 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
@@ -142,91 +140,29 @@ class SQLite(
 
     override suspend fun acquire(): Result<Connection> = pool.acquire()
 
-    override suspend fun execute(sql: String): Result<Long> = runCatching {
-        val connection = pool.acquire().getOrThrow()
-        try {
-            connection.execute(sql).getOrThrow()
-        } catch (e: Exception) {
-            e.toSQLError().raise()
-        } finally {
-            connection.close()
-        }
-    }
+    override suspend fun execute(sql: String): Result<Long> =
+        pool.withConnection { execute(sql).getOrThrow() }
 
-    override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
-        val connection = pool.acquire().getOrThrow()
-        try {
-            connection.executeWithResult(sql).getOrThrow()
-        } catch (e: Exception) {
-            e.toSQLError().raise()
-        } finally {
-            connection.close()
-        }
-    }
+    override suspend fun executeWithResult(sql: String): Result<ExecuteResult> =
+        pool.withConnection { executeWithResult(sql).getOrThrow() }
 
-    override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
-        val connection = pool.acquire().getOrThrow()
-        try {
-            connection.fetchAll(sql).getOrThrow()
-        } catch (e: Exception) {
-            e.toSQLError().raise()
-        } finally {
-            connection.close()
-        }
-    }
+    override suspend fun fetchAll(sql: String): Result<ResultSet> =
+        pool.withConnection { fetchAll(sql).getOrThrow() }
 
-    override suspend fun execute(statement: Statement): Result<Long> = runCatching {
-        val connection = pool.acquire().getOrThrow()
-        try {
-            connection.execute(statement).getOrThrow()
-        } catch (e: Exception) {
-            e.toSQLError().raise()
-        } finally {
-            connection.close()
-        }
-    }
+    override suspend fun execute(statement: Statement): Result<Long> =
+        pool.withConnection { execute(statement).getOrThrow() }
 
-    override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
-        val connection = pool.acquire().getOrThrow()
-        try {
-            connection.executeWithResult(statement).getOrThrow()
-        } catch (e: Exception) {
-            e.toSQLError().raise()
-        } finally {
-            connection.close()
-        }
-    }
+    override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> =
+        pool.withConnection { executeWithResult(statement).getOrThrow() }
 
-    override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
-        val connection = pool.acquire().getOrThrow()
-        try {
-            connection.fetchAll(statement).getOrThrow()
-        } catch (e: Exception) {
-            e.toSQLError().raise()
-        } finally {
-            connection.close()
-        }
-    }
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+        pool.withConnection { fetchAll(statement).getOrThrow() }
 
-    // A pooled connection is borrowed for the whole collection and returned when the flow completes,
-    // fails or is cancelled.
-    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
-        val connection = pool.acquire().getOrThrow()
-        try {
-            emitAll(connection.fetch(sql, fetchSize))
-        } finally {
-            withContext(NonCancellable) { connection.close() }
-        }
-    }
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> =
+        pool.flowWithConnection { fetch(sql, fetchSize) }
 
-    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
-        val connection = pool.acquire().getOrThrow()
-        try {
-            emitAll(connection.fetch(statement, fetchSize))
-        } finally {
-            withContext(NonCancellable) { connection.close() }
-        }
-    }
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> =
+        pool.flowWithConnection { fetch(statement, fetchSize) }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
         val connection = pool.acquire().getOrThrow()
@@ -276,130 +212,53 @@ class SQLite(
             return Result.success(Unit)
         }
 
-        override suspend fun execute(sql: String): Result<Long> = runCatching {
-            mutex.withLock {
-                assertIsOpen()
-                try {
-                    withContext(dispatcher) {
-                        db.execSQL(sql)
-                        // execSQL returns void; return -1 as "unknown affected rows"
-                        -1L
-                    }
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
+        override suspend fun execute(sql: String): Result<Long> = mutex.withLockCatching(::assertIsOpen) {
+            withContext(dispatcher) {
+                db.execSQL(sql)
+                // execSQL returns void; return -1 as "unknown affected rows"
+                -1L
             }
         }
 
         override suspend fun execute(statement: Statement): Result<Long> =
             executeWithResult(statement).map { it.rowsAffected }
 
-        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
-            mutex.withLock {
-                assertIsOpen()
-                try {
-                    withContext(dispatcher) {
-                        db.executeForResult(sql) { db.compileStatement(sql).use { it.executeUpdateDelete() } }
-                    }
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
-            }
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> =
+            mutex.withLockCatching(::assertIsOpen) { withContext(dispatcher) { db.executeForResult(sql) } }
+
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> {
+            val nq = statement.render(encoders).getOrElse { return Result.failure(it) }
+            return mutex.withLockCatching(::assertIsOpen) { withContext(dispatcher) { db.executeForResult(nq) } }
         }
 
-        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
-            val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
-            mutex.withLock {
-                assertIsOpen()
-                try {
-                    withContext(dispatcher) {
-                        db.executeForResult(nq.sql) {
-                            db.compileStatement(nq.sql).use { stmt ->
-                                stmt.bindAll(nq.values)
-                                stmt.executeUpdateDelete()
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
-            }
+        override suspend fun fetchAll(sql: String): Result<ResultSet> = mutex.withLockCatching(::assertIsOpen) {
+            withContext(dispatcher) { db.rawQuery(sql, null).use { it.toResultSet() } }
         }
 
-        override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
-            return mutex.withLock {
-                assertIsOpen()
-                try {
-                    withContext(dispatcher) {
-                        db.rawQuery(sql, null).use { it.toResultSet() }
-                    }.toResult()
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
-            }
-        }
-
-        override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
-            val nq = runCatching { statement.renderNativeQuery(Dialect.SQLite, encoders) }
-                .getOrElse { return Result.failure(it) }
-            return mutex.withLock {
-                assertIsOpen()
-                try {
-                    withContext(dispatcher) {
-                        // `rawQueryWithFactory` is the only public API that lets us bind
-                        // typed parameters (long / double / blob / string / null) to a
-                        // SELECT — `rawQuery` would force every arg through `bindString`.
-                        val factory = SQLiteDatabase.CursorFactory { _, driver, editTable, query ->
-                            query.bindAll(nq.values)
-                            SQLiteCursor(driver, editTable, query)
-                        }
-                        // editTable is documented as a hint for the cursor (only used
-                        // by Android's CursorAdapter / undo support); empty string
-                        // satisfies the non-null Kotlin signature without consequence.
-                        db.rawQueryWithFactory(factory, nq.sql, null, "").use { it.toResultSet() }
-                    }.toResult()
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
+            val nq = statement.render(encoders).getOrElse { return Result.failure(it) }
+            return mutex.withLockCatching(::assertIsOpen) {
+                withContext(dispatcher) { db.rawQuery(nq).use { it.toResultSet() } }
             }
         }
 
         // The connection is held (its mutex locked) for the whole collection.
-        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(cursorRows(fetchSize, dispatcher) { db.rawQuery(sql, null) })
-            }
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = mutex.flowWithLock(::assertIsOpen) {
+            cursorRows(fetchSize, dispatcher) { db.rawQuery(sql, null) }
         }
 
-        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(cursorRows(fetchSize, dispatcher) {
-                    val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
-                    val factory = SQLiteDatabase.CursorFactory { _, driver, editTable, query ->
-                        query.bindAll(nq.values)
-                        SQLiteCursor(driver, editTable, query)
-                    }
-                    db.rawQueryWithFactory(factory, nq.sql, null, "")
-                })
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> =
+            mutex.flowWithLock(::assertIsOpen) {
+                cursorRows(fetchSize, dispatcher) { db.rawQuery(statement.renderNativeQuery(Dialect.SQLite, encoders)) }
             }
-        }
 
-        override suspend fun begin(): Result<Transaction> = runCatching {
-            mutex.withLock {
-                assertIsOpen()
-                // Begin the transaction on the connection's dedicated thread, then hand
-                // the same dispatcher to AndroidTransaction so commit/rollback also run
-                // on that thread (Android SQLiteDatabase sessions are thread-local).
-                withContext(dispatcher) {
-                    try {
-                        db.beginTransactionNonExclusive()
-                        AndroidTransaction(db, false, encoders, dispatcher)
-                    } catch (e: Exception) {
-                        e.toSQLError().raise()
-                    }
-                }
+        override suspend fun begin(): Result<Transaction> = mutex.withLockCatching(::assertIsOpen) {
+            // Begin the transaction on the connection's dedicated thread, then hand
+            // the same dispatcher to AndroidTransaction so commit/rollback also run
+            // on that thread (Android SQLiteDatabase sessions are thread-local).
+            withContext(dispatcher) {
+                db.beginTransactionNonExclusive()
+                AndroidTransaction(db, false, encoders, dispatcher)
             }
         }
     }
@@ -443,18 +302,9 @@ class SQLite(
                 assertIsOpen()
                 _status = Transaction.Status.Closed
                 withContext(dispatcher) {
-                    try {
-                        db.setTransactionSuccessful()
+                    db.completeTransaction(closeConnectionAfterTx) {
+                        setTransactionSuccessful()
                         _commited = true
-                    } catch (e: Exception) {
-                        e.toSQLError().raise()
-                    } finally {
-                        try {
-                            db.endTransaction()
-                            if (closeConnectionAfterTx) db.close()
-                        } catch (_: Exception) {
-                            // Ignore exceptions in finally block
-                        }
                     }
                 }
             }
@@ -466,128 +316,50 @@ class SQLite(
                 assertIsOpen()
                 _status = Transaction.Status.Closed
                 withContext(dispatcher) {
-                    try {
-                        // Do NOT call setTransactionSuccessful() — endTransaction() will roll back.
-                        _rollbacked = true
-                    } catch (e: Exception) {
-                        e.toSQLError().raise()
-                    } finally {
-                        try {
-                            db.endTransaction()
-                            if (closeConnectionAfterTx) db.close()
-                        } catch (_: Exception) {
-                            // Ignore exceptions in finally block
-                        }
-                    }
+                    // Do NOT call setTransactionSuccessful() — endTransaction() will roll back.
+                    db.completeTransaction(closeConnectionAfterTx) { _rollbacked = true }
                 }
             }
         }
 
-        override suspend fun execute(sql: String): Result<Long> = runCatching {
-            mutex.withLock {
-                assertIsOpen()
-                try {
-                    withContext(dispatcher) {
-                        db.execSQL(sql)
-                        -1L
-                    }
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
+        override suspend fun execute(sql: String): Result<Long> = mutex.withLockCatching(::assertIsOpen) {
+            withContext(dispatcher) {
+                db.execSQL(sql)
+                -1L
             }
         }
 
         override suspend fun execute(statement: Statement): Result<Long> =
             executeWithResult(statement).map { it.rowsAffected }
 
-        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
-            mutex.withLock {
-                assertIsOpen()
-                try {
-                    withContext(dispatcher) {
-                        db.executeForResult(sql) { db.compileStatement(sql).use { it.executeUpdateDelete() } }
-                    }
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
-            }
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> =
+            mutex.withLockCatching(::assertIsOpen) { withContext(dispatcher) { db.executeForResult(sql) } }
+
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> {
+            val nq = statement.render(encoders).getOrElse { return Result.failure(it) }
+            return mutex.withLockCatching(::assertIsOpen) { withContext(dispatcher) { db.executeForResult(nq) } }
         }
 
-        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
-            val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
-            mutex.withLock {
-                assertIsOpen()
-                try {
-                    withContext(dispatcher) {
-                        db.executeForResult(nq.sql) {
-                            db.compileStatement(nq.sql).use { stmt ->
-                                stmt.bindAll(nq.values)
-                                stmt.executeUpdateDelete()
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
-            }
+        override suspend fun fetchAll(sql: String): Result<ResultSet> = mutex.withLockCatching(::assertIsOpen) {
+            withContext(dispatcher) { db.rawQuery(sql, null).use { it.toResultSet() } }
         }
 
-        override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
-            return mutex.withLock {
-                assertIsOpen()
-                try {
-                    withContext(dispatcher) {
-                        db.rawQuery(sql, null).use { it.toResultSet() }
-                    }.toResult()
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
-            }
-        }
-
-        override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
-            val nq = runCatching { statement.renderNativeQuery(Dialect.SQLite, encoders) }
-                .getOrElse { return Result.failure(it) }
-            return mutex.withLock {
-                assertIsOpen()
-                try {
-                    withContext(dispatcher) {
-                        val factory = SQLiteDatabase.CursorFactory { _, driver, editTable, query ->
-                            query.bindAll(nq.values)
-                            SQLiteCursor(driver, editTable, query)
-                        }
-                        // editTable is documented as a hint for the cursor (only used
-                        // by Android's CursorAdapter / undo support); empty string
-                        // satisfies the non-null Kotlin signature without consequence.
-                        db.rawQueryWithFactory(factory, nq.sql, null, "").use { it.toResultSet() }
-                    }.toResult()
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
+            val nq = statement.render(encoders).getOrElse { return Result.failure(it) }
+            return mutex.withLockCatching(::assertIsOpen) {
+                withContext(dispatcher) { db.rawQuery(nq).use { it.toResultSet() } }
             }
         }
 
         // The transaction is held (its mutex locked) for the whole collection.
-        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(cursorRows(fetchSize, dispatcher) { db.rawQuery(sql, null) })
-            }
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = mutex.flowWithLock(::assertIsOpen) {
+            cursorRows(fetchSize, dispatcher) { db.rawQuery(sql, null) }
         }
 
-        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(cursorRows(fetchSize, dispatcher) {
-                    val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
-                    val factory = SQLiteDatabase.CursorFactory { _, driver, editTable, query ->
-                        query.bindAll(nq.values)
-                        SQLiteCursor(driver, editTable, query)
-                    }
-                    db.rawQueryWithFactory(factory, nq.sql, null, "")
-                })
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> =
+            mutex.flowWithLock(::assertIsOpen) {
+                cursorRows(fetchSize, dispatcher) { db.rawQuery(statement.renderNativeQuery(Dialect.SQLite, encoders)) }
             }
-        }
     }
 
     companion object {
@@ -631,6 +403,38 @@ class SQLite(
                 }
             }
         }
+
+        /**
+         * Renders the statement for SQLite. Rendering runs before the driver call, outside its error mapping, so a
+         * rendering failure is reported as it is.
+         */
+        private fun Statement.render(encoders: ValueEncoderRegistry): Result<Statement.NativeQuery> =
+            runCatching { renderNativeQuery(Dialect.SQLite, encoders) }
+
+        /**
+         * Runs the query with its parameters bound by type. `rawQueryWithFactory` is the only public API that lets us
+         * bind typed parameters (long / double / blob / string / null) to a SELECT — `rawQuery` would force every arg
+         * through `bindString`. `editTable` is documented as a hint for the cursor (only used by Android's
+         * CursorAdapter / undo support); an empty string satisfies the non-null Kotlin signature without consequence.
+         */
+        private fun SQLiteDatabase.rawQuery(query: Statement.NativeQuery): Cursor {
+            val factory = SQLiteDatabase.CursorFactory { _, driver, editTable, program ->
+                program.bindAll(query.values)
+                SQLiteCursor(driver, editTable, program)
+            }
+            return rawQueryWithFactory(factory, query.sql, null, "")
+        }
+
+        private fun SQLiteDatabase.executeForResult(sql: String): ExecuteResult =
+            executeForResult(sql) { compileStatement(sql).use { it.executeUpdateDelete() } }
+
+        private fun SQLiteDatabase.executeForResult(query: Statement.NativeQuery): ExecuteResult =
+            executeForResult(query.sql) {
+                compileStatement(query.sql).use { stmt ->
+                    stmt.bindAll(query.values)
+                    stmt.executeUpdateDelete()
+                }
+            }
 
         /**
          * Runs [update] (returning the changed row count) and reports the rowid an `INSERT` generated. SQLite keeps the

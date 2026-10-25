@@ -9,6 +9,7 @@ import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
+import io.github.smyrgeorge.sqlx4k.sqlite.flowWithLock
 import kotlin.concurrent.Volatile
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
@@ -17,8 +18,6 @@ import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -167,19 +166,11 @@ internal class PooledConnection(
             guarded { connection.fetchAll(statement) }
 
         // The connection is held (its mutex locked) for the whole collection, like the wrapped one.
-        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(connection.fetch(sql, fetchSize))
-            }
-        }
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> =
+            mutex.flowWithLock(::assertIsOpen) { connection.fetch(sql, fetchSize) }
 
-        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(connection.fetch(statement, fetchSize))
-            }
-        }
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> =
+            mutex.flowWithLock(::assertIsOpen) { connection.fetch(statement, fetchSize) }
 
         override suspend fun begin(): Result<Transaction> = guarded { connection.begin() }
 
