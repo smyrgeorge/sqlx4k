@@ -3,12 +3,10 @@
 package io.github.smyrgeorge.sqlx4k.postgres
 
 import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimeString
 import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.types.SqlRawLiteral
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
-import kotlin.reflect.KClass
-import kotlin.time.Instant
-import kotlin.uuid.Uuid
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.MemScope
@@ -35,6 +33,9 @@ import sqlx4k.postgresql.PARAM_TIMESTAMP
 import sqlx4k.postgresql.PARAM_TIMESTAMPTZ
 import sqlx4k.postgresql.PARAM_UUID
 import sqlx4k.postgresql.Sqlx4kPostgresParam
+import kotlin.reflect.KClass
+import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 /**
  * Allocates an FFI-ready array of [Sqlx4kPostgresParam] inside the receiver [MemScope]
@@ -141,12 +142,12 @@ private fun MemScope.bindParam(p: Sqlx4kPostgresParam, value: Any?) {
 
         is LocalTime -> {
             p.kind = PARAM_TIME
-            p.text = value.toString().cstr.ptr
+            p.text = value.toTimeString().cstr.ptr
         }
 
         is LocalDateTime -> {
             p.kind = PARAM_TIMESTAMP
-            p.text = value.toString().replace('T', ' ').cstr.ptr
+            p.text = value.toTimestampString().cstr.ptr
         }
 
         is Uuid -> {

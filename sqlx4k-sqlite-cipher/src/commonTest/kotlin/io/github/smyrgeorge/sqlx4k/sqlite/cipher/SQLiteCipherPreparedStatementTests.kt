@@ -15,6 +15,7 @@ import io.github.smyrgeorge.sqlx4k.impl.extensions.asDouble
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asFloat
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalDate
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalDateTime
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalTime
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asShort
@@ -26,6 +27,7 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 
 class SQLiteCipherPreparedStatementTests : SQLiteCipherTestBase() {
@@ -183,8 +185,6 @@ class SQLiteCipherPreparedStatementTests : SQLiteCipherTestBase() {
 
     // ---- Date, Time and UUID types ----
     // Note: SQLite stores dates/times as text and has no native timestamptz support.
-    // LocalDateTime is excluded: encodeValue uses ISO 'T' separator but the shared
-    // decoder expects space-separated format, causing a round-trip mismatch for SQLite.
     @Test
     fun `date time and uuid types as parameters`(): Unit = runBlocking {
         val table = newTable()
@@ -221,6 +221,49 @@ class SQLiteCipherPreparedStatementTests : SQLiteCipherTestBase() {
                 assertThat(row.get(0).asLocalDate()).isEqualTo(date)
                 assertThat(row.get(1).asLocalTime()).isEqualTo(time)
                 assertThat(row.get(2).asUuid()).isEqualTo(uuid)
+            }
+        } finally {
+            runCatching { db.execute("drop table if exists $table") }
+        }
+    }
+
+    // LocalTime/LocalDateTime.toString omit zero seconds ("09:00"): the values must still bind and read back.
+    @Test
+    fun `time and datetime values without seconds round-trip`(): Unit = runBlocking {
+        val table = newTable()
+        try {
+            db.execute(
+                """
+                create table $table(
+                    id int primary key,
+                    v_time text,
+                    v_midnight text,
+                    v_fraction text
+                )
+                """.trimIndent()
+            ).getOrThrow()
+
+            val time = LocalTime(9, 0)
+            val midnight = LocalDateTime(2025, 3, 25, 0, 0)
+            val fraction = LocalDateTime(2025, 3, 25, 7, 31, 43, 500_000_000)
+
+            val insert = Statement.create(
+                "insert into $table(id, v_time, v_midnight, v_fraction) values (1, :time, :midnight, :fraction)"
+            )
+                .bind("time", time)
+                .bind("midnight", midnight)
+                .bind("fraction", fraction)
+            db.execute(insert).getOrThrow()
+
+            val row = db.fetchAll(
+                Statement.create("select v_time, v_midnight, v_fraction from $table where v_midnight = :midnight")
+                    .bind("midnight", midnight)
+            ).getOrThrow().first()
+
+            assertAll {
+                assertThat(row.get(0).asLocalTime()).isEqualTo(time)
+                assertThat(row.get(1).asLocalDateTime()).isEqualTo(midnight)
+                assertThat(row.get(2).asLocalDateTime()).isEqualTo(fraction)
             }
         } finally {
             runCatching { db.execute("drop table if exists $table") }

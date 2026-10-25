@@ -17,6 +17,7 @@ import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.extensions.isInsertStatement
+import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimeString
 import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
@@ -38,7 +39,6 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.toJavaLocalDate
-import kotlinx.datetime.toJavaLocalTime
 import java.sql.SQLException
 import java.sql.SQLTransientConnectionException
 import java.util.concurrent.atomic.AtomicReference
@@ -398,8 +398,8 @@ class SQLite(
                 // round-trip parsing through `asInstant` is consistent.
                 is Instant -> toTimestampString()
                 is LocalDate -> toJavaLocalDate()
-                is LocalTime -> toJavaLocalTime()
-                is LocalDateTime -> toString().replace('T', ' ')
+                is LocalTime -> toTimeString()
+                is LocalDateTime -> toTimestampString()
                 // SQLite has no native UUID type; store as string.
                 // Also handle java.util.UUID in case Kotlin's Uuid value class is stored as its underlying type.
                 is Uuid -> toString()

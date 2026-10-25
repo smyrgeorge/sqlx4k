@@ -5,14 +5,14 @@ import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.types.NoWrappingTuple
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
-import kotlin.time.Instant
-import kotlin.uuid.Uuid
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 /**
  * Converts the `Instant` to a string representation of a timestamp with microsecond precision.
@@ -41,6 +41,33 @@ fun Instant.toTimestampString(timeZone: TimeZone = TimeZone.UTC): String {
         append(ldt.minute.toString().padStart(2, '0')); append(':')
         append(ldt.second.toString().padStart(2, '0')); append('.')
         append(microsStr)
+    }
+}
+
+/**
+ * Converts the `LocalDateTime` to `YYYY-MM-DD HH:MM:SS[.mmmuuu]` (e.g., `2023-01-01 12:34:00`), the shape
+ * [asLocalDateTime][io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalDateTime] reads back.
+ *
+ * Unlike [LocalDateTime.toString], which omits zero seconds (`2023-01-01T12:34`) and writes the fraction in groups
+ * of three digits, the seconds are always present; the fraction is written with six digits (microseconds, the
+ * precision of the supported databases) and only when it is not zero.
+ */
+fun LocalDateTime.toTimestampString(): String = "$date ${time.toTimeString()}"
+
+/**
+ * Converts the `LocalTime` to `HH:MM:SS[.mmmuuu]` (e.g., `12:34:00`).
+ *
+ * Unlike [LocalTime.toString], which omits zero seconds (`12:34`), the seconds are always present; the fraction
+ * is written with six digits (microseconds) and only when it is not zero.
+ */
+fun LocalTime.toTimeString(): String = buildString(15) {
+    append(hour.toString().padStart(2, '0')); append(':')
+    append(minute.toString().padStart(2, '0')); append(':')
+    append(second.toString().padStart(2, '0'))
+    val micros = nanosecond / 1_000
+    if (micros != 0) {
+        append('.')
+        append(micros.toString().padStart(6, '0'))
     }
 }
 

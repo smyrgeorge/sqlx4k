@@ -233,6 +233,49 @@ class MySQLPreparedStatementTests {
         }
     }
 
+    // LocalTime/LocalDateTime.toString omit zero seconds ("09:00"): the values must still bind and read back.
+    @Test
+    fun `time and datetime values without seconds round-trip`(): Unit = runBlocking {
+        val table = newTable()
+        try {
+            db.execute(
+                """
+                create table $table(
+                    id int primary key,
+                    v_time time(6),
+                    v_midnight datetime(6),
+                    v_fraction datetime(6)
+                )
+                """.trimIndent()
+            ).getOrThrow()
+
+            val time = LocalTime(9, 0)
+            val midnight = LocalDateTime(2025, 3, 25, 0, 0)
+            val fraction = LocalDateTime(2025, 3, 25, 7, 31, 43, 500_000_000)
+
+            val insert = Statement.create(
+                "insert into $table(id, v_time, v_midnight, v_fraction) values (1, :time, :midnight, :fraction)"
+            )
+                .bind("time", time)
+                .bind("midnight", midnight)
+                .bind("fraction", fraction)
+            db.execute(insert).getOrThrow()
+
+            val row = db.fetchAll(
+                Statement.create("select v_time, v_midnight, v_fraction from $table where v_midnight = :midnight")
+                    .bind("midnight", midnight)
+            ).getOrThrow().first()
+
+            assertAll {
+                assertThat(row.get(0).asLocalTime()).isEqualTo(time)
+                assertThat(row.get(1).asLocalDateTime()).isEqualTo(midnight)
+                assertThat(row.get(2).asLocalDateTime()).isEqualTo(fraction)
+            }
+        } finally {
+            runCatching { db.execute("drop table if exists $table") }
+        }
+    }
+
     // ---- Type cast preservation ----
     @Test
     fun `type cast preservation with params`(): Unit = runBlocking {

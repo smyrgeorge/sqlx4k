@@ -4,16 +4,17 @@ package io.github.smyrgeorge.sqlx4k.impl.extensions
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
-import kotlin.time.Instant
-import kotlin.uuid.Uuid
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.UtcOffset
 import kotlinx.datetime.format.DateTimeFormat
-import kotlinx.datetime.format.FormatStringsInDatetimeFormats
-import kotlinx.datetime.format.byUnicodePattern
+import kotlinx.datetime.format.alternativeParsing
+import kotlinx.datetime.format.char
+import kotlinx.datetime.format.optional
 import kotlinx.datetime.toInstant
+import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 //@formatter:off
 fun ResultSet.Row.Column.asChar(): Char = asString().asChar()
@@ -44,8 +45,8 @@ fun ResultSet.Row.Column.asLocalDate(): LocalDate = LocalDate.parse(asString())
 fun ResultSet.Row.Column.asLocalDateOrNull(): LocalDate? = asStringOrNull()?.let { LocalDate.parse(it) }
 fun ResultSet.Row.Column.asLocalTime(): LocalTime = LocalTime.parse(asString())
 fun ResultSet.Row.Column.asLocalTimeOrNull(): LocalTime? = asStringOrNull()?.let { LocalTime.parse(it) }
-fun ResultSet.Row.Column.asLocalDateTime(): LocalDateTime = LocalDateTime.parse(asString().replace('T', ' '), localDateTimeFormatter)
-fun ResultSet.Row.Column.asLocalDateTimeOrNull(): LocalDateTime? = asStringOrNull()?.let { LocalDateTime.parse(it.replace('T', ' '), localDateTimeFormatter) }
+fun ResultSet.Row.Column.asLocalDateTime(): LocalDateTime = LocalDateTime.parse(asString(), localDateTimeFormatter)
+fun ResultSet.Row.Column.asLocalDateTimeOrNull(): LocalDateTime? = asStringOrNull()?.let { LocalDateTime.parse(it, localDateTimeFormatter) }
 fun ResultSet.Row.Column.asInstant(): Instant = asString().asInstant()
 fun ResultSet.Row.Column.asInstantOrNull(): Instant? = asStringOrNull()?.asInstant()
 fun ResultSet.Row.Column.asByteArray(): ByteArray = bytes ?: asString().removePrefix("\\x").hexToByteArray()
@@ -73,13 +74,23 @@ inline fun <reified T : Enum<T>> String.toEnum(): T {
     }
 }
 
+// Accepts what the databases and drivers produce: a space or 'T' separator, optional seconds (as written by
+// LocalDateTime.toString) and a fraction of any length up to nanoseconds (PostgreSQL trims trailing zeros,
+// SQLite's strftime writes milliseconds).
 private val localDateTimeFormatter: DateTimeFormat<LocalDateTime> = LocalDateTime.Format {
-    @OptIn(FormatStringsInDatetimeFormats::class)
-    byUnicodePattern("yyyy-MM-dd HH:mm:ss[.SSSSSS]")
+    date(LocalDate.Formats.ISO)
+    alternativeParsing({ char('T') }) { char(' ') }
+    hour(); char(':'); minute()
+    optional {
+        char(':'); second()
+        optional { char('.'); secondFraction(1, 9) }
+    }
 }
 
 // Match: "yyyy-MM-dd[ T]HH:mm:ss[.fraction][(Z|z|+HH|+HHMM|+HH:MM|-HH|-HHMM|-HH:MM)]" (offset optional; space or 'T' separator; Z/z = UTC)
-private val timestampRegex = Regex("""^(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?)([Zz]|[+-]\d{2}(?::?\d{2})?)?$""")
+private val timestampRegex =
+    Regex("""^(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?)([Zz]|[+-]\d{2}(?::?\d{2})?)?$""")
+
 private fun String.asInstant(): Instant {
     fun normalizeFractionTo6(s: String): String {
         val dot = s.indexOf('.')

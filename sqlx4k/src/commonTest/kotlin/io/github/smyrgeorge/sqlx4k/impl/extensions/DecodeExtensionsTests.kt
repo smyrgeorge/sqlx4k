@@ -317,9 +317,38 @@ class DecodeExtensionsTests {
 
     @Test
     fun `asLocalDateTime accepts the T separator`() {
-        // The ISO-8601 'T' separator is normalized to a space, so it parses like the space form.
+        // The ISO-8601 'T' separator parses like the space form.
         assertThat(col("2023-01-15T12:34:56").asLocalDateTime())
             .isEqualTo(col("2023-01-15 12:34:56").asLocalDateTime())
+    }
+
+    @Test
+    fun `asLocalDateTime accepts a missing seconds field`() {
+        // LocalDateTime.toString omits zero seconds; values stored that way must read back.
+        assertThat(col("2023-01-15 12:34").asLocalDateTime()).isEqualTo(LocalDateTime(2023, 1, 15, 12, 34))
+        assertThat(col("2023-01-15T12:34").asLocalDateTime()).isEqualTo(LocalDateTime(2023, 1, 15, 12, 34))
+    }
+
+    @Test
+    fun `asLocalDateTime accepts fractions of any length`() {
+        // PostgreSQL trims trailing zeros, SQLite's strftime writes milliseconds.
+        assertThat(col("2023-01-15 12:34:56.5").asLocalDateTime())
+            .isEqualTo(LocalDateTime(2023, 1, 15, 12, 34, 56, 500_000_000))
+        assertThat(col("2023-01-15 12:34:56.123").asLocalDateTime())
+            .isEqualTo(LocalDateTime(2023, 1, 15, 12, 34, 56, 123_000_000))
+        assertThat(col("2023-01-15 12:34:56.123456789").asLocalDateTime())
+            .isEqualTo(LocalDateTime(2023, 1, 15, 12, 34, 56, 123_456_789))
+    }
+
+    @Test
+    fun `asLocalDateTime reads back what toTimestampString writes`() {
+        listOf(
+            LocalDateTime(2023, 1, 15, 0, 0),
+            LocalDateTime(2023, 1, 15, 12, 34),
+            LocalDateTime(2023, 1, 15, 12, 34, 56),
+            LocalDateTime(2023, 1, 15, 12, 34, 56, 500_000_000),
+            LocalDateTime(2023, 1, 15, 12, 34, 56, 123_456_000),
+        ).forEach { assertThat(col(it.toTimestampString()).asLocalDateTime()).isEqualTo(it) }
     }
 
     // ========================================================================================

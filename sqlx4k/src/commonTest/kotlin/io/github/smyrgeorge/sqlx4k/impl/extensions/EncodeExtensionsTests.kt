@@ -131,6 +131,36 @@ class EncodeExtensionsTests {
     }
 
     // ========================================================================================
+    // LocalDateTime.toTimestampString / LocalTime.toTimeString – seconds are always written
+    // ========================================================================================
+
+    @Test
+    fun `LocalDateTime toTimestampString always writes the seconds`() {
+        // LocalDateTime.toString would give "2023-01-15T12:34".
+        assertThat(LocalDateTime(2023, 1, 15, 12, 34).toTimestampString()).isEqualTo("2023-01-15 12:34:00")
+        assertThat(LocalDateTime(2023, 1, 15, 0, 0).toTimestampString()).isEqualTo("2023-01-15 00:00:00")
+    }
+
+    @Test
+    fun `LocalDateTime toTimestampString writes a non-zero fraction as microseconds`() {
+        assertThat(LocalDateTime(2023, 1, 15, 12, 34, 56, 500_000_000).toTimestampString())
+            .isEqualTo("2023-01-15 12:34:56.500000")
+        // Sub-microsecond nanoseconds are truncated, as for Instant.
+        assertThat(LocalDateTime(2023, 1, 15, 12, 34, 56, 123_456_789).toTimestampString())
+            .isEqualTo("2023-01-15 12:34:56.123456")
+        assertThat(LocalDateTime(2023, 1, 15, 12, 34, 56, 999).toTimestampString())
+            .isEqualTo("2023-01-15 12:34:56")
+    }
+
+    @Test
+    fun `LocalTime toTimeString always writes the seconds`() {
+        // LocalTime.toString would give "09:00".
+        assertThat(LocalTime(9, 0).toTimeString()).isEqualTo("09:00:00")
+        assertThat(LocalTime(0, 0).toTimeString()).isEqualTo("00:00:00")
+        assertThat(LocalTime(23, 59, 59, 1_000).toTimeString()).isEqualTo("23:59:59.000001")
+    }
+
+    // ========================================================================================
     // resolveNativeValue – null / TypedNull
     // ========================================================================================
 

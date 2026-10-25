@@ -3,13 +3,10 @@
 package io.github.smyrgeorge.sqlx4k.sqlite
 
 import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimeString
 import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.types.SqlRawLiteral
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
-import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.MemScope
@@ -26,6 +23,10 @@ import sqlx4k.sqlite.PARAM_NULL
 import sqlx4k.sqlite.PARAM_REAL
 import sqlx4k.sqlite.PARAM_TEXT
 import sqlx4k.sqlite.Sqlx4kSqliteParam
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 /**
  * Allocates an FFI-ready array of [Sqlx4kSqliteParam] inside the receiver [MemScope]
@@ -113,11 +114,11 @@ private fun MemScope.bindParam(p: Sqlx4kSqliteParam, value: Any?) {
         }
 
         is LocalTime -> {
-            bindText(p, value.toString())
+            bindText(p, value.toTimeString())
         }
 
         is LocalDateTime -> {
-            bindText(p, value.toString().replace('T', ' '))
+            bindText(p, value.toTimestampString())
         }
 
         is Uuid -> {

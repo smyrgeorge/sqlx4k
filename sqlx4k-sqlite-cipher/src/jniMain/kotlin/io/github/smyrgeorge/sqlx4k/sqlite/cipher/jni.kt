@@ -6,17 +6,10 @@ import io.github.smyrgeorge.sqlx4k.ExecuteResult
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.isInsertStatement
+import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimeString
 import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.types.SqlRawLiteral
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.io.DataInputStream
-import java.io.DataOutputStream
-import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +18,14 @@ import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.DataInputStream
+import java.io.DataOutputStream
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 // Parameter discriminators — must match the PARAM_* constants in the Rust core.
 private const val PARAM_NULL = 0
@@ -114,8 +115,8 @@ private fun writeParam(out: DataOutputStream, value: Any?) {
 
         is Instant -> writeText(out, value.toTimestampString())
         is LocalDate -> writeText(out, value.toString())
-        is LocalTime -> writeText(out, value.toString())
-        is LocalDateTime -> writeText(out, value.toString().replace('T', ' '))
+        is LocalTime -> writeText(out, value.toTimeString())
+        is LocalDateTime -> writeText(out, value.toTimestampString())
         is Uuid -> writeText(out, value.toString())
         is java.util.UUID -> writeText(out, value.toString())
         is SqlRawLiteral -> writeText(out, value.sql)
@@ -291,7 +292,8 @@ internal fun streamFlow(rt: Long, open: () -> JniResult): Flow<ResultSet.Row> = 
     val stream: Long = withContext(Dispatchers.IO) { open().streamOrError() }
     try {
         while (true) {
-            val chunk = withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeStreamNext(rt, stream)).toResultSet() }
+            val chunk =
+                withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeStreamNext(rt, stream)).toResultSet() }
             chunk.throwIfError()
             if (chunk.rows.isEmpty()) break
             chunk.rows.forEach { emit(it) }

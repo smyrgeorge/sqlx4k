@@ -19,6 +19,7 @@ import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.extensions.isInsertStatement
+import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimeString
 import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
@@ -27,12 +28,6 @@ import io.github.smyrgeorge.sqlx4k.impl.types.SqlRawLiteral
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.github.smyrgeorge.sqlx4k.sqlite.pool.ConnectionPoolImpl
 import io.github.smyrgeorge.sqlx4k.sqlite.pool.PooledTransaction
-import java.util.concurrent.Executors
-import kotlin.time.Duration
-import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -47,6 +42,12 @@ import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
+import java.util.concurrent.Executors
+import kotlin.time.Duration
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 /**
  * SQLite class provides mechanisms to interact with a SQLite database on the Android platform.
@@ -391,8 +392,8 @@ class SQLite(
                     // the existing `asInstant()` / `asLocalDate*()` decoders work.
                     is Instant -> bindString(index, value.toTimestampString())
                     is LocalDate -> bindString(index, value.toString())
-                    is LocalTime -> bindString(index, value.toString())
-                    is LocalDateTime -> bindString(index, value.toString().replace('T', ' '))
+                    is LocalTime -> bindString(index, value.toTimeString())
+                    is LocalDateTime -> bindString(index, value.toTimestampString())
                     is Uuid -> bindString(index, value.toString())
                     is java.util.UUID -> bindString(index, value.toString())
                     is SqlRawLiteral -> bindString(index, value.sql)
