@@ -19,5 +19,6 @@ internal actual fun ensureCipherNativeLoaded() = loadCipherNative {
     }
     val tmp = File.createTempFile("sqlx4k_sqlite_cipher", ext).also { it.deleteOnExit() }
     stream.use { input -> tmp.outputStream().use { input.copyTo(it) } }
+    @Suppress("UnsafeDynamicallyLoadedCode")
     System.load(tmp.absolutePath)
 }

@@ -30,6 +30,7 @@ private fun tryLoadHostNativeLibFromProperty(): Boolean {
     val ext = src.name.substringAfterLast('.', "so")
     val tmp = File.createTempFile("sqlx4k_sqlite_cipher", ".$ext").also { it.deleteOnExit() }
     src.inputStream().use { input -> tmp.outputStream().use { input.copyTo(it) } }
+    @Suppress("UnsafeDynamicallyLoadedCode")
     System.load(tmp.absolutePath)
     return true
 }

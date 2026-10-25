@@ -1,4 +1,4 @@
-@file:Suppress("SqlSourceToSinkFlow", "DuplicatedCode")
+@file:Suppress("SqlSourceToSinkFlow", "SqlNoDataSourceInspection")
 
 package io.github.smyrgeorge.sqlx4k.mysql
 
@@ -27,19 +27,9 @@ import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufAllocator
-import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
 import io.r2dbc.pool.ConnectionPoolConfiguration
-import io.r2dbc.spi.Connection as NativeR2dbcConnection
 import io.r2dbc.spi.ConnectionFactoryOptions
-import io.r2dbc.spi.R2dbcTimeoutException
-import io.r2dbc.spi.Result as NativeR2dbcResultSet
 import io.r2dbc.spi.Row
-import kotlin.jvm.optionals.getOrElse
-import kotlin.time.Duration
-import kotlin.time.Instant
-import kotlin.time.toJavaDuration
-import kotlin.uuid.Uuid
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emitAll
@@ -53,7 +43,6 @@ import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
@@ -62,10 +51,15 @@ import kotlinx.datetime.toJavaLocalDate
 import kotlinx.datetime.toJavaLocalDateTime
 import kotlinx.datetime.toJavaLocalTime
 import kotlinx.datetime.toLocalDateTime
-import org.reactivestreams.Publisher
 import reactor.core.publisher.Mono
-import reactor.pool.PoolAcquireTimeoutException
-import reactor.pool.PoolShutdownException
+import kotlin.jvm.optionals.getOrElse
+import kotlin.time.Duration
+import kotlin.time.Instant
+import kotlin.time.toJavaDuration
+import kotlin.uuid.Uuid
+import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
+import io.r2dbc.spi.Connection as NativeR2dbcConnection
+import io.r2dbc.spi.Result as NativeR2dbcResultSet
 
 /**
  * The `MySQL` class provides a driver implementation for interacting with a MySQL database.
@@ -167,76 +161,26 @@ class MySQL(
 
     override suspend fun execute(sql: String): Result<Long> = executeWithResult(sql).map { it.rowsAffected }
 
-    override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
-        with(pool.acquire()) {
-            try {
-                createStatement(sql).executeForResult()
-            } catch (e: Exception) {
-                e.toSQLError().raise()
-            } finally {
-                close().toMono().awaitSingleOrNull()
-            }
-        }
-    }
+    override suspend fun executeWithResult(sql: String): Result<ExecuteResult> =
+        pool.withConnection { createStatement(sql).executeForResult() }
 
-    override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
-        with(pool.acquire()) {
-            try {
-                createStatement(sql).execute().awaitLast().toResultSet()
-            } catch (e: Exception) {
-                e.toSQLError().raise()
-            } finally {
-                close().toMono().awaitSingleOrNull()
-            }
-        }
-    }
+    override suspend fun fetchAll(sql: String): Result<ResultSet> =
+        pool.withConnection { createStatement(sql).execute().awaitLast().toResultSet() }
 
     override suspend fun execute(statement: Statement): Result<Long> =
         executeWithResult(statement).map { it.rowsAffected }
 
-    override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
-        with(pool.acquire()) {
-            try {
-                createStatement(statement, encoders).executeForResult()
-            } catch (e: Exception) {
-                e.toSQLError().raise()
-            } finally {
-                close().toMono().awaitSingleOrNull()
-            }
-        }
-    }
+    override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> =
+        pool.withConnection { createStatement(statement, encoders).executeForResult() }
 
-    override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
-        with(pool.acquire()) {
-            try {
-                createStatement(statement, encoders).execute().awaitLast().toResultSet()
-            } catch (e: Exception) {
-                e.toSQLError().raise()
-            } finally {
-                close().toMono().awaitSingleOrNull()
-            }
-        }
-    }
+    override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+        pool.withConnection { createStatement(statement, encoders).execute().awaitLast().toResultSet() }
 
-    // A pooled connection is borrowed for the whole collection and returned when the flow completes,
-    // fails or is cancelled.
-    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
-        val connection = pool.acquire()
-        try {
-            emitAll(connection.createStatement(sql).fetchSize(fetchSize).streamRows())
-        } finally {
-            withContext(NonCancellable) { connection.close().toMono().awaitSingleOrNull() }
-        }
-    }
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> =
+        pool.flowWithConnection { createStatement(sql).fetchSize(fetchSize).streamRows() }
 
-    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
-        val connection = pool.acquire()
-        try {
-            emitAll(connection.createStatement(statement, encoders).fetchSize(fetchSize).streamRows())
-        } finally {
-            withContext(NonCancellable) { connection.close().toMono().awaitSingleOrNull() }
-        }
-    }
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> =
+        pool.flowWithConnection { createStatement(statement, encoders).fetchSize(fetchSize).streamRows() }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
         with(pool.acquire()) {
@@ -247,20 +191,6 @@ class MySQL(
                 e.toSQLError().raise()
             }
             R2dbcTransaction(this, true, encoders)
-        }
-    }
-
-    private suspend fun NativeR2dbcConnectionPool.acquire(): NativeR2dbcConnection {
-        return try {
-            create().awaitSingle()
-        } catch (e: Exception) {
-            when (e) {
-                is PoolShutdownException -> SQLError(SQLError.Code.PoolClosed, e.message).raise()
-                is PoolAcquireTimeoutException -> SQLError(SQLError.Code.PoolTimedOut, e.message).raise()
-                // r2dbc-pool enforces the acquire timeout itself and reports it as an R2dbcTimeoutException.
-                is R2dbcTimeoutException -> SQLError(SQLError.Code.PoolTimedOut, e.message).raise()
-                else -> SQLError(SQLError.Code.Pool, e.message, e).raise()
-            }
         }
     }
 
@@ -302,86 +232,43 @@ class MySQL(
         private suspend fun execute(sql: String, lock: Boolean): Result<Long> =
             executeWithResult(sql, lock).map { it.rowsAffected }
 
-        private suspend fun executeWithResult(sql: String, lock: Boolean): Result<ExecuteResult> {
-            suspend fun doExecute(sql: String): Result<ExecuteResult> = runCatching {
-                connection.createStatement(sql).executeForResult()
-            }
-
-            suspend fun doExecuteWithLock(sql: String): Result<ExecuteResult> = runCatching {
-                mutex.withLock {
-                    assertIsOpen()
-                    doExecute(sql).getOrThrow()
-                }
-            }
-
-            return if (lock) doExecuteWithLock(sql) else doExecute(sql)
-        }
+        private suspend fun executeWithResult(sql: String, lock: Boolean): Result<ExecuteResult> =
+            if (lock) mutex.withLockCatching(::assertIsOpen) { connection.createStatement(sql).executeForResult() }
+            else runCatching { rethrowAsSQLError { connection.createStatement(sql).executeForResult() } }
 
         override suspend fun execute(sql: String): Result<Long> = execute(sql, true)
 
         override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = executeWithResult(sql, true)
 
-        override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
-            return mutex.withLock {
-                assertIsOpen()
-                try {
-                    connection.createStatement(sql).execute().awaitLast().toResultSet().toResult()
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
-            }
+        override suspend fun fetchAll(sql: String): Result<ResultSet> = mutex.withLockCatching(::assertIsOpen) {
+            connection.createStatement(sql).execute().awaitLast().toResultSet()
         }
 
         override suspend fun execute(statement: Statement): Result<Long> =
             executeWithResult(statement).map { it.rowsAffected }
 
-        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
-            mutex.withLock {
-                assertIsOpen()
-                try {
-                    connection.createStatement(statement, encoders).executeForResult()
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> =
+            mutex.withLockCatching(::assertIsOpen) {
+                connection.createStatement(statement, encoders).executeForResult()
             }
-        }
 
-        override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
-            return mutex.withLock {
-                assertIsOpen()
-                try {
-                    connection.createStatement(statement, encoders).execute().awaitLast().toResultSet().toResult()
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+            mutex.withLockCatching(::assertIsOpen) {
+                connection.createStatement(statement, encoders).execute().awaitLast().toResultSet()
             }
-        }
 
         // The connection is held (its mutex locked) for the whole collection.
-        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(connection.createStatement(sql).fetchSize(fetchSize).streamRows())
-            }
-        }
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> =
+            mutex.flowWithLock(::assertIsOpen) { connection.createStatement(sql).fetchSize(fetchSize).streamRows() }
 
-        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(connection.createStatement(statement, encoders).fetchSize(fetchSize).streamRows())
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> =
+            mutex.flowWithLock(::assertIsOpen) {
+                connection.createStatement(statement, encoders).fetchSize(fetchSize).streamRows()
             }
-        }
 
-        override suspend fun begin(): Result<Transaction> = runCatching {
-            mutex.withLock {
-                assertIsOpen()
-                try {
-                    connection.beginTransaction().toMono().awaitSingleOrNull()
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
-                R2dbcTransaction(connection, false, encoders)
-            }
+        override suspend fun begin(): Result<Transaction> = mutex.withLockCatching(::assertIsOpen) {
+            connection.beginTransaction().toMono().awaitSingleOrNull()
+            R2dbcTransaction(connection, false, encoders)
         }
     }
 
@@ -403,13 +290,9 @@ class MySQL(
                 if (commited) return@withLock
                 assertIsOpen()
                 _status = Transaction.Status.Closed
-                try {
-                    connection.commitTransaction().toMono().awaitSingleOrNull()
+                connection.endTransaction(closeConnectionAfterTx) {
+                    commitTransaction().toMono().awaitSingleOrNull()
                     _commited = true
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                } finally {
-                    if (closeConnectionAfterTx) connection.close().toMono().awaitSingleOrNull()
                 }
             }
         }
@@ -419,88 +302,46 @@ class MySQL(
                 if (rollbacked) return@withLock
                 assertIsOpen()
                 _status = Transaction.Status.Closed
-                try {
-                    connection.rollbackTransaction().toMono().awaitSingleOrNull()
+                connection.endTransaction(closeConnectionAfterTx) {
+                    rollbackTransaction().toMono().awaitSingleOrNull()
                     _rollbacked = true
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                } finally {
-                    if (closeConnectionAfterTx) connection.close().toMono().awaitSingleOrNull()
                 }
             }
         }
 
         override suspend fun execute(sql: String): Result<Long> = executeWithResult(sql).map { it.rowsAffected }
 
-        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
-            mutex.withLock {
-                assertIsOpen()
-                try {
-                    connection.createStatement(sql).executeForResult()
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
-            }
-        }
+        override suspend fun executeWithResult(sql: String): Result<ExecuteResult> =
+            mutex.withLockCatching(::assertIsOpen) { connection.createStatement(sql).executeForResult() }
 
-        override suspend fun fetchAll(sql: String): Result<ResultSet> = runCatching {
-            return mutex.withLock {
-                assertIsOpen()
-                try {
-                    connection.createStatement(sql).execute().awaitLast().toResultSet().toResult()
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
-            }
+        override suspend fun fetchAll(sql: String): Result<ResultSet> = mutex.withLockCatching(::assertIsOpen) {
+            connection.createStatement(sql).execute().awaitLast().toResultSet()
         }
 
         override suspend fun execute(statement: Statement): Result<Long> =
             executeWithResult(statement).map { it.rowsAffected }
 
-        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
-            mutex.withLock {
-                assertIsOpen()
-                try {
-                    connection.createStatement(statement, encoders).executeForResult()
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
+        override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> =
+            mutex.withLockCatching(::assertIsOpen) {
+                connection.createStatement(statement, encoders).executeForResult()
             }
-        }
 
-        override suspend fun fetchAll(statement: Statement): Result<ResultSet> = runCatching {
-            return mutex.withLock {
-                assertIsOpen()
-                try {
-                    connection.createStatement(statement, encoders).execute().awaitLast().toResultSet().toResult()
-                } catch (e: Exception) {
-                    e.toSQLError().raise()
-                }
+        override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
+            mutex.withLockCatching(::assertIsOpen) {
+                connection.createStatement(statement, encoders).execute().awaitLast().toResultSet()
             }
-        }
 
         // The transaction is held (its mutex locked) for the whole collection.
-        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(connection.createStatement(sql).fetchSize(fetchSize).streamRows())
-            }
-        }
+        override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> =
+            mutex.flowWithLock(::assertIsOpen) { connection.createStatement(sql).fetchSize(fetchSize).streamRows() }
 
-        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
-            mutex.withLock {
-                assertIsOpen()
-                emitAll(connection.createStatement(statement, encoders).fetchSize(fetchSize).streamRows())
+        override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> =
+            mutex.flowWithLock(::assertIsOpen) {
+                connection.createStatement(statement, encoders).fetchSize(fetchSize).streamRows()
             }
-        }
     }
 
     companion object {
-        private fun <T> Publisher<T>.toMono(): Mono<T> {
-            if (this is Mono<T>) return this
-            error("Publisher is not a Mono: ${this::class.qualifiedName}")
-        }
-
         /**
          * Executes the statement and reports its update count and generated id. With returnGeneratedValues(),
          * r2dbc-mysql reports `LAST_INSERT_ID()` from the server's reply to the statement (no extra query); it is 0
@@ -513,8 +354,8 @@ class MySQL(
                     if (segment is NativeR2dbcResultSet.Message) return@flatMap Mono.error(segment.exception())
                     // A segment may carry both: the update count and the generated id.
                     val count = (segment as? NativeR2dbcResultSet.UpdateCount)?.value() ?: 0L
-                    val id = (segment as? NativeR2dbcResultSet.RowSegment)?.row()?.get(0, java.lang.Long::class.java)
-                    Mono.just(count to id?.toLong())
+                    val id = (segment as? NativeR2dbcResultSet.RowSegment)?.row()?.get(0, Long::class.java)
+                    Mono.just(count to id)
                 }
                 .asFlow().toList()
             return ExecuteResult(
