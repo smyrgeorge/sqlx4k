@@ -5,9 +5,6 @@ package io.github.smyrgeorge.sqlx4k.mysql
 import io.github.smyrgeorge.sqlx4k.ExecuteResult
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
-import kotlin.coroutines.Continuation
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.CValue
@@ -22,6 +19,7 @@ import kotlinx.cinterop.useContents
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import sqlx4k.mysql.Sqlx4kMysqlPtr
 import sqlx4k.mysql.Sqlx4kMysqlResult
@@ -29,6 +27,8 @@ import sqlx4k.mysql.Sqlx4kMysqlSchema
 import sqlx4k.mysql.sqlx4k_mysql_free_result
 import sqlx4k.mysql.sqlx4k_mysql_stream_close
 import sqlx4k.mysql.sqlx4k_mysql_stream_next
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.resume
 
 private fun Sqlx4kMysqlResult.isError(): Boolean = error >= 0
 private fun Sqlx4kMysqlResult.toError(): SQLError {
@@ -122,18 +122,29 @@ internal fun Sqlx4kMysqlResult.toResultSetOrError(): ResultSet {
     return toResultSet()
 }
 
+/**
+ * Runs an FFI [operation] and suspends until the Rust side reports its result through [fn].
+ *
+ * The call cannot be cancelled: Rust always completes it, and its result may own a resource that must be reclaimed
+ * (a connection or transaction handle, a row stream, a transaction moved into the call). So the result is always
+ * awaited, also when the caller is cancelled: [NonCancellable] keeps the continuation from being cancelled, and since
+ * it does not change the dispatcher, `withContext` adds no cancellation check on entry or exit. The caller observes a
+ * cancellation at its next suspension point.
+ */
 internal suspend inline fun sqlx(
     crossinline operation: (continuationPtr: CPointer<out CPointed>) -> Unit
-): CPointer<Sqlx4kMysqlResult>? = suspendCoroutine { continuation ->
-    // Create a stable reference to the continuation that won't be garbage collected
-    val stableRef = StableRef.create(continuation)
+): CPointer<Sqlx4kMysqlResult>? = withContext(NonCancellable) {
+    suspendCancellableCoroutine { continuation ->
+        // Create a stable reference to the continuation that won't be garbage collected
+        val stableRef = StableRef.create(continuation)
 
-    // Get a C-compatible pointer to the continuation
-    val continuationPtr = stableRef.asCPointer()
+        // Get a C-compatible pointer to the continuation
+        val continuationPtr = stableRef.asCPointer()
 
-    // Execute the operation with the continuation pointer
-    // The operation is responsible for resuming the continuation
-    operation(continuationPtr)
+        // Execute the operation with the continuation pointer
+        // The operation is responsible for resuming the continuation
+        operation(continuationPtr)
+    }
 }
 
 internal val fn = staticCFunction<CValue<Sqlx4kMysqlPtr>, CPointer<Sqlx4kMysqlResult>?, Unit> { c, r ->

@@ -4,10 +4,6 @@ package io.github.smyrgeorge.sqlx4k.postgres
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.withContext
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.CValue
@@ -19,15 +15,19 @@ import kotlinx.cinterop.pointed
 import kotlinx.cinterop.staticCFunction
 import kotlinx.cinterop.toKString
 import kotlinx.cinterop.useContents
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import sqlx4k.postgresql.Sqlx4kPostgresPtr
 import sqlx4k.postgresql.Sqlx4kPostgresResult
-import sqlx4k.postgresql.sqlx4k_postgresql_stream_close
-import sqlx4k.postgresql.sqlx4k_postgresql_stream_next
 import sqlx4k.postgresql.Sqlx4kPostgresSchema
 import sqlx4k.postgresql.sqlx4k_postgres_free_result
+import sqlx4k.postgresql.sqlx4k_postgresql_stream_close
+import sqlx4k.postgresql.sqlx4k_postgresql_stream_next
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 
 private fun Sqlx4kPostgresResult.isError(): Boolean = error >= 0
 private fun Sqlx4kPostgresResult.toError(): SQLError {
@@ -117,18 +117,29 @@ internal fun Sqlx4kPostgresResult.toResultSetOrError(): ResultSet {
     return toResultSet()
 }
 
+/**
+ * Runs an FFI [operation] and suspends until the Rust side reports its result through [fn].
+ *
+ * The call cannot be cancelled: Rust always completes it, and its result may own a resource that must be reclaimed
+ * (a connection or transaction handle, a row stream, a transaction moved into the call). So the result is always
+ * awaited, also when the caller is cancelled: [NonCancellable] keeps the continuation from being cancelled, and since
+ * it does not change the dispatcher, `withContext` adds no cancellation check on entry or exit. The caller observes a
+ * cancellation at its next suspension point.
+ */
 internal suspend inline fun sqlx(
     crossinline operation: (continuationPtr: CPointer<out CPointed>) -> Unit
-): CPointer<Sqlx4kPostgresResult>? = suspendCoroutine { continuation ->
-    // Create a stable reference to the continuation that won't be garbage collected
-    val stableRef = StableRef.create(continuation)
+): CPointer<Sqlx4kPostgresResult>? = withContext(NonCancellable) {
+    suspendCancellableCoroutine { continuation ->
+        // Create a stable reference to the continuation that won't be garbage collected
+        val stableRef = StableRef.create(continuation)
 
-    // Get a C-compatible pointer to the continuation
-    val continuationPtr = stableRef.asCPointer()
+        // Get a C-compatible pointer to the continuation
+        val continuationPtr = stableRef.asCPointer()
 
-    // Execute the operation with the continuation pointer
-    // The operation is responsible for resuming the continuation
-    operation(continuationPtr)
+        // Execute the operation with the continuation pointer
+        // The operation is responsible for resuming the continuation
+        operation(continuationPtr)
+    }
 }
 
 internal val fn = staticCFunction<CValue<Sqlx4kPostgresPtr>, CPointer<Sqlx4kPostgresResult>?, Unit> { c, r ->
