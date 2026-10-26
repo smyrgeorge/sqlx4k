@@ -886,14 +886,9 @@ pub extern "C" fn sqlx4k_sqlite_of(
     let read_only = mode == Some("ro");
     let create_if_missing = matches!(mode, None | Some("rwc"));
 
-    // Create the tokio runtime.
-    let runtime = if RUNTIME.get().is_some() {
-        RUNTIME.get().unwrap()
-    } else {
-        let rt = Runtime::new().unwrap();
-        RUNTIME.set(rt).unwrap();
-        RUNTIME.get().unwrap()
-    };
+    // Create the tokio runtime, once: get_or_init also when two pools are created concurrently (checking and then
+    // setting raced: a losing set().unwrap() panicked, and the process aborted).
+    let runtime = RUNTIME.get_or_init(|| Runtime::new().expect("failed to create the tokio runtime"));
 
     // Create the db pool options.
     //

@@ -898,14 +898,9 @@ pub fn open(
         options = options.pragma("key", quoted);
     }
 
-    // Create the tokio runtime.
-    let runtime = if RUNTIME.get().is_some() {
-        RUNTIME.get().unwrap()
-    } else {
-        let rt = Runtime::new().unwrap();
-        let _ = RUNTIME.set(rt);
-        RUNTIME.get().unwrap()
-    };
+    // Create the tokio runtime, once: get_or_init also when two pools are created concurrently (checking and then
+    // setting raced: a losing set().unwrap() panicked, and the process aborted).
+    let runtime = RUNTIME.get_or_init(|| Runtime::new().expect("failed to create the tokio runtime"));
 
     // Create the db pool options.
     //
