@@ -163,4 +163,21 @@ class PostgreSQLTests {
 
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }
     }
+
+    // Valid values the driver's decoders cannot represent (an array with a NULL element, an infinite timestamp or
+    // date, 24:00:00) must come back as postgres prints them, through both the plain and the prepared protocol,
+    // instead of failing the decode (the native driver used to abort the process on them).
+    @Test
+    fun `values beyond the decoded types come back as postgres text`(): Unit = runBlocking {
+        val sql = "select array[1, null, 3]::int4[], 'infinity'::timestamp, '-infinity'::timestamptz, " +
+            "'infinity'::date, '24:00:00'::time"
+        val expected = listOf("{1,NULL,3}", "infinity", "-infinity", "infinity", "24:00:00")
+
+        val plain = db.fetchAll(sql).getOrThrow().first()
+        val prepared = db.fetchAll(Statement.create("$sql where 1 = :one").bind("one", 1)).getOrThrow().first()
+        assertAll {
+            assertThat(expected.indices.map { plain.get(it).asString() }, "plain").isEqualTo(expected)
+            assertThat(expected.indices.map { prepared.get(it).asString() }, "prepared").isEqualTo(expected)
+        }
+    }
 }

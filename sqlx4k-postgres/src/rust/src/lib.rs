@@ -1548,69 +1548,74 @@ fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mut c_char {
             format!("\\x{}", hex::encode(bytes))
         }
         "UUID" => row.get_unchecked::<uuid::Uuid, _>(ordinal).to_string(),
-        "DATE" => row
-            .get_unchecked::<chrono::NaiveDate, _>(ordinal)
-            .to_string(),
-        "TIME" => row
-            .get_unchecked::<chrono::NaiveTime, _>(ordinal)
-            .to_string(),
-        "TIMESTAMP" => {
-            let dt: chrono::NaiveDateTime = row.get_unchecked(ordinal);
-            dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string()
-        }
-        "TIMESTAMPTZ" => {
-            let dt: chrono::DateTime<chrono::Utc> = row.get_unchecked(ordinal);
-            dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string()
-        }
+        // Dates, times and timestamps have values chrono cannot represent ('infinity', '24:00:00'): see decode_datetime.
+        "DATE" => decode_datetime(row, ordinal, |d: chrono::NaiveDate| d.to_string(), decode_pg_date_binary),
+        "TIME" => decode_datetime(row, ordinal, |t: chrono::NaiveTime| t.to_string(), decode_pg_time_binary),
+        "TIMESTAMP" => decode_datetime(
+            row,
+            ordinal,
+            |dt: chrono::NaiveDateTime| dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string(),
+            decode_pg_timestamp_binary,
+        ),
+        "TIMESTAMPTZ" => decode_datetime(
+            row,
+            ordinal,
+            |dt: chrono::DateTime<chrono::Utc>| dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string(),
+            decode_pg_timestamp_binary,
+        ),
         // Array types — render with postgres' `{a,b,c}` text form so the existing
         // `asString()` path round-trips. Element formatting mirrors `T::to_string()`,
-        // so this only handles arrays of element types we can decode here.
-        "BOOL[]" => {
+        // so this only handles arrays of element types we can decode here. Elements may
+        // be NULL (rendered `NULL`, as postgres does); an array sqlx cannot decode (a lower
+        // bound other than 1, an infinite timestamp, ...) falls back as in decode_or.
+        "BOOL[]" => decode_or(
+            row,
+            ordinal,
             // Postgres' canonical text encoding for bool arrays is `{t,f}` and
             // sqlx4k's `asBooleanArray()` parses that form (via `asBoolean`).
-            let v: Vec<bool> = row.get_unchecked(ordinal);
-            let mut s = String::from("{");
-            let mut first = true;
-            for b in v {
-                if !first {
-                    s.push(',');
-                }
-                first = false;
-                s.push(if b { 't' } else { 'f' });
-            }
-            s.push('}');
-            s
-        }
-        "INT2[]" => format_pg_array(row.get_unchecked::<Vec<i16>, _>(ordinal).iter()),
-        "INT4[]" => format_pg_array(row.get_unchecked::<Vec<i32>, _>(ordinal).iter()),
-        "INT8[]" => format_pg_array(row.get_unchecked::<Vec<i64>, _>(ordinal).iter()),
-        "FLOAT4[]" => format_pg_array(row.get_unchecked::<Vec<f32>, _>(ordinal).iter()),
-        "FLOAT8[]" => format_pg_array(row.get_unchecked::<Vec<f64>, _>(ordinal).iter()),
+            |v: Vec<Option<bool>>| {
+                format_pg_array_fmt(v.iter(), |b| match b {
+                    Some(true) => "t".to_string(),
+                    Some(false) => "f".to_string(),
+                    None => "NULL".to_string(),
+                })
+            },
+            || decode_text_or_binary(row, ordinal, |_| None),
+        ),
+        "INT2[]" => decode_array::<i16>(row, ordinal),
+        "INT4[]" => decode_array::<i32>(row, ordinal),
+        "INT8[]" => decode_array::<i64>(row, ordinal),
+        "FLOAT4[]" => decode_array::<f32>(row, ordinal),
+        "FLOAT8[]" => decode_array::<f64>(row, ordinal),
         // Text-like array types — output `{a,b,c}` without per-element quoting so
         // the existing naive `asStringArray()` parser (split on `,`) round-trips.
         // Limitation: elements containing commas will be split incorrectly.
-        "TEXT[]" | "VARCHAR[]" | "BPCHAR[]" | "NAME[]" => {
-            format_pg_array(row.get_unchecked::<Vec<String>, _>(ordinal).iter())
-        }
-        "UUID[]" => format_pg_array(row.get_unchecked::<Vec<uuid::Uuid>, _>(ordinal).iter()),
-        "TIMESTAMP[]" => {
-            let v: Vec<chrono::NaiveDateTime> = row.get_unchecked(ordinal);
-            format_pg_array_fmt(v.iter(), |dt| {
-                dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string()
-            })
-        }
-        "TIMESTAMPTZ[]" => {
-            let v: Vec<chrono::DateTime<chrono::Utc>> = row.get_unchecked(ordinal);
-            format_pg_array_fmt(v.iter(), |dt| {
-                dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string()
-            })
-        }
-        "BYTEA[]" => {
+        "TEXT[]" | "VARCHAR[]" | "BPCHAR[]" | "NAME[]" => decode_array::<String>(row, ordinal),
+        "UUID[]" => decode_array::<uuid::Uuid>(row, ordinal),
+        "TIMESTAMP[]" => decode_datetime(
+            row,
+            ordinal,
+            |v: Vec<Option<chrono::NaiveDateTime>>| {
+                format_pg_nullable_array_fmt(v.iter(), |dt| dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string())
+            },
+            |bytes| decode_pg_array_binary(bytes, decode_pg_timestamp_binary),
+        ),
+        "TIMESTAMPTZ[]" => decode_datetime(
+            row,
+            ordinal,
+            |v: Vec<Option<chrono::DateTime<chrono::Utc>>>| {
+                format_pg_nullable_array_fmt(v.iter(), |dt| dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string())
+            },
+            |bytes| decode_pg_array_binary(bytes, decode_pg_timestamp_binary),
+        ),
+        "BYTEA[]" => decode_or(
+            row,
+            ordinal,
             // Each element gets the bytea text form (`\xHH..`) so a downstream
             // `asStringArray().map { it.asByteArray() }` round-trips per element.
-            let v: Vec<Vec<u8>> = row.get_unchecked(ordinal);
-            format_pg_array_fmt(v.iter(), |b| format!("\\x{}", hex::encode(b)))
-        }
+            |v: Vec<Option<Vec<u8>>>| format_pg_nullable_array_fmt(v.iter(), |b| format!("\\x{}", hex::encode(b))),
+            || decode_text_or_binary(row, ordinal, |_| None),
+        ),
         // JSONB's binary wire format is a 1-byte version header (0x01) followed by the
         // canonical JSON text. Decoding as `&str` (the fallthrough below) would keep that
         // header byte, corrupting JSON parsing on the Kotlin side (e.g. `?{...}`), so strip
@@ -1640,6 +1645,90 @@ fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mut c_char {
     CString::new(s).unwrap_or_default().into_raw()
 }
 
+/// Decodes the value as `T` and renders it with `render`. A value `T` cannot represent ('infinity', '24:00:00', an
+/// array whose lower bound is not 1, ...) is rendered by `fallback` instead: `get_unchecked` would unwrap the decode
+/// error, and with `panic = "abort"` a single such value took the host process down.
+fn decode_or<'r, T: sqlx::Decode<'r, Postgres>>(
+    row: &'r PgRow,
+    ordinal: usize,
+    render: impl FnOnce(T) -> String,
+    fallback: impl FnOnce() -> String,
+) -> String {
+    match row.try_get_unchecked::<T, _>(ordinal) {
+        Ok(value) => render(value),
+        Err(_) => fallback(),
+    }
+}
+
+/// Decodes an array of `T` (elements may be NULL) into postgres' `{a,NULL,c}` text form; see decode_or.
+fn decode_array<T>(row: &PgRow, ordinal: usize) -> String
+where
+    T: ToString + for<'r> sqlx::Decode<'r, Postgres> + Type<Postgres>,
+{
+    decode_or(
+        row,
+        ordinal,
+        |v: Vec<Option<T>>| format_pg_nullable_array_fmt(v.iter(), |e| e.to_string()),
+        || decode_text_or_binary(row, ordinal, |_| None),
+    )
+}
+
+/// Decodes a date/time value (or an array of them) without sqlx's binary decoders, which panic (overflowing chrono)
+/// on values chrono cannot represent, such as 'infinity': a binary value is decoded by `binary`, with checked
+/// arithmetic; a text value by sqlx, whose text parsing fails cleanly, and is passed through as is when it cannot be
+/// represented ('infinity', '24:00:00').
+fn decode_datetime<'r, T: sqlx::Decode<'r, Postgres>>(
+    row: &'r PgRow,
+    ordinal: usize,
+    render: impl FnOnce(T) -> String,
+    binary: fn(&[u8]) -> Option<String>,
+) -> String {
+    let Ok(value) = row.try_get_raw(ordinal) else { return String::new() };
+    match value.format() {
+        PgValueFormat::Binary => value.as_bytes().ok().and_then(binary).unwrap_or_default(),
+        PgValueFormat::Text => decode_or(row, ordinal, render, || value.as_str().map(str::to_string).unwrap_or_default()),
+    }
+}
+
+/// Days from 0001-01-01 (chrono's `num_days_from_ce` day 1) to 2000-01-01, the epoch of the binary DATE format.
+const PG_EPOCH_DAYS_FROM_CE: i32 = 730_120;
+/// Microseconds from 1970-01-01 to 2000-01-01, the epoch of the binary TIMESTAMP format.
+const PG_EPOCH_UNIX_MICROS: i64 = 946_684_800_000_000;
+
+/// Binary DATE (days since 2000-01-01, `i32::MAX` / `i32::MIN` for `±infinity`).
+fn decode_pg_date_binary(bytes: &[u8]) -> Option<String> {
+    let days = i32::from_be_bytes(bytes.try_into().ok()?);
+    match days {
+        i32::MAX => Some("infinity".to_string()),
+        i32::MIN => Some("-infinity".to_string()),
+        _ => Some(chrono::NaiveDate::from_num_days_from_ce_opt(days.checked_add(PG_EPOCH_DAYS_FROM_CE)?)?.to_string()),
+    }
+}
+
+/// Binary TIMESTAMP / TIMESTAMPTZ (microseconds since 2000-01-01 UTC, `i64::MAX` / `i64::MIN` for `±infinity`).
+fn decode_pg_timestamp_binary(bytes: &[u8]) -> Option<String> {
+    let micros = i64::from_be_bytes(bytes.try_into().ok()?);
+    match micros {
+        i64::MAX => Some("infinity".to_string()),
+        i64::MIN => Some("-infinity".to_string()),
+        _ => {
+            let dt = chrono::DateTime::from_timestamp_micros(micros.checked_add(PG_EPOCH_UNIX_MICROS)?)?;
+            Some(dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string())
+        }
+    }
+}
+
+/// Binary TIME (microseconds since midnight, up to and including 24:00:00, which chrono cannot represent).
+fn decode_pg_time_binary(bytes: &[u8]) -> Option<String> {
+    let micros = i64::from_be_bytes(bytes.try_into().ok()?);
+    if !(0..=86_400_000_000).contains(&micros) {
+        return None;
+    }
+    let (secs, frac) = (micros / 1_000_000, micros % 1_000_000);
+    let hms = format!("{:02}:{:02}:{:02}", secs / 3600, secs % 3600 / 60, secs % 60);
+    Some(if frac == 0 { hms } else { format!("{hms}.{frac:06}") })
+}
+
 /// Text format is passed through as is; binary format is rendered to the same text by `decode_binary`.
 fn decode_text_or_binary(row: &PgRow, ordinal: usize, decode_binary: fn(&[u8]) -> Option<String>) -> String {
     let Ok(value) = row.try_get_raw(ordinal) else { return String::new() };
@@ -1654,6 +1743,12 @@ fn decode_text_or_binary(row: &PgRow, ordinal: usize, decode_binary: fn(&[u8]) -
 /// elements in row-major order, each as `len: i32` (-1 for NULL) and `len` bytes of `numeric_send`.
 /// Renders the canonical text form (`{1.5,NULL}`, `{{1,2},{3,4}}`, `[0:1]={1,2}`).
 pub(crate) fn decode_pg_numeric_array_binary(bytes: &[u8]) -> Option<String> {
+    decode_pg_array_binary(bytes, decode_pg_numeric_binary)
+}
+
+/// Decodes a binary array (`array_send`, see decode_pg_numeric_array_binary) whose elements are decoded by
+/// `decode_element`, into the canonical text form.
+fn decode_pg_array_binary(bytes: &[u8], decode_element: fn(&[u8]) -> Option<String>) -> Option<String> {
     let read_i32 = |i: usize| -> Option<i32> { Some(i32::from_be_bytes(bytes.get(i..i + 4)?.try_into().ok()?)) };
     let ndim = read_i32(0)?;
     if ndim < 0 {
@@ -1678,18 +1773,24 @@ pub(crate) fn decode_pg_numeric_array_binary(bytes: &[u8]) -> Option<String> {
     }
     // Like array_out, spell the bounds out only when some dimension does not start at 1.
     let mut out = if default_bounds { String::new() } else { bounds + "=" };
-    write_pg_numeric_array_level(bytes, &mut pos, &dims, &mut out)?;
+    write_pg_array_level(bytes, &mut pos, &dims, decode_element, &mut out)?;
     Some(out)
 }
 
-fn write_pg_numeric_array_level(bytes: &[u8], pos: &mut usize, dims: &[usize], out: &mut String) -> Option<()> {
+fn write_pg_array_level(
+    bytes: &[u8],
+    pos: &mut usize,
+    dims: &[usize],
+    decode_element: fn(&[u8]) -> Option<String>,
+    out: &mut String,
+) -> Option<()> {
     out.push('{');
     for i in 0..dims[0] {
         if i > 0 {
             out.push(',');
         }
         if dims.len() > 1 {
-            write_pg_numeric_array_level(bytes, pos, &dims[1..], out)?;
+            write_pg_array_level(bytes, pos, &dims[1..], decode_element, out)?;
             continue;
         }
         let len = i32::from_be_bytes(bytes.get(*pos..*pos + 4)?.try_into().ok()?);
@@ -1700,7 +1801,7 @@ fn write_pg_numeric_array_level(bytes: &[u8], pos: &mut usize, dims: &[usize], o
         }
         let element = bytes.get(*pos..*pos + len as usize)?;
         *pos += len as usize;
-        out.push_str(&decode_pg_numeric_binary(element)?);
+        out.push_str(&decode_element(element)?);
     }
     out.push('}');
     Some(())
@@ -1786,8 +1887,12 @@ fn decode_text_lossy(row: &PgRow, ordinal: usize) -> String {
     }
 }
 
-fn format_pg_array<'a, T: 'a + ToString, I: Iterator<Item = &'a T>>(iter: I) -> String {
-    format_pg_array_fmt(iter, |v| v.to_string())
+/// Like format_pg_array_fmt, for elements that may be NULL (rendered `NULL`, as postgres does).
+fn format_pg_nullable_array_fmt<'a, T: 'a, I: Iterator<Item = &'a Option<T>>, F: FnMut(&'a T) -> String>(
+    iter: I,
+    mut format_one: F,
+) -> String {
+    format_pg_array_fmt(iter, |v| v.as_ref().map_or_else(|| "NULL".to_string(), &mut format_one))
 }
 
 fn format_pg_array_fmt<'a, T: 'a, I: Iterator<Item = &'a T>, F: FnMut(&'a T) -> String>(
