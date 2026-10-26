@@ -9,6 +9,7 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isFalse
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asBoolean
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.readSqlFilesFromDisk
 import kotlin.random.Random
 import kotlin.test.AfterTest
@@ -220,6 +221,25 @@ class PostgreSQLPgmqTopicTests {
             // ...but becomes visible after the delay elapses.
             delay(2500.milliseconds)
             assertThat(client.read(q, quantity = 10).getOrThrow()).hasSize(1)
+        } finally {
+            client.drop(PgmqClient.Queue(q))
+        }
+    }
+
+    // The bindings of a list are created all or none, and a failure is returned, not thrown.
+    @Test
+    fun `bindTopic with a list is atomic`(): Unit = runBlocking {
+        ensureTopics()
+        val q = newQueue()
+        client.create(PgmqClient.Queue(q)).getOrThrow()
+        try {
+            val res = client.bindTopic(listOf("valid.*", "invalid..pattern"), q)
+            assertThat(res.isFailure).isTrue()
+
+            val bound = client.pg.fetchAll(
+                "SELECT count(*) FROM pgmq.topic_bindings WHERE queue_name = '$q'"
+            ).getOrThrow().first().get(0).asLong()
+            assertThat(bound).isEqualTo(0L)
         } finally {
             client.drop(PgmqClient.Queue(q))
         }

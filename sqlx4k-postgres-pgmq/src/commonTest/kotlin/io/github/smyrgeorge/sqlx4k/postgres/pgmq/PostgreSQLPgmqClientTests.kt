@@ -11,6 +11,8 @@ import assertk.assertions.isGreaterThan
 import assertk.assertions.isGreaterThanOrEqualTo
 import assertk.assertions.isNotNull
 import assertk.assertions.isTrue
+import io.github.smyrgeorge.sqlx4k.ConnectionPool
+import io.github.smyrgeorge.sqlx4k.postgres.postgreSQL
 import kotlin.random.Random
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -621,5 +623,27 @@ class PostgreSQLPgmqClientTests {
         assertThat(messages[1].message).isEqualTo("null")
 
         client.drop(queue)
+    }
+
+    // create() runs in a transaction: with a pool of one, anything it does outside that transaction would wait for
+    // a second connection forever.
+    @Test
+    fun `create should work with a pool of one connection`(): Unit = runBlocking {
+        val single = postgreSQL(
+            url = "postgresql://localhost:15432/test",
+            username = "postgres",
+            password = "postgres",
+            options = ConnectionPool.Options.builder().maxConnections(1).acquireTimeout(5.seconds).build(),
+        )
+        try {
+            val singleClient = testPgmqClient(single)
+            val queue = PgmqClient.Queue(newQueue())
+            singleClient.create(queue).getOrThrow()
+            // Creating it again goes through the existing-queue check.
+            singleClient.create(queue).getOrThrow()
+            singleClient.drop(queue).getOrThrow()
+        } finally {
+            single.close()
+        }
     }
 }

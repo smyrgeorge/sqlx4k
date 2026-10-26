@@ -213,7 +213,11 @@ class PgmqClient(
         }
 
         return pg.transaction {
-            val existing = listQueues().getOrThrow().find { it.name == queue.name }
+            // Listed through the transaction: the member listQueues() runs on the pool, so it would need a second
+            // connection while this transaction holds one (with a pool of one it waits for it forever).
+            // language=PostgreSQL
+            val existing = fetchAll("SELECT * FROM pgmq.list_queues()", QueueRecordRowMapper).getOrThrow()
+                .find { it.name == queue.name }
             existing?.let {
                 check(it.unlogged == queue.unlogged) { "Queue '${queue.name}' already exists with a different unlogged flag." }
                 check(!it.partitioned) { "Queue '${queue.name}' already exists with a partitioned flag (partitioning is not yet supported by this client)." }
@@ -496,11 +500,10 @@ class PgmqClient(
      * @param queueName The name of the queue that will receive matching messages.
      * @return A [Result] containing [Unit] on success, or an error if any binding fails.
      */
-    suspend fun bindTopic(patterns: List<String>, queueName: String): Result<Unit> {
-        return pg.transaction {
-            patterns.forEach { pattern -> bindTopic(pattern, queueName).getOrThrow() }
-            Result.success(Unit)
-        }
+    suspend fun bindTopic(patterns: List<String>, queueName: String): Result<Unit> = pg.transactionCatching {
+        // Bound through the transaction: the member bindTopic runs on the pool, where each binding would be
+        // committed on its own. A failure is returned as a Result, not thrown.
+        patterns.forEach { pattern -> bindTopicWithContext(pattern, queueName).getOrThrow() }
     }
 
     /**
