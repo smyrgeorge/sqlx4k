@@ -152,7 +152,7 @@ internal class PooledConnection(
                 if (released) {
                     // A transaction begun through this lease and never ended must not follow the connection back
                     // into the pool.
-                    (connection as? SQLite.AndroidConnection)?.rollbackOpenTransaction()
+                    (connection as? SQLite.AndroidConnection)?.rollbackOpenTransactions()
                     release()
                 }
             }

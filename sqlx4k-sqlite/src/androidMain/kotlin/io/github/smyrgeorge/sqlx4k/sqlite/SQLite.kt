@@ -196,18 +196,19 @@ class SQLite(
         private val executor = Executors.newSingleThreadExecutor()
         private val dispatcher: CoroutineDispatcher = executor.asCoroutineDispatcher()
 
-        // The last transaction begun on this connection: see rollbackOpenTransaction.
-        private var openTransaction: AndroidTransaction? = null
+        // The transactions begun on this connection (a begin() while one is open nests in it): see
+        // rollbackOpenTransactions.
+        private val transactions = mutableListOf<AndroidTransaction>()
 
         /**
-         * Rolls back the transaction begun on this connection if it was never ended, so the connection does not go
-         * back to the pool inside it: the next borrower's statements would run in that transaction (on the same
-         * thread) and never be committed, and its write lock would stay held.
+         * Rolls back the transactions begun on this connection that were never ended, innermost first, so the
+         * connection does not go back to the pool inside one: the next borrower's statements would run in that
+         * transaction (on the same thread) and never be committed, and its write lock would stay held.
          */
-        internal suspend fun rollbackOpenTransaction() {
-            val tx = openTransaction ?: return
-            openTransaction = null
-            if (tx.status == Transaction.Status.Open) tx.rollback()
+        internal suspend fun rollbackOpenTransactions() {
+            val open = transactions.asReversed().filter { it.status == Transaction.Status.Open }
+            transactions.clear()
+            open.forEach { it.rollback() }
         }
 
         // Runs to completion also when the caller is cancelled: withContext(dispatcher) would otherwise throw on
@@ -283,7 +284,10 @@ class SQLite(
                 db.beginTransactionNonExclusive()
                 // Recorded as soon as it is begun: a caller cancelled meanwhile never receives it, and closing the
                 // connection must still roll it back.
-                AndroidTransaction(db, false, encoders, dispatcher).also { openTransaction = it }
+                AndroidTransaction(db, false, encoders, dispatcher).also { tx ->
+                    transactions.removeAll { it.status != Transaction.Status.Open }
+                    transactions += tx
+                }
             }
         }
     }

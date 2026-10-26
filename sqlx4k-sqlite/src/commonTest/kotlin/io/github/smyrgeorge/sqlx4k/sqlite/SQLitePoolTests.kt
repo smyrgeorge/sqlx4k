@@ -172,6 +172,31 @@ class SQLitePoolTests : SQLiteTestBase() {
             .isEqualTo(listOf(2))
     }
 
+    // A begin() on a connection already in a transaction nests in it: closing the connection must end both, or it
+    // goes back to the pool inside the outer one (the next borrower's writes are never committed).
+    @Test
+    fun `closing a connection ends all the transactions begun on it`(): Unit = runBlocking {
+        val options = ConnectionPool.Options.builder().maxConnections(1).acquireTimeout(3.seconds).build()
+        val db = pool(maxConnections = 1, acquireTimeout = 3.seconds)
+        db.execute("create table t_nested(id integer primary key);").getOrThrow()
+
+        val cn = db.acquire().getOrThrow()
+        val outer = cn.begin().getOrThrow()
+        outer.execute("insert into t_nested(id) values (1);").getOrThrow()
+        val inner = cn.begin().getOrThrow()
+        inner.commit().getOrThrow()
+        cn.close().getOrThrow() // the outer transaction is still open
+
+        // The pool's only connection is no longer in a transaction: a new write is committed for real (it survives
+        // closing the pool and reopening the database), and the outer transaction can no longer be used.
+        db.execute("insert into t_nested(id) values (2);").getOrThrow()
+        assertThat(outer.execute("insert into t_nested(id) values (3);")).isFailure()
+        db.close().getOrThrow()
+        val reopened = openSQLite("sqlite://$testDirectory/SQLitePoolTests.db", options).also { opened += it }
+        assertThat(reopened.fetchAll("select count(*) from t_nested where id = 2;").getOrThrow().first().get(0).asInt())
+            .isEqualTo(1)
+    }
+
     // A transaction ended from a coroutine that is already cancelled (e.g. in the finally block of a cancelled scope)
     // must still end: its connection would otherwise go back to the pool inside it, and the next borrower's writes
     // would never be committed.
