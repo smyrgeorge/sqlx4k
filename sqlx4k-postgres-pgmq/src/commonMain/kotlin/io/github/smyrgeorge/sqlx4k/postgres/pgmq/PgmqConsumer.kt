@@ -15,6 +15,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.launch
@@ -99,15 +101,19 @@ class PgmqConsumer(
         consumeJob = scope.launch {
             consumeChannel.consumeEach { msg ->
                 // Process the message within a timeout. Only a genuine processing timeout or
-                // failure should trigger a nack; a CancellationException means the consumer is
-                // shutting down, so it must propagate instead of being treated as a failure.
+                // failure should trigger a nack; the cancellation of the consumer itself means it is
+                // shutting down, so it must propagate instead of being treated as a failure. A
+                // CancellationException thrown by the handler while the consumer is still active
+                // (e.g. awaiting a cancelled Deferred) is a failure of that message: propagating it
+                // would end the consume loop, and with it the consumer, without any notice.
                 val res = try {
                     withTimeout(options.vt) { onMessage(msg) }
                     Result.success(Unit)
                 } catch (e: TimeoutCancellationException) {
                     Result.failure(e)
                 } catch (e: CancellationException) {
-                    throw e
+                    if (!currentCoroutineContext().isActive) throw e
+                    Result.failure(e)
                 } catch (e: Throwable) {
                     Result.failure(e)
                 }

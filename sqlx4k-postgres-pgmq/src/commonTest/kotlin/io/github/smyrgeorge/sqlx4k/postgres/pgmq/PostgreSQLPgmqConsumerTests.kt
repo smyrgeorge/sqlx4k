@@ -13,6 +13,7 @@ import assertk.assertions.isNotNull
 import kotlin.random.Random
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
@@ -617,6 +618,54 @@ class PostgreSQLPgmqConsumerTests {
         delay(500.milliseconds)
 
         // Cleanup
+        client.drop(queue)
+    }
+
+    @Test
+    fun `consumer should survive a cancellation exception thrown by the handler`(): Unit = runBlocking {
+        val queueName = newQueue()
+        val queue = PgmqClient.Queue(queueName)
+        client.create(queue).getOrThrow()
+
+        val processed = mutableListOf<Long>()
+        var thrown = false
+        val lock = Mutex()
+
+        val consumer = PgmqConsumer(
+            pgmq = client,
+            options = PgmqConsumer.Options(
+                queue = queueName,
+                prefetch = 5,
+                vt = 2.seconds,
+                autoStart = false,
+                queueMinPullDelay = 100.milliseconds,
+                messageRetryDelayStep = 100.milliseconds,
+                messageMaxRetryDelay = 1.seconds
+            ),
+            onMessage = { msg ->
+                lock.withLock {
+                    // E.g. awaiting a Deferred cancelled elsewhere: a failure of this message, not a shutdown of
+                    // the consumer, which must keep consuming (and retry this message).
+                    if (!thrown) {
+                        thrown = true
+                        throw CancellationException("cancelled elsewhere")
+                    }
+                    processed += msg.msgId
+                }
+            }
+        )
+
+        consumer.start()
+        delay(200.milliseconds)
+
+        client.send(queueName, """{"n": 1}""").getOrThrow()
+        client.send(queueName, """{"n": 2}""").getOrThrow()
+
+        withTimeout(10_000.milliseconds) {
+            while (lock.withLock { processed.size } < 2) delay(100.milliseconds)
+        }
+
+        consumer.stop()
         client.drop(queue)
     }
 }
