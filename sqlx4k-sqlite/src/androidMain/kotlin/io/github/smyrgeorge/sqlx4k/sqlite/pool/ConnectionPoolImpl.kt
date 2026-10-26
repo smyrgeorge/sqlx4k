@@ -65,14 +65,17 @@ internal class ConnectionPoolImpl(
     private val cleanupJob: Job
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
+    // Gives back the idle connections that reached no one (see [idleConnections]). Unlike [scope], it is not
+    // cancelled when the pool closes: a connection that reaches no one then must still be closed.
+    private val undeliveredScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
     // An idle connection that reached no one goes back to the channel, or is closed once the pool is: one taken off
     // the channel by a waiter cancelled (e.g. by its acquire timeout) before it resumed would otherwise be lost,
     // neither idle nor handed off, and its permit never given back. A send that fails (the pool is closing) lands
     // here too.
     private val idleConnections = Channel<PooledConnection>(options.maxConnections) { undelivered ->
         idleCount.decrementAndFetch()
-        // NonCancellable: it also runs once the pool is closed (and its scope cancelled).
-        scope.launch(NonCancellable) {
+        undeliveredScope.launch {
             if (closed.load() || !sendToIdle(undelivered)) undelivered.closeInternal()
         }
     }
