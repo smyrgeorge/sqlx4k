@@ -9,8 +9,9 @@ interface IPostgresSQL : Driver, Migrator.Driver {
     /**
      * Listens for notifications on a specified PostgreSQL channel and executes a callback for each received notification.
      *
-     * The listener runs in the background, on a connection of its own (re-established when it drops), for as long as
-     * the process runs: it returns once listening has started, and it cannot be stopped. Each call opens a new one.
+     * Suspends for as long as it listens: run it in a coroutine of its own (e.g. `launch { db.listen(...) { ... } }`)
+     * and cancel that coroutine to stop listening, which also closes the listener's connection. The listener uses a
+     * connection of its own, re-established when it drops; a failing callback does not stop it.
      *
      * @param channel The name of the PostgreSQL channel to listen on. The channel name must be valid according to PostgreSQL's naming rules.
      * @param f The callback function to be executed whenever a notification is received on the specified channel.
@@ -21,8 +22,9 @@ interface IPostgresSQL : Driver, Migrator.Driver {
     /**
      * Listens for notifications on specified PostgreSQL channels and executes a callback for each received notification.
      *
-     * The listener runs in the background, on a connection of its own (re-established when it drops), for as long as
-     * the process runs: it returns once listening has started, and it cannot be stopped. Each call opens a new one.
+     * Suspends for as long as it listens: run it in a coroutine of its own (e.g. `launch { db.listen(...) { ... } }`)
+     * and cancel that coroutine to stop listening, which also closes the listener's connection. The listener uses a
+     * connection of its own, re-established when it drops; a failing callback does not stop it.
      *
      * @param channels A list of PostgreSQL channel names to listen on. Each channel name must be valid according to PostgreSQL's naming rules.
      * @param f The callback function to execute whenever a notification is received on any of the specified channels.

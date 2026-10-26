@@ -1386,6 +1386,10 @@ pub extern "C" fn sqlx4k_postgresql_listen(
     let channels = c_chars_to_str_postgres(channels).to_owned();
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
+    // Registered before the task starts, so that sqlx4k_postgresql_unlisten finds it as soon as listen returns.
+    let (stop_tx, mut stop) = oneshot::channel::<()>();
+    let (stopped, stopped_rx) = oneshot::channel::<()>();
+    listeners().lock().unwrap().insert(notify_id, (stop_tx, stopped_rx));
     runtime.spawn(async move {
         // A pool of 1 without timeouts (as they don't apply here), only used to handle re-connections.
         let options = sqlx4k.pool.options().clone().max_connections(1).min_connections(0);
@@ -1396,10 +1400,10 @@ pub extern "C" fn sqlx4k_postgresql_listen(
             listener.ignore_pool_close_event(true);
             let channels: Vec<&str> = channels.split(',').collect();
             listener.listen_all(channels).await?;
-            Ok::<_, Error>(listener)
+            Ok::<_, Error>((pool, listener))
         }
         .await;
-        let mut listener = match listener {
+        let (pool, mut listener) = match listener {
             Ok(listener) => listener,
             // Report a failure to start listening (database down, too many clients, ...) instead of aborting.
             Err(err) => return fun(callback, sqlx4k_postgres_error_result_of(err).leak()),
@@ -1409,24 +1413,73 @@ pub extern "C" fn sqlx4k_postgresql_listen(
         let result = Sqlx4kPostgresResult::default().leak();
         fun(callback, result);
 
+        // Until stopped by sqlx4k_postgresql_unlisten (a dropped sender stops it too).
         let mut backoff = LISTEN_MIN_BACKOFF;
         loop {
-            match listener.try_recv().await {
-                Ok(Some(item)) => {
-                    backoff = LISTEN_MIN_BACKOFF;
-                    let result = sqlx4k_postgresql_result_of_pg_notification(item).leak();
-                    notify(notify_id, result)
+            let stop_now = tokio::select! {
+                _ = &mut stop => true,
+                received = listener.try_recv() => {
+                    match received {
+                        Ok(Some(item)) => {
+                            backoff = LISTEN_MIN_BACKOFF;
+                            let result = sqlx4k_postgresql_result_of_pg_notification(item).leak();
+                            notify(notify_id, result);
+                            false
+                        }
+                        // The connection was lost: the next call reconnects and listens again.
+                        Ok(None) => false,
+                        // The connection failed or could not be re-established (server restart, terminated backend,
+                        // database down): retry with a backoff instead of aborting the process.
+                        Err(_) => {
+                            let stop_now = tokio::select! {
+                                _ = &mut stop => true,
+                                _ = tokio::time::sleep(backoff) => false,
+                            };
+                            backoff = (backoff * 2).min(LISTEN_MAX_BACKOFF);
+                            stop_now
+                        }
+                    }
                 }
-                // The connection was lost: the next call reconnects and listens again.
-                Ok(None) => {}
-                // The connection failed or could not be re-established (server restart, terminated backend,
-                // database down): retry with a backoff instead of aborting the process.
-                Err(_) => {
-                    tokio::time::sleep(backoff).await;
-                    backoff = (backoff * 2).min(LISTEN_MAX_BACKOFF);
-                }
+            };
+            if stop_now {
+                break;
             }
         }
+
+        // Stopped: release the listener's connection.
+        drop(listener);
+        pool.close().await;
+        let _ = stopped.send(());
+    });
+}
+
+/// The listeners started by sqlx4k_postgresql_listen, by notify id: the sender that stops one, and the receiver
+/// notified once it has stopped and closed its connection.
+type ListenerControl = (oneshot::Sender<()>, oneshot::Receiver<()>);
+
+fn listeners() -> &'static std::sync::Mutex<std::collections::HashMap<c_int, ListenerControl>> {
+    static LISTENERS: OnceLock<std::sync::Mutex<std::collections::HashMap<c_int, ListenerControl>>> = OnceLock::new();
+    LISTENERS.get_or_init(Default::default)
+}
+
+/// Stops the listener started with `notify_id` and closes its connection; completes once it has (and at once for an
+/// unknown id).
+#[no_mangle]
+pub extern "C" fn sqlx4k_postgresql_unlisten(
+    notify_id: c_int,
+    callback: *mut c_void,
+    fun: extern "C" fn(Sqlx4kPostgresPtr, *mut Sqlx4kPostgresResult),
+) {
+    let callback = Sqlx4kPostgresPtr { ptr: callback };
+    let runtime = RUNTIME.get().unwrap();
+    let control = listeners().lock().unwrap().remove(&notify_id);
+    runtime.spawn(async move {
+        if let Some((stop, stopped)) = control {
+            let _ = stop.send(());
+            // An error means the task already ended (it failed to start listening).
+            let _ = stopped.await;
+        }
+        fun(callback, Sqlx4kPostgresResult::default().leak())
     });
 }
 

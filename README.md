@@ -1242,14 +1242,19 @@ the [examples](#examples).
 ### PostgreSQL Listen/Notify
 
 ```kotlin
-db.listen("chan0") { notification: Postgres.Notification ->
-    println(notification)
+// listen suspends while it listens: run it in a coroutine of its own, and cancel that to stop listening.
+val listener = launch {
+    db.listen("chan0") { notification: Postgres.Notification ->
+        println(notification)
+    }
 }
 
 (1..10).forEach {
     db.notify("chan0", "Hello $it")
     delay(1000)
 }
+
+listener.cancel() // Stops listening and closes the listener's connection.
 ```
 
 ### PostgreSQL Message Queue (PGMQ)

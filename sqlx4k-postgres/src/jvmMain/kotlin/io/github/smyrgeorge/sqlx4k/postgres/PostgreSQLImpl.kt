@@ -14,17 +14,19 @@ import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
+import io.github.smyrgeorge.sqlx4k.postgres.PostgreSQLImpl.Companion.toPgArrayText
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
 import io.r2dbc.spi.Row
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
@@ -37,8 +39,6 @@ import kotlinx.datetime.LocalTime
 import kotlinx.datetime.toJavaLocalDate
 import kotlinx.datetime.toJavaLocalDateTime
 import kotlinx.datetime.toJavaLocalTime
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.jvm.optionals.getOrElse
 import kotlin.reflect.KClass
 import kotlin.time.Duration
@@ -182,6 +182,8 @@ class PostgreSQLImpl(
      * callback function is invoked with the notification object as a parameter. The method ensures that
      * channel names are valid and automatically attempts to reconnect if the connection is closed.
      *
+     * Suspends until the calling coroutine is cancelled, and then stops listening and closes the connection.
+     *
      * @param channels A list of PostgreSQL channel names to listen to. Must not be empty.
      * @param f A callback function to handle notifications. The function receives a `Notification` object
      *          containing the channel name and payload.
@@ -205,32 +207,36 @@ class PostgreSQLImpl(
                 .renderNativeQuery(Dialect.PostgreSQL, encoders).sql
         }
 
-        PgChannelScope.launch {
-            var retryCount = 0
-            val baseDelay = 100.milliseconds
-            val maxDelay = 30.seconds
+        var retryCount = 0
+        val baseDelay = 100.milliseconds
+        val maxDelay = 30.seconds
 
-            // Automatically reconnect if the connection closes.
-            while (true) {
+        // Listen until the calling coroutine is cancelled, reconnecting if the connection closes.
+        while (true) {
+            try {
+                val con = connectionFactory.create().awaitSingle()
+                // A successful connection resets the reconnect backoff.
+                retryCount = 0
                 try {
-                    val con = connectionFactory.create().awaitSingle()
-                    // A successful connection resets the reconnect backoff.
-                    retryCount = 0
-                    try {
-                        con.createStatement(sql)
-                            .execute()
-                            .flatMap { it.rowsUpdated }
-                            .thenMany(con.notifications)
-                            .asFlow()
-                            .collect { f(it.toNotification()) }
-                    } finally {
-                        // Always release the connection, including when the stream fails mid-flight.
-                        con.close().awaitSingleOrNull()
-                    }
-                } catch (_: Exception) {
-                    retryCount++
-                    delay(minOf(baseDelay * retryCount, maxDelay))
+                    con.createStatement(sql)
+                        .execute()
+                        .flatMap { it.rowsUpdated }
+                        .thenMany(con.notifications)
+                        .asFlow()
+                        .collect { f(it.toNotification()) }
+                } finally {
+                    // Always release the connection, including when the stream fails mid-flight or the listener is
+                    // cancelled (a release in the cancelled coroutine would itself be cancelled).
+                    withContext(NonCancellable) { con.close().awaitSingleOrNull() }
                 }
+            } catch (e: CancellationException) {
+                // The listener was cancelled: stop. (One thrown by the callback is handled like any failure.)
+                if (!currentCoroutineContext().isActive) throw e
+                retryCount++
+                delay(minOf(baseDelay * retryCount, maxDelay))
+            } catch (_: Exception) {
+                retryCount++
+                delay(minOf(baseDelay * retryCount, maxDelay))
             }
         }
     }
@@ -404,11 +410,6 @@ class PostgreSQLImpl(
     }
 
     companion object {
-        private object PgChannelScope : CoroutineScope {
-            override val coroutineContext: CoroutineContext
-                get() = EmptyCoroutineContext
-        }
-
         private fun NativeR2dbcConnection.createStatement(
             statement: Statement,
             encoders: ValueEncoderRegistry

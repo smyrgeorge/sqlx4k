@@ -7,16 +7,18 @@ import assertk.assertions.containsExactlyInAnyOrder
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFailure
 import assertk.assertions.isTrue
-import kotlin.random.Random
-import kotlin.test.AfterTest
-import kotlin.test.Test
-import kotlin.time.Duration.Companion.milliseconds
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import kotlin.random.Random
+import kotlin.test.AfterTest
+import kotlin.test.Test
+import kotlin.time.Duration.Companion.milliseconds
 
 class PostgreSQLListenNotifyTests {
 
@@ -164,7 +166,7 @@ class PostgreSQLListenNotifyTests {
         // Terminate the listening connection(s) for this channel.
         val terminated = db.fetchAll(
             "select pg_terminate_backend(pid) from pg_stat_activity " +
-                "where pid <> pg_backend_pid() and query ilike '%listen%$chan%'"
+                    "where pid <> pg_backend_pid() and query ilike '%listen%$chan%'"
         ).getOrThrow()
         assertThat(terminated.size >= 1, "a listening connection was terminated").isTrue()
         deliversAfter("after")
@@ -194,5 +196,42 @@ class PostgreSQLListenNotifyTests {
         }
         assertThat(lock.withLock { received.toList() }).isEqualTo(sent)
         job.cancel()
+    }
+
+    // The backends listening on a channel (their last query is the LISTEN).
+    private suspend fun listeners(chan: String): Long =
+        db.fetchAll(
+            "select count(*) from pg_stat_activity where pid <> pg_backend_pid() and query ilike 'listen %$chan%'"
+        ).getOrThrow().first().get(0).asLong()
+
+    @Test
+    fun `cancelling listen stops listening and closes its connection`(): Unit = runBlocking {
+        val chan = newChannel()
+        val received = mutableListOf<String>()
+        val lock = Mutex()
+
+        val job = launch {
+            db.listen(chan) { n: Notification ->
+                lock.withLock { received.add(n.value.asString()) }
+            }
+        }
+        withTimeout(5_000.milliseconds) {
+            // Keep notifying until the listener is subscribed and gets one.
+            while (lock.withLock { "before" !in received }) {
+                db.notify(chan, "before")
+                delay(100.milliseconds)
+            }
+        }
+        assertThat(listeners(chan)).isEqualTo(1L)
+
+        job.cancelAndJoin()
+
+        // Its connection is closed, and nothing more is delivered.
+        withTimeout(5_000.milliseconds) {
+            while (listeners(chan) > 0) delay(100.milliseconds)
+        }
+        db.notify(chan, "after")
+        delay(300.milliseconds)
+        assertThat(lock.withLock { "after" in received }).isEqualTo(false)
     }
 }

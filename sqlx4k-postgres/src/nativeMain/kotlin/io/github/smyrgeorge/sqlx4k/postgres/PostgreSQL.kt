@@ -17,13 +17,17 @@ import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.staticCFunction
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import sqlx4k.postgresql.Sqlx4kPostgresResult
 import sqlx4k.postgresql.sqlx4k_postgresql_close
 import sqlx4k.postgresql.sqlx4k_postgresql_cn_acquire
@@ -51,12 +55,11 @@ import sqlx4k.postgresql.sqlx4k_postgresql_tx_query
 import sqlx4k.postgresql.sqlx4k_postgresql_tx_query_with_params
 import sqlx4k.postgresql.sqlx4k_postgresql_tx_rollback
 import sqlx4k.postgresql.sqlx4k_postgresql_tx_stream_open
+import sqlx4k.postgresql.sqlx4k_postgresql_unlisten
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.concurrent.atomics.incrementAndFetch
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.Duration
 
 /**
@@ -222,6 +225,8 @@ class PostgreSQL(
      * using the provided callback function. The notifications are received via the
      * PostgreSQL listen/notify mechanism.
      *
+     * Suspends until the calling coroutine is cancelled, and then stops listening and closes the connection.
+     *
      * @param channels A list of channel names to listen to. The list must not be empty.
      *                 Each channel represents a PostgreSQL listen/notify channel.
      * @param f A callback function that is invoked for each notification received.
@@ -229,7 +234,8 @@ class PostgreSQL(
      *          and the notification payload.
      * @throws IllegalArgumentException If the `channels` list is empty.
      */
-    override suspend fun listen(channels: List<String>, f: suspend (Notification) -> Unit) {
+    @OptIn(ExperimentalAtomicApi::class)
+    override suspend fun listen(channels: List<String>, f: suspend (Notification) -> Unit): Unit = coroutineScope {
         require(channels.isNotEmpty()) { "Channels cannot be empty." }
         channels.forEach { validateChannelName(it) }
 
@@ -237,28 +243,50 @@ class PostgreSQL(
         val channel = Channel<Notification>(capacity = Channel.UNLIMITED)
 
         // Store the channel.
-        @OptIn(ExperimentalAtomicApi::class)
         while (true) {
             val current = Companion.channels.load()
             if (Companion.channels.compareAndSet(current, current + (channelId to channel))) break
         }
 
-        // Start the channel consumer.
-        PgChannelScope.launch {
-            channel.consumeEach { f(it) }
-        }
+        try {
+            // Deliver the notifications in the caller's scope, so they stop with it. A failing callback does not stop
+            // the listener (as on the JVM driver).
+            launch {
+                channel.consumeEach {
+                    try {
+                        f(it)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Throwable) {
+                    }
+                }
+            }
 
-        // Create the listener.
-        sqlx { c ->
-            sqlx4k_postgresql_listen(
-                rt,
-                channels = channels.joinToString(","),
-                notify_id = channelId,
-                notify = notify,
-                callback = c,
-                `fun` = fn
-            )
-        }.throwIfError()
+            // Create the listener.
+            sqlx { c ->
+                sqlx4k_postgresql_listen(
+                    rt,
+                    channels = channels.joinToString(","),
+                    notify_id = channelId,
+                    notify = notify,
+                    callback = c,
+                    `fun` = fn
+                )
+            }.throwIfError()
+
+            // Listen until the calling coroutine is cancelled.
+            awaitCancellation()
+        } finally {
+            withContext(NonCancellable) {
+                // Stop the listener and close its connection (also when it failed to start), then forget it.
+                runCatching { sqlx { c -> sqlx4k_postgresql_unlisten(channelId, c, fn) }.throwIfError() }
+                while (true) {
+                    val current = Companion.channels.load()
+                    if (Companion.channels.compareAndSet(current, current - channelId)) break
+                }
+                channel.close()
+            }
+        }
     }
 
     /**
@@ -515,9 +543,5 @@ class PostgreSQL(
             }
         }
 
-        private object PgChannelScope : CoroutineScope {
-            override val coroutineContext: CoroutineContext
-                get() = EmptyCoroutineContext
-        }
     }
 }

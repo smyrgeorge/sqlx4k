@@ -93,9 +93,10 @@ class PgmqConsumer(
 
     private fun startNotify() {
         notifyJob = scope.launch {
-            // A failure to start listening must not escape: this scope has no exception handler, and an uncaught
-            // exception ends a Kotlin/Native process. (pgmq accepts 47-character queue names, whose channel exceeds
-            // the driver's 60-character limit.) It is reported, and the consumer keeps working by polling.
+            // Listens until stop() cancels this job. A failure to start listening must not escape: this scope has no
+            // exception handler, and an uncaught exception ends a Kotlin/Native process. (pgmq accepts 47-character
+            // queue names, whose channel exceeds the driver's 60-character limit.) It is reported, and the consumer
+            // keeps working by polling.
             try {
                 pgmq.pg.listen(options.listenChannel) {
                     // Reset the backoff and wake the fetch loop immediately (if it is currently waiting).
@@ -206,8 +207,7 @@ class PgmqConsumer(
      * Stops the message queue consumer, gracefully shutting down all of its jobs and awaiting their completion.
      *
      * The shutdown proceeds in the following order:
-     * - The notification job (`notifyJob`) is cancelled. Note that the insert listener it started keeps running (see
-     *   [Options.enableNotifyInsert]); its notifications only wake a fetch loop that is no longer there.
+     * - The notification job (`notifyJob`) is cancelled, which stops the insert listener and closes its connection.
      * - The fetching job (`fetchJob`) is cancelled first, stopping the consumer from pulling in new work,
      *   and the fetch delay is reset to zero.
      * - The consume channel is closed so any already-buffered messages are drained (rather than dropped)
@@ -249,10 +249,8 @@ class PgmqConsumer(
      *             visible for processing again if it has not been acknowledged. Must be at least 1 second. Defaults to 10 seconds.
      * @property autoStart Indicates if the consumer should automatically start processing messages. Defaults to true.
      * @property enableNotifyInsert Determines whether insertion notifications are enabled for the queue. Defaults to false.
-     *                           The consumer then LISTENs for inserts, which takes a dedicated database connection that
-     *                           is never released, also not by [stop], as
-     *                           [io.github.smyrgeorge.sqlx4k.postgres.IPostgresSQL.listen] cannot be stopped: every
-     *                           start of such a consumer adds one for the lifetime of the process.
+     *                           The consumer then LISTENs for inserts on a dedicated database connection, closed by
+     *                           [stop].
      * @property queueMinPullDelay The minimum delay between consecutive pull operations from the queue. Must be positive
      *                             and less than `queueMaxPullDelay`. Defaults to 50 milliseconds.
      * @property queueMaxPullDelay The maximum delay between consecutive pull operations from the queue. Must be positive

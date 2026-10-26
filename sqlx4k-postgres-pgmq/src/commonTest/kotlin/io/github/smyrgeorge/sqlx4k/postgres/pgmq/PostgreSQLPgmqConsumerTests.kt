@@ -10,6 +10,7 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isGreaterThanOrEqualTo
 import assertk.assertions.isNotEmpty
 import assertk.assertions.isNotNull
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
@@ -744,6 +745,34 @@ class PostgreSQLPgmqConsumerTests {
         assertThat(lock.withLock { readFailures.isNotEmpty() }).isEqualTo(true)
 
         consumer.stop()
+        client.drop(queue)
+    }
+
+    // The insert listener of a consumer has a connection of its own: stop() must close it.
+    @Test
+    fun `stop should close the insert listener`(): Unit = runBlocking {
+        val queueName = newQueue()
+        val queue = PgmqClient.Queue(queueName)
+        client.create(queue).getOrThrow()
+
+        suspend fun listeners(): Long = client.pg.fetchAll(
+            "select count(*) from pg_stat_activity where pid <> pg_backend_pid() and query ilike 'listen %q_$queueName%'"
+        ).getOrThrow().first().get(0).asLong()
+
+        val consumer = PgmqConsumer(
+            pgmq = client,
+            options = PgmqConsumer.Options(queue = queueName, autoStart = false, enableNotifyInsert = true),
+            onMessage = {},
+        )
+        consumer.start()
+        withTimeout(5_000.milliseconds) {
+            while (listeners() < 1) delay(100.milliseconds)
+        }
+
+        consumer.stop()
+        withTimeout(5_000.milliseconds) {
+            while (listeners() > 0) delay(100.milliseconds)
+        }
         client.drop(queue)
     }
 }

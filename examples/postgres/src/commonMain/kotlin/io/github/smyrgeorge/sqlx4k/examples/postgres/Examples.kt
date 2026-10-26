@@ -9,7 +9,9 @@ import io.github.smyrgeorge.sqlx4k.postgres.pgmq.Metrics
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.PgmqClient
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.PgmqConsumer
 import io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.PgmqDbAdapterImpl
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -364,13 +366,15 @@ object Examples {
      * @param db The PostgreSQL database instance implementing the `IPostgresSQL` interface,
      *           used to perform listening and notification operations.
      */
-    suspend fun exampleListenNotify(db: IPostgresSQL) {
+    suspend fun exampleListenNotify(db: IPostgresSQL): Unit = coroutineScope {
         println("\n=== Listen / Notify ===")
         val channel = "example_events"
 
-        // Start listening (registers a listener internally, non-blocking)
-        db.listen(channel) { n ->
-            println("Notification: channel='${n.channel}' payload='${n.value}'")
+        // Start listening: listen suspends while it listens, so it runs in a coroutine of its own.
+        val listener = launch {
+            db.listen(channel) { n ->
+                println("Notification: channel='${n.channel}' payload='${n.value}'")
+            }
         }
 
         delay(300.milliseconds) // Wait for the listener to be registered.
@@ -381,5 +385,8 @@ object Examples {
 
         // Give some time for notifications to be delivered
         delay(300.milliseconds)
+
+        // Stop listening (this also closes the listener's connection).
+        listener.cancel()
     }
 }
