@@ -2,6 +2,7 @@
 
 package io.github.smyrgeorge.sqlx4k.sqlite.cipher
 
+import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -48,12 +49,21 @@ class JvmSQLiteCipherPoolTests {
                 (1..100).map { async { db.fetchAll("select 1;") } }.awaitAll()
             }
         }
-        withTimeout(10.seconds) { while (db.poolIdleSize() < 2) delay(10.milliseconds) }
-        val a = db.acquire().getOrThrow()
+        // Every connection the pool has can be held at once (an acquire may still time out, e.g. on a connection not
+        // yet back in the pool).
+        suspend fun acquireEventually() = withTimeout(10.seconds) {
+            var cn = db.acquire()
+            while (cn.isFailure) {
+                delay(10.milliseconds)
+                cn = db.acquire()
+            }
+            cn.getOrThrow()
+        }
+        val held = mutableListOf<Connection>()
         try {
-            db.acquire().getOrThrow().close().getOrThrow()
+            repeat(db.poolSize()) { held += acquireEventually() }
         } finally {
-            a.close().getOrThrow()
+            held.forEach { it.close().getOrThrow() }
         }
     }
 }
