@@ -255,9 +255,9 @@ class SQLiteCipher(
     ) : Connection {
         private val mutex = Mutex()
 
-        // The transaction begun on this connection: it shares the mutex (both drive the same native connection),
-        // and close() rolls it back if it is still open.
-        private var transaction: SqlxTransaction? = null
+        // The transactions begun on this connection (a begin() while one is open nests in it, as a savepoint): they
+        // share the mutex (all drive the same native connection), and close() rolls back the ones still open.
+        private val transactions = mutableListOf<SqlxTransaction>()
         private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
         override val transactionIsolationLevel: IsolationLevel? = null
@@ -269,9 +269,9 @@ class SQLiteCipher(
                     if (status == Connection.Status.Closed) return@withLock
                     _status = Connection.Status.Closed
                     // An open transaction would keep the connection inside it once back in the pool, and its native
-                    // handle would outlive the connection it borrows: roll it back first.
-                    transaction?.let { runCatching { it.rollbackIfOpenLocked() } }
-                    transaction = null
+                    // handle would outlive the connection it borrows: roll them all back first, innermost first.
+                    transactions.asReversed().forEach { runCatching { it.rollbackIfOpenLocked() } }
+                    transactions.clear()
                     try {
                         withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeCnRelease(rt, cn)).throwIfError() }
                     } finally {
@@ -362,7 +362,10 @@ class SQLiteCipher(
                 val tx = withNativeResource({ decodeResult(CipherJni.nativeCnTxBegin(rt, cn)).txOrError() }) {
                     decodeResult(CipherJni.nativeTxRollback(rt, it)).throwIfError()
                 }
-                SqlxTransaction(rt, tx, encoders, mutex).also { transaction = it }
+                SqlxTransaction(rt, tx, encoders, mutex).also { tx ->
+                    transactions.removeAll { it.status != Transaction.Status.Open }
+                    transactions += tx
+                }
             }
         }
     }

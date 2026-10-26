@@ -229,5 +229,35 @@ class PostgreSQLPoolTests {
         assertThat(db.fetchAll("select 1")).isFailure()
         cn.close()
     }
+
+    // A begin() on a connection already in a transaction nests in it: closing the connection must end both, or it
+    // goes back to the pool inside the outer one (the next borrower's writes are never committed).
+    @Test
+    fun `closing a connection ends all the transactions begun on it`(): Unit = runBlocking {
+        val table = "t_nested_${Random.nextInt(1_000_000)}"
+        val db = pool(maxConnections = 1, acquireTimeout = 3.seconds)
+        db.execute("create table $table(id int primary key)").getOrThrow()
+        try {
+            val cn = db.acquire().getOrThrow()
+            val outer = cn.begin().getOrThrow()
+            outer.execute("insert into $table(id) values (1)").getOrThrow()
+            val inner = cn.begin().getOrThrow()
+            inner.commit().getOrThrow()
+            cn.close().getOrThrow() // the outer transaction is still open
+
+            // The pool's only connection is no longer in a transaction: a new write is committed for real.
+            db.execute("insert into $table(id) values (2)").getOrThrow()
+            val other = testPostgreSQL()
+            try {
+                val ids = other.fetchAll("select id from $table order by id").getOrThrow().map { it.get(0).asInt() }
+                assertThat(ids.contains(2)).isEqualTo(true)
+            } finally {
+                other.close().getOrThrow()
+            }
+            assertThat(outer.execute("insert into $table(id) values (3)")).isFailure()
+        } finally {
+            db.execute("drop table if exists $table").getOrThrow()
+        }
+    }
 }
 
