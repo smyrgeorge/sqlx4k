@@ -967,17 +967,16 @@ pub extern "C" fn sqlx4k_postgresql_of(
     let url = c_chars_to_str_postgres(url);
     let username = c_chars_to_str_postgres(username);
     let password = c_chars_to_str_postgres(password);
-    let options: PgConnectOptions = url.parse().unwrap();
+    // A malformed URL is reported to the caller (panic = "abort" would take the process down).
+    let options: PgConnectOptions = match url.parse() {
+        Ok(options) => options,
+        Err(err) => return sqlx4k_postgres_error_result_of(err).leak(),
+    };
     let options = options.username(username).password(password);
 
-    // Create the tokio runtime.
-    let runtime = if RUNTIME.get().is_some() {
-        RUNTIME.get().unwrap()
-    } else {
-        let rt = Runtime::new().unwrap();
-        RUNTIME.set(rt).unwrap();
-        RUNTIME.get().unwrap()
-    };
+    // Create the tokio runtime, once: get_or_init also when two pools are created concurrently (checking and then
+    // setting raced, and the losing set().unwrap() panicked).
+    let runtime = RUNTIME.get_or_init(|| Runtime::new().expect("failed to create the tokio runtime"));
 
     // Create the db pool options.
     let pool = PgPoolOptions::new().max_connections(max_connections as u32);

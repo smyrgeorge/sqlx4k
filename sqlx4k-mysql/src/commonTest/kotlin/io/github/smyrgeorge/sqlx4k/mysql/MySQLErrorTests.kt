@@ -42,6 +42,13 @@ class MySQLErrorTests {
     }
 
     @Test
+    fun `malformed url should fail instead of crashing`() {
+        // The port is not a number. The native driver used to abort the process on a URL it could not parse.
+        val res = fails("mysql://localhost:notaport/test")
+        assertThat(res).isFailure()
+    }
+
+    @Test
     fun `refused connection should be returned as an SQLError`() {
         // Nothing listens on port 1.
         val res = fails("mysql://localhost:1/test")
