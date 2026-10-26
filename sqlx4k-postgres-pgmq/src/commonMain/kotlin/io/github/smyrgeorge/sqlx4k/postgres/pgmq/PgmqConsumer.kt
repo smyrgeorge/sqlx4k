@@ -261,7 +261,9 @@ class PgmqConsumer(
      * @property vtBias A derived value calculated as `vt * 2`, in whole seconds (truncated, as pgmq applies it). The
      *                   visibility timeout the consumer reads (and extends) messages with.
      * @property listenChannel The channel used for listening to insertion notifications. Derived from the queue name
-     *                         and formatted as "pgmq.q_<queue>.INSERT".
+     *                         and formatted as "pgmq.q_<queue>.INSERT", with the queue name in lowercase as in pgmq's
+     *                         table name. (pgmq 1.12 does not send insert notifications for a queue whose name is not
+     *                         lowercase: the consumer then relies on polling alone.)
      *
      * @throws IllegalArgumentException Thrown if any of the validation conditions for the properties are violated:
      *                                  - `queue` must not be empty or blank.
@@ -286,7 +288,8 @@ class PgmqConsumer(
         // pgmq takes whole seconds (the client truncates): the consumer must count on the invisibility the server
         // applies, or a message waiting in the prefetch buffer could be processed while it is visible again.
         val vtBias: Duration = (vt * 2).inWholeSeconds.seconds
-        val listenChannel: String = "pgmq.q_${queue}.INSERT"
+        // pgmq notifies on 'pgmq.' || TG_TABLE_NAME || '.INSERT', and its table names are lowercase.
+        val listenChannel: String = "pgmq.q_${queue.lowercase()}.INSERT"
 
         init {
             require(queue.isNotEmpty()) { "Queue name must not be empty" }
