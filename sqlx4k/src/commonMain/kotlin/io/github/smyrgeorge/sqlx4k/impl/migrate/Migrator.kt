@@ -221,8 +221,9 @@ object Migrator {
                     val duration = try {
                         measureTime {
                             statements.forEach { statement ->
-                                // Execute the statement
-                                val duration = measureTime { execute(statement).getOrThrow() }
+                                // Executed as written, not as a prepared statement: `?` and `:name` in migration SQL
+                                // are SQL (e.g. PostgreSQL's jsonb `?` operator, array slices), not parameters.
+                                val duration = measureTime { execute(statement.sql).getOrThrow() }
                                 // Ensure callback exceptions surface as migration failures
                                 afterStatementExecution(statement, duration)
                             }

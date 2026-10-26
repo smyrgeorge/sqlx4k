@@ -9,7 +9,9 @@ import assertk.assertions.containsExactly
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFailure
 import assertk.assertions.isSuccess
+import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asBoolean
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
 import kotlin.math.absoluteValue
 import kotlin.random.Random
@@ -94,6 +96,32 @@ class PostgreSQLMigratorTests {
         } finally {
             // Post-clean
             runCatching { db.execute("DROP TABLE IF EXISTS $users CASCADE;").getOrThrow() }
+            runCatching { db.execute("DROP TABLE IF EXISTS $table CASCADE;").getOrThrow() }
+        }
+    }
+
+    // Migration SQL is run as written: `?` (jsonb) and `:` (array slices, casts) are not parameter placeholders.
+    @Test
+    fun `migration SQL with question marks and colons runs as written`(): Unit = runBlocking {
+        val docs = "t_docs_${Random.nextInt(1_000_000)}"
+        val table = "_sqlx4k_migr_pg_${Random.nextInt(100000)}"
+        try {
+            val dir = newTempDir("pg-operators")
+            write(
+                dir, "1_docs.sql", """
+            CREATE TABLE $docs (data jsonb NOT NULL CHECK (data ? 'id'), tags text[] NOT NULL);
+            INSERT INTO $docs VALUES ('{"id": 1}', ARRAY['a', 'b', 'c']);
+            CREATE VIEW ${docs}_v AS SELECT data ?| ARRAY['id'] AS has_id, tags[1:2] AS first_tags FROM $docs;
+        """.trimIndent()
+            )
+
+            assertThat(db.migrate(path = dir.toString(), table = table)).isSuccess()
+            val row = db.fetchAll("SELECT has_id, first_tags FROM ${docs}_v;").getOrThrow().first()
+            assertThat(row.get(0).asBoolean()).isTrue()
+            assertThat(row.get(1).asString()).isEqualTo("{a,b}")
+        } finally {
+            runCatching { db.execute("DROP VIEW IF EXISTS ${docs}_v;").getOrThrow() }
+            runCatching { db.execute("DROP TABLE IF EXISTS $docs CASCADE;").getOrThrow() }
             runCatching { db.execute("DROP TABLE IF EXISTS $table CASCADE;").getOrThrow() }
         }
     }
