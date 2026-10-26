@@ -533,4 +533,29 @@ class SQLiteTransactionTests : SQLiteTestBase() {
         assertThat(tx.fetchAll("select 1;")).isSuccess()
         tx.commit().getOrThrow()
     }
+
+    // A deferred foreign key is only checked when the transaction commits: the COMMIT itself fails, and that
+    // failure must be reported, not turned into a successful commit.
+    @Test
+    fun `a commit that fails at COMMIT time is reported`(): Unit = runBlocking {
+        val parent = newTable()
+        val child = newTable()
+        db.execute("create table $parent(id integer primary key);").getOrThrow()
+        db.execute(
+            "create table $child(id integer primary key, parent_id integer references $parent(id) deferrable initially deferred);"
+        ).getOrThrow()
+
+        val cn = db.acquire().getOrThrow()
+        try {
+            cn.execute("pragma foreign_keys = on;").getOrThrow()
+            val tx = cn.begin().getOrThrow()
+            // No such parent: accepted for now, rejected at COMMIT.
+            tx.execute("insert into $child(id, parent_id) values (1, 42);").getOrThrow()
+            val res = tx.commit()
+            assertThat(res).isFailure()
+            assertThat(tx.commited).isEqualTo(false)
+        } finally {
+            cn.close()
+        }
+    }
 }

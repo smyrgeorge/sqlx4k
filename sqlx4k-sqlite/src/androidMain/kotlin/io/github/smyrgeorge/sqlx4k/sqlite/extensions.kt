@@ -68,18 +68,24 @@ internal fun <T> Mutex.flowWithLock(
 
 /**
  * Ends the transaction after [block], which marks it successful for a commit (a rollback leaves it unmarked, so
- * ending it rolls back), and closes the database afterwards when [close] is set. A failure while ending or closing
- * is ignored. Blocking: run it on the connection's dispatcher, where the transaction was begun.
+ * ending it rolls back), and closes the database afterwards when [close] is set. Blocking: run it on the
+ * connection's dispatcher, where the transaction was begun.
+ *
+ * [SQLiteDatabase.endTransaction] is where the COMMIT (or ROLLBACK) actually runs, so its failure is reported (a
+ * deferred foreign key violation, a busy or full database, ...); when [block] itself failed, that failure is reported
+ * instead. A failure closing the database is ignored.
  */
 internal inline fun SQLiteDatabase.completeTransaction(close: Boolean, block: SQLiteDatabase.() -> Unit) {
     try {
-        rethrowAsSQLError { block() }
-    } finally {
         try {
-            endTransaction()
-            if (close) close()
-        } catch (_: Exception) {
-            // Ignore exceptions in finally block
+            rethrowAsSQLError { block() }
+        } catch (e: Throwable) {
+            // Still end the transaction, but keep the original failure.
+            runCatching { endTransaction() }
+            throw e
         }
+        rethrowAsSQLError { endTransaction() }
+    } finally {
+        if (close) runCatching { close() }
     }
 }

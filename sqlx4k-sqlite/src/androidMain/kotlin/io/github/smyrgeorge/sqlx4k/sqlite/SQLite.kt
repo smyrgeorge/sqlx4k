@@ -308,11 +308,10 @@ class SQLite(
                 assertIsOpen()
                 _status = Transaction.Status.Closed
                 withContext(dispatcher) {
-                    db.completeTransaction(closeConnectionAfterTx) {
-                        setTransactionSuccessful()
-                        _commited = true
-                    }
+                    db.completeTransaction(closeConnectionAfterTx) { setTransactionSuccessful() }
                 }
+                // Only once the COMMIT itself succeeded (it runs when the transaction ends).
+                _commited = true
             }
         }
 
@@ -323,8 +322,9 @@ class SQLite(
                 _status = Transaction.Status.Closed
                 withContext(dispatcher) {
                     // Do NOT call setTransactionSuccessful() — endTransaction() will roll back.
-                    db.completeTransaction(closeConnectionAfterTx) { _rollbacked = true }
+                    db.completeTransaction(closeConnectionAfterTx) { }
                 }
+                _rollbacked = true
             }
         }
 
