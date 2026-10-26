@@ -118,4 +118,32 @@ class MySQLExecuteResultTests {
             drop(table)
         }
     }
+
+    // Rows a statement returns itself (a SELECT, a procedure's result set) are not a generated id: executing such a
+    // statement succeeds (it used to fail after its side effects, reading a text column as the id) and reports none.
+    @Test
+    fun `statements returning rows execute and report no generated id`(): Unit = runBlocking {
+        val table = "t_rows_${Random.nextInt(1_000_000)}"
+        val procedure = "p_rows_${Random.nextInt(1_000_000)}"
+        try {
+            db.execute("create table $table(id int auto_increment primary key, v int)").getOrThrow()
+            db.execute(
+                "create procedure $procedure() begin insert into $table(v) values (1); select 'done'; end"
+            ).getOrThrow()
+
+            db.execute("call $procedure()").getOrThrow()
+            assertThat(db.fetchAll("select count(*) from $table").getOrThrow().first().get(0).asLong()).isEqualTo(1L)
+
+            val selected = db.executeWithResult(Statement.create("select ?").bind(0, "x")).getOrThrow()
+            val numeric = db.executeWithResult("select 42").getOrThrow()
+            assertAll {
+                assertThat(selected.lastInsertId).isNull()
+                assertThat(numeric.lastInsertId).isNull()
+            }
+        } finally {
+            runCatching { db.execute("drop procedure if exists $procedure").getOrThrow() }
+            runCatching { db.execute("drop table if exists $table").getOrThrow() }
+        }
+    }
 }
+

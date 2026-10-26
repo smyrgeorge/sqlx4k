@@ -171,7 +171,7 @@ class MySQL(
     override suspend fun execute(sql: String): Result<Long> = executeWithResult(sql).map { it.rowsAffected }
 
     override suspend fun executeWithResult(sql: String): Result<ExecuteResult> =
-        pool.withConnection { createStatement(sql).executeForResult() }
+        pool.withConnection { createStatement(sql).executeForResult(sql) }
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> =
         pool.withConnection { createStatement(sql).fetchResultSet() }
@@ -180,7 +180,7 @@ class MySQL(
         executeWithResult(statement).map { it.rowsAffected }
 
     override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> =
-        pool.withConnection { createStatement(statement, encoders).executeForResult() }
+        pool.withConnection { createStatement(statement, encoders).executeForResult(statement.sql) }
 
     override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
         pool.withConnection { createStatement(statement, encoders).fetchResultSet() }
@@ -246,8 +246,8 @@ class MySQL(
             executeWithResult(sql, lock).map { it.rowsAffected }
 
         private suspend fun executeWithResult(sql: String, lock: Boolean): Result<ExecuteResult> =
-            if (lock) mutex.withLockCatching(::assertIsOpen) { connection.createStatement(sql).executeForResult() }
-            else runCatching { rethrowAsSQLError { connection.createStatement(sql).executeForResult() } }
+            if (lock) mutex.withLockCatching(::assertIsOpen) { connection.createStatement(sql).executeForResult(sql) }
+            else runCatching { rethrowAsSQLError { connection.createStatement(sql).executeForResult(sql) } }
 
         override suspend fun execute(sql: String): Result<Long> = execute(sql, true)
 
@@ -262,7 +262,7 @@ class MySQL(
 
         override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> =
             mutex.withLockCatching(::assertIsOpen) {
-                connection.createStatement(statement, encoders).executeForResult()
+                connection.createStatement(statement, encoders).executeForResult(statement.sql)
             }
 
         override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
@@ -325,7 +325,7 @@ class MySQL(
         override suspend fun execute(sql: String): Result<Long> = executeWithResult(sql).map { it.rowsAffected }
 
         override suspend fun executeWithResult(sql: String): Result<ExecuteResult> =
-            mutex.withLockCatching(::assertIsOpen) { connection.createStatement(sql).executeForResult() }
+            mutex.withLockCatching(::assertIsOpen) { connection.createStatement(sql).executeForResult(sql) }
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> = mutex.withLockCatching(::assertIsOpen) {
             connection.createStatement(sql).fetchResultSet()
@@ -336,7 +336,7 @@ class MySQL(
 
         override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> =
             mutex.withLockCatching(::assertIsOpen) {
-                connection.createStatement(statement, encoders).executeForResult()
+                connection.createStatement(statement, encoders).executeForResult(statement.sql)
             }
 
         override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
@@ -360,24 +360,36 @@ class MySQL(
          * r2dbc-mysql reports `LAST_INSERT_ID()` from the server's reply to the statement (no extra query); it is 0
          * when the statement generated no id. Every result is consumed: see fetchResultSet.
          */
-        private suspend fun io.r2dbc.spi.Statement.executeForResult(): ExecuteResult {
-            val segments = mutableListOf<Pair<Long, Long?>>()
+        /** INSERT or REPLACE: the statements whose rows (MariaDB's `RETURNING`) carry the generated id. */
+        private val INSERT_SQL = Regex("""^\s*(insert|replace)\b""", RegexOption.IGNORE_CASE)
+
+        private suspend fun io.r2dbc.spi.Statement.executeForResult(sql: String): ExecuteResult {
+            var rowsAffected = 0L
+            var lastInsertId: Long? = null
+            val insert = INSERT_SQL.containsMatchIn(sql)
             returnGeneratedValues().execute().asFlow().collect { result ->
-                segments += result
+                result
                     .flatMap { segment ->
                         // An error arrives as a message segment: fail like rowsUpdated would.
                         if (segment is NativeR2dbcResultSet.Message) return@flatMap Mono.error(segment.exception())
-                        // A segment may carry both: the update count and the generated id.
+                        // A segment may carry both: the update count and a row (read here, while it is valid).
                         val count = (segment as? NativeR2dbcResultSet.UpdateCount)?.value() ?: 0L
-                        val id = (segment as? NativeR2dbcResultSet.RowSegment)?.row()?.get(0, Long::class.java)
+                        // The generated id is MySQL's synthetic LAST_INSERT_ID row, or the first column of MariaDB's
+                        // RETURNING row of an insert. Any other row is the statement's own (a SELECT, a procedure's
+                        // result set): not an id, and not necessarily a number.
+                        val id = (segment as? NativeR2dbcResultSet.RowSegment)?.row()?.let { row ->
+                            val synthetic = row.metadata.columnMetadatas.firstOrNull()?.name == "LAST_INSERT_ID"
+                            if (synthetic || insert) (row.get(0) as? Number)?.toLong() else null
+                        }
                         Mono.just(count to id)
                     }
-                    .asFlow().toList()
+                    .asFlow()
+                    .collect { (count, id) ->
+                        rowsAffected += count
+                        if (lastInsertId == null) lastInsertId = id
+                    }
             }
-            return ExecuteResult(
-                rowsAffected = segments.sumOf { it.first },
-                lastInsertId = segments.firstNotNullOfOrNull { it.second }?.takeIf { it != 0L },
-            )
+            return ExecuteResult(rowsAffected = rowsAffected, lastInsertId = lastInsertId?.takeIf { it != 0L })
         }
 
         /**
