@@ -563,4 +563,20 @@ class CrudRepositoryTests {
         repository.streamAllByEmailNotNull(mockExecutor).toList()
         assertThat(mockExecutor.lastFetchSize).isEqualTo(50)
     }
+
+    @Test
+    fun `query SQL that needs escaping reaches the database unchanged`() = runTest {
+        mockExecutor.setFetchAllRows()
+
+        val result = repository.findAllByQuotedName(mockExecutor, "Alice")
+
+        assertThat(result).isSuccess()
+        // A quoted identifier, a backslash and a dollar sign, exactly as written in @Query.
+        assertThat(mockExecutor.hasExecuted("\"name\" = ")).isTrue()
+        assertThat(mockExecutor.hasExecuted("email NOT LIKE '%\\_%'")).isTrue()
+        assertThat(mockExecutor.hasExecuted("name <> '\$x'")).isTrue()
+
+        repository.executeRenameQuoted(mockExecutor, "Bob").getOrThrow()
+        assertThat(mockExecutor.hasExecuted("/* renamed */ WHERE \"name\" = '\$old'")).isTrue()
+    }
 }

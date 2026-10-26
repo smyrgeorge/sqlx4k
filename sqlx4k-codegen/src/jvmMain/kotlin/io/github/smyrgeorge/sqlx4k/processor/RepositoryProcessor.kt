@@ -770,7 +770,7 @@ class RepositoryProcessor(
         file += "    /**\n"
         file += "     * Generated implementation of [$name]\n"
         file += "     *\n"
-        file += "     * SQL: `$sql`\n"
+        file += "     * SQL: `${sql.toKDocText()}`\n"
         file += "     *\n"
         if (!useContextParameters) {
             file += "     * @param context The query executor (database connection or transaction)\n"
@@ -800,7 +800,7 @@ class RepositoryProcessor(
         file += if (isStream) "    override fun $name($paramSig) = run {\n"
         else "    override suspend fun $name($paramSig) = run {\n"
         file += "        // language=SQL\n"
-        file += "        val statement = Statement.create(\"$sql\")\n"
+        file += "        val statement = Statement.create(${sql.toKotlinStringLiteral()})\n"
         emitNamedParameterBindings(file, params, useContextParameters)
 
         val contextParamName =
@@ -1656,3 +1656,31 @@ class RepositoryProcessor(
         private const val DIALECT_OPTION = "dialect"
     }
 }
+
+/**
+ * Renders the SQL of a `@Query` as a Kotlin string literal. The SQL is arbitrary text: a quoted identifier (`"order"`),
+ * a backslash, a `$` (a dollar-quoted body) or a line break pasted between plain quotes produced generated code that
+ * failed to compile.
+ */
+private fun String.toKotlinStringLiteral(): String = buildString {
+    append('"')
+    for (c in this@toKotlinStringLiteral) {
+        when (c) {
+            '\\' -> append("\\\\")
+            '"' -> append("\\\"")
+            '$' -> append("\\$")
+            '\n' -> append("\\n")
+            '\r' -> append("\\r")
+            '\t' -> append("\\t")
+            else -> append(c)
+        }
+    }
+    append('"')
+}
+
+/**
+ * Renders the SQL of a `@Query` for its KDoc: on one line, and without the comment delimiters (`/*` would open a nested
+ * comment and `*/` would close the KDoc early, breaking the generated file).
+ */
+private fun String.toKDocText(): String =
+    lines().joinToString(" ") { it.trim() }.replace("/*", "/ *").replace("*/", "* /")

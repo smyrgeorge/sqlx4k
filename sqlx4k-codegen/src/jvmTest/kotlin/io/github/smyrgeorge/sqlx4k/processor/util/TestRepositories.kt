@@ -52,6 +52,14 @@ interface UserCrudRepository : CrudRepository<User> {
 
     @Query("SELECT * FROM users WHERE email IS NOT NULL", fetchSize = 50)
     fun streamAllByEmailNotNull(context: QueryExecutor): Flow<User>
+
+    // SQL that must be escaped to be pasted into the generated code: a quoted identifier, a backslash, a dollar sign
+    // and comment delimiters (SELECT * queries are re-rendered without comments, so the comment is in an UPDATE).
+    @Query("SELECT * FROM users WHERE \"name\" = :name AND email NOT LIKE '%\\_%' AND name <> '\$x'")
+    suspend fun findAllByQuotedName(context: QueryExecutor, name: String): Result<List<User>>
+
+    @Query("UPDATE users SET name = :name /* renamed */ WHERE \"name\" = '\$old'")
+    suspend fun executeRenameQuoted(context: QueryExecutor, name: String): Result<Long>
 }
 
 /**
