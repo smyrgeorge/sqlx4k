@@ -541,8 +541,11 @@ class TableProcessor(
         //         typed NULLs (see typedNullOf). The SET then assigns each value with an assignment cast.
         // SQLite: WITH v(...) AS (VALUES ...) UPDATE table SET ... FROM v WHERE table.id = v.id
         //         SQLite requires CTE syntax because it doesn't support column aliases on inline VALUES
-        // MySQL/MariaDB: UPDATE table AS t JOIN (SELECT ? AS id, ... UNION ALL SELECT ?, ...) AS v ON t.id = v.id SET ...
-        //         Neither has UPDATE ... FROM, and they differ in their VALUES syntax (MySQL requires ROW(...)).
+        // MySQL/MariaDB: UPDATE table AS t JOIN (SELECT id, ... FROM table WHERE false UNION ALL SELECT ?, ...) AS v
+        //         ON t.id = v.id SET ...
+        //         Neither has UPDATE ... FROM, and they differ in their VALUES syntax (MySQL requires ROW(...)). The
+        //         empty first branch gives the joined columns the table's types: typed by a parameter instead, a
+        //         string column held at most 65535 characters (a longer value for a MEDIUMTEXT column failed).
         val mySqlLike = dialect == Dialect.MySQL || dialect == Dialect.MariaDB
         val tableRef = if (dialect == Dialect.SQLite) table else "t"
         // MySQL/MariaDB qualify the SET targets, as the joined rows have the same column names.
@@ -557,8 +560,8 @@ class TableProcessor(
             dialect == Dialect.SQLite ->
                 file += "    val valuePlaceholders = items.indices.joinToString(\", \") { \"$singleValuePlaceholder\" }\n"
             mySqlLike -> {
-                val firstRow = "select ${valueColumns.joinToString { "? as $it" }}"
-                file += "    val rows = \"$firstRow\" + \"$otherRow\".repeat(items.size - 1)\n"
+                val typedRow = "select $valueColumnsList from $table where false"
+                file += "    val rows = \"$typedRow\" + \"$otherRow\".repeat(items.size)\n"
             }
             else ->
                 file += "    val valuePlaceholders = items.indices.joinToString(\", \") { \"$singleValuePlaceholder\" }\n"

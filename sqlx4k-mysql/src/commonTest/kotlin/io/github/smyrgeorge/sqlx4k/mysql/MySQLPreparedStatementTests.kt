@@ -772,5 +772,27 @@ class MySQLPreparedStatementTests {
             runCatching { db.execute("drop table if exists $table") }
         }
     }
+
+    // The shape of the generated batch UPDATE (sqlx4k-codegen): the empty first branch gives the joined columns the
+    // table's types, so a string longer than 65535 characters fits a MEDIUMTEXT column (typed by a parameter, the
+    // derived column was too short on the native driver), whatever the types and nulls of the bound values.
+    @Test
+    fun `batch update rows typed by the table accept long strings`(): Unit = runBlocking {
+        val table = newTable()
+        try {
+            db.execute("create table $table(id int primary key, body mediumtext, n int)").getOrThrow()
+            db.execute("insert into $table values (1, 'a', 1), (2, 'b', 2)").getOrThrow()
+            val big = "x".repeat(70_000)
+            val update = Statement.create(
+                "update $table as t join (select id, body, n from $table where false " +
+                    "union all select ?, ?, ? union all select ?, ?, ?) as v on t.id = v.id set t.body = v.body, t.n = v.n"
+            ).bind(0, 1).bind(1, big).bind(2, null).bind(3, 2).bind(4, "y").bind(5, 7)
+            assertThat(db.execute(update).getOrThrow()).isEqualTo(2L)
+            val rows = db.fetchAll("select length(body), n from $table order by id").getOrThrow()
+            assertThat(rows.map { it.get(0).asLong() to it.get(1).asStringOrNull() }).isEqualTo(listOf(70_000L to null, 1L to "7"))
+        } finally {
+            runCatching { db.execute("drop table if exists $table") }
+        }
+    }
 }
 

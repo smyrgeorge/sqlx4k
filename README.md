@@ -878,12 +878,12 @@ val updated: Result<Long> = userRepository.batchUpdate(db, updatedUsers)
 
 Both operations are supported by every dialect:
 
-| Dialect       | `batchInsert`                    | `batchUpdate`                                                                        |
-|---------------|----------------------------------|--------------------------------------------------------------------------------------|
-| PostgreSQL    | `INSERT ... VALUES (...), (...)` | `UPDATE ... AS t SET ... FROM (VALUES (...), (...)) AS v(...) WHERE t.id = v.id`     |
-| SQLite        | `INSERT ... VALUES (...), (...)` | `WITH v(...) AS (VALUES (...), (...)) UPDATE ... SET ... FROM v WHERE ...`           |
-| MySQL/MariaDB | `INSERT ... VALUES (...), (...)` | `UPDATE ... AS t JOIN (SELECT ... UNION ALL SELECT ...) AS v ON t.id = v.id SET ...` |
-| Generic       | `INSERT ... VALUES (...), (...)` | Like PostgreSQL                                                                      |
+| Dialect       | `batchInsert`                    | `batchUpdate`                                                                                             |
+|---------------|----------------------------------|-----------------------------------------------------------------------------------------------------------|
+| PostgreSQL    | `INSERT ... VALUES (...), (...)` | `UPDATE ... AS t SET ... FROM (VALUES (...), (...)) AS v(...) WHERE t.id = v.id`                          |
+| SQLite        | `INSERT ... VALUES (...), (...)` | `WITH v(...) AS (VALUES (...), (...)) UPDATE ... SET ... FROM v WHERE ...`                                |
+| MySQL/MariaDB | `INSERT ... VALUES (...), (...)` | `UPDATE ... AS t JOIN (SELECT ... FROM ... WHERE false UNION ALL SELECT ...) AS v ON t.id = v.id SET ...` |
+| Generic       | `INSERT ... VALUES (...), (...)` | Like PostgreSQL                                                                                           |
 
 On PostgreSQL a `null` property value is bound with its type (`bigint`, `timestamptz`, ...), as the `VALUES` list
 takes its column types from its rows.
