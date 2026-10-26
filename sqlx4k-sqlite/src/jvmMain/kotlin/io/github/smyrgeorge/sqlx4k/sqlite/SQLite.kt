@@ -457,29 +457,21 @@ class SQLite(
             val metaData = this.metaData
             val columns = (1..metaData.columnCount).map { i ->
                 val type = metaData.getColumnTypeName(i)
-                if (type == "BLOB") {
-                    val raw = getBytes(i)
-                    ResultSet.Row.Column(
-                        ordinal = i - 1,
-                        name = metaData.getColumnName(i),
-                        type = type,
-                        value = null,
-                        bytes = if (wasNull()) null else raw
-                    )
-                } else {
-                    // getObject reflects the value's storage class; render REAL values ourselves (see formatSqliteReal).
-                    val raw = getObject(i)
-                    ResultSet.Row.Column(
-                        ordinal = i - 1,
-                        name = metaData.getColumnName(i),
-                        type = type,
-                        value = when (raw) {
-                            null -> null
-                            is Double -> formatSqliteReal(raw)
-                            else -> getString(i)
-                        }
-                    )
-                }
+                // getObject reflects the value's storage class, not the column's declared type (a BINARY(16) column
+                // holds blobs, a BLOB column may hold text): a blob read as text would be corrupted.
+                val raw = getObject(i)
+                ResultSet.Row.Column(
+                    ordinal = i - 1,
+                    name = metaData.getColumnName(i),
+                    type = type,
+                    value = when (raw) {
+                        null, is ByteArray -> null
+                        // Render REAL values ourselves (see formatSqliteReal).
+                        is Double -> formatSqliteReal(raw)
+                        else -> getString(i)
+                    },
+                    bytes = raw as? ByteArray
+                )
             }
             return ResultSet.Row(columns)
         }

@@ -374,4 +374,24 @@ class SQLiteByteArrayTests : SQLiteTestBase() {
             assertThat(actual.all { it == 0xAB.toByte() }).isTrue()
         }
     }
+
+    // A value is read by its storage class, not by the column's declared type: SQLite stores any value in any column.
+    @Test
+    fun `values are read by their storage class whatever the column type`(): Unit = runBlocking {
+        val table = newTable()
+        try {
+            db.execute("create table $table(id integer primary key, b binary(16), t blob)").getOrThrow()
+            db.execute("insert into $table(id, b, t) values (1, x'00ff41', 'text')").getOrThrow()
+            val plain = db.fetchAll("select b, t from $table where id = 1").getOrThrow().first()
+            val prepared = db.fetchAll(Statement.create("select b, t from $table where id = ?").bind(0, 1))
+                .getOrThrow().first()
+            for (row in listOf(plain, prepared)) assertAll {
+                assertThat(row.get(0).asByteArray().toList()).isEqualTo(listOf<Byte>(0x00, -1, 0x41))
+                assertThat(row.get(1).asString()).isEqualTo("text")
+            }
+        } finally {
+            runCatching { db.execute("drop table if exists $table").getOrThrow() }
+        }
+    }
 }
+
