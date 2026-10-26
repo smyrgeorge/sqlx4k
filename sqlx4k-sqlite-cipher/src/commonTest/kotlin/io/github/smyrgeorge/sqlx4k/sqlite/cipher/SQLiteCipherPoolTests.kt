@@ -11,10 +11,12 @@ import assertk.assertions.isSuccess
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.test.AfterTest
@@ -164,4 +166,22 @@ class SQLiteCipherPoolTests : SQLiteCipherTestBase() {
         assertThat(reopened.fetchAll("select id from t_unfinished;").getOrThrow().map { it.get(0).asInt() })
             .isEqualTo(listOf(2))
     }
+
+    // More transactions than the IO dispatcher has threads, on a small pool: waiting for a connection must not take up
+    // the threads the connections' holders need to run their statements and commit.
+    @Test
+    fun `many more concurrent transactions than connections complete`(): Unit = runBlocking {
+        val db = pool(maxConnections = 2, acquireTimeout = 60.seconds)
+        db.execute("create table if not exists t_many(id integer primary key);").getOrThrow()
+        withTimeout(30.seconds) {
+            withContext(Dispatchers.Default) {
+                (1..200).map {
+                    async { db.transaction { execute("insert into t_many default values;").getOrThrow() } }
+                }.awaitAll()
+            }
+        }
+        assertThat(db.fetchAll("select count(*) from t_many;").getOrThrow().first().get(0).asInt()).isEqualTo(200)
+        db.execute("drop table t_many;").getOrThrow()
+    }
 }
+

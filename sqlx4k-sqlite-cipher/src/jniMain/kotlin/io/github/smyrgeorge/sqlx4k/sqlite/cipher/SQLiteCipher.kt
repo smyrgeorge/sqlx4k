@@ -7,6 +7,7 @@ import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.ExecuteResult
 import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
@@ -20,8 +21,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration
 
 /**
@@ -45,6 +48,28 @@ class SQLiteCipher(
     override val encoders: ValueEncoderRegistry = ValueEncoderRegistry()
 ) : ISQLiteCipher {
     private val rt: Long
+
+    // One permit per connection, taken (suspended) before a call that waits for a connection of the pool on an IO
+    // thread, and given back once it no longer holds the connection. Without it, enough callers blocked waiting would
+    // take up every IO thread, and the connections' holders could no longer run a statement or commit to give them
+    // back: every caller then waited for the acquire timeout.
+    private val permits = Semaphore(options.maxConnections)
+    private val acquireTimeout: Duration? = options.acquireTimeout
+
+    private suspend fun takePermit() {
+        val taken = acquireTimeout?.let { withTimeoutOrNull(it) { permits.acquire() } != null }
+            ?: true.also { permits.acquire() }
+        if (!taken) SQLError(SQLError.Code.PoolTimedOut, "Timed out waiting for a connection").raise()
+    }
+
+    private suspend inline fun <T> withPermit(block: () -> T): T {
+        takePermit()
+        try {
+            return block()
+        } finally {
+            permits.release()
+        }
+    }
 
     init {
         ensureCipherNativeLoaded()
@@ -123,18 +148,26 @@ class SQLiteCipher(
     override fun poolIdleSize(): Int = CipherJni.nativePoolIdleSize(rt)
 
     override suspend fun acquire(): Result<Connection> = runCatching {
-        val cn = withNativeResource({ decodeResult(CipherJni.nativeCnAcquire(rt)).cnOrError() }) {
-            decodeResult(CipherJni.nativeCnRelease(rt, it)).throwIfError()
+        takePermit()
+        val cn = try {
+            withNativeResource({ decodeResult(CipherJni.nativeCnAcquire(rt)).cnOrError() }) {
+                decodeResult(CipherJni.nativeCnRelease(rt, it)).throwIfError()
+            }
+        } catch (e: Throwable) {
+            permits.release()
+            throw e
         }
-        SqlxConnection(rt, cn, encoders)
+        SqlxConnection(rt, cn, encoders, onClose = permits::release)
     }
 
     override suspend fun execute(sql: String): Result<Long> =
         executeWithResult(sql).map { it.rowsAffected }
 
     override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = runCatching {
-        withContext(Dispatchers.IO) {
-            decodeResult(CipherJni.nativeQuery(rt, sql)).executeResultOrError(sql)
+        withPermit {
+            withContext(Dispatchers.IO) {
+                decodeResult(CipherJni.nativeQuery(rt, sql)).executeResultOrError(sql)
+            }
         }
     }
 
@@ -143,48 +176,82 @@ class SQLiteCipher(
 
     override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> = runCatching {
         val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
-        withContext(Dispatchers.IO) {
-            decodeResult(CipherJni.nativeQueryWithParams(rt, nq.sql, encodeParams(nq.values)))
-                .executeResultOrError(nq.sql)
+        withPermit {
+            withContext(Dispatchers.IO) {
+                decodeResult(CipherJni.nativeQueryWithParams(rt, nq.sql, encodeParams(nq.values)))
+                    .executeResultOrError(nq.sql)
+            }
         }
     }
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> {
-        val rs = withContext(Dispatchers.IO) {
-            decodeResult(CipherJni.nativeFetchAll(rt, sql)).toResultSet()
+        val rs = runCatching {
+            withPermit {
+                withContext(Dispatchers.IO) {
+                    decodeResult(
+                        CipherJni.nativeFetchAll(
+                            rt,
+                            sql
+                        )
+                    )
+                }
+            }
         }
+            .getOrElse { return Result.failure(it) }
+            .toResultSet()
         return rs.toResult()
     }
 
     override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
         val nq = runCatching { statement.renderNativeQuery(Dialect.SQLite, encoders) }
             .getOrElse { return Result.failure(it) }
-        val rs = withContext(Dispatchers.IO) {
-            decodeResult(CipherJni.nativeFetchAllWithParams(rt, nq.sql, encodeParams(nq.values))).toResultSet()
-        }
+        val rs = runCatching {
+            withPermit {
+                withContext(Dispatchers.IO) {
+                    decodeResult(CipherJni.nativeFetchAllWithParams(rt, nq.sql, encodeParams(nq.values)))
+                }
+            }
+        }.getOrElse { return Result.failure(it) }.toResultSet()
         return rs.toResult()
     }
 
-    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = streamFlow(rt) {
-        decodeResult(CipherJni.nativeStreamOpen(rt, sql, encodeParams(emptyList()), fetchSize))
+    // A stream holds its connection (and so a permit) for the whole collection.
+    override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        withPermit {
+            emitAll(streamFlow(rt) {
+                decodeResult(CipherJni.nativeStreamOpen(rt, sql, encodeParams(emptyList()), fetchSize))
+            })
+        }
     }
 
-    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = streamFlow(rt) {
-        val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
-        decodeResult(CipherJni.nativeStreamOpen(rt, nq.sql, encodeParams(nq.values), fetchSize))
+    override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> = flow {
+        withPermit {
+            emitAll(streamFlow(rt) {
+                val nq = statement.renderNativeQuery(Dialect.SQLite, encoders)
+                decodeResult(CipherJni.nativeStreamOpen(rt, nq.sql, encodeParams(nq.values), fetchSize))
+            })
+        }
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
-        val tx = withNativeResource({ decodeResult(CipherJni.nativeTxBegin(rt)).txOrError() }) {
-            decodeResult(CipherJni.nativeTxRollback(rt, it)).throwIfError()
+        takePermit()
+        val tx = try {
+            withNativeResource({ decodeResult(CipherJni.nativeTxBegin(rt)).txOrError() }) {
+                decodeResult(CipherJni.nativeTxRollback(rt, it)).throwIfError()
+            }
+        } catch (e: Throwable) {
+            permits.release()
+            throw e
         }
-        SqlxTransaction(rt, tx, encoders)
+        SqlxTransaction(rt, tx, encoders, onEnd = permits::release)
     }
 
     class SqlxConnection(
         private val rt: Long,
         private val cn: Long,
-        override val encoders: ValueEncoderRegistry
+        override val encoders: ValueEncoderRegistry,
+        // Gives the pool permit back, once the connection is released.
+        private val onClose: () -> Unit = {},
     ) : Connection {
         private val mutex = Mutex()
 
@@ -205,7 +272,11 @@ class SQLiteCipher(
                     // handle would outlive the connection it borrows: roll it back first.
                     transaction?.let { runCatching { it.rollbackIfOpenLocked() } }
                     transaction = null
-                    withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeCnRelease(rt, cn)).throwIfError() }
+                    try {
+                        withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeCnRelease(rt, cn)).throwIfError() }
+                    } finally {
+                        onClose()
+                    }
                 }
             }
         }
@@ -302,8 +373,11 @@ class SQLiteCipher(
         override val encoders: ValueEncoderRegistry,
         // Shared with the connection the transaction was begun on, which drives the same native connection.
         private val mutex: Mutex,
+        // A pool-level transaction gives its pool permit back once it is ended (committed or rolled back).
+        private val onEnd: () -> Unit = {},
     ) : Transaction {
-        constructor(rt: Long, tx: Long, encoders: ValueEncoderRegistry) : this(rt, tx, encoders, Mutex())
+        constructor(rt: Long, tx: Long, encoders: ValueEncoderRegistry, onEnd: () -> Unit = {}) :
+                this(rt, tx, encoders, Mutex(), onEnd)
 
         private var _status: Transaction.Status = Transaction.Status.Open
         private var _commited: Boolean = false
@@ -320,7 +394,11 @@ class SQLiteCipher(
                     if (commited) return@withLock
                     assertIsOpen()
                     _status = Transaction.Status.Closed
-                    withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeTxCommit(rt, tx)).throwIfError() }
+                    try {
+                        withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeTxCommit(rt, tx)).throwIfError() }
+                    } finally {
+                        onEnd()
+                    }
                     _commited = true
                 }
             }
@@ -332,7 +410,11 @@ class SQLiteCipher(
                     if (rollbacked) return@withLock
                     assertIsOpen()
                     _status = Transaction.Status.Closed
-                    withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeTxRollback(rt, tx)).throwIfError() }
+                    try {
+                        withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeTxRollback(rt, tx)).throwIfError() }
+                    } finally {
+                        onEnd()
+                    }
                     _rollbacked = true
                 }
             }
