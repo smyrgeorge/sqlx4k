@@ -13,8 +13,10 @@ on:
     branches: [ main ]
 
 jobs:
-  build-apple:
-    runs-on: macos-latest
+  build:
+    # Linux: the build covers the JVM, Android and the host's native target (linuxX64). The Apple targets are
+    # only built on a macOS host.
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Project
         uses: actions/checkout@v7
@@ -25,6 +27,10 @@ jobs:
           distribution: corretto
           java-version: 21
 
+      # The build calls cargo from ~/.cargo/bin (the rustup location); the runner images do not guarantee it.
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
       # Caches the Gradle user home (wrapper, dependencies, build cache). It is written on the default
       # branch only and restored everywhere else.
       - name: Setup Gradle
@@ -33,7 +39,7 @@ jobs:
       # Caches the cargo registry and the target directories of the Rust crates, keyed on the rustc
       # version and the Cargo.lock files. The crates' own artifacts are dropped before saving, so they
       # are always rebuilt while their (expensive) dependencies are restored. The build only targets
-      # the JVM and the host (macosArm64), so the preinstalled toolchain needs no extra targets.
+      # the JVM and the host (linuxX64), so the toolchain needs no extra targets.
       - name: Setup Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
@@ -55,4 +61,4 @@ jobs:
         run: ./scripts/bootstrap.sh
 
       - name: Gradle Build
-        run: ./gradlew build -x test -x jvmTest -x macosArm64Test -x testAndroid -x testAndroidHostTest
+        run: ./gradlew build -x test -x jvmTest -x linuxX64Test -x testAndroid -x testAndroidHostTest
