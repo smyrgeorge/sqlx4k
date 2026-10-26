@@ -295,6 +295,20 @@ class CrudRepositoryTests {
     // ==================== existsBy Tests ====================
 
     @Test
+    fun `count and exists keep a parameter used only in the ORDER BY`() = runTest {
+        mockExecutor.setFetchAllRows(row("exists" to "true"))
+        val exists = repository.existsByEmailNotNullOrdered(mockExecutor, "Alice")
+        assertThat(exists.getOrThrow()).isEqualTo(true)
+        assertThat(mockExecutor.hasExecuted("EXISTS(SELECT * FROM users")).isTrue()
+        assertThat(mockExecutor.lastBoundValues).containsExactly("Alice")
+
+        mockExecutor.setFetchAllRows(countRow(3))
+        val count = repository.countByEmailNotNullOrdered(mockExecutor, "Alice")
+        assertThat(count.getOrThrow()).isEqualTo(3L)
+        assertThat(mockExecutor.lastBoundValues).containsExactly("Alice")
+    }
+
+    @Test
     fun `existsByEmail wraps the query in SELECT EXISTS and returns a boolean`() = runTest {
         // No rows configured -> firstOrNull() is null -> false.
         val absent = repository.existsByEmail(mockExecutor, "nobody@example.com")

@@ -742,13 +742,19 @@ class RepositoryProcessor(
             when (prefix) {
                 Prefix.EXISTS_BY -> {
                     // ORDER BY is meaningless inside an existence check; drop it before wrapping.
-                    if (globalDropRedundantOrderBy) sql = SqlValidator.dropOrderBy(stmt, sql)
-                    sql = SqlValidator.toExistsQuery(stmt, sql, entityTable)
+                    var exists = sql
+                    if (globalDropRedundantOrderBy) exists = SqlValidator.dropOrderBy(stmt, exists)
+                    exists = SqlValidator.toExistsQuery(stmt, exists, entityTable)
+                    // The rewrite drops the ORDER BY and the select list: when they hold a parameter the method still
+                    // binds (binding it would then fail), the query is wrapped as written instead.
+                    sql = if (parametersOf(exists) == parametersOf(sql)) exists else "SELECT EXISTS($sql)"
                 }
                 else -> {
-                    // ORDER BY is meaningless for a single count(...) aggregate.
+                    // ORDER BY is meaningless for a single count(...) aggregate, unless it holds a parameter the
+                    // method still binds.
                     if (globalDropRedundantOrderBy && (prefix == Prefix.COUNT_ALL || prefix == Prefix.COUNT_BY)) {
-                        sql = SqlValidator.dropOrderBy(stmt, sql)
+                        val dropped = SqlValidator.dropOrderBy(stmt, sql)
+                        if (parametersOf(dropped) == parametersOf(sql)) sql = dropped
                     }
                     if (globalExpandSelectStar) {
                         sql = SqlValidator.expandSelectStar(stmt, sql, entityTable, entityColumns)
@@ -1567,6 +1573,16 @@ class RepositoryProcessor(
  * a backslash, a `$` (a dollar-quoted body) or a line break pasted between plain quotes produced generated code that
  * failed to compile.
  */
+/**
+ * The named parameters (`:name`) and the number of positional ones (`?`) of [sql], outside string literals and
+ * `::` casts: what the generated method binds, which a rewrite of the query must keep.
+ */
+private fun parametersOf(sql: String): Pair<Set<String>, Int> {
+    val code = sql.replace(Regex("'(?:[^']|'')*'"), "''")
+    val named = Regex("(?<![:\\w]):([A-Za-z_][A-Za-z0-9_]*)").findAll(code).map { it.groupValues[1] }.toSet()
+    return named to code.count { it == '?' }
+}
+
 private fun String.toKotlinStringLiteral(): String = buildString {
     append('"')
     for (c in this@toKotlinStringLiteral) {

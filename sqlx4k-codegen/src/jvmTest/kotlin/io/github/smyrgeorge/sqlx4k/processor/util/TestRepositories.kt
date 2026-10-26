@@ -38,6 +38,13 @@ interface UserCrudRepository : CrudRepository<User> {
     @Query("SELECT * FROM users WHERE email = :email")
     suspend fun existsByEmail(context: QueryExecutor, email: String): Result<Boolean>
 
+    // A parameter used only in the ORDER BY, which the count/exists rewrites would otherwise drop.
+    @Query("SELECT * FROM users WHERE email IS NOT NULL ORDER BY CASE WHEN name = :first THEN 0 ELSE 1 END")
+    suspend fun existsByEmailNotNullOrdered(context: QueryExecutor, first: String): Result<Boolean>
+
+    @Query("SELECT count(*) FROM users WHERE email IS NOT NULL ORDER BY CASE WHEN name = :first THEN 0 ELSE 1 END")
+    suspend fun countByEmailNotNullOrdered(context: QueryExecutor, first: String): Result<Long>
+
     @Query("DELETE FROM users WHERE email = :email")
     suspend fun deleteByEmail(context: QueryExecutor, email: String): Result<Long>
 
