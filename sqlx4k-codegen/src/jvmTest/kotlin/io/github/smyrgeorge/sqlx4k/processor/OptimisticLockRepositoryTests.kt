@@ -126,6 +126,21 @@ class OptimisticLockRepositoryTests {
     }
 
     @Test
+    fun `batchUpdate matches the returned rows to the entities by id`() = runTest {
+        // UPDATE ... FROM (VALUES ...) RETURNING returns the rows in no particular order.
+        mockExecutor.setFetchAllRows(
+            row("id" to "2", "version" to "8"),
+            row("id" to "1", "version" to "4"),
+        )
+        val docs = listOf(doc, Document(id = 2, title = "Other", body = "o", version = 7))
+
+        val result = repository.batchUpdate(mockExecutor, docs)
+
+        assertThat(result).isSuccess()
+        assertThat(result.getOrThrow().map { it.id to it.version }).containsExactly(1L to 4L, 2L to 8L)
+    }
+
+    @Test
     fun `batchUpdate fails with OptimisticLockFailed when fewer rows than entities matched`() = runTest {
         mockExecutor.setFetchAllRows(row("id" to "1", "version" to "4")) // only one of two matched
         val docs = listOf(doc, Document(id = 2, title = "Other", body = "o", version = 7))

@@ -636,14 +636,38 @@ class TableProcessor(
         val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
         val returningProps = findUpdateReturningProps(props.toList())
             .ifEmpty { error("RETURNING SQL clause cannot be empty for entity (check that a property marked with @Id exists): $className") }
+        // The @Id is always returned (see findUpdateReturningProps).
+        val idIndex = returningProps.indexOfFirst { p -> p.annotations.any { it.qualifiedName() == TypeNames.ID_ANNOTATION } }
+        check(idIndex >= 0) { "The batch UPDATE of $className must return its @Id property" }
+        val idProp = returningProps[idIndex]
+        val idName = idProp.simpleName()
+        val idType = idProp.type.resolve()
+        val idDecoder = generateDecoder(idProp, idType, idType.isMarkedNullable)
 
-        emitApplyBatchResultFunction(
-            file,
-            className,
-            returningProps,
-            "applyUpdateResult",
-            "batch UPDATE result (DB-generated columns)"
-        )
+        file += "\n"
+        file += "/**\n"
+        file += " * Merges the batch UPDATE result (DB-generated columns) back into this collection of [$className] entities.\n"
+        file += " *\n"
+        file += " * After executing a batch UPDATE statement, use this function to update the entities\n"
+        file += " * with database-generated values (e.g., auto-updated timestamps, version numbers).\n"
+        file += " *\n"
+        file += " * `UPDATE ... FROM (VALUES ...) RETURNING` returns the rows in no particular order, so each row is\n"
+        file += " * matched to its entity by `$idName`.\n"
+        file += " *\n"
+        file += " * @param rows The result rows from the statement execution\n"
+        file += " * @param converters The registry containing custom type decoders\n"
+        file += " * @return A list of new instances with the generated values merged in, in the order of the entities\n"
+        file += " * @throws IllegalArgumentException if the rows don't match the entities\n"
+        file += " */\n"
+        file += "fun Iterable<$className>.applyUpdateResult(rows: List<ResultSet.Row>, converters: ValueEncoderRegistry): List<$className> {\n"
+        file += "    val items = this.toList()\n"
+        file += $$"    require(items.size == rows.size) { \"Result rows count (${rows.size}) doesn't match entities count (${items.size})\" }\n"
+        file += "    val rowsById = rows.associateBy { row -> row.get($idIndex)$idDecoder }\n"
+        file += "    return items.map { item ->\n"
+        file += $$"        val row = requireNotNull(rowsById[item.$$idName]) { \"No result row for the entity with $$idName ${item.$$idName}\" }\n"
+        file += "        item.applyUpdateResult(row, converters)\n"
+        file += "    }\n"
+        file += "}\n"
     }
 
     /**
