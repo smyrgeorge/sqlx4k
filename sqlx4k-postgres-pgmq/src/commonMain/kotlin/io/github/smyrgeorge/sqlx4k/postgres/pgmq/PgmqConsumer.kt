@@ -2,12 +2,6 @@
 
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq
 
-import kotlin.concurrent.atomics.AtomicReference
-import kotlin.concurrent.atomics.ExperimentalAtomicApi
-import kotlin.coroutines.cancellation.CancellationException
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,13 +9,21 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.concurrent.atomics.AtomicReference
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
+import kotlin.time.TimeMark
 
 /**
  * PgMqConsumer is responsible for consuming messages from a PostgreSQL-based
@@ -63,7 +65,10 @@ class PgmqConsumer(
     private val wakeup = Channel<Unit>(Channel.CONFLATED)
 
     private var consumeJob: Job? = null
-    private lateinit var consumeChannel: Channel<Message>
+    private lateinit var consumeChannel: Channel<Fetched>
+
+    /** A message read from the queue, invisible to other reads until [invisibleUntil] (see the consume loop). */
+    private class Fetched(val message: Message, val invisibleUntil: TimeMark)
 
     init {
         if (options.autoStart) start()
@@ -99,7 +104,26 @@ class PgmqConsumer(
     private fun startConsume() {
         consumeChannel = Channel(capacity = options.prefetch)
         consumeJob = scope.launch {
-            consumeChannel.consumeEach { msg ->
+            consumeChannel.consumeEach { fetched ->
+                val msg = fetched.message
+                // The read made the message invisible for vtBias, but it may have waited in the prefetch
+                // buffer since (behind up to two batches): its handler would then run while it is visible
+                // again, and be run again for the copy read meanwhile.
+                val remaining = -fetched.invisibleUntil.elapsedNow()
+                if (remaining < VISIBILITY_MARGIN) {
+                    // Visible again (or about to be): another read, possibly by another consumer, has it or will
+                    // get it. Processing (and acking or nacking) this stale copy would duplicate that work.
+                    return@consumeEach
+                }
+                if (remaining < options.vt + VISIBILITY_MARGIN) {
+                    // Not enough invisibility left to process it within vt: extend it first.
+                    val extended = pgmq.setVt(options.queue, msg.msgId, options.vtBias)
+                    if (extended.isFailure) {
+                        runCatching { onFailToProcess(extended.exceptionOrNull()!!) }
+                        return@consumeEach
+                    }
+                }
+
                 // Process the message within a timeout. Only a genuine processing timeout or
                 // failure should trigger a nack; the cancellation of the consumer itself means it is
                 // shutting down, so it must propagate instead of being treated as a failure. A
@@ -136,12 +160,15 @@ class PgmqConsumer(
     private fun startFetch() {
         fetchJob = scope.launch {
             while (true) {
+                // Marked before the read: the server starts the messages' visibility timeout after this point, so
+                // readAt + vtBias never overestimates how long they stay invisible.
+                val readAt = TimeSource.Monotonic.markNow()
                 val messages = pgmq.read(options.queue, options.prefetch, options.vtBias).getOrElse {
                     runCatching { onFailToRead(it) }
                     emptyList()
                 }
                 // Forward whatever we read for processing (applies natural backpressure via the channel).
-                messages.forEach { consumeChannel.send(it) }
+                messages.forEach { consumeChannel.send(Fetched(it, readAt + options.vtBias)) }
 
                 // Decide how long to wait before the next read:
                 // - full batch   -> more messages are likely waiting, poll again immediately
@@ -261,4 +288,9 @@ class PgmqConsumer(
     }
 
     override fun toString(): String = "PgMqConsumer(queue='${options.queue}')"
+
+    private companion object {
+        /** How much invisibility a message must have left to be processed (or extended) rather than skipped. */
+        val VISIBILITY_MARGIN = 500.milliseconds
+    }
 }

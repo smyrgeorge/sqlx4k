@@ -10,17 +10,17 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isGreaterThanOrEqualTo
 import assertk.assertions.isNotEmpty
 import assertk.assertions.isNotNull
-import kotlin.random.Random
-import kotlin.test.AfterTest
-import kotlin.test.Test
-import kotlin.coroutines.cancellation.CancellationException
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.random.Random
+import kotlin.test.AfterTest
+import kotlin.test.Test
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 class PostgreSQLPgmqConsumerTests {
 
@@ -666,6 +666,47 @@ class PostgreSQLPgmqConsumerTests {
         }
 
         consumer.stop()
+        client.drop(queue)
+    }
+
+    // A batch is read at once, so its last messages wait for the handlers of the ones before them. With a backlog,
+    // their visibility timeout used to run out meanwhile: they were read again and handled twice.
+    @Test
+    fun `consumer should handle each message once when a batch outlasts its visibility timeout`(): Unit = runBlocking {
+        val queueName = newQueue()
+        val queue = PgmqClient.Queue(queueName)
+        client.create(queue).getOrThrow()
+
+        val handled = mutableMapOf<Long, Int>()
+        val lock = Mutex()
+        // Sent before the consumer starts, so a single read gets them all.
+        val ids = (1..5).map { client.send(queueName, """{"n": $it}""").getOrThrow() }
+
+        val consumer = PgmqConsumer(
+            pgmq = client,
+            options = PgmqConsumer.Options(
+                queue = queueName,
+                prefetch = 5,
+                vt = 1.seconds, // invisible for 2 seconds after a read
+                autoStart = false,
+                queueMinPullDelay = 50.milliseconds,
+                queueMaxPullDelay = 200.milliseconds,
+            ),
+            onMessage = { msg ->
+                lock.withLock { handled[msg.msgId] = (handled[msg.msgId] ?: 0) + 1 }
+                delay(600.milliseconds) // five of them take longer than the visibility timeout
+            }
+        )
+        consumer.start()
+
+        withTimeout(15_000.milliseconds) {
+            while (lock.withLock { handled.keys.size } < ids.size) delay(100.milliseconds)
+        }
+        // Leave time for any copy read again to be handled as well.
+        delay(3_000.milliseconds)
+        consumer.stop()
+
+        assertThat(lock.withLock { handled.toMap() }).isEqualTo(ids.associateWith { 1 })
         client.drop(queue)
     }
 }
