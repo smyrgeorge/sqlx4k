@@ -758,7 +758,7 @@ impl Sqlx4kSqliteCipher {
     }
 
     pub async fn close(&self) -> *mut Sqlx4kSqliteCipherResult {
-        self.pool.close().await;
+        close_pool(&self.pool).await;
         Sqlx4kSqliteCipherResult::default().leak()
     }
 
@@ -865,6 +865,26 @@ impl Sqlx4kSqliteCipher {
             ..result
         };
         result.leak()
+    }
+}
+
+/// Closes the pool without waiting for the connections still checked out. `Pool::close()` waits until every
+/// checked-out connection is given back (and only then closes the idle ones): one the caller still holds (or abandoned)
+/// would hang it for good, and the caller cannot cancel it. The idle connections are closed here instead, and the
+/// pool is marked closed; the checked-out ones are closed as they are given back, as the JVM drivers do.
+async fn close_pool<DB: sqlx::Database>(pool: &sqlx::Pool<DB>) {
+    while let Some(cn) = pool.try_acquire() {
+        let _ = sqlx::Connection::close(cn.detach()).await;
+    }
+    if pool.size() == 0 {
+        pool.close().await;
+    } else {
+        let closing = pool.clone();
+        tokio::spawn(async move { closing.close().await });
+        // The spawned close marks the pool closed when it first runs: no connection is acquired after this returns.
+        while !pool.is_closed() {
+            tokio::task::yield_now().await;
+        }
     }
 }
 

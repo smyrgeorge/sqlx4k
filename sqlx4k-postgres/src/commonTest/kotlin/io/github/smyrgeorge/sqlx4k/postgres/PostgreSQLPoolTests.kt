@@ -218,5 +218,16 @@ class PostgreSQLPoolTests {
         // The pool's only connection is back.
         assertThat(db.fetchAll("select 1").getOrThrow().size).isEqualTo(1)
     }
+
+    // Closing the pool does not wait for a connection that is still checked out (it is closed when given back).
+    @Test
+    fun `closing the pool does not wait for a checked-out connection`(): Unit = runBlocking {
+        val db = pool(maxConnections = 2)
+        db.fetchAll("select 1").getOrThrow() // an idle connection as well
+        val cn = db.acquire().getOrThrow()
+        withTimeout(5.seconds) { db.close().getOrThrow() }
+        assertThat(db.fetchAll("select 1")).isFailure()
+        cn.close()
+    }
 }
 
