@@ -21,6 +21,7 @@ tokio = { version = "1.52.3", features = [
     "rt-multi-thread",
     "sync",   # mpsc/oneshot channels of the row streams (fetch).
     "macros", # tokio::select! in the row streams.
+    "time",   # The grace closing a pool gives its checked-out connections.
 ] }
 # https://crates.io/crates/futures-core (already a sqlx dependency; the row stream type)
 futures-core = "0.3"
