@@ -281,6 +281,10 @@ class PostgreSQL(
         override val encoders: ValueEncoderRegistry
     ) : Connection {
         private val mutex = Mutex()
+
+        // The transaction begun on this connection: it shares the mutex (both drive the same native connection),
+        // and close() rolls it back if it is still open.
+        private var transaction: SqlxTransaction? = null
         private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
         private var _transactionIsolationLevel: IsolationLevel? = null
@@ -290,6 +294,10 @@ class PostgreSQL(
             mutex.withLock {
                 if (status == Connection.Status.Closed) return@withLock
                 _status = Connection.Status.Closed
+                // An open transaction would keep the connection inside it once back in the pool, and its native
+                // handle would outlive the connection it borrows: roll it back first.
+                transaction?.let { runCatching { it.rollbackIfOpenLocked() } }
+                transaction = null
 
                 transactionIsolationLevel?.let {
                     val default = IPostgresSQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL
@@ -361,17 +369,24 @@ class PostgreSQL(
         override suspend fun begin(): Result<Transaction> = mutex.withLockCatching(::assertIsOpen) {
             sqlx { c -> sqlx4k_postgresql_cn_tx_begin(rt, cn, c, fn) }.use {
                 it.throwIfError()
-                SqlxTransaction(rt, it.tx!!, encoders)
+                SqlxTransaction(rt, it.tx!!, encoders, mutex).also { transaction = it }
             }
         }
     }
 
-    class SqlxTransaction(
+    class SqlxTransaction internal constructor(
         private val rt: CPointer<out CPointed>,
         private var tx: CPointer<out CPointed>,
-        override val encoders: ValueEncoderRegistry
+        override val encoders: ValueEncoderRegistry,
+        // Shared with the connection the transaction was begun on, which drives the same native connection.
+        private val mutex: Mutex,
     ) : Transaction {
-        private val mutex = Mutex()
+        constructor(
+            rt: CPointer<out CPointed>,
+            tx: CPointer<out CPointed>,
+            encoders: ValueEncoderRegistry
+        ) : this(rt, tx, encoders, Mutex())
+
         private var _status: Transaction.Status = Transaction.Status.Open
         private var _commited: Boolean = false
         private var _rollbacked: Boolean = false
@@ -397,6 +412,17 @@ class PostgreSQL(
                 sqlx { c -> sqlx4k_postgresql_tx_rollback(rt, tx, c, fn) }.throwIfError()
                 _rollbacked = true
             }
+        }
+
+        /**
+         * Rolls the transaction back if it is still open: called by the connection it was begun on when that is
+         * closed, with the shared mutex already held.
+         */
+        internal suspend fun rollbackIfOpenLocked() {
+            if (status != Transaction.Status.Open) return
+            _status = Transaction.Status.Closed
+            sqlx { c -> sqlx4k_postgresql_tx_rollback(rt, tx, c, fn) }.throwIfError()
+            _rollbacked = true
         }
 
         override suspend fun execute(sql: String): Result<Long> = mutex.withLockCatching(::assertIsOpen) {

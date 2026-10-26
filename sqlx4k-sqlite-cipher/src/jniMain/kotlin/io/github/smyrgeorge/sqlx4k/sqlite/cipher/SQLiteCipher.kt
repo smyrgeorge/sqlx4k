@@ -187,6 +187,10 @@ class SQLiteCipher(
         override val encoders: ValueEncoderRegistry
     ) : Connection {
         private val mutex = Mutex()
+
+        // The transaction begun on this connection: it shares the mutex (both drive the same native connection),
+        // and close() rolls it back if it is still open.
+        private var transaction: SqlxTransaction? = null
         private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
         override val transactionIsolationLevel: IsolationLevel? = null
@@ -197,6 +201,10 @@ class SQLiteCipher(
                 mutex.withLock {
                     if (status == Connection.Status.Closed) return@withLock
                     _status = Connection.Status.Closed
+                    // An open transaction would keep the connection inside it once back in the pool, and its native
+                    // handle would outlive the connection it borrows: roll it back first.
+                    transaction?.let { runCatching { it.rollbackIfOpenLocked() } }
+                    transaction = null
                     withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeCnRelease(rt, cn)).throwIfError() }
                 }
             }
@@ -283,17 +291,20 @@ class SQLiteCipher(
                 val tx = withNativeResource({ decodeResult(CipherJni.nativeCnTxBegin(rt, cn)).txOrError() }) {
                     decodeResult(CipherJni.nativeTxRollback(rt, it)).throwIfError()
                 }
-                SqlxTransaction(rt, tx, encoders)
+                SqlxTransaction(rt, tx, encoders, mutex).also { transaction = it }
             }
         }
     }
 
-    class SqlxTransaction(
+    class SqlxTransaction internal constructor(
         private val rt: Long,
         private var tx: Long,
-        override val encoders: ValueEncoderRegistry
+        override val encoders: ValueEncoderRegistry,
+        // Shared with the connection the transaction was begun on, which drives the same native connection.
+        private val mutex: Mutex,
     ) : Transaction {
-        private val mutex = Mutex()
+        constructor(rt: Long, tx: Long, encoders: ValueEncoderRegistry) : this(rt, tx, encoders, Mutex())
+
         private var _status: Transaction.Status = Transaction.Status.Open
         private var _commited: Boolean = false
         private var _rollbacked: Boolean = false
@@ -325,6 +336,17 @@ class SQLiteCipher(
                     _rollbacked = true
                 }
             }
+        }
+
+        /**
+         * Rolls the transaction back if it is still open: called by the connection it was begun on when that is
+         * closed, with the shared mutex already held.
+         */
+        internal suspend fun rollbackIfOpenLocked() {
+            if (status != Transaction.Status.Open) return
+            _status = Transaction.Status.Closed
+            withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeTxRollback(rt, tx)).throwIfError() }
+            _rollbacked = true
         }
 
         override suspend fun execute(sql: String): Result<Long> =

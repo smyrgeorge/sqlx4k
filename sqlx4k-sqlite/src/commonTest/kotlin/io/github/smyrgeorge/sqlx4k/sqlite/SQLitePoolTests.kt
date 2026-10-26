@@ -143,8 +143,6 @@ class SQLitePoolTests : SQLiteTestBase() {
     // the next borrower's writes would run in that transaction and never be committed.
     @Test
     fun `closing a connection rolls back its unfinished transaction`(): Unit = runBlocking {
-        // Native: closing a connection with an open transaction is not handled yet.
-        if (testPlatform == TestPlatform.Native) return@runBlocking
         val options = ConnectionPool.Options.builder().maxConnections(1).acquireTimeout(3.seconds).build()
         val db = pool(maxConnections = 1, acquireTimeout = 3.seconds)
         db.execute("create table t_unfinished(id integer primary key);").getOrThrow()

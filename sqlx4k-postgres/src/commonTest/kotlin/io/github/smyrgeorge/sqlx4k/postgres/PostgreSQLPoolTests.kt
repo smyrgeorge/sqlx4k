@@ -11,6 +11,7 @@ import assertk.assertions.isSuccess
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
+import kotlin.random.Random
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
@@ -136,5 +137,31 @@ class PostgreSQLPoolTests {
         }
         // The pool's only connection is still there to serve a query.
         assertThat(db.fetchAll("select 1").getOrThrow().size).isEqualTo(1)
+    }
+
+    // A connection closed while a transaction begun on it is still open must not go back to the pool inside it:
+    // the next borrower's writes would run in that transaction and never be committed.
+    @Test
+    fun `closing a connection rolls back its unfinished transaction`(): Unit = runBlocking {
+        val db = pool(maxConnections = 1)
+        val other = pool(maxConnections = 1)
+        val table = "t_unfinished_${Random.nextInt(1_000_000)}"
+        db.execute("create table $table(id int primary key)").getOrThrow()
+        try {
+            val cn = db.acquire().getOrThrow()
+            val tx = cn.begin().getOrThrow()
+            tx.execute("insert into $table(id) values (1)").getOrThrow()
+            cn.close().getOrThrow() // neither committed nor rolled back
+
+            // The transaction can no longer be used through the connection that went back to the pool.
+            assertThat(tx.execute("insert into $table(id) values (3)")).isFailure()
+            // The pool's only connection is out of that transaction: its insert is gone, and a new write is
+            // committed (another pool sees it).
+            db.execute("insert into $table(id) values (2)").getOrThrow()
+            assertThat(other.fetchAll("select id from $table").getOrThrow().map { it.get(0).asInt() })
+                .isEqualTo(listOf(2))
+        } finally {
+            runCatching { db.execute("drop table if exists $table") }
+        }
     }
 }
