@@ -25,7 +25,7 @@ class BatchUpdateStatementTests {
     // User entity: Basic batch update with @Id
 
     @Test
-    fun `User batch update uses FROM VALUES syntax`() {
+    fun `User batch update joins one row per entity typed by the table`() {
         val users = listOf(
             User(id = 1, name = "Alice Updated", email = "alice@updated.com"),
             User(id = 2, name = "Bob Updated", email = "bob@updated.com")
@@ -33,8 +33,11 @@ class BatchUpdateStatementTests {
         val sql = users.update().render()
 
         assertThat(sql).contains("update users as t")
-        assertThat(sql).contains("from (values")
-        assertThat(sql).contains(") as v(")
+        // The empty first branch types every column from the table (an all-NULL column would otherwise be text).
+        assertThat(sql).contains(
+            "from (select id, name, email from users where false union all select $1, $2, $3" +
+                " union all select $4, $5, $6) as v(id, name, email)"
+        )
     }
 
     @Test

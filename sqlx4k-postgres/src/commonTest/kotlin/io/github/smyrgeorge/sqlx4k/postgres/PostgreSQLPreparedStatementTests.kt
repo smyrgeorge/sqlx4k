@@ -822,4 +822,34 @@ class PostgreSQLPreparedStatementTests {
             runCatching { db.execute("drop table if exists $table") }
         }
     }
+
+    // The shape of the generated batch UPDATE (sqlx4k-codegen): every column of the joined rows takes the table's
+    // type from the empty first branch, also when all its values are untyped NULLs (in a VALUES list it became text,
+    // which a bigint or timestamptz column rejects).
+    @Test
+    fun `batch update rows typed by the table accept all-null columns`(): Unit = runBlocking {
+        val table = "t_bu_${Random.nextInt(1_000_000)}"
+        try {
+            db.execute(
+                "create table $table(id bigint primary key, name text not null, parent_id bigint, deleted_at timestamptz)"
+            ).getOrThrow()
+            db.execute("insert into $table values (1, 'a', 10, now()), (2, 'b', 20, now())").getOrThrow()
+
+            val update = Statement.create(
+                "update $table as t set name = v.name, parent_id = v.parent_id, deleted_at = v.deleted_at " +
+                    "from (select id, name, parent_id, deleted_at from $table where false " +
+                    "union all select ?, ?, ?, ? union all select ?, ?, ?, ?) as v(id, name, parent_id, deleted_at) " +
+                    "where t.id = v.id"
+            )
+                .bind(0, 1).bind(1, "x").bind(2, null).bind(3, null) // an Int into the bigint id
+                .bind(4, 2L).bind(5, "y").bind(6, null).bind(7, null)
+            assertThat(db.execute(update).getOrThrow()).isEqualTo(2L)
+
+            val rows = db.fetchAll("select name, parent_id, deleted_at from $table order by id").getOrThrow()
+            assertThat(rows.map { listOf(it.get(0).asString(), it.get(1).asStringOrNull(), it.get(2).asStringOrNull()) })
+                .isEqualTo(listOf(listOf("x", null, null), listOf("y", null, null)))
+        } finally {
+            runCatching { db.execute("drop table if exists $table").getOrThrow() }
+        }
+    }
 }

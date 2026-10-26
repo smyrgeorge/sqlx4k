@@ -535,7 +535,12 @@ class TableProcessor(
         file += "    val items = this.toList()\n"
         file += "    require(items.isNotEmpty()) { \"Cannot create batch update statement for empty collection\" }\n"
 
-        // PostgreSQL/Generic: UPDATE table AS t SET ... FROM (VALUES ...) AS v(...) WHERE t.id = v.id
+        // PostgreSQL/Generic: UPDATE table AS t SET ... FROM (SELECT id, ... FROM table WHERE false
+        //         UNION ALL SELECT ?, ... UNION ALL ...) AS v(...) WHERE t.id = v.id
+        //         The empty first branch gives every column the table's type: a VALUES list types a column from its
+        //         rows only, so a column whose values are all untyped NULLs became text, which a bigint (or
+        //         timestamptz, ...) column rejects. A row of its own per entity, as a multi-row VALUES is typed
+        //         before the union.
         // SQLite: WITH v(...) AS (VALUES ...) UPDATE table SET ... FROM v WHERE table.id = v.id
         //         SQLite requires CTE syntax because it doesn't support column aliases on inline VALUES
         // MySQL/MariaDB: UPDATE table AS t JOIN (SELECT ? AS id, ... UNION ALL SELECT ?, ...) AS v ON t.id = v.id SET ...
@@ -549,12 +554,18 @@ class TableProcessor(
         val joinClause = "$tableRef.$idColumn = v.$idColumn" +
                 (versionColumn?.let { " and $tableRef.$it = v.$it" } ?: "")
 
-        if (mySqlLike) {
-            val firstRow = "select ${valueColumns.joinToString { "? as $it" }}"
-            val otherRow = " union all select ${valueColumns.joinToString { "?" }}"
-            file += "    val rows = \"$firstRow\" + \"$otherRow\".repeat(items.size - 1)\n"
-        } else {
-            file += "    val valuePlaceholders = items.indices.joinToString(\", \") { \"$singleValuePlaceholder\" }\n"
+        val otherRow = " union all select ${valueColumns.joinToString { "?" }}"
+        when {
+            dialect == Dialect.SQLite ->
+                file += "    val valuePlaceholders = items.indices.joinToString(\", \") { \"$singleValuePlaceholder\" }\n"
+            mySqlLike -> {
+                val firstRow = "select ${valueColumns.joinToString { "? as $it" }}"
+                file += "    val rows = \"$firstRow\" + \"$otherRow\".repeat(items.size - 1)\n"
+            }
+            else -> {
+                val typedRow = "select $valueColumnsList from $table where false"
+                file += "    val rows = \"$typedRow\" + \"$otherRow\".repeat(items.size)\n"
+            }
         }
         file += "    // language=SQL\n"
         file += when {
@@ -564,7 +575,7 @@ class TableProcessor(
             mySqlLike ->
                 $$"    val sql = \"update $$table as t join ($rows) as v on $$joinClause set $$setClause;\"\n"
             else ->
-                $$"    val sql = \"update $$table as t set $$setClause from (values $valuePlaceholders) as v($$valueColumnsList) where $$joinClause;\"\n"
+                $$"    val sql = \"update $$table as t set $$setClause from ($rows) as v($$valueColumnsList) where $$joinClause;\"\n"
         }
 
         file += "    val statement = Statement.create(sql)\n"
