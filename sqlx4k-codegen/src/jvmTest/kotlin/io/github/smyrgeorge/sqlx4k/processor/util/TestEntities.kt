@@ -210,3 +210,22 @@ data class AliasedConverted(
     @Converter(AliasedMoneyEncoder::class)
     val price: AliasedMoney,
 )
+
+typealias AliasedCents = Long
+
+/** Converts [AliasedCents], an alias of a primitive, stored as a decimal amount. */
+object AliasedCentsEncoder : ValueEncoder<AliasedCents> {
+    override fun encode(value: AliasedCents): Any = "${value / 100}.${(value % 100).toString().padStart(2, '0')}"
+    override fun decode(value: ResultSet.Row.Column): AliasedCents = value.asString().replace(".", "").toLong()
+}
+
+/**
+ * Entity with a @Converter property whose type is an alias of a primitive.
+ */
+@Table("aliased_cents")
+data class AliasedCentsEntity(
+    @Id
+    val id: Long,
+    @Converter(AliasedCentsEncoder::class)
+    val amount: AliasedCents,
+)

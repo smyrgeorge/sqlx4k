@@ -1214,9 +1214,10 @@ class TableProcessor(
         val propTypeQualifiedName = propType.declaration.qualifiedName?.asString()
             ?: error("No type name found for property ${prop.simpleName()}")
 
-        // Check that the property is not a primitive type
-        val baseTypeName = propTypeQualifiedName.removeSuffix("?")
-        if (isPrimitiveType(baseTypeName)) {
+        // Check that the property is not a primitive type. A type alias of one (`typealias Cents = Long`) is checked
+        // as written: it may be converted like any other type.
+        val baseTypeName = prop.type.resolve().declaration.qualifiedName?.asString()?.removeSuffix("?")
+        if (baseTypeName != null && isPrimitiveType(baseTypeName)) {
             error(
                 "@Converter cannot be used on primitive type '$propTypeQualifiedName'. " +
                         "Property: ${prop.simpleName()} in ${prop.parentDeclaration?.simpleName?.asString()}"

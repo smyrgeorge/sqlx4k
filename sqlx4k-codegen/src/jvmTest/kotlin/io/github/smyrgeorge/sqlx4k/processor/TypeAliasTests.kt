@@ -5,9 +5,11 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.AliasedAutoRowMapper
+import io.github.smyrgeorge.sqlx4k.processor.test.generated.AliasedCentsEntityAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.AliasedConvertedAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.AliasedCrudRepositoryImpl
 import io.github.smyrgeorge.sqlx4k.processor.util.Aliased
+import io.github.smyrgeorge.sqlx4k.processor.util.AliasedCentsEntity
 import io.github.smyrgeorge.sqlx4k.processor.util.AliasedConverted
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.row
@@ -43,5 +45,12 @@ class TypeAliasTests {
         val row = row("id" to "1", "price" to "9.5:EUR")
         assertThat(AliasedConvertedAutoRowMapper.map(row, ValueEncoderRegistry.EMPTY))
             .isEqualTo(AliasedConverted(id = 1, price = Money(9.5, "EUR")))
+    }
+
+    @Test
+    fun `the row mapper decodes a converted property declared through an alias of a primitive`() {
+        val row = row("id" to "1", "amount" to "12.05")
+        assertThat(AliasedCentsEntityAutoRowMapper.map(row, ValueEncoderRegistry.EMPTY))
+            .isEqualTo(AliasedCentsEntity(id = 1, amount = 1205))
     }
 }
