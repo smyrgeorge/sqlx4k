@@ -218,23 +218,23 @@ object Migrator {
                         searchPath
                     }
 
-                    val duration = measureTime {
-                        statements.forEach { statement ->
-                            // Execute the statement
-                            val duration = measureTime {
-                                execute(statement)
-                                    .onFailure { error ->
-                                        // Reset the search path to what it was before.
-                                        searchPath?.let {
-                                            val searchpathStatement = Migration.setSearchpath(it, dialect)
-                                            execute(searchpathStatement).getOrThrow()
-                                        }
-                                        throw error
-                                    }
+                    val duration = try {
+                        measureTime {
+                            statements.forEach { statement ->
+                                // Execute the statement
+                                val duration = measureTime { execute(statement).getOrThrow() }
+                                // Ensure callback exceptions surface as migration failures
+                                afterStatementExecution(statement, duration)
                             }
-                            // Ensure callback exceptions surface as migration failures
-                            afterStatementExecution(statement, duration)
                         }
+                    } catch (e: Throwable) {
+                        // Reset the search path to what it was before, also when a statement or the callback
+                        // failed: MySQL's default database is session state the rollback does not undo, and it
+                        // would stay on the pooled connection. Best effort, so that the migration's own error is
+                        // the one reported: PostgreSQL rejects any command in a failed transaction (and the
+                        // rollback restores its search path anyway).
+                        searchPath?.let { runCatching { execute(Migration.setSearchpath(it, dialect)) } }
+                        throw e
                     }
 
                     // Reset the search path to what it was before.

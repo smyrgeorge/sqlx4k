@@ -4,6 +4,7 @@ package io.github.smyrgeorge.sqlx4k.postgres
 
 import assertk.assertAll
 import assertk.assertThat
+import assertk.assertions.contains
 import assertk.assertions.containsExactly
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFailure
@@ -227,6 +228,31 @@ class PostgreSQLMigratorTests {
         } finally {
             runCatching { db.execute("DROP TABLE IF EXISTS $users CASCADE;").getOrThrow() }
             runCatching { db.execute("DROP TABLE IF EXISTS $table CASCADE;").getOrThrow() }
+        }
+    }
+
+    // With a schema, the failing statement's own error must be reported: resetting the search path in the failed
+    // transaction used to replace it with "current transaction is aborted".
+    @Test
+    fun `failure with an explicit schema reports the statement's error`(): Unit = runBlocking {
+        val rnd = Random.nextInt(100000)
+        val schema = "s_migr_err_$rnd"
+        val tableName = "_sqlx4k_migr_pg_$rnd"
+        runCatching { db.execute("DROP SCHEMA IF EXISTS $schema CASCADE;").getOrThrow() }
+        try {
+            val dir = newTempDir("pg-schema-error")
+            write(dir, "1_bad.sql", "INSERT INTO t_missing_$rnd(name) VALUES ('alice');")
+
+            val res = db.migrate(path = dir.toString(), table = tableName, schema = schema, createSchema = true)
+            assertThat(res).isFailure()
+            val message = res.exceptionOrNull()!!.message!!
+            assertAll {
+                assertThat(message, "error message").contains("t_missing_$rnd")
+                assertThat(message.contains("current transaction is aborted"), "masked by the search path reset")
+                    .isEqualTo(false)
+            }
+        } finally {
+            runCatching { db.execute("DROP SCHEMA IF EXISTS $schema CASCADE;").getOrThrow() }
         }
     }
 
