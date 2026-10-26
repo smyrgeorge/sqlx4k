@@ -45,7 +45,11 @@ fun splitSqlStatements(sql: String): List<String> {
                 val word = substring(i, end).uppercase()
                 words++
                 if (words == 1) create = word == "CREATE"
-                else if (create && words <= ROUTINE_HEADER_WORDS && word in ROUTINE_KINDS) routine = true
+                else if (create && !routine && words <= ROUTINE_HEADER_WORDS) {
+                    // The kind of object created comes before its name: `CREATE TABLE event` or `CREATE INDEX i ON
+                    // event` creates no routine.
+                    if (word in ROUTINE_KINDS) routine = true else if (word in OTHER_KINDS) create = false
+                }
                 if (routine) when (word) {
                     "BEGIN", "CASE" -> depth++
                     "END" -> {
@@ -77,6 +81,12 @@ fun splitSqlStatements(sql: String): List<String> {
 /** The words, after CREATE, within which the kind of object created is named (`CREATE OR REPLACE FUNCTION`, ...). */
 private const val ROUTINE_HEADER_WORDS = 8
 private val ROUTINE_KINDS = setOf("TRIGGER", "PROCEDURE", "FUNCTION", "EVENT")
+
+/** Kinds of objects created without a routine body, whose names may be one of [ROUTINE_KINDS]. */
+private val OTHER_KINDS = setOf(
+    "TABLE", "INDEX", "VIEW", "SCHEMA", "DATABASE", "SEQUENCE", "TYPE", "DOMAIN", "EXTENSION", "ROLE", "USER",
+    "TABLESPACE", "POLICY", "RULE", "STATISTICS", "PUBLICATION", "SUBSCRIPTION", "SERVER",
+)
 private val UNCOUNTED_BLOCK_ENDS = setOf("IF", "LOOP", "WHILE", "REPEAT")
 
 private fun String.identEnd(start: Int): Int {

@@ -897,6 +897,15 @@ class ScanSqlTests {
     }
 
     @Test
+    fun `split does not take an object named after a routine kind for a routine`() {
+        // begin is a valid column name: tracked as a routine's BEGIN, it would merge every statement after it.
+        val table = "CREATE TABLE event (id INT, begin TIMESTAMP, \"end\" TIMESTAMP)"
+        val index = "CREATE INDEX i ON event (begin)"
+        val result = splitSqlStatements("$table; $index; SELECT 1;")
+        assertThat(result).containsExactly(table, index, "SELECT 1")
+    }
+
+    @Test
     fun `split leaves out comment-only statements`() {
         val result = splitSqlStatements("SELECT 1;\n-- TODO: drop x;\n/* done; */")
         assertThat(result).containsExactly("SELECT 1")
