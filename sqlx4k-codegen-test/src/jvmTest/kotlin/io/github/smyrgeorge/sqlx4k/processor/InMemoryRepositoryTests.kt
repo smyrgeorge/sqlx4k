@@ -16,6 +16,7 @@ import io.github.smyrgeorge.sqlx4k.processor.util.User
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
@@ -203,6 +204,21 @@ class InMemoryRepositoryTests {
         repo.insert(ctx, User(id = 0, name = "Alice", email = "alice@example.com"))
         // 'WHERE name LIKE :pattern' cannot be translated to an in-memory predicate.
         assertFailsWith<NotImplementedError> { repo.findAllByNameLike(ctx, "A%") }
+    }
+
+    @Test
+    fun `queries whose order or limit cannot be reproduced become throwing stubs`() = runTest {
+        repo.insert(ctx, User(id = 0, name = "Alice", email = "a1@example.com"))
+        repo.insert(ctx, User(id = 0, name = "Alice", email = "a2@example.com"))
+        // ORDER BY ... LIMIT 1 would otherwise return every match, in any order.
+        assertFailsWith<NotImplementedError> { repo.findAllByNameLatest(ctx, "Alice") }
+    }
+
+    @Test
+    fun `streamAllByName emits the matching entities`() = runTest {
+        repo.insert(ctx, User(id = 0, name = "Alice", email = "alice@example.com"))
+        repo.insert(ctx, User(id = 0, name = "Bob", email = "bob@example.com"))
+        assertThat(repo.streamAllByName(ctx, "Bob").toList().map { it.email }).isEqualTo(listOf("bob@example.com"))
     }
 
     @Test

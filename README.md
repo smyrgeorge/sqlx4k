@@ -1211,14 +1211,17 @@ What the generated implementation provides:
 - **Derived `@Query` methods** — the in-memory behavior is derived from each method's `@Query` **SQL**: the statement is
   parsed and its `WHERE` clause becomes a predicate over the stored entities (columns are mapped back to properties via
   snake_case / `@Column`). Supports `=`, `<>`, `<`, `<=`, `>`, `>=`, `IS [NOT] NULL`, `AND`/`OR`, named parameters, and
-  simple literals — for `find*`/`count*` (SELECT), `delete*` (DELETE), and `execute*` (UPDATE `SET …`/DELETE). For
-  example `@Query("select * from users where name = :name")` behaves like `filter { it.name == name }`.
+  simple literals — for `find*`/`stream*`/`count*`/`exists*` (SELECT), `delete*` (DELETE), and `execute*`
+  (UPDATE `SET …`/DELETE). For example `@Query("select * from users where name = :name")` behaves like
+  `filter { it.name == name }`.
 - **Repository hooks** — the overridden `preInsert/afterInsert/... /aroundQuery` hooks are honored exactly like the real
   generated implementations.
 - **Test helpers** — `clear()` empties the store (and resets the id sequence) and `findAllStored()` returns a snapshot.
 
 Anything the generator cannot translate — a `WHERE` it doesn't understand (e.g. `LIKE`, `IN`, subqueries, function
-calls), or an `execute*` that isn't a plain UPDATE/DELETE — is emitted as a stub that throws `NotImplementedError`. The
+calls), a query whose result also depends on a join, `DISTINCT`, `GROUP BY`/`HAVING`, a `LIMIT`/`OFFSET` or (for
+`find*`/`stream*`) an `ORDER BY`, or an `execute*` that isn't a plain UPDATE/DELETE — is emitted as a stub that throws
+`NotImplementedError`. The
 generated class is `open`, so provide the behavior yourself by subclassing and overriding just those methods. Use the
 `withStore { }` helper for thread-safe access to the backing map (the `MutableMap` is the lambda receiver):
 

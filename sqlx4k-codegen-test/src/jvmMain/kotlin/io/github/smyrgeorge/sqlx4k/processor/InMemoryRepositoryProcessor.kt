@@ -144,6 +144,8 @@ class InMemoryRepositoryProcessor(
         file += "package $outputPackage\n\n"
         file += "import ${TypeNames.QUERY_EXECUTOR}\n"
         file += "import ${TypeNames.SQL_ERROR}\n"
+        file += "import kotlinx.coroutines.flow.Flow\n"
+        file += "import kotlinx.coroutines.flow.flow\n"
         file += "import kotlinx.coroutines.sync.Mutex\n"
         file += "import kotlinx.coroutines.sync.withLock\n"
         if (useArrow) file += "import ${TypeNames.TO_DB_RESULT}\n"
@@ -445,7 +447,9 @@ class InMemoryRepositoryProcessor(
         val valueParams: Set<String> = (if (useContext) fn.parameters else fn.parameters.drop(1))
             .mapNotNull { it.name?.asString() }.toSet()
 
+        val isStream = prefix == Prefix.STREAM_ALL || prefix == Prefix.STREAM_ALL_BY
         val returnType = when (prefix) {
+            Prefix.STREAM_ALL, Prefix.STREAM_ALL_BY -> "Flow<$domainQn>"
             Prefix.FIND_ALL, Prefix.FIND_ALL_BY -> "$resultType<List<$domainQn>>"
             Prefix.FIND_ONE_BY -> "$resultType<$domainQn?>"
             Prefix.EXISTS_BY -> "$resultType<Boolean>"
@@ -453,9 +457,9 @@ class InMemoryRepositoryProcessor(
                 "$resultType<Long>"
         }
 
-        // Emit signature.
+        // Emit signature (a stream is a plain function returning a cold flow).
         if (useContext) file += "    context(context: QueryExecutor)\n"
-        file += "    override suspend fun $name($paramSig): $returnType ="
+        file += "    override ${if (isStream) "" else "suspend "}fun $name($paramSig): $returnType ="
 
         val core: String? = deriveCore(fn, prefix, valueParams, columns, idName)
         if (core == null) {
@@ -467,7 +471,11 @@ class InMemoryRepositoryProcessor(
             file += "    )\n\n"
         } else {
             val hasAroundQueryHook = isHookOverridden(repo, "aroundQuery")
-            file += "\n        ${wrapAround(hasAroundQueryHook, name, core)}$toResult\n\n"
+            file += if (isStream) {
+                "\n        flow { ${wrapAround(hasAroundQueryHook, name, core)}.forEach { emit(it) } }\n\n"
+            } else {
+                "\n        ${wrapAround(hasAroundQueryHook, name, core)}$toResult\n\n"
+            }
         }
     }
 
@@ -494,7 +502,27 @@ class InMemoryRepositoryProcessor(
         val multipleRows =
             "Result.failure(SQLError(SQLError.Code.MultipleRowsReturned, \"findOneBy query returned more than one row\"))"
 
+        // Only the WHERE clause is reproduced in memory: a query whose result also depends on a join, DISTINCT,
+        // grouping, a row limit or (for the rows it returns) its order gets a stub instead of a silently different
+        // result. A count or an existence check does not depend on the order.
+        val ordered = prefix != Prefix.COUNT_ALL && prefix != Prefix.COUNT_BY && prefix != Prefix.EXISTS_BY
+        (statement as? PlainSelect)?.let { ps ->
+            if (!ps.joins.isNullOrEmpty() || ps.distinct != null || ps.groupBy != null || ps.having != null ||
+                ps.limit != null || ps.offset != null || ps.fetch != null || (ordered && ps.orderByElements != null)
+            ) return null
+        }
+
         return when (prefix) {
+            // A stream emits the rows a findAll would return.
+            Prefix.STREAM_ALL, Prefix.STREAM_ALL_BY -> {
+                val ps = statement as? PlainSelect ?: return null
+                when (val where = analyzeWhere(ps.where, valueParams, columns)) {
+                    Where.All -> "withStore { values.toList() }"
+                    is Where.By -> "withStore { values.filter { ${where.predicate} } }"
+                    Where.Unsupported -> null
+                }
+            }
+
             Prefix.FIND_ALL, Prefix.FIND_ALL_BY -> {
                 val ps = statement as? PlainSelect ?: return null
                 when (val where = analyzeWhere(ps.where, valueParams, columns)) {
@@ -814,6 +842,8 @@ class InMemoryRepositoryProcessor(
      * Valid repository method prefixes (mirrors the naming conventions of the main codegen processor).
      */
     private enum class Prefix {
+        STREAM_ALL_BY,
+        STREAM_ALL,
         FIND_ONE_BY,
         FIND_ALL_BY,
         FIND_ALL,
@@ -829,6 +859,8 @@ class InMemoryRepositoryProcessor(
         name == "findAll" -> Prefix.FIND_ALL
         name == "deleteAll" -> Prefix.DELETE_ALL
         name == "countAll" -> Prefix.COUNT_ALL
+        name == "streamAll" -> Prefix.STREAM_ALL
+        name.startsWith("streamAllBy") -> Prefix.STREAM_ALL_BY
         name.startsWith("findAllBy") -> Prefix.FIND_ALL_BY
         name.startsWith("findOneBy") -> Prefix.FIND_ONE_BY
         name.startsWith("deleteBy") -> Prefix.DELETE_BY

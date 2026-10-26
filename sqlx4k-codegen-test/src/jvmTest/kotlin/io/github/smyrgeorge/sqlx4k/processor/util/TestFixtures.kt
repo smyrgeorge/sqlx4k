@@ -84,6 +84,13 @@ interface UserCrudRepository : CrudRepository<User> {
 
     @Query("UPDATE users SET name = :newName WHERE name = :oldName")
     suspend fun executeUpdateName(context: QueryExecutor, oldName: String, newName: String): Result<Long>
+
+    @Query("SELECT * FROM users WHERE name = :name")
+    fun streamAllByName(context: QueryExecutor, name: String): Flow<User>
+
+    // The order and the limit cannot be reproduced from the WHERE clause alone, so this becomes a stub.
+    @Query("SELECT * FROM users WHERE name = :name ORDER BY email DESC LIMIT 1")
+    suspend fun findAllByNameLatest(context: QueryExecutor, name: String): Result<List<User>>
 }
 
 /**
