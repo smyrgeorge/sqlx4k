@@ -22,28 +22,36 @@ class PostgreSQLPgmqTopicTests {
     private val db = testPostgreSQL()
     private val client = testPgmqClient(db)
 
+    /**
+     * The first segment of every pattern and routing key of the test: the JVM and native suites run at the same time
+     * against the same database, and would otherwise route messages to each other's queues (and remove each other's
+     * bindings).
+     */
+    private val root = "t${Random.nextInt(1_000_000)}"
+
+    private fun topic(key: String): String = "$root.$key"
+
+    // Topic routing (`bind_topic` / `unbind_topic` / `send_topic`) is part of the pgmq extension since 1.11.0. Its
+    // bindings table is extension-owned, and dropping a queue leaves its bindings: the test's own are removed.
     @AfterTest
-    fun tearDown(): Unit = runBlocking { db.close().getOrThrow() }
+    fun tearDown(): Unit = runBlocking {
+        try {
+            client.pg.execute("DELETE FROM pgmq.topic_bindings WHERE pattern LIKE '$root.%'").getOrThrow()
+        } finally {
+            db.close().getOrThrow()
+        }
+    }
 
     private fun newQueue(): String = "test_topic_q_${Random.nextInt(1_000_000)}"
 
-    /**
-     * Starts each test from a clean set of bindings. Topic routing (`bind_topic` / `unbind_topic` / `send_topic`) is
-     * part of the pgmq extension since 1.11.0; the bindings table is extension-owned, so it is emptied, not dropped.
-     */
-    private suspend fun ensureTopics() {
-        client.pg.execute("DELETE FROM pgmq.topic_bindings").getOrThrow()
-    }
-
     @Test
     fun `sendTopic routes a message to a queue whose pattern matches`(): Unit = runBlocking {
-        ensureTopics()
         val q = newQueue()
         client.create(PgmqClient.Queue(q)).getOrThrow()
         try {
-            client.bindTopic("logs.*", q).getOrThrow()
+            client.bindTopic(topic("logs.*"), q).getOrThrow()
 
-            val count = client.sendTopic("logs.error", """{"msg": "boom"}""").getOrThrow()
+            val count = client.sendTopic(topic("logs.error"), """{"msg": "boom"}""").getOrThrow()
             assertThat(count).isEqualTo(1L)
 
             val messages = client.read(q, quantity = 10).getOrThrow()
@@ -56,14 +64,13 @@ class PostgreSQLPgmqTopicTests {
 
     @Test
     fun `sendTopic preserves headers on the routed message`(): Unit = runBlocking {
-        ensureTopics()
         val q = newQueue()
         client.create(PgmqClient.Queue(q)).getOrThrow()
         try {
-            client.bindTopic("orders.#", q).getOrThrow()
+            client.bindTopic(topic("orders.#"), q).getOrThrow()
 
             val headers = mapOf("trace" to "abc", "src" to "test")
-            client.sendTopic("orders.eu.created", """{"id": 1}""", headers).getOrThrow()
+            client.sendTopic(topic("orders.eu.created"), """{"id": 1}""", headers).getOrThrow()
 
             val messages = client.read(q, quantity = 10).getOrThrow()
             assertThat(messages).hasSize(1)
@@ -75,17 +82,16 @@ class PostgreSQLPgmqTopicTests {
 
     @Test
     fun `sendTopic fans out to every matching queue`(): Unit = runBlocking {
-        ensureTopics()
         val q1 = newQueue()
         val q2 = newQueue()
         client.create(PgmqClient.Queue(q1)).getOrThrow()
         client.create(PgmqClient.Queue(q2)).getOrThrow()
         try {
             // '#' matches zero-or-more segments, '*' matches exactly one — both match "app.user.created".
-            client.bindTopic("app.#", q1).getOrThrow()
-            client.bindTopic("app.user.*", q2).getOrThrow()
+            client.bindTopic(topic("app.#"), q1).getOrThrow()
+            client.bindTopic(topic("app.user.*"), q2).getOrThrow()
 
-            val count = client.sendTopic("app.user.created", """{"user": 7}""").getOrThrow()
+            val count = client.sendTopic(topic("app.user.created"), """{"user": 7}""").getOrThrow()
             assertThat(count).isEqualTo(2L)
 
             assertThat(client.read(q1, quantity = 10).getOrThrow()).hasSize(1)
@@ -98,15 +104,14 @@ class PostgreSQLPgmqTopicTests {
 
     @Test
     fun `star matches a single segment only`(): Unit = runBlocking {
-        ensureTopics()
         val q = newQueue()
         client.create(PgmqClient.Queue(q)).getOrThrow()
         try {
-            client.bindTopic("logs.*", q).getOrThrow()
+            client.bindTopic(topic("logs.*"), q).getOrThrow()
 
             // One segment after "logs." matches; two segments do not.
-            assertThat(client.sendTopic("logs.error", """{"m": 1}""").getOrThrow()).isEqualTo(1L)
-            assertThat(client.sendTopic("logs.error.fatal", """{"m": 2}""").getOrThrow()).isEqualTo(0L)
+            assertThat(client.sendTopic(topic("logs.error"), """{"m": 1}""").getOrThrow()).isEqualTo(1L)
+            assertThat(client.sendTopic(topic("logs.error.fatal"), """{"m": 2}""").getOrThrow()).isEqualTo(0L)
 
             assertThat(client.read(q, quantity = 10).getOrThrow()).hasSize(1)
         } finally {
@@ -116,14 +121,13 @@ class PostgreSQLPgmqTopicTests {
 
     @Test
     fun `hash matches multiple segments`(): Unit = runBlocking {
-        ensureTopics()
         val q = newQueue()
         client.create(PgmqClient.Queue(q)).getOrThrow()
         try {
-            client.bindTopic("logs.#", q).getOrThrow()
+            client.bindTopic(topic("logs.#"), q).getOrThrow()
 
-            assertThat(client.sendTopic("logs.error", """{"m": 1}""").getOrThrow()).isEqualTo(1L)
-            assertThat(client.sendTopic("logs.error.fatal", """{"m": 2}""").getOrThrow()).isEqualTo(1L)
+            assertThat(client.sendTopic(topic("logs.error"), """{"m": 1}""").getOrThrow()).isEqualTo(1L)
+            assertThat(client.sendTopic(topic("logs.error.fatal"), """{"m": 2}""").getOrThrow()).isEqualTo(1L)
 
             assertThat(client.read(q, quantity = 10).getOrThrow()).hasSize(2)
         } finally {
@@ -133,13 +137,12 @@ class PostgreSQLPgmqTopicTests {
 
     @Test
     fun `sendTopic returns zero when no pattern matches`(): Unit = runBlocking {
-        ensureTopics()
         val q = newQueue()
         client.create(PgmqClient.Queue(q)).getOrThrow()
         try {
-            client.bindTopic("logs.*", q).getOrThrow()
+            client.bindTopic(topic("logs.*"), q).getOrThrow()
 
-            val count = client.sendTopic("metrics.cpu", """{"m": 1}""").getOrThrow()
+            val count = client.sendTopic(topic("metrics.cpu"), """{"m": 1}""").getOrThrow()
             assertThat(count).isEqualTo(0L)
             assertThat(client.read(q, quantity = 10).getOrThrow()).isEmpty()
         } finally {
@@ -149,15 +152,14 @@ class PostgreSQLPgmqTopicTests {
 
     @Test
     fun `bindTopic with multiple patterns binds them all`(): Unit = runBlocking {
-        ensureTopics()
         val q = newQueue()
         client.create(PgmqClient.Queue(q)).getOrThrow()
         try {
-            client.bindTopic(listOf("a.*", "b.*"), q).getOrThrow()
+            client.bindTopic(listOf(topic("a.*"), topic("b.*")), q).getOrThrow()
 
-            assertThat(client.sendTopic("a.one", """{"m": 1}""").getOrThrow()).isEqualTo(1L)
-            assertThat(client.sendTopic("b.two", """{"m": 2}""").getOrThrow()).isEqualTo(1L)
-            assertThat(client.sendTopic("c.three", """{"m": 3}""").getOrThrow()).isEqualTo(0L)
+            assertThat(client.sendTopic(topic("a.one"), """{"m": 1}""").getOrThrow()).isEqualTo(1L)
+            assertThat(client.sendTopic(topic("b.two"), """{"m": 2}""").getOrThrow()).isEqualTo(1L)
+            assertThat(client.sendTopic(topic("c.three"), """{"m": 3}""").getOrThrow()).isEqualTo(0L)
 
             assertThat(client.read(q, quantity = 10).getOrThrow()).hasSize(2)
         } finally {
@@ -167,19 +169,18 @@ class PostgreSQLPgmqTopicTests {
 
     @Test
     fun `unbindTopic stops routing and reports removal`(): Unit = runBlocking {
-        ensureTopics()
         val q = newQueue()
         client.create(PgmqClient.Queue(q)).getOrThrow()
         try {
-            client.bindTopic("logs.*", q).getOrThrow()
-            assertThat(client.sendTopic("logs.error", """{"m": 1}""").getOrThrow()).isEqualTo(1L)
+            client.bindTopic(topic("logs.*"), q).getOrThrow()
+            assertThat(client.sendTopic(topic("logs.error"), """{"m": 1}""").getOrThrow()).isEqualTo(1L)
 
             // Removing an existing binding returns true; a second removal returns false (idempotent).
-            assertThat(client.unbindTopic("logs.*", q).getOrThrow()).isTrue()
-            assertThat(client.unbindTopic("logs.*", q).getOrThrow()).isFalse()
+            assertThat(client.unbindTopic(topic("logs.*"), q).getOrThrow()).isTrue()
+            assertThat(client.unbindTopic(topic("logs.*"), q).getOrThrow()).isFalse()
 
             // After unbinding nothing is routed anymore.
-            assertThat(client.sendTopic("logs.error", """{"m": 2}""").getOrThrow()).isEqualTo(0L)
+            assertThat(client.sendTopic(topic("logs.error"), """{"m": 2}""").getOrThrow()).isEqualTo(0L)
         } finally {
             client.drop(PgmqClient.Queue(q))
         }
@@ -187,14 +188,13 @@ class PostgreSQLPgmqTopicTests {
 
     @Test
     fun `sendTopic honours a delivery delay`(): Unit = runBlocking {
-        ensureTopics()
         val q = newQueue()
         client.create(PgmqClient.Queue(q)).getOrThrow()
         try {
-            client.bindTopic("delayed.*", q).getOrThrow()
+            client.bindTopic(topic("delayed.*"), q).getOrThrow()
 
             // A non-zero delay exercises the `delay integer` argument specifically.
-            val count = client.sendTopic("delayed.job", """{"m": 1}""", delay = 2.seconds).getOrThrow()
+            val count = client.sendTopic(topic("delayed.job"), """{"m": 1}""", delay = 2.seconds).getOrThrow()
             assertThat(count).isEqualTo(1L)
 
             // Delayed message is not visible immediately...
@@ -210,11 +210,10 @@ class PostgreSQLPgmqTopicTests {
     // The bindings of a list are created all or none, and a failure is returned, not thrown.
     @Test
     fun `bindTopic with a list is atomic`(): Unit = runBlocking {
-        ensureTopics()
         val q = newQueue()
         client.create(PgmqClient.Queue(q)).getOrThrow()
         try {
-            val res = client.bindTopic(listOf("valid.*", "invalid..pattern"), q)
+            val res = client.bindTopic(listOf(topic("valid.*"), topic("invalid..pattern")), q)
             assertThat(res.isFailure).isTrue()
 
             val bound = client.pg.fetchAll(
