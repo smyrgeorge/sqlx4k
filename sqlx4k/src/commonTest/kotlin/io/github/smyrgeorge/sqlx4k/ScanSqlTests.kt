@@ -901,4 +901,11 @@ class ScanSqlTests {
         val result = splitSqlStatements("SELECT 1;\n-- TODO: drop x;\n/* done; */")
         assertThat(result).containsExactly("SELECT 1")
     }
+
+    @Test
+    fun `split keeps MySQL executable comments`() {
+        // MySQL and MariaDB run them, e.g. the settings at the top of a mysqldump.
+        val result = splitSqlStatements("/*!40101 SET NAMES utf8mb4 */;\n/*M!100616 SET NOTE_VERBOSITY=0 */;\nSELECT 1;")
+        assertThat(result).containsExactly("/*!40101 SET NAMES utf8mb4 */", "/*M!100616 SET NOTE_VERBOSITY=0 */", "SELECT 1")
+    }
 }

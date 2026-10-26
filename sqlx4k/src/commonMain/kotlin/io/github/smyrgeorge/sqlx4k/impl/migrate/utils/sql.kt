@@ -94,12 +94,17 @@ private fun String.nextWord(from: Int): Pair<String, Int> {
     return substring(i, end).uppercase() to end
 }
 
-/** Whether this is blank or only comments (anything else, a quote included, is a statement). */
+/**
+ * Whether this is blank or only comments (anything else, a quote included, is a statement). A MySQL / MariaDB
+ * executable comment (`/*! ... */`, `/*M! ... */`, e.g. `/*!40101 SET NAMES utf8mb4 */` in a dump) is run by the server,
+ * so it is a statement too.
+ */
 private fun CharSequence.isOnlyComments(): Boolean {
     var i = 0
     while (i < length) {
         when {
             this[i].isWhitespace() -> i++
+            startsWith("/*!", i) || startsWith("/*M!", i) -> return false
             startsWith("--", i) -> {
                 while (i < length && this[i] != '\n') i++
             }
