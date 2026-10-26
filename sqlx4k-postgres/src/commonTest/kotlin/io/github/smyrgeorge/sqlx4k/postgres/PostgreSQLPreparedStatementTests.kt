@@ -5,6 +5,7 @@ package io.github.smyrgeorge.sqlx4k.postgres
 import assertk.assertAll
 import assertk.assertThat
 import assertk.assertions.isEqualTo
+import assertk.assertions.isFailure
 import assertk.assertions.isNull
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.Statement
@@ -801,6 +802,22 @@ class PostgreSQLPreparedStatementTests {
             val results = rows.map { it.get(0).asString() to it.get(1).asInt() }
 
             assertThat(results).isEqualTo(listOf("carol" to 85, "bob" to 75))
+        } finally {
+            runCatching { db.execute("drop table if exists $table") }
+        }
+    }
+
+    // PostgreSQL text cannot hold a NUL character: binding one must fail, not store the string cut at the NUL (the
+    // native driver passed it as a C string).
+    @Test
+    fun `string parameter with a NUL character is not cut`(): Unit = runBlocking {
+        val table = newTable()
+        try {
+            db.execute("create table $table(id int primary key, v text)").getOrThrow()
+            val res = db.execute(Statement.create("insert into $table(id, v) values (1, :v)").bind("v", "a\u0000b"))
+            assertThat(res).isFailure()
+            val count = db.fetchAll("select count(*) from $table").getOrThrow().first().get(0).asLong()
+            assertThat(count).isEqualTo(0L)
         } finally {
             runCatching { db.execute("drop table if exists $table") }
         }

@@ -177,8 +177,22 @@ pub struct Sqlx4kMysqlParam {
     pub i64_val: i64,
     pub f64_val: f64,
     pub text: *const c_char,
+    /// Length of `text` in bytes; a string may contain NUL, so it is not read as a C string.
+    pub text_len: c_int,
     pub blob: *const u8,
     pub blob_len: c_int,
+}
+
+/// Reads a TEXT-shaped parameter by its length, not as a C string: a string may contain NUL, at which a C string would
+/// silently cut it.
+fn read_text(p: &Sqlx4kMysqlParam) -> String {
+    let len = p.text_len.max(0) as usize;
+    let bytes = if len == 0 || p.text.is_null() {
+        &[][..]
+    } else {
+        unsafe { slice::from_raw_parts(p.text as *const u8, len) }
+    };
+    String::from_utf8_lossy(bytes).into_owned()
 }
 
 enum OwnedParam {
@@ -200,13 +214,7 @@ fn read_params(params: *const Sqlx4kMysqlParam, count: c_int) -> Vec<OwnedParam>
             PARAM_NULL => OwnedParam::Null,
             PARAM_INT => OwnedParam::Int(p.i64_val),
             PARAM_REAL => OwnedParam::Real(p.f64_val),
-            PARAM_TEXT => {
-                let s = unsafe { CStr::from_ptr(p.text) }
-                    .to_str()
-                    .expect("Invalid UTF-8 in TEXT parameter")
-                    .to_owned();
-                OwnedParam::Text(s)
-            }
+            PARAM_TEXT => OwnedParam::Text(read_text(p)),
             PARAM_BLOB => {
                 let len = p.blob_len.max(0) as usize;
                 let bytes = if len == 0 || p.blob.is_null() {

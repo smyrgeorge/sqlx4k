@@ -5,6 +5,7 @@ package io.github.smyrgeorge.sqlx4k.mysql
 import assertk.assertAll
 import assertk.assertThat
 import assertk.assertions.isEqualTo
+import assertk.assertions.isFailure
 import assertk.assertions.isNull
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.Statement
@@ -725,6 +726,26 @@ class MySQLPreparedStatementTests {
             val results = rows.map { it.get(0).asString() to it.get(1).asInt() }
 
             assertThat(results).isEqualTo(listOf("carol" to 85, "bob" to 75))
+        } finally {
+            runCatching { db.execute("drop table if exists $table") }
+        }
+    }
+
+    // A string with a NUL character must be bound in full (the native driver passed it as a C string, cut at the NUL).
+    @Test
+    fun `string parameter with a NUL character is bound in full`(): Unit = runBlocking {
+        val table = newTable()
+        try {
+            db.execute("create table $table(id int primary key, v varchar(10))").getOrThrow()
+            val value = "a\u0000b"
+            db.execute(Statement.create("insert into $table(id, v) values (1, :v)").bind("v", value)).getOrThrow()
+            val row = db.fetchAll(
+                Statement.create("select length(v), v = :v from $table where id = 1").bind("v", value)
+            ).getOrThrow().first()
+            assertAll {
+                assertThat(row.get(0).asLong(), "stored length").isEqualTo(3L)
+                assertThat(row.get(1).asLong(), "stored value matches").isEqualTo(1L)
+            }
         } finally {
             runCatching { db.execute("drop table if exists $table") }
         }

@@ -12,7 +12,6 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.MemScope
 import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.allocArrayOf
-import kotlinx.cinterop.cstr
 import kotlinx.cinterop.get
 import kotlinx.cinterop.reinterpret
 import kotlinx.datetime.LocalDate
@@ -87,12 +86,12 @@ private fun MemScope.bindParam(p: Sqlx4kMysqlParam, value: Any?) {
 
         is String -> {
             p.kind = PARAM_TEXT
-            p.text = value.cstr.ptr
+            setText(p, value)
         }
 
         is Char -> {
             p.kind = PARAM_TEXT
-            p.text = value.toString().cstr.ptr
+            setText(p, value.toString())
         }
 
         is ByteArray -> {
@@ -108,32 +107,32 @@ private fun MemScope.bindParam(p: Sqlx4kMysqlParam, value: Any?) {
 
         is Instant -> {
             p.kind = PARAM_TEXT
-            p.text = value.toTimestampString().cstr.ptr
+            setText(p, value.toTimestampString())
         }
 
         is LocalDate -> {
             p.kind = PARAM_TEXT
-            p.text = value.toString().cstr.ptr
+            setText(p, value.toString())
         }
 
         is LocalTime -> {
             p.kind = PARAM_TEXT
-            p.text = value.toTimeString().cstr.ptr
+            setText(p, value.toTimeString())
         }
 
         is LocalDateTime -> {
             p.kind = PARAM_TEXT
-            p.text = value.toTimestampString().cstr.ptr
+            setText(p, value.toTimestampString())
         }
 
         is Uuid -> {
             p.kind = PARAM_TEXT
-            p.text = value.toString().cstr.ptr
+            setText(p, value.toString())
         }
 
         is SqlRawLiteral -> {
             p.kind = PARAM_TEXT
-            p.text = value.sql.cstr.ptr
+            setText(p, value.sql)
         }
 
         else -> SQLError(
@@ -141,4 +140,11 @@ private fun MemScope.bindParam(p: Sqlx4kMysqlParam, value: Any?) {
             message = "Cannot bind value of type ${value::class.simpleName} as a MySQL parameter"
         ).raise()
     }
+}
+
+/** Passes [value] as UTF-8 with its length, not as a C string: a string may contain NUL, at which a C string is cut. */
+private fun MemScope.setText(p: Sqlx4kMysqlParam, value: String) {
+    val bytes = value.encodeToByteArray()
+    p.text = if (bytes.isEmpty()) null else allocArrayOf(bytes)
+    p.text_len = bytes.size
 }

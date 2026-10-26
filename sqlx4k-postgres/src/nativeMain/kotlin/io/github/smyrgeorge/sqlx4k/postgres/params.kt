@@ -12,7 +12,6 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.MemScope
 import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.allocArrayOf
-import kotlinx.cinterop.cstr
 import kotlinx.cinterop.get
 import kotlinx.cinterop.reinterpret
 import kotlinx.datetime.LocalDate
@@ -109,12 +108,12 @@ private fun MemScope.bindParam(p: Sqlx4kPostgresParam, value: Any?) {
 
         is String -> {
             p.kind = PARAM_TEXT
-            p.text = value.cstr.ptr
+            setText(p, value)
         }
 
         is Char -> {
             p.kind = PARAM_TEXT
-            p.text = value.toString().cstr.ptr
+            setText(p, value.toString())
         }
 
         is ByteArray -> {
@@ -132,32 +131,32 @@ private fun MemScope.bindParam(p: Sqlx4kPostgresParam, value: Any?) {
             // The Kotlin Instant is a UTC moment; the Rust side parses this as
             // `DateTime<Utc>` and binds as TIMESTAMPTZ.
             p.kind = PARAM_TIMESTAMPTZ
-            p.text = value.toTimestampString().cstr.ptr
+            setText(p, value.toTimestampString())
         }
 
         is LocalDate -> {
             p.kind = PARAM_DATE
-            p.text = value.toString().cstr.ptr
+            setText(p, value.toString())
         }
 
         is LocalTime -> {
             p.kind = PARAM_TIME
-            p.text = value.toTimeString().cstr.ptr
+            setText(p, value.toTimeString())
         }
 
         is LocalDateTime -> {
             p.kind = PARAM_TIMESTAMP
-            p.text = value.toTimestampString().cstr.ptr
+            setText(p, value.toTimestampString())
         }
 
         is Uuid -> {
             p.kind = PARAM_UUID
-            p.text = value.toString().cstr.ptr
+            setText(p, value.toString())
         }
 
         is SqlRawLiteral -> {
             p.kind = PARAM_TEXT
-            p.text = value.sql.cstr.ptr
+            setText(p, value.sql)
         }
 
         else -> SQLError(
@@ -184,4 +183,11 @@ private fun nullTypeFor(type: KClass<*>): Int = when (type) {
     // Fall back to the "untyped" sentinel; Rust binds None::<String> which
     // postgres can implicit-cast into many target types.
     else -> PARAM_NULL
+}
+
+/** Passes [value] as UTF-8 with its length, not as a C string: a string may contain NUL, at which a C string is cut. */
+private fun MemScope.setText(p: Sqlx4kPostgresParam, value: String) {
+    val bytes = value.encodeToByteArray()
+    p.text = if (bytes.isEmpty()) null else allocArrayOf(bytes)
+    p.text_len = bytes.size
 }

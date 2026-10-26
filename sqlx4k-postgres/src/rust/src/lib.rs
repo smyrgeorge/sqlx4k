@@ -196,6 +196,8 @@ pub struct Sqlx4kPostgresParam {
     pub i64_val: i64,
     pub f64_val: f64,
     pub text: *const c_char,
+    /// Length of `text` in bytes; a string may contain NUL, so it is not read as a C string.
+    pub text_len: c_int,
     pub blob: *const u8,
     pub blob_len: c_int,
 }
@@ -236,11 +238,16 @@ enum OwnedParam {
     Uuid(uuid::Uuid),
 }
 
+/// Reads a TEXT-shaped parameter by its length, not as a C string: a string may contain NUL, at which a C string would
+/// silently cut it.
 fn read_text(p: &Sqlx4kPostgresParam) -> String {
-    unsafe { CStr::from_ptr(p.text) }
-        .to_str()
-        .expect("Invalid UTF-8 in TEXT-shaped parameter")
-        .to_owned()
+    let len = p.text_len.max(0) as usize;
+    let bytes = if len == 0 || p.text.is_null() {
+        &[][..]
+    } else {
+        unsafe { slice::from_raw_parts(p.text as *const u8, len) }
+    };
+    String::from_utf8_lossy(bytes).into_owned()
 }
 
 /// Reads `count` params from a C array and copies their data into owned Rust
