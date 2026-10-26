@@ -166,4 +166,29 @@ class SQLiteMigratorTests : SQLiteTestBase() {
             runCatching { db.execute("DROP TABLE IF EXISTS $table;").getOrThrow() }
         }
     }
+
+    // A trigger's body holds several statements separated by `;`: the migration must keep it in one statement.
+    @Test
+    fun `migration with a trigger body`(): Unit = runBlocking {
+        val rnd = Random.nextInt(1_000_000)
+        val table = "_sqlx4k_migr_sqlite_trg_$rnd"
+        val dir = newTempDir("sqlite-trigger")
+        write(
+            dir, "1_trigger.sql", """
+            CREATE TABLE t_items_$rnd (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+            CREATE TABLE t_audit_$rnd (n INTEGER NOT NULL);
+            INSERT INTO t_audit_$rnd (n) VALUES (0);
+            CREATE TRIGGER t_count_$rnd AFTER INSERT ON t_items_$rnd
+            BEGIN
+                UPDATE t_audit_$rnd SET n = n + 1;
+                UPDATE t_audit_$rnd SET n = n + CASE WHEN NEW.name = 'b' THEN 10 ELSE 0 END;
+            END;
+            -- a trailing comment;
+        """.trimIndent()
+        )
+
+        assertThat(db.migrate(path = dir.toString(), table = table)).isSuccess()
+        db.execute("INSERT INTO t_items_$rnd (name) VALUES ('a'), ('b');").getOrThrow()
+        assertThat(db.fetchAll("SELECT n FROM t_audit_$rnd;").getOrThrow().first().get(0).asLong()).isEqualTo(12L)
+    }
 }

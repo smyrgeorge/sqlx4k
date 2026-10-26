@@ -854,4 +854,51 @@ class ScanSqlTests {
         val result = splitSqlStatements(sql)
         assertThat(result).containsExactly("SELECT `unclosed; ident")
     }
+
+    // ========================================================================================
+    // splitSqlStatements – routine and trigger bodies, comment-only statements
+    // ========================================================================================
+
+    @Test
+    fun `split keeps a SQLite trigger body in one statement`() {
+        val trigger = "CREATE TRIGGER t AFTER INSERT ON a BEGIN UPDATE b SET n = n + 1; INSERT INTO c VALUES (1); END"
+        val result = splitSqlStatements("$trigger; SELECT 1;")
+        assertThat(result).containsExactly(trigger, "SELECT 1")
+    }
+
+    @Test
+    fun `split keeps a MySQL procedure with nested blocks in one statement`() {
+        val procedure = """
+            CREATE DEFINER = `root`@`%` PROCEDURE p(IN x INT)
+            BEGIN
+                DECLARE y INT;
+                IF x > 0 THEN SET y = 1; ELSE SET y = 2; END IF;
+                CASE y WHEN 1 THEN SELECT 1; ELSE SELECT 2; END CASE;
+                lbl: LOOP LEAVE lbl; END LOOP lbl;
+                BEGIN SELECT y; END;
+            END
+        """.trimIndent()
+        val result = splitSqlStatements("$procedure;\nSELECT 2;")
+        assertThat(result).containsExactly(procedure, "SELECT 2")
+    }
+
+    @Test
+    fun `split keeps a PostgreSQL BEGIN ATOMIC function in one statement`() {
+        val function = "CREATE OR REPLACE FUNCTION f() RETURNS int LANGUAGE sql BEGIN ATOMIC SELECT 1; SELECT CASE WHEN true THEN 2 END; END"
+        val result = splitSqlStatements("$function; SELECT 3")
+        assertThat(result).containsExactly(function, "SELECT 3")
+    }
+
+    @Test
+    fun `split does not track begin and end outside routines`() {
+        // MySQL accepts begin and end as column names, and BEGIN / END as transaction statements.
+        val result = splitSqlStatements("CREATE TABLE r (begin INT, end INT); BEGIN; INSERT INTO r VALUES (1, 2); END;")
+        assertThat(result).containsExactly("CREATE TABLE r (begin INT, end INT)", "BEGIN", "INSERT INTO r VALUES (1, 2)", "END")
+    }
+
+    @Test
+    fun `split leaves out comment-only statements`() {
+        val result = splitSqlStatements("SELECT 1;\n-- TODO: drop x;\n/* done; */")
+        assertThat(result).containsExactly("SELECT 1")
+    }
 }
