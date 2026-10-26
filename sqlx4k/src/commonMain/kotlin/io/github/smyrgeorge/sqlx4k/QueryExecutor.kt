@@ -5,6 +5,7 @@ import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import kotlin.time.Duration
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -217,8 +218,11 @@ interface QueryExecutor {
                 throw e
             }
 
-            // Commit outside try-catch - if it fails, we don't roll back
+            // Commit outside try-catch - if it fails, we don't roll back. A cancellation (the caller was cancelled
+            // during the commit) stays a cancellation: wrapped in an SQLError it would be taken for a database failure
+            // (transactionCatching and toDbResult return it, and a retry could write twice).
             tx.commit().getOrElse {
+                if (it is CancellationException) throw it
                 SQLError(SQLError.Code.TransactionCommitFailed, it.message, it).raise()
             }
 

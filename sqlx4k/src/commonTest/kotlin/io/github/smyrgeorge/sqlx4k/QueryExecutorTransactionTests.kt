@@ -7,6 +7,7 @@ import assertk.assertions.isSameInstanceAs
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.utils.ControllableTransaction
 import io.github.smyrgeorge.sqlx4k.utils.FakeTransactional
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
@@ -86,6 +87,15 @@ class QueryExecutorTransactionTests {
         }
         assertThat(ex.code).isEqualTo(SQLError.Code.TransactionCommitFailed)
         assertThat(tx.rollbackCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `transaction rethrows a cancellation during commit as is`() = runBlocking {
+        val tx = ControllableTransaction(commitResult = Result.failure(CancellationException("cancelled")))
+        val ex = assertFailsWith<CancellationException> { withTx(tx).transaction { 1 } }
+        assertThat(ex.message).isEqualTo("cancelled")
+        // Nor does transactionCatching take it for a database failure (in a cancelled coroutine it rethrows it).
+        assertThat(withTx(tx).transactionCatching { 1 }.exceptionOrNull() is CancellationException).isTrue()
     }
 
     @Test
