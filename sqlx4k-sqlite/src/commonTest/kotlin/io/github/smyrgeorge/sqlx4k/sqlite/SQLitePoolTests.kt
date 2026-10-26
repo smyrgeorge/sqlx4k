@@ -240,15 +240,31 @@ class SQLitePoolTests : SQLiteTestBase() {
     // pool's connections: every one of them can still be acquired afterwards.
     @Test
     fun `acquire timeouts racing with releases keep the pool's capacity`(): Unit = runBlocking {
-        val db = pool(maxConnections = 2, acquireTimeout = 2.milliseconds)
+        val options = ConnectionPool.Options.builder()
+            .minConnections(2)
+            .maxConnections(2)
+            .acquireTimeout(2.milliseconds)
+            .build()
+        val db = testSQLite("SQLitePoolTests", options = options).also { opened += it }
+        // Both connections are opened up front: opening one may take longer than the acquire timeout.
+        withTimeout(10.seconds) { while (db.poolIdleSize() < 2) delay(10.milliseconds) }
         withContext(Dispatchers.Default) {
             repeat(20) {
                 (1..100).map { async { db.fetchAll("select 1;") } }.awaitAll()
             }
         }
-        val a = db.acquire().getOrThrow()
+        // Both connections can be held at once (an acquire may still time out opening a connection again).
+        suspend fun acquireEventually() = withTimeout(10.seconds) {
+            var cn = db.acquire()
+            while (cn.isFailure) {
+                delay(10.milliseconds)
+                cn = db.acquire()
+            }
+            cn.getOrThrow()
+        }
+        val a = acquireEventually()
         try {
-            db.acquire().getOrThrow().close().getOrThrow()
+            acquireEventually().close().getOrThrow()
         } finally {
             a.close().getOrThrow()
         }
