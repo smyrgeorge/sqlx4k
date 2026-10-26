@@ -77,26 +77,30 @@ consumer.stop()
 
 ## Topics
 
-Optional: topic-like routing (pub/sub style)
+Topic routing (pub/sub style) is part of the PGMQ extension since 1.11.0: bind wildcard patterns to queues, then
+publish with a routing key and every queue whose pattern matches receives the message.
 
-- First, run sql/topics.sql in your database (creates helper functions and a bindings table).
-- Then you can bind patterns to queues and publish with a routing key:
+- `*` matches exactly one segment, `#` matches zero or more (`logs.*` matches `logs.error` but not
+  `logs.error.fatal`; `logs.#` matches both).
+- A pattern without wildcards routes on an exact match, and `#` alone fans out every message.
 
 ```sql
--- 1) Create a queue and bind a topic pattern
+-- 1) Create queues and bind topic patterns
 SELECT pgmq.create('logs_all');
+SELECT pgmq.create('logs_error');
 SELECT pgmq.bind_topic('logs.#', 'logs_all');
--- '#' matches zero or more segments
+SELECT pgmq.bind_topic('logs.*.error', 'logs_error');
 
 -- 2) Dry-run to see where a key would route (no send)
 SELECT *
 FROM pgmq.test_routing('logs.api.error');
 
--- 3) Publish to all matching queues
-SELECT pgmq.send_topic('logs.api.error', '{"message":"boom"}'::jsonb);
+-- 3) Publish to all matching queues (returns the number of queues it was sent to)
+SELECT pgmq.send_topic('logs.api.error', '{"message":"boom"}'::jsonb); -- 2: logs_all and logs_error
+SELECT pgmq.send_topic('logs.api.info', '{"message":"up"}'::jsonb);    -- 1: logs_all
 ```
 
-See sql/topics-examples.sql for more patterns (exact match, fanout, wildcard differences).
+The client exposes `bindTopic`, `unbindTopic` and `sendTopic`.
 
 ## Examples
 
@@ -106,7 +110,7 @@ example [here](../examples/postgres/src/commonMain/kotlin/io/github/smyrgeorge/s
 ## Requirements
 
 - PostgreSQL 12+
-- PGMQ extension installed
+- PGMQ extension installed (1.11.0+ for topics)
 
 ## Links
 

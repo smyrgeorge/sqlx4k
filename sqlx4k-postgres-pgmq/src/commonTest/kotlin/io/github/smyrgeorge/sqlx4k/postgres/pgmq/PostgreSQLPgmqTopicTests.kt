@@ -8,16 +8,14 @@ import assertk.assertions.isEmpty
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFalse
 import assertk.assertions.isTrue
-import io.github.smyrgeorge.sqlx4k.impl.extensions.asBoolean
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
-import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.readSqlFilesFromDisk
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlin.random.Random
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 
 class PostgreSQLPgmqTopicTests {
 
@@ -30,27 +28,10 @@ class PostgreSQLPgmqTopicTests {
     private fun newQueue(): String = "test_topic_q_${Random.nextInt(1_000_000)}"
 
     /**
-     * Ensures the topic routing functions (`bind_topic` / `unbind_topic` / `send_topic`) are
-     * available and starts each test from a clean set of bindings.
-     *
-     * Some pgmq builds already bundle the topic feature as part of the extension (in which case the
-     * `pgmq.topic_bindings` table is extension-owned and cannot be dropped); others do not. So we
-     * install `topics.sql` only when the functions are missing, and always reset the bindings with a
-     * `DELETE` (which works regardless of extension ownership, unlike the `DROP TABLE` in the SQL
-     * file). The test working directory is the module directory, so the file is under `src/sql`.
+     * Starts each test from a clean set of bindings. Topic routing (`bind_topic` / `unbind_topic` / `send_topic`) is
+     * part of the pgmq extension since 1.11.0; the bindings table is extension-owned, so it is emptied, not dropped.
      */
     private suspend fun ensureTopics() {
-        val hasSendTopic = client.pg.fetchAll(
-            "SELECT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid " +
-                    "WHERE n.nspname = 'pgmq' AND p.proname = 'send_topic')"
-        ).getOrThrow().first().get(0).asBoolean()
-
-        if (!hasSendTopic) {
-            val topics = readSqlFilesFromDisk("src/sql").firstOrNull { it.first == "topics.sql" }
-                ?: error("Could not locate topics.sql under src/sql (cwd must be the module directory).")
-            client.installExtension(topics)
-        }
-
         client.pg.execute("DELETE FROM pgmq.topic_bindings").getOrThrow()
     }
 
