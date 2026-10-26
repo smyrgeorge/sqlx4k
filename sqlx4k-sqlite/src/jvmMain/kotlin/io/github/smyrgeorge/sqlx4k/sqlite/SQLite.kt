@@ -299,31 +299,38 @@ class SQLite(
         override val commited: Boolean get() = _commited
         override val rollbacked: Boolean get() = _rollbacked
 
+        // Runs to completion also when the caller is cancelled (e.g. from the finally block of a cancelled scope):
+        // withContext(Dispatchers.IO) would otherwise throw on entry, after the transaction was marked closed, and the
+        // COMMIT would silently never run.
         override suspend fun commit(): Result<Unit> = runCatching {
-            mutex.withLock {
-                if (commited) return@withLock
-                assertIsOpen()
-                _status = Transaction.Status.Closed
-                withContext(Dispatchers.IO) {
-                    connection.endTransaction(closeConnectionAfterTx) {
-                        commit()
-                        autoCommit = true
-                        _commited = true
+            withContext(NonCancellable) {
+                mutex.withLock {
+                    if (commited) return@withLock
+                    assertIsOpen()
+                    _status = Transaction.Status.Closed
+                    withContext(Dispatchers.IO) {
+                        connection.endTransaction(closeConnectionAfterTx) {
+                            commit()
+                            autoCommit = true
+                            _commited = true
+                        }
                     }
                 }
             }
         }
 
         override suspend fun rollback(): Result<Unit> = runCatching {
-            mutex.withLock {
-                if (rollbacked) return@withLock
-                assertIsOpen()
-                _status = Transaction.Status.Closed
-                withContext(Dispatchers.IO) {
-                    connection.endTransaction(closeConnectionAfterTx) {
-                        rollback()
-                        autoCommit = true
-                        _rollbacked = true
+            withContext(NonCancellable) {
+                mutex.withLock {
+                    if (rollbacked) return@withLock
+                    assertIsOpen()
+                    _status = Transaction.Status.Closed
+                    withContext(Dispatchers.IO) {
+                        connection.endTransaction(closeConnectionAfterTx) {
+                            rollback()
+                            autoCommit = true
+                            _rollbacked = true
+                        }
                     }
                 }
             }

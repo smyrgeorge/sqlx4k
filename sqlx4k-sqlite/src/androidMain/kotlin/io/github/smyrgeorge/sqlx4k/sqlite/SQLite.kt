@@ -278,8 +278,10 @@ class SQLite(
             // on that thread (Android SQLiteDatabase sessions are thread-local).
             withContext(dispatcher) {
                 db.beginTransactionNonExclusive()
-                AndroidTransaction(db, false, encoders, dispatcher)
-            }.also { openTransaction = it }
+                // Recorded as soon as it is begun: a caller cancelled meanwhile never receives it, and closing the
+                // connection must still roll it back.
+                AndroidTransaction(db, false, encoders, dispatcher).also { openTransaction = it }
+            }
         }
     }
 
@@ -316,29 +318,36 @@ class SQLite(
             )
         )
 
+        // Runs to completion also when the caller is cancelled (e.g. from the finally block of a cancelled scope):
+        // withContext(dispatcher) would otherwise throw on entry, after the transaction was marked closed, and the
+        // transaction would stay open on the connection, which goes back to the pool inside it.
         override suspend fun commit(): Result<Unit> = runCatching {
-            mutex.withLock {
-                if (commited) return@withLock
-                assertIsOpen()
-                _status = Transaction.Status.Closed
-                withContext(dispatcher) {
-                    db.completeTransaction(closeConnectionAfterTx) { setTransactionSuccessful() }
+            withContext(NonCancellable) {
+                mutex.withLock {
+                    if (commited) return@withLock
+                    assertIsOpen()
+                    _status = Transaction.Status.Closed
+                    withContext(dispatcher) {
+                        db.completeTransaction(closeConnectionAfterTx) { setTransactionSuccessful() }
+                    }
+                    // Only once the COMMIT itself succeeded (it runs when the transaction ends).
+                    _commited = true
                 }
-                // Only once the COMMIT itself succeeded (it runs when the transaction ends).
-                _commited = true
             }
         }
 
         override suspend fun rollback(): Result<Unit> = runCatching {
-            mutex.withLock {
-                if (rollbacked) return@withLock
-                assertIsOpen()
-                _status = Transaction.Status.Closed
-                withContext(dispatcher) {
-                    // Do NOT call setTransactionSuccessful() — endTransaction() will roll back.
-                    db.completeTransaction(closeConnectionAfterTx) { }
+            withContext(NonCancellable) {
+                mutex.withLock {
+                    if (rollbacked) return@withLock
+                    assertIsOpen()
+                    _status = Transaction.Status.Closed
+                    withContext(dispatcher) {
+                        // Do NOT call setTransactionSuccessful() — endTransaction() will roll back.
+                        db.completeTransaction(closeConnectionAfterTx) { }
+                    }
+                    _rollbacked = true
                 }
-                _rollbacked = true
             }
         }
 

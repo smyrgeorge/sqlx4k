@@ -13,7 +13,9 @@ import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
@@ -163,5 +165,29 @@ class SQLitePoolTests : SQLiteTestBase() {
         val reopened = openSQLite("sqlite://$testDirectory/SQLitePoolTests.db", options).also { opened += it }
         assertThat(reopened.fetchAll("select id from t_unfinished;").getOrThrow().map { it.get(0).asInt() })
             .isEqualTo(listOf(2))
+    }
+
+    // A transaction ended from a coroutine that is already cancelled (e.g. in the finally block of a cancelled scope)
+    // must still end: its connection would otherwise go back to the pool inside it, and the next borrower's writes
+    // would never be committed.
+    @Test
+    fun `a transaction committed from a cancelled coroutine is still committed`(): Unit = runBlocking {
+        val options = ConnectionPool.Options.builder().maxConnections(1).acquireTimeout(3.seconds).build()
+        val db = pool(maxConnections = 1, acquireTimeout = 3.seconds)
+        db.execute("create table t_cancelled_commit(id integer primary key);").getOrThrow()
+
+        val tx = db.begin().getOrThrow()
+        tx.execute("insert into t_cancelled_commit(id) values (1);").getOrThrow()
+        launch {
+            coroutineContext.cancel()
+            tx.commit().getOrThrow()
+        }.join()
+
+        // The next borrower of the pool's only connection writes outside of any transaction.
+        db.execute("insert into t_cancelled_commit(id) values (2);").getOrThrow()
+        db.close().getOrThrow()
+        val reopened = openSQLite("sqlite://$testDirectory/SQLitePoolTests.db", options).also { opened += it }
+        assertThat(reopened.fetchAll("select id from t_cancelled_commit order by id;").getOrThrow().map { it.get(0).asInt() })
+            .isEqualTo(listOf(1, 2))
     }
 }
