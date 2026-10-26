@@ -9,6 +9,7 @@ import assertk.assertions.isFailure
 import assertk.assertions.isFalse
 import assertk.assertions.isLessThanOrEqualTo
 import assertk.assertions.isSuccess
+import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
@@ -253,7 +254,8 @@ class SQLitePoolTests : SQLiteTestBase() {
                 (1..100).map { async { db.fetchAll("select 1;") } }.awaitAll()
             }
         }
-        // Both connections can be held at once (an acquire may still time out opening a connection again).
+        // Every connection the pool still has can be held at once. (Android closes the connection of an acquire that
+        // timed out just after it was handed over, and opening one again takes longer than the acquire timeout.)
         suspend fun acquireEventually() = withTimeout(10.seconds) {
             var cn = db.acquire()
             while (cn.isFailure) {
@@ -262,11 +264,11 @@ class SQLitePoolTests : SQLiteTestBase() {
             }
             cn.getOrThrow()
         }
-        val a = acquireEventually()
+        val held = mutableListOf<Connection>()
         try {
-            acquireEventually().close().getOrThrow()
+            repeat(db.poolSize()) { held += acquireEventually() }
         } finally {
-            a.close().getOrThrow()
+            held.forEach { it.close().getOrThrow() }
         }
     }
 
