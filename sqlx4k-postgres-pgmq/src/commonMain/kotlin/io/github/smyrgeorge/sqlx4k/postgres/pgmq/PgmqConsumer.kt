@@ -258,7 +258,8 @@ class PgmqConsumer(
      * @property messageRetryDelayStep The incremental delay applied before retrying a message. Must be positive and less
      *                                 than `messageMaxRetryDelay`. Defaults to 500 milliseconds.
      * @property messageMaxRetryDelay The maximum retry delay for a message. Must be positive. Defaults to 60 seconds.
-     * @property vtBias A derived value calculated as `vt * 2`. Represents an adjusted visibility timeout bias.
+     * @property vtBias A derived value calculated as `vt * 2`, in whole seconds (truncated, as pgmq applies it). The
+     *                   visibility timeout the consumer reads (and extends) messages with.
      * @property listenChannel The channel used for listening to insertion notifications. Derived from the queue name
      *                         and formatted as "pgmq.q_<queue>.INSERT".
      *
@@ -282,7 +283,9 @@ class PgmqConsumer(
         val messageRetryDelayStep: Duration = 500.milliseconds,
         val messageMaxRetryDelay: Duration = 60.seconds,
     ) {
-        val vtBias: Duration = vt * 2
+        // pgmq takes whole seconds (the client truncates): the consumer must count on the invisibility the server
+        // applies, or a message waiting in the prefetch buffer could be processed while it is visible again.
+        val vtBias: Duration = (vt * 2).inWholeSeconds.seconds
         val listenChannel: String = "pgmq.q_${queue}.INSERT"
 
         init {
