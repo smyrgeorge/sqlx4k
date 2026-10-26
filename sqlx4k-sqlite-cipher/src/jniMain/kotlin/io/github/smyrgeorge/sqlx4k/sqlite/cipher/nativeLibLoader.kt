@@ -1,9 +1,11 @@
 package io.github.smyrgeorge.sqlx4k.sqlite.cipher
 
 import java.io.File
-import java.util.concurrent.atomic.AtomicBoolean
 
-private val nativeLoaded = AtomicBoolean(false)
+private val nativeLoadLock = Any()
+
+@Volatile
+private var nativeLoaded = false
 
 /**
  * Loads the `sqlx4k_sqlite_cipher` native library exactly once.
@@ -13,10 +15,18 @@ private val nativeLoaded = AtomicBoolean(false)
  * tests on the JVM load the host `.dylib`/`.so`/`.dll`. If that property is absent (a real
  * deployment), [loadFallback] is invoked — resource extraction on the JVM, `System.loadLibrary` on
  * Android.
+ *
+ * Loading is done under a lock and only marked done once it succeeded: a concurrent caller waits for the library
+ * instead of going on to call into it before it is loaded (an `UnsatisfiedLinkError`), and a failed load is retried
+ * by the next call.
  */
 internal fun loadCipherNative(loadFallback: () -> Unit) {
-    if (!nativeLoaded.compareAndSet(false, true)) return
-    if (!tryLoadHostNativeLibFromProperty()) loadFallback()
+    if (nativeLoaded) return
+    synchronized(nativeLoadLock) {
+        if (nativeLoaded) return
+        if (!tryLoadHostNativeLibFromProperty()) loadFallback()
+        nativeLoaded = true
+    }
 }
 
 private fun tryLoadHostNativeLibFromProperty(): Boolean {
