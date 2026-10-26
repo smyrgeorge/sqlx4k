@@ -180,4 +180,26 @@ class PostgreSQLTests {
             assertThat(expected.indices.map { prepared.get(it).asString() }, "prepared").isEqualTo(expected)
         }
     }
+
+    // A query of several statements returns the rows of the last one, with its own columns, on every driver (and
+    // through a connection and a transaction too).
+    @Test
+    fun `fetchAll of several statements returns the last statement's rows`(): Unit = runBlocking {
+        val sql = "select 1 as a; select 2 as b, 'x' as c union all select 3, 'y'"
+        fun check(rs: io.github.smyrgeorge.sqlx4k.ResultSet) = assertAll {
+            assertThat(List(rs.metadata.getColumnCount()) { rs.metadata.getColumn(it).name }).isEqualTo(listOf("b", "c"))
+            assertThat(rs.map { listOf(it.get(0).asInt().toString(), it.get(1).asString()) })
+                .isEqualTo(listOf(listOf("2", "x"), listOf("3", "y")))
+        }
+        check(db.fetchAll(sql).getOrThrow())
+        val cn = db.acquire().getOrThrow()
+        try {
+            check(cn.fetchAll(sql).getOrThrow())
+            val tx = cn.begin().getOrThrow()
+            check(tx.fetchAll(sql).getOrThrow())
+            tx.rollback().getOrThrow()
+        } finally {
+            cn.close().getOrThrow()
+        }
+    }
 }

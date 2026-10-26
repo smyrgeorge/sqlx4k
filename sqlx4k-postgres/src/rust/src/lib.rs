@@ -627,7 +627,7 @@ impl Sqlx4kPostgreSql {
     }
 
     async fn fetch_all(&self, sql: String) -> *mut Sqlx4kPostgresResult {
-        let result = self.pool.fetch_all(AssertSqlSafe(sql)).await;
+        let result = fetch_last(&self.pool, sql).await;
         sqlx4k_postgresql_result_of(result).leak()
     }
 
@@ -676,7 +676,7 @@ impl Sqlx4kPostgreSql {
 
     async fn cn_fetch_all(&self, cn: Sqlx4kPostgresPtr, sql: String) -> *mut Sqlx4kPostgresResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<Postgres>) };
-        let result = cn.fetch_all(AssertSqlSafe(sql)).await;
+        let result = fetch_last(&mut **cn, sql).await;
         sqlx4k_postgresql_result_of(result).leak()
     }
 
@@ -757,7 +757,7 @@ impl Sqlx4kPostgreSql {
 
     async fn tx_fetch_all(&self, tx: Sqlx4kPostgresPtr, sql: String) -> *mut Sqlx4kPostgresResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Postgres>) };
-        let result = tx.fetch_all(AssertSqlSafe(sql)).await;
+        let result = fetch_last(&mut *tx, sql).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
         let result = sqlx4k_postgresql_result_of(result);
@@ -1546,6 +1546,26 @@ fn sqlx4k_postgresql_result_of_pg_notification(item: PgNotification) -> Sqlx4kPo
         rows,
         ..Default::default()
     }
+}
+
+/// The rows of the last statement of `sql`, as the JVM driver returns them. A simple query may hold several
+/// statements, whose rows (with columns of their own) fetch_all would return one after the other: the result
+/// describes the columns of a single row set.
+async fn fetch_last<'e, E>(executor: E, sql: String) -> Result<Vec<PgRow>, sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let mut items = executor.fetch_many(AssertSqlSafe(sql));
+    let mut current = Vec::new();
+    let mut last = Vec::new();
+    while let Some(item) = items.try_next().await? {
+        match item {
+            // The end of a statement.
+            sqlx::Either::Left(_) => last = std::mem::take(&mut current),
+            sqlx::Either::Right(row) => current.push(row),
+        }
+    }
+    Ok(if current.is_empty() { last } else { current })
 }
 
 fn sqlx4k_postgresql_result_of(result: Result<Vec<PgRow>, sqlx::Error>) -> Sqlx4kPostgresResult {
