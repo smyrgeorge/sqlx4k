@@ -73,6 +73,22 @@ class SQLiteCipherPoolTests : SQLiteCipherTestBase() {
         }
     }
 
+    // Without an acquire timeout, a query on an exhausted pool still fails, after sqlx's default of 30 seconds, instead
+    // of waiting forever (e.g. a query on the pool from inside a transaction on a pool of 1).
+    @Test
+    fun `a query on an exhausted pool without an acquire timeout fails with PoolTimedOut`(): Unit = runBlocking {
+        val options = ConnectionPool.Options.builder().maxConnections(1).build()
+        val db = testSQLiteCipher("SQLiteCipherPoolTests", options = options).also { opened += it }
+        val held = db.acquire().getOrThrow()
+        try {
+            val res = withTimeout(45.seconds) { db.fetchAll("select 1;") }
+            assertThat(res).isFailure()
+            assertThat((res.exceptionOrNull() as SQLError).code).isEqualTo(SQLError.Code.PoolTimedOut)
+        } finally {
+            held.close().getOrThrow()
+        }
+    }
+
     @Test
     fun `a waiting acquire gets the released connection`(): Unit = runBlocking {
         val db = pool(maxConnections = 1)

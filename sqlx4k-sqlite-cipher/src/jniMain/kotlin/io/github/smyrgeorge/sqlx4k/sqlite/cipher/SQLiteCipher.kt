@@ -27,6 +27,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Encrypted SQLite (SQLCipher) driver for the JVM and Android, backed by the Rust `sqlx` core via
@@ -55,16 +56,19 @@ class SQLiteCipher(
     // take up every IO thread, and the connections' holders could no longer run a statement or commit to give them
     // back: every caller then waited for the acquire timeout.
     private val permits = Semaphore(options.maxConnections)
-    private val acquireTimeout: Duration? = options.acquireTimeout
+
+    // Without an acquire timeout, the native pool waits for a connection for sqlx's default of 30 seconds: waiting
+    // for a permit is bounded the same, so a caller on an exhausted pool (e.g. one querying the pool from inside a
+    // transaction on a pool of 1) fails with PoolTimedOut instead of waiting forever.
+    private val acquireTimeout: Duration = options.acquireTimeout ?: 30.seconds
 
     // Whether the permit was taken is recorded in the block: withTimeoutOrNull returns null when the timeout fires
     // after acquire() returned, and a permit taken but then reported as timed out (or cancelled) would never be given
     // back, the pool losing one of its connections for good.
     private suspend fun takePermit() {
-        val timeout = acquireTimeout ?: return permits.acquire()
         var taken = false
         try {
-            withTimeoutOrNull(timeout) {
+            withTimeoutOrNull(acquireTimeout) {
                 permits.acquire()
                 taken = true
             }
