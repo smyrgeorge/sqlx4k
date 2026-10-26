@@ -198,4 +198,41 @@ class MySQLTests {
 
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }
     }
+
+    // Valid values chrono cannot represent (TIME past 24 hours or negative, zero dates) must come back as MySQL
+    // prints them, through both the plain and the prepared protocol, instead of failing the decode (the native
+    // driver used to abort the process on them).
+    @Test
+    fun `values beyond the decoded types come back as mysql text`(): Unit = runBlocking {
+        val table = "t_zero_${Random.nextInt(1_000_000)}"
+        val cn = db.acquire().getOrThrow()
+        try {
+            // Zero dates are only accepted without the strict sql_mode defaults.
+            cn.execute("set session sql_mode = ''").getOrThrow()
+            cn.execute("create table $table(d date, dt datetime)").getOrThrow()
+            cn.execute("insert into $table values ('0000-00-00', '0000-00-00 00:00:00')").getOrThrow()
+
+            val sql = "select cast('838:59:59' as time), cast('-01:30:00' as time), d, dt from $table"
+            val plain = cn.fetchAll(sql).getOrThrow().first()
+            val prepared = cn.fetchAll(Statement.create("$sql where 1 = :one").bind("one", 1)).getOrThrow().first()
+            for ((name, row) in listOf("plain" to plain, "prepared" to prepared)) {
+                // A zero date reads back as MySQL prints it, or as NULL where the driver maps zero dates to NULL
+                // (sqlx does in the binary protocol, like r2dbc-mysql's and JDBC's defaults).
+                val zeroDate = row.get(2).asStringOrNull()
+                val zeroDateTime = row.get(3).asStringOrNull()
+                assertAll {
+                    assertThat(row.get(0).asString(), "$name: time past 24 hours").isEqualTo("838:59:59")
+                    assertThat(row.get(1).asString(), "$name: negative time").isEqualTo("-01:30:00")
+                    assertThat(zeroDate == null || zeroDate == "0000-00-00", "$name: zero date ($zeroDate)").isTrue()
+                    assertThat(
+                        zeroDateTime == null || zeroDateTime.startsWith("0000-00-00 00:00:00"),
+                        "$name: zero datetime ($zeroDateTime)"
+                    ).isTrue()
+                }
+            }
+        } finally {
+            runCatching { cn.execute("drop table if exists $table") }
+            cn.close()
+        }
+    }
 }
