@@ -9,6 +9,7 @@ import assertk.assertions.isNotNull
 import assertk.assertions.isNull
 import assertk.assertions.isSuccess
 import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.impl.coroutines.TransactionContext
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
@@ -479,6 +480,29 @@ class PostgreSQLTransactionTests {
         listOf(tx.savepoint("sp1"), tx.releaseSavepoint("sp1"), tx.rollbackToSavepoint("sp1")).forEach { res ->
             assertThat(res).isFailure()
             assertThat((res.exceptionOrNull() as SQLError).code).isEqualTo(SQLError.Code.TransactionIsClosed)
+        }
+    }
+
+    // A statement can produce several results (PostgreSQL's SET produces two): leaving one unconsumed lost the error
+    // of the next statement in the transaction, which was then reported as a success (and the commit silently
+    // turned into a rollback).
+    @Test
+    fun `a failing statement after a SET is reported`(): Unit = runBlocking {
+        val missing = "t_missing_${Random.nextInt(1_000_000)}"
+        val tx = db.begin().getOrThrow()
+        try {
+            tx.execute("set search_path to public").getOrThrow()
+            assertThat(tx.execute(Statement.create("insert into $missing(id) values (1)"))).isFailure()
+        } finally {
+            tx.rollback()
+        }
+
+        val tx2 = db.begin().getOrThrow()
+        try {
+            tx2.execute("set search_path to public").getOrThrow()
+            assertThat(tx2.fetchAll(Statement.create("select id from $missing"))).isFailure()
+        } finally {
+            tx2.rollback()
         }
     }
 }

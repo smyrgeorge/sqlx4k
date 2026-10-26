@@ -38,7 +38,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.asFlow
-import kotlinx.coroutines.reactive.awaitLast
 import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.runBlocking
@@ -167,7 +166,7 @@ class MySQL(
         pool.withConnection { createStatement(sql).executeForResult() }
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> =
-        pool.withConnection { createStatement(sql).execute().awaitLast().toResultSet() }
+        pool.withConnection { createStatement(sql).fetchResultSet() }
 
     override suspend fun execute(statement: Statement): Result<Long> =
         executeWithResult(statement).map { it.rowsAffected }
@@ -176,7 +175,7 @@ class MySQL(
         pool.withConnection { createStatement(statement, encoders).executeForResult() }
 
     override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
-        pool.withConnection { createStatement(statement, encoders).execute().awaitLast().toResultSet() }
+        pool.withConnection { createStatement(statement, encoders).fetchResultSet() }
 
     override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> =
         pool.flowWithConnection { createStatement(sql).fetchSize(fetchSize).streamRows() }
@@ -247,7 +246,7 @@ class MySQL(
         override suspend fun executeWithResult(sql: String): Result<ExecuteResult> = executeWithResult(sql, true)
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> = mutex.withLockCatching(::assertIsOpen) {
-            connection.createStatement(sql).execute().awaitLast().toResultSet()
+            connection.createStatement(sql).fetchResultSet()
         }
 
         override suspend fun execute(statement: Statement): Result<Long> =
@@ -260,7 +259,7 @@ class MySQL(
 
         override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
             mutex.withLockCatching(::assertIsOpen) {
-                connection.createStatement(statement, encoders).execute().awaitLast().toResultSet()
+                connection.createStatement(statement, encoders).fetchResultSet()
             }
 
         // The connection is held (its mutex locked) for the whole collection.
@@ -321,7 +320,7 @@ class MySQL(
             mutex.withLockCatching(::assertIsOpen) { connection.createStatement(sql).executeForResult() }
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> = mutex.withLockCatching(::assertIsOpen) {
-            connection.createStatement(sql).execute().awaitLast().toResultSet()
+            connection.createStatement(sql).fetchResultSet()
         }
 
         override suspend fun execute(statement: Statement): Result<Long> =
@@ -334,7 +333,7 @@ class MySQL(
 
         override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
             mutex.withLockCatching(::assertIsOpen) {
-                connection.createStatement(statement, encoders).execute().awaitLast().toResultSet()
+                connection.createStatement(statement, encoders).fetchResultSet()
             }
 
         // The transaction is held (its mutex locked) for the whole collection.
@@ -351,23 +350,38 @@ class MySQL(
         /**
          * Executes the statement and reports its update count and generated id. With returnGeneratedValues(),
          * r2dbc-mysql reports `LAST_INSERT_ID()` from the server's reply to the statement (no extra query); it is 0
-         * when the statement generated no id.
+         * when the statement generated no id. Every result is consumed: see fetchResultSet.
          */
         private suspend fun io.r2dbc.spi.Statement.executeForResult(): ExecuteResult {
-            val segments = returnGeneratedValues().execute().awaitLast()
-                .flatMap { segment ->
-                    // An error arrives as a message segment: fail like rowsUpdated would.
-                    if (segment is NativeR2dbcResultSet.Message) return@flatMap Mono.error(segment.exception())
-                    // A segment may carry both: the update count and the generated id.
-                    val count = (segment as? NativeR2dbcResultSet.UpdateCount)?.value() ?: 0L
-                    val id = (segment as? NativeR2dbcResultSet.RowSegment)?.row()?.get(0, Long::class.java)
-                    Mono.just(count to id)
-                }
-                .asFlow().toList()
+            val segments = mutableListOf<Pair<Long, Long?>>()
+            returnGeneratedValues().execute().asFlow().collect { result ->
+                segments += result
+                    .flatMap { segment ->
+                        // An error arrives as a message segment: fail like rowsUpdated would.
+                        if (segment is NativeR2dbcResultSet.Message) return@flatMap Mono.error(segment.exception())
+                        // A segment may carry both: the update count and the generated id.
+                        val count = (segment as? NativeR2dbcResultSet.UpdateCount)?.value() ?: 0L
+                        val id = (segment as? NativeR2dbcResultSet.RowSegment)?.row()?.get(0, Long::class.java)
+                        Mono.just(count to id)
+                    }
+                    .asFlow().toList()
+            }
             return ExecuteResult(
                 rowsAffected = segments.sumOf { it.first },
                 lastInsertId = segments.firstNotNullOfOrNull { it.second }?.takeIf { it != 0L },
             )
+        }
+
+        /**
+         * Executes the statement and reads the rows of its last result. Every result is consumed, in order, as it
+         * arrives: a statement can produce several (PostgreSQL's SET produces two), and a result left unconsumed
+         * (awaitLast() only kept the last one) left the connection out of step, so the error of the next statement
+         * on it was lost and reported as a success.
+         */
+        private suspend fun io.r2dbc.spi.Statement.fetchResultSet(): ResultSet {
+            var last: ResultSet? = null
+            execute().asFlow().collect { result -> last = result.toResultSet() }
+            return last ?: ResultSet(emptyList(), null, ResultSet.Metadata(emptyList()))
         }
 
         private fun NativeR2dbcConnection.createStatement(

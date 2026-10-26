@@ -26,7 +26,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.asFlow
-import kotlinx.coroutines.reactive.awaitLast
 import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.sync.Mutex
@@ -132,13 +131,13 @@ class PostgreSQLImpl(
         pool.withConnection { createStatement(sql).executeForRowsUpdated() }
 
     override suspend fun fetchAll(sql: String): Result<ResultSet> =
-        pool.withConnection { createStatement(sql).execute().awaitLast().toResultSet() }
+        pool.withConnection { createStatement(sql).fetchResultSet() }
 
     override suspend fun execute(statement: Statement): Result<Long> =
         pool.withConnection { createStatement(statement, encoders).executeForRowsUpdated() }
 
     override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
-        pool.withConnection { createStatement(statement, encoders).execute().awaitLast().toResultSet() }
+        pool.withConnection { createStatement(statement, encoders).fetchResultSet() }
 
     override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> =
         pool.flowWithConnection { createStatement(sql).fetchSize(fetchSize).streamRows() }
@@ -305,7 +304,7 @@ class PostgreSQLImpl(
         override suspend fun execute(sql: String): Result<Long> = execute(sql, true)
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> = mutex.withLockCatching(::assertIsOpen) {
-            connection.createStatement(sql).execute().awaitLast().toResultSet()
+            connection.createStatement(sql).fetchResultSet()
         }
 
         override suspend fun execute(statement: Statement): Result<Long> = mutex.withLockCatching(::assertIsOpen) {
@@ -314,7 +313,7 @@ class PostgreSQLImpl(
 
         override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
             mutex.withLockCatching(::assertIsOpen) {
-                connection.createStatement(statement, encoders).execute().awaitLast().toResultSet()
+                connection.createStatement(statement, encoders).fetchResultSet()
             }
 
         // The connection is held (its mutex locked) for the whole collection.
@@ -373,7 +372,7 @@ class PostgreSQLImpl(
             mutex.withLockCatching(::assertIsOpen) { connection.createStatement(sql).executeForRowsUpdated() }
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> = mutex.withLockCatching(::assertIsOpen) {
-            connection.createStatement(sql).execute().awaitLast().toResultSet()
+            connection.createStatement(sql).fetchResultSet()
         }
 
         override suspend fun execute(statement: Statement): Result<Long> = mutex.withLockCatching(::assertIsOpen) {
@@ -382,7 +381,7 @@ class PostgreSQLImpl(
 
         override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
             mutex.withLockCatching(::assertIsOpen) {
-                connection.createStatement(statement, encoders).execute().awaitLast().toResultSet()
+                connection.createStatement(statement, encoders).fetchResultSet()
             }
 
         // The transaction is held (its mutex locked) for the whole collection.
@@ -437,9 +436,27 @@ class PostgreSQLImpl(
             return stmt
         }
 
-        /** Executes the statement and reports its update count (0 when the statement reports none). */
-        private suspend fun io.r2dbc.spi.Statement.executeForRowsUpdated(): Long =
-            execute().awaitLast().rowsUpdated.toMono().awaitSingleOrNull() ?: 0
+        /**
+         * Executes the statement and reports its update count (0 when the statement reports none), summed over its
+         * results. Every result is consumed: see fetchResultSet.
+         */
+        private suspend fun io.r2dbc.spi.Statement.executeForRowsUpdated(): Long {
+            var rows = 0L
+            execute().asFlow().collect { result -> rows += result.rowsUpdated.toMono().awaitSingleOrNull() ?: 0 }
+            return rows
+        }
+
+        /**
+         * Executes the statement and reads the rows of its last result. Every result is consumed, in order, as it
+         * arrives: a statement can produce several (PostgreSQL's SET produces two), and a result left unconsumed
+         * (awaitLast() only kept the last one) left the connection out of step, so the error of the next statement
+         * on it was lost and reported as a success.
+         */
+        private suspend fun io.r2dbc.spi.Statement.fetchResultSet(): ResultSet {
+            var last: ResultSet? = null
+            execute().asFlow().collect { result -> last = result.toResultSet() }
+            return last ?: ResultSet(emptyList(), null, ResultSet.Metadata(emptyList()))
+        }
 
         private fun Row.toRow(): ResultSet.Row {
             val columns = metadata.columnMetadatas.mapIndexed { i, c ->
