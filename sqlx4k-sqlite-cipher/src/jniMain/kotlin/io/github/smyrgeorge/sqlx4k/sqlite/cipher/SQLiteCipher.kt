@@ -79,9 +79,11 @@ class SQLiteCipher(
                 password = password,
                 minConnections = options.minConnections ?: -1,
                 maxConnections = options.maxConnections,
-                acquireTimeoutMillis = options.acquireTimeout?.inWholeMilliseconds?.toInt() ?: -1,
-                idleTimeoutMillis = options.idleTimeout?.inWholeMilliseconds?.toInt() ?: -1,
-                maxLifetimeMillis = options.maxLifetime?.inWholeMilliseconds?.toInt() ?: -1,
+                // Capped to the Int the native side takes (about 24.8 days): a longer one wrapped around, to a negative
+                // number read there as unset (sqlx's default, e.g. a 30-second acquire timeout) or to a much shorter one.
+                acquireTimeoutMillis = options.acquireTimeout?.inWholeMilliseconds?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt() ?: -1,
+                idleTimeoutMillis = options.idleTimeout?.inWholeMilliseconds?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt() ?: -1,
+                maxLifetimeMillis = options.maxLifetime?.inWholeMilliseconds?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt() ?: -1,
             )
         ).rtOrError()
     }

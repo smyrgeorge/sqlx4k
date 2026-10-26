@@ -77,9 +77,11 @@ class SQLiteCipher(
         password = password,
         min_connections = options.minConnections ?: -1,
         max_connections = options.maxConnections,
-        acquire_timeout_milis = options.acquireTimeout?.inWholeMilliseconds?.toInt() ?: -1,
-        idle_timeout_milis = options.idleTimeout?.inWholeMilliseconds?.toInt() ?: -1,
-        max_lifetime_milis = options.maxLifetime?.inWholeMilliseconds?.toInt() ?: -1,
+        // Capped to the Int the native side takes (about 24.8 days): a longer one wrapped around, to a negative
+        // number read there as unset (sqlx's default, e.g. a 30-second acquire timeout) or to a much shorter one.
+        acquire_timeout_milis = options.acquireTimeout?.inWholeMilliseconds?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt() ?: -1,
+        idle_timeout_milis = options.idleTimeout?.inWholeMilliseconds?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt() ?: -1,
+        max_lifetime_milis = options.maxLifetime?.inWholeMilliseconds?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt() ?: -1,
     ).rtOrError()
 
     override suspend fun migrate(
