@@ -12,13 +12,14 @@ import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
-import kotlin.time.Duration
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import sqlx4k.sqlite.Sqlx4kSqliteResult
 import sqlx4k.sqlite.sqlx4k_sqlite_close
 import sqlx4k.sqlite.sqlx4k_sqlite_cn_acquire
@@ -45,6 +46,7 @@ import sqlx4k.sqlite.sqlx4k_sqlite_tx_query
 import sqlx4k.sqlite.sqlx4k_sqlite_tx_query_with_params
 import sqlx4k.sqlite.sqlx4k_sqlite_tx_rollback
 import sqlx4k.sqlite.sqlx4k_sqlite_tx_stream_open
+import kotlin.time.Duration
 
 /**
  * A database driver for SQLite, implemented with connection pooling and transactional support.
@@ -205,15 +207,19 @@ class SQLite(
         override val status: Connection.Status get() = _status
         override val transactionIsolationLevel: IsolationLevel? = null
 
+        // Runs to completion also when the caller is cancelled: waiting for the lock (held by a query still running
+        // on the connection) would otherwise throw, and the connection would never go back to the pool.
         override suspend fun close(): Result<Unit> = runCatching {
-            mutex.withLock {
-                if (status == Connection.Status.Closed) return@withLock
-                _status = Connection.Status.Closed
-                // An open transaction would keep the connection inside it once back in the pool, and its native
-                // handle would outlive the connection it borrows: roll it back first.
-                transaction?.let { runCatching { it.rollbackIfOpenLocked() } }
-                transaction = null
-                sqlx { c -> sqlx4k_sqlite_cn_release(rt, cn, c, fn) }.throwIfError()
+            withContext(NonCancellable) {
+                mutex.withLock {
+                    if (status == Connection.Status.Closed) return@withLock
+                    _status = Connection.Status.Closed
+                    // An open transaction would keep the connection inside it once back in the pool, and its native
+                    // handle would outlive the connection it borrows: roll it back first.
+                    transaction?.let { runCatching { it.rollbackIfOpenLocked() } }
+                    transaction = null
+                    sqlx { c -> sqlx4k_sqlite_cn_release(rt, cn, c, fn) }.throwIfError()
+                }
             }
         }
 

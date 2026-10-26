@@ -13,6 +13,7 @@ import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -185,6 +186,22 @@ class MySQLPoolTests {
         val cn2 = db.acquire().getOrThrow()
         cn1.close().getOrThrow()
         cn2.close().getOrThrow()
+    }
+
+    // Closing a connection from a cancelled coroutine, while a query still holds it, must still give it back.
+    @Test
+    fun `a connection closed from a cancelled coroutine goes back to the pool`(): Unit = runBlocking {
+        val db = pool(maxConnections = 1, acquireTimeout = 3.seconds)
+        val cn = db.acquire().getOrThrow()
+        val busy = launch { cn.fetchAll("select sleep(0.5)").getOrThrow() }
+        delay(100.milliseconds)
+        launch {
+            coroutineContext.cancel()
+            cn.close()
+        }.join()
+        busy.join()
+        // The pool's only connection is back.
+        assertThat(db.fetchAll("select 1").getOrThrow().size).isEqualTo(1)
     }
 }
 

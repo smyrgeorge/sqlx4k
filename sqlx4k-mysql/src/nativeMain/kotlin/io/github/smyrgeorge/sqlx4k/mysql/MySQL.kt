@@ -17,9 +17,11 @@ import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import sqlx4k.mysql.Sqlx4kMysqlResult
 import sqlx4k.mysql.sqlx4k_mysql_close
 import sqlx4k.mysql.sqlx4k_mysql_cn_acquire
@@ -209,21 +211,25 @@ class MySQL(
         private var _transactionIsolationLevel: IsolationLevel? = null
         override val transactionIsolationLevel: IsolationLevel? get() = _transactionIsolationLevel
 
+        // Runs to completion also when the caller is cancelled: waiting for the lock (held by a query still running
+        // on the connection) would otherwise throw, and the connection would never go back to the pool.
         override suspend fun close(): Result<Unit> = runCatching {
-            mutex.withLock {
-                if (status == Connection.Status.Closed) return@withLock
-                _status = Connection.Status.Closed
-                // An open transaction would keep the connection inside it once back in the pool, and its native
-                // handle would outlive the connection it borrows: roll it back first.
-                transaction?.let { runCatching { it.rollbackIfOpenLocked() } }
-                transaction = null
+            withContext(NonCancellable) {
+                mutex.withLock {
+                    if (status == Connection.Status.Closed) return@withLock
+                    _status = Connection.Status.Closed
+                    // An open transaction would keep the connection inside it once back in the pool, and its native
+                    // handle would outlive the connection it borrows: roll it back first.
+                    transaction?.let { runCatching { it.rollbackIfOpenLocked() } }
+                    transaction = null
 
-                transactionIsolationLevel?.let {
-                    val default = IMySQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL
-                    setTransactionIsolationLevel(default, false)
+                    transactionIsolationLevel?.let {
+                        val default = IMySQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL
+                        setTransactionIsolationLevel(default, false)
+                    }
+
+                    sqlx { c -> sqlx4k_mysql_cn_release(rt, cn, c, fn) }.throwIfError()
                 }
-
-                sqlx { c -> sqlx4k_mysql_cn_release(rt, cn, c, fn) }.throwIfError()
             }
         }
 
