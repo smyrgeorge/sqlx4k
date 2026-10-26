@@ -15,5 +15,11 @@ kotlin {
                 api(libs.arrow.core)
             }
         }
+        commonTest {
+            dependencies {
+                implementation(libs.kotlin.test)
+                implementation(libs.assertk)
+            }
+        }
     }
 }
