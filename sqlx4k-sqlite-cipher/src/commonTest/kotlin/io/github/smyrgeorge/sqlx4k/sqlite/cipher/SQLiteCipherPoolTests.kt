@@ -11,16 +11,17 @@ import assertk.assertions.isSuccess
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
-import kotlin.test.AfterTest
-import kotlin.test.Test
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.test.AfterTest
+import kotlin.test.Test
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 class SQLiteCipherPoolTests : SQLiteCipherTestBase() {
 
@@ -112,5 +113,29 @@ class SQLiteCipherPoolTests : SQLiteCipherTestBase() {
         db.fetchAll("select 1;").getOrThrow()
         assertThat(db.close()).isSuccess()
         assertThat(db.close()).isSuccess()
+    }
+
+    // A query cancelled midway (here by a timeout) must still give its connection back to the pool, both when the
+    // pool runs it and when the caller closes an acquired connection in `finally`.
+    @Test
+    fun `a cancelled query gives its connection back to the pool`(): Unit = runBlocking {
+        val db = pool(maxConnections = 1, acquireTimeout = 3.seconds)
+        val slow =
+            "with recursive c(x) as (select 1 union all select x + 1 from c where x < 5000000) select count(*) from c"
+        repeat(3) {
+            withTimeoutOrNull(100.milliseconds) { db.execute(slow) }
+        }
+        repeat(3) {
+            withTimeoutOrNull(100.milliseconds) {
+                val cn = db.acquire().getOrThrow()
+                try {
+                    cn.execute(slow)
+                } finally {
+                    cn.close()
+                }
+            }
+        }
+        // The pool's only connection is still there to serve a query.
+        assertThat(db.fetchAll("select 1").getOrThrow().size).isEqualTo(1)
     }
 }

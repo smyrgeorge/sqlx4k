@@ -17,6 +17,7 @@ import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.r2dbc.postgresql.PostgresqlConnectionFactory
 import io.r2dbc.spi.Row
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -30,6 +31,7 @@ import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
@@ -149,7 +151,7 @@ class PostgreSQLImpl(
             try {
                 beginTransaction().toMono().awaitSingleOrNull()
             } catch (e: Exception) {
-                close().toMono().awaitSingleOrNull()
+                withContext(NonCancellable) { close().toMono().awaitSingleOrNull() }
                 e.toSQLError().raise()
             }
             R2dbcTransaction(this, true, encoders)
@@ -264,19 +266,23 @@ class PostgreSQLImpl(
         private var _transactionIsolationLevel: IsolationLevel? = null
         override val transactionIsolationLevel: IsolationLevel? get() = _transactionIsolationLevel
 
+        // Runs to completion also when the caller is cancelled: in a cancelled coroutine the release would be
+        // cancelled before reaching the pool, and the connection would stay checked out for good.
         override suspend fun close(): Result<Unit> = runCatching {
-            mutex.withLock {
-                if (status == Connection.Status.Closed) return@withLock
-                _status = Connection.Status.Closed
+            withContext(NonCancellable) {
+                mutex.withLock {
+                    if (status == Connection.Status.Closed) return@withLock
+                    _status = Connection.Status.Closed
 
-                try {
-                    transactionIsolationLevel?.let {
-                        val default = IPostgresSQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL
-                        setTransactionIsolationLevel(default, false).getOrThrow()
+                    try {
+                        transactionIsolationLevel?.let {
+                            val default = IPostgresSQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL
+                            setTransactionIsolationLevel(default, false).getOrThrow()
+                        }
+                    } finally {
+                        // Always release the underlying connection, even if the isolation-level reset fails.
+                        connection.close().toMono().awaitSingleOrNull()
                     }
-                } finally {
-                    // Always release the underlying connection, even if the isolation-level reset fails.
-                    connection.close().toMono().awaitSingleOrNull()
                 }
             }
         }

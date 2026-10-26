@@ -26,6 +26,7 @@ import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.github.smyrgeorge.sqlx4k.sqlite.pool.PooledTransaction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.catch
@@ -206,12 +207,16 @@ class SQLite(
         override val status: Connection.Status get() = _status
         override val transactionIsolationLevel: IsolationLevel? = null
 
+        // Runs to completion also when the caller is cancelled: withContext(Dispatchers.IO) would otherwise throw on
+        // entry, after the status was set to Closed, and the connection would never go back to the pool.
         override suspend fun close(): Result<Unit> = runCatching {
-            mutex.withLock {
-                if (status == Connection.Status.Closed) return@withLock
-                _status = Connection.Status.Closed
-                withContext(Dispatchers.IO) {
-                    connection.close()
+            withContext(NonCancellable) {
+                mutex.withLock {
+                    if (status == Connection.Status.Closed) return@withLock
+                    _status = Connection.Status.Closed
+                    withContext(Dispatchers.IO) {
+                        connection.close()
+                    }
                 }
             }
         }

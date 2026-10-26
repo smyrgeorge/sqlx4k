@@ -1,8 +1,6 @@
 package io.github.smyrgeorge.sqlx4k.postgres
 
 import io.github.smyrgeorge.sqlx4k.SQLError
-import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
-import io.r2dbc.spi.Connection as NativeR2dbcConnection
 import io.r2dbc.spi.R2dbcTimeoutException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +15,8 @@ import org.reactivestreams.Publisher
 import reactor.core.publisher.Mono
 import reactor.pool.PoolAcquireTimeoutException
 import reactor.pool.PoolShutdownException
+import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
+import io.r2dbc.spi.Connection as NativeR2dbcConnection
 
 /** Runs [block], reporting a driver failure as the matching [SQLError]. */
 internal inline fun <T> rethrowAsSQLError(block: () -> T): T =
@@ -53,7 +53,9 @@ internal suspend inline fun <T> NativeR2dbcConnectionPool.withConnection(
     try {
         rethrowAsSQLError { connection.block() }
     } finally {
-        connection.close().toMono().awaitSingleOrNull()
+        // Released also when the caller is cancelled: in a cancelled coroutine the release would be cancelled
+        // before reaching the pool, and the connection would stay checked out for good.
+        withContext(NonCancellable) { connection.close().toMono().awaitSingleOrNull() }
     }
 }
 
@@ -98,10 +100,13 @@ internal fun <T> Mutex.flowWithLock(
  * Ends a transaction with [block] (a commit or a rollback). The connection is returned to the pool afterwards
  * when [close] is set.
  */
-internal suspend inline fun NativeR2dbcConnection.endTransaction(close: Boolean, block: NativeR2dbcConnection.() -> Unit) {
+internal suspend inline fun NativeR2dbcConnection.endTransaction(
+    close: Boolean,
+    block: NativeR2dbcConnection.() -> Unit
+) {
     try {
         rethrowAsSQLError { block() }
     } finally {
-        if (close) close().toMono().awaitSingleOrNull()
+        if (close) withContext(NonCancellable) { this@endTransaction.close().toMono().awaitSingleOrNull() }
     }
 }

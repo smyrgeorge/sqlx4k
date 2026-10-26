@@ -14,14 +14,15 @@ import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
-import kotlin.time.Duration
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration
 
 /**
  * Encrypted SQLite (SQLCipher) driver for the JVM and Android, backed by the Rust `sqlx` core via
@@ -122,10 +123,10 @@ class SQLiteCipher(
     override fun poolIdleSize(): Int = CipherJni.nativePoolIdleSize(rt)
 
     override suspend fun acquire(): Result<Connection> = runCatching {
-        withContext(Dispatchers.IO) {
-            val cn = decodeResult(CipherJni.nativeCnAcquire(rt)).cnOrError()
-            SqlxConnection(rt, cn, encoders)
+        val cn = withNativeResource({ decodeResult(CipherJni.nativeCnAcquire(rt)).cnOrError() }) {
+            decodeResult(CipherJni.nativeCnRelease(rt, it)).throwIfError()
         }
+        SqlxConnection(rt, cn, encoders)
     }
 
     override suspend fun execute(sql: String): Result<Long> =
@@ -174,10 +175,10 @@ class SQLiteCipher(
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
-        withContext(Dispatchers.IO) {
-            val tx = decodeResult(CipherJni.nativeTxBegin(rt)).txOrError()
-            SqlxTransaction(rt, tx, encoders)
+        val tx = withNativeResource({ decodeResult(CipherJni.nativeTxBegin(rt)).txOrError() }) {
+            decodeResult(CipherJni.nativeTxRollback(rt, it)).throwIfError()
         }
+        SqlxTransaction(rt, tx, encoders)
     }
 
     class SqlxConnection(
@@ -190,11 +191,14 @@ class SQLiteCipher(
         override val status: Connection.Status get() = _status
         override val transactionIsolationLevel: IsolationLevel? = null
 
+        // Runs to completion also when the caller is cancelled, so the connection always goes back to the pool.
         override suspend fun close(): Result<Unit> = runCatching {
-            mutex.withLock {
-                if (status == Connection.Status.Closed) return@withLock
-                _status = Connection.Status.Closed
-                withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeCnRelease(rt, cn)).throwIfError() }
+            withContext(NonCancellable) {
+                mutex.withLock {
+                    if (status == Connection.Status.Closed) return@withLock
+                    _status = Connection.Status.Closed
+                    withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeCnRelease(rt, cn)).throwIfError() }
+                }
             }
         }
 
@@ -276,10 +280,10 @@ class SQLiteCipher(
         override suspend fun begin(): Result<Transaction> = runCatching {
             mutex.withLock {
                 assertIsOpen()
-                withContext(Dispatchers.IO) {
-                    val tx = decodeResult(CipherJni.nativeCnTxBegin(rt, cn)).txOrError()
-                    SqlxTransaction(rt, tx, encoders)
+                val tx = withNativeResource({ decodeResult(CipherJni.nativeCnTxBegin(rt, cn)).txOrError() }) {
+                    decodeResult(CipherJni.nativeTxRollback(rt, it)).throwIfError()
                 }
+                SqlxTransaction(rt, tx, encoders)
             }
         }
     }
@@ -297,23 +301,29 @@ class SQLiteCipher(
         override val commited: Boolean get() = _commited
         override val rollbacked: Boolean get() = _rollbacked
 
+        // Commit and rollback end the transaction and free its native handle (and, for a pool-level
+        // transaction, its connection): they run to completion also when the caller is cancelled.
         override suspend fun commit(): Result<Unit> = runCatching {
-            mutex.withLock {
-                if (commited) return@withLock
-                assertIsOpen()
-                _status = Transaction.Status.Closed
-                withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeTxCommit(rt, tx)).throwIfError() }
-                _commited = true
+            withContext(NonCancellable) {
+                mutex.withLock {
+                    if (commited) return@withLock
+                    assertIsOpen()
+                    _status = Transaction.Status.Closed
+                    withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeTxCommit(rt, tx)).throwIfError() }
+                    _commited = true
+                }
             }
         }
 
         override suspend fun rollback(): Result<Unit> = runCatching {
-            mutex.withLock {
-                if (rollbacked) return@withLock
-                assertIsOpen()
-                _status = Transaction.Status.Closed
-                withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeTxRollback(rt, tx)).throwIfError() }
-                _rollbacked = true
+            withContext(NonCancellable) {
+                mutex.withLock {
+                    if (rollbacked) return@withLock
+                    assertIsOpen()
+                    _status = Transaction.Status.Closed
+                    withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeTxRollback(rt, tx)).throwIfError() }
+                    _rollbacked = true
+                }
             }
         }
 

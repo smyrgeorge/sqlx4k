@@ -30,6 +30,7 @@ import io.netty.buffer.ByteBufAllocator
 import io.r2dbc.pool.ConnectionPoolConfiguration
 import io.r2dbc.spi.ConnectionFactoryOptions
 import io.r2dbc.spi.Row
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emitAll
@@ -43,6 +44,7 @@ import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
@@ -187,7 +189,7 @@ class MySQL(
             try {
                 beginTransaction().toMono().awaitSingleOrNull()
             } catch (e: Exception) {
-                close().toMono().awaitSingleOrNull()
+                withContext(NonCancellable) { close().toMono().awaitSingleOrNull() }
                 e.toSQLError().raise()
             }
             R2dbcTransaction(this, true, encoders)
@@ -204,18 +206,22 @@ class MySQL(
         private var _transactionIsolationLevel: IsolationLevel? = null
         override val transactionIsolationLevel: IsolationLevel? get() = _transactionIsolationLevel
 
+        // Runs to completion also when the caller is cancelled: in a cancelled coroutine the release would be
+        // cancelled before reaching the pool, and the connection would stay checked out for good.
         override suspend fun close(): Result<Unit> = runCatching {
-            mutex.withLock {
-                if (status == Connection.Status.Closed) return@withLock
-                _status = Connection.Status.Closed
+            withContext(NonCancellable) {
+                mutex.withLock {
+                    if (status == Connection.Status.Closed) return@withLock
+                    _status = Connection.Status.Closed
 
-                try {
-                    transactionIsolationLevel?.let {
-                        val default = IMySQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL
-                        setTransactionIsolationLevel(default, false).getOrThrow()
+                    try {
+                        transactionIsolationLevel?.let {
+                            val default = IMySQL.DEFAULT_TRANSACTION_ISOLATION_LEVEL
+                            setTransactionIsolationLevel(default, false).getOrThrow()
+                        }
+                    } finally {
+                        connection.close().toMono().awaitSingleOrNull()
                     }
-                } finally {
-                    connection.close().toMono().awaitSingleOrNull()
                 }
             }
         }

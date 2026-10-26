@@ -3,7 +3,6 @@ package io.github.smyrgeorge.sqlx4k.sqlite
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.SQLError
-import java.sql.Connection as NativeJdbcConnection
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
@@ -11,6 +10,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.sql.Connection as NativeJdbcConnection
 
 /** Runs [block], reporting a driver failure as the matching [SQLError]. */
 internal inline fun <T> rethrowAsSQLError(block: () -> T): T =
@@ -26,7 +26,8 @@ internal suspend inline fun <T> ConnectionPool.withConnection(block: Connection.
     try {
         rethrowAsSQLError { connection.block() }
     } finally {
-        connection.close()
+        // Released also when the caller is cancelled, so the connection always goes back to the pool.
+        withContext(NonCancellable) { connection.close() }
     }
 }
 

@@ -12,8 +12,11 @@ import io.github.smyrgeorge.sqlx4k.impl.types.SqlRawLiteral
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -279,6 +282,21 @@ internal fun decodeResult(bytes: ByteArray): JniResult {
 }
 
 /**
+ * Runs a blocking JNI call that hands over a native resource (a connection, a transaction or a row stream) on
+ * [Dispatchers.IO]. The resource must not be dropped, or it leaks for good (a pooled connection is never returned),
+ * so the call is always awaited, and if the caller was cancelled meanwhile the resource is given back with [release]
+ * before the cancellation is rethrown. (A plain `withContext(Dispatchers.IO)` would discard the result.)
+ */
+internal suspend fun <T> withNativeResource(acquire: () -> T, release: (T) -> Unit): T {
+    val resource = withContext(NonCancellable) { withContext(Dispatchers.IO) { acquire() } }
+    if (!currentCoroutineContext().isActive) {
+        withContext(NonCancellable) { withContext(Dispatchers.IO) { runCatching { release(resource) } } }
+        currentCoroutineContext().ensureActive()
+    }
+    return resource
+}
+
+/**
  * Collects a row stream as a cold flow. [open] calls one of the `CipherJni.native*StreamOpen` functions and returns
  * its decoded result, which carries the stream handle. Rows then arrive in chunks of the requested fetch size, each
  * chunk crossing the JNI boundary as a regular result; an empty chunk marks the end of the stream and an error chunk
@@ -289,7 +307,9 @@ internal fun decodeResult(bytes: ByteArray): JniResult {
  * using the connection, so the caller may release the connection (or commit the transaction) right after.
  */
 internal fun streamFlow(rt: Long, open: () -> JniResult): Flow<ResultSet.Row> = flow {
-    val stream: Long = withContext(Dispatchers.IO) { open().streamOrError() }
+    val stream: Long = withNativeResource({ open().streamOrError() }) {
+        decodeResult(CipherJni.nativeStreamClose(rt, it)).throwIfError()
+    }
     try {
         while (true) {
             val chunk =

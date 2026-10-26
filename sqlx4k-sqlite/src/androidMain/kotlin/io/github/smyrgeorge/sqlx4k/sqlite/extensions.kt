@@ -26,7 +26,8 @@ internal suspend inline fun <T> ConnectionPool.withConnection(block: Connection.
     try {
         rethrowAsSQLError { connection.block() }
     } finally {
-        connection.close()
+        // Released also when the caller is cancelled, so the connection always goes back to the pool.
+        withContext(NonCancellable) { connection.close() }
     }
 }
 

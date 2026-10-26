@@ -30,6 +30,7 @@ import io.github.smyrgeorge.sqlx4k.sqlite.pool.ConnectionPoolImpl
 import io.github.smyrgeorge.sqlx4k.sqlite.pool.PooledTransaction
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
@@ -192,18 +193,22 @@ class SQLite(
         private val executor = Executors.newSingleThreadExecutor()
         private val dispatcher: CoroutineDispatcher = executor.asCoroutineDispatcher()
 
+        // Runs to completion also when the caller is cancelled: withContext(dispatcher) would otherwise throw on
+        // entry and the database would never be closed.
         override suspend fun close(): Result<Unit> = runCatching {
-            mutex.withLock {
-                if (status == Connection.Status.Closed) return@withLock
-                _status = Connection.Status.Closed
-                try {
-                    withContext(dispatcher) {
-                        db.close()
+            withContext(NonCancellable) {
+                mutex.withLock {
+                    if (status == Connection.Status.Closed) return@withLock
+                    _status = Connection.Status.Closed
+                    try {
+                        withContext(dispatcher) {
+                            db.close()
+                        }
+                    } finally {
+                        // Always release the dedicated single-thread executor, even if db.close() fails,
+                        // otherwise its thread would leak for the lifetime of the process.
+                        executor.shutdown()
                     }
-                } finally {
-                    // Always release the dedicated single-thread executor, even if db.close() fails,
-                    // otherwise its thread would leak for the lifetime of the process.
-                    executor.shutdown()
                 }
             }
         }
