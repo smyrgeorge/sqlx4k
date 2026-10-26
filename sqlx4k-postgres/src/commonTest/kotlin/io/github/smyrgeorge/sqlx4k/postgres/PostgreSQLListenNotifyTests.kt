@@ -135,4 +135,40 @@ class PostgreSQLListenNotifyTests {
         assertThat(values).containsExactlyInAnyOrder(*(1..10).map { it.toString() }.toTypedArray())
         job.cancel()
     }
+
+    // The server may drop a listening connection at any time (a restart, pg_terminate_backend): the listener must
+    // reconnect and keep delivering notifications (the native driver used to abort the process instead).
+    @Test
+    fun `listen should survive a terminated connection`(): Unit = runBlocking {
+        val chan = newChannel()
+        val received = mutableListOf<String>()
+        val lock = Mutex()
+
+        val job = launch {
+            db.listen(chan) { n: Notification ->
+                lock.withLock { received.add(n.value.asString()) }
+            }
+        }
+        // Give listener a moment to subscribe
+        delay(150.milliseconds)
+
+        suspend fun deliversAfter(payload: String) = withTimeout(10_000.milliseconds) {
+            // Keep notifying until the (re)subscribed listener gets one.
+            while (lock.withLock { payload !in received }) {
+                db.notify(chan, payload)
+                delay(200.milliseconds)
+            }
+        }
+
+        deliversAfter("before")
+        // Terminate the listening connection(s) for this channel.
+        val terminated = db.fetchAll(
+            "select pg_terminate_backend(pid) from pg_stat_activity " +
+                "where pid <> pg_backend_pid() and query ilike '%listen%$chan%'"
+        ).getOrThrow()
+        assertThat(terminated.size >= 1, "a listening connection was terminated").isTrue()
+        deliversAfter("after")
+
+        job.cancel()
+    }
 }

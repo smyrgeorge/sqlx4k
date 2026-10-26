@@ -1381,36 +1381,52 @@ pub extern "C" fn sqlx4k_postgresql_listen(
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
-        // Create a pool of 1 without timeouts (as they don't apply here)
-        // We only use the pool to handle re-connections
-        let pool = sqlx4k
-            .pool
-            .options()
-            .clone()
-            .connect_with(sqlx4k.connect_options.clone())
-            .await
-            .unwrap();
-
-        let mut listener = PgListener::connect_with(&pool).await.unwrap();
-        // We don't need to handle close events
-        listener.ignore_pool_close_event(true);
-
-        let channels: Vec<&str> = channels.split(',').collect();
-        listener.listen_all(channels).await.unwrap();
+        // A pool of 1 without timeouts (as they don't apply here), only used to handle re-connections.
+        let options = sqlx4k.pool.options().clone().max_connections(1).min_connections(0);
+        let listener = async {
+            let pool = options.connect_with(sqlx4k.connect_options.clone()).await?;
+            let mut listener = PgListener::connect_with(&pool).await?;
+            // We don't need to handle close events
+            listener.ignore_pool_close_event(true);
+            let channels: Vec<&str> = channels.split(',').collect();
+            listener.listen_all(channels).await?;
+            Ok::<_, Error>(listener)
+        }
+        .await;
+        let mut listener = match listener {
+            Ok(listener) => listener,
+            // Report a failure to start listening (database down, too many clients, ...) instead of aborting.
+            Err(err) => return fun(callback, sqlx4k_postgres_error_result_of(err).leak()),
+        };
 
         // Return OK as soon as the stream is ready.
         let result = Sqlx4kPostgresResult::default().leak();
         fun(callback, result);
 
+        let mut backoff = LISTEN_MIN_BACKOFF;
         loop {
-            while let Some(item) = listener.try_recv().await.unwrap() {
-                let result = sqlx4k_postgresql_result_of_pg_notification(item).leak();
-                notify(notify_id, result)
+            match listener.try_recv().await {
+                Ok(Some(item)) => {
+                    backoff = LISTEN_MIN_BACKOFF;
+                    let result = sqlx4k_postgresql_result_of_pg_notification(item).leak();
+                    notify(notify_id, result)
+                }
+                // The connection was lost: the next call reconnects and listens again.
+                Ok(None) => {}
+                // The connection failed or could not be re-established (server restart, terminated backend,
+                // database down): retry with a backoff instead of aborting the process.
+                Err(_) => {
+                    tokio::time::sleep(backoff).await;
+                    backoff = (backoff * 2).min(LISTEN_MAX_BACKOFF);
+                }
             }
-            // Automatically reconnect if connection closes.
         }
     });
 }
+
+/// Backoff between LISTEN reconnect attempts.
+const LISTEN_MIN_BACKOFF: Duration = Duration::from_millis(100);
+const LISTEN_MAX_BACKOFF: Duration = Duration::from_secs(30);
 
 fn sqlx4k_postgresql_result_of_pg_notification(item: PgNotification) -> Sqlx4kPostgresResult {
     let column = Sqlx4kPostgresSchemaColumn {
