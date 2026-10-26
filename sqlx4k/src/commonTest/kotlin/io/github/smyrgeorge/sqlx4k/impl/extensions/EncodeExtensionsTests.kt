@@ -24,6 +24,23 @@ class EncodeExtensionsTests {
 
     private enum class Color { RED, GREEN }
 
+    // Constants with a body are instances of anonymous subclasses of the enum.
+    private enum class Status(val code: Int) {
+        ACTIVE(1) {
+            override fun label() = "active"
+        },
+        INACTIVE(0) {
+            override fun label() = "inactive"
+        };
+
+        abstract fun label(): String
+    }
+
+    private object StatusCodeEncoder : ValueEncoder<Status> {
+        override fun encode(value: Status): Any = value.code
+        override fun decode(value: ResultSet.Row.Column): Status = error("not needed")
+    }
+
     private data class Money(val amount: Double, val currency: String)
     private class MoneyEncoder : ValueEncoder<Money> {
         override fun encode(value: Money): Any = "${value.amount}:${value.currency}"
@@ -158,6 +175,23 @@ class EncodeExtensionsTests {
         assertThat(LocalTime(9, 0).toTimeString()).isEqualTo("09:00:00")
         assertThat(LocalTime(0, 0).toTimeString()).isEqualTo("00:00:00")
         assertThat(LocalTime(23, 59, 59, 1_000).toTimeString()).isEqualTo("23:59:59.000001")
+    }
+
+    // ========================================================================================
+    // resolveNativeValue – enums with a registered encoder
+    // ========================================================================================
+
+    @Test
+    fun `resolveNativeValue uses the encoder registered for an enum whose constants have a body`() {
+        val registry = ValueEncoderRegistry().register<Status>(StatusCodeEncoder)
+        assertThat(Status.ACTIVE.resolveNativeValue(registry)).isEqualTo(1)
+        assertThat(Status.INACTIVE.resolveNativeValue(registry)).isEqualTo(0)
+    }
+
+    @Test
+    fun `resolveNativeValue binds the name of an enum without a registered encoder`() {
+        assertThat(Status.ACTIVE.resolveNativeValue(empty)).isEqualTo("ACTIVE")
+        assertThat(Color.RED.resolveNativeValue(empty)).isEqualTo("RED")
     }
 
     // ========================================================================================

@@ -28,6 +28,16 @@ class ValueEncoderRegistry {
         encoders[type] as ValueEncoder<T>?
 
     /**
+     * Retrieves the `ValueEncoder` registered for the enum type of [value]. An enum constant with a body is an
+     * instance of an anonymous subclass of its enum, whose class is not the registered one: when the exact class has
+     * no encoder, the registered type that [value] is an instance of is used.
+     */
+    @Suppress("UNCHECKED_CAST")
+    internal fun getForEnum(value: Enum<*>): ValueEncoder<Any>? =
+        (encoders[value::class] ?: encoders.entries.firstOrNull { (type, _) -> type.isInstance(value) }?.value)
+                as ValueEncoder<Any>?
+
+    /**
      * Retrieves a `ValueEncoder` associated with the reified type `T`.
      *
      * @return The `ValueEncoder` instance associated with type `T`, or null if none is found.
