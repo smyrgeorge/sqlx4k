@@ -1,10 +1,9 @@
 package io.github.smyrgeorge.sqlx4k.postgres.pgmq.impl.extensions
 
-import kotlinx.serialization.builtins.MapSerializer
-import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -48,5 +47,21 @@ private fun Map<*, *>.toJsonElement(): JsonElement {
 
 internal fun Map<*, *>.toJsonString(): String = toJsonElement().toString()
 
-private val mapSerializer = MapSerializer(String.serializer(), String.serializer())
-internal fun String.toStringMap(): Map<String, String> = Json.decodeFromString(mapSerializer, this)
+/**
+ * Decodes message headers into a string map, leniently: headers written by SQL or by another pgmq client may hold any
+ * JSON. A string value is kept as is, any other value as its JSON text (`1`, `true`, `["a"]`), and a null value is
+ * left out; headers that are not a JSON object decode to an empty map. A strict decoding failed the whole read for
+ * every message read with such a message, again on every retry.
+ */
+internal fun String.toStringMap(): Map<String, String> {
+    val headers = Json.parseToJsonElement(this) as? JsonObject ?: return emptyMap()
+    return buildMap {
+        headers.forEach { (key, value) ->
+            when {
+                value is JsonNull -> {}
+                value is JsonPrimitive && value.isString -> put(key, value.content)
+                else -> put(key, value.toString())
+            }
+        }
+    }
+}

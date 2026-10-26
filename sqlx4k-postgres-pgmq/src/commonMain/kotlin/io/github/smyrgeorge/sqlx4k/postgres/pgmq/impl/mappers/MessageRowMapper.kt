@@ -18,7 +18,8 @@ internal object MessageRowMapper : RowMapper<Message> {
             enqueuedAt = row.get("enqueued_at").asInstant(),
             lastReadAt = row.get("last_read_at").asInstantOrNull(),
             vt = row.get("vt").asInstant(),
-            message = row.get("message").asString(),
+            // A NULL message (sent through SQL) reads as the JSON null literal, instead of failing the read.
+            message = row.get("message").asStringOrNull() ?: "null",
             headers = row.get("headers").asStringOrNull()?.toStringMap() ?: emptyMap(),
         )
     }

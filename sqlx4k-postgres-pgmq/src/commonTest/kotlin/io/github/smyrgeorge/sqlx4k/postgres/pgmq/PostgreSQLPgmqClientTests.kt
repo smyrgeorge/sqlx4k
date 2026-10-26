@@ -600,4 +600,26 @@ class PostgreSQLPgmqClientTests {
         // Cleanup
         client.drop(queue)
     }
+
+    // Messages written through SQL or by another pgmq client may carry any JSON as headers, or no message at all.
+    // They must still be read (strict decoding failed the whole read, for every message in the batch, on every retry).
+    @Test
+    fun `read should accept any JSON headers and a null message`(): Unit = runBlocking {
+        val queueName = newQueue()
+        val queue = PgmqClient.Queue(queueName)
+        client.create(queue).getOrThrow()
+
+        db.execute(
+            "select pgmq.send('$queueName', '{\"n\": 1}'::jsonb, " +
+                "'{\"s\": \"v\", \"retries\": 1, \"ok\": true, \"tags\": [\"a\"], \"none\": null}'::jsonb)"
+        ).getOrThrow()
+        db.execute("select pgmq.send('$queueName', null::jsonb)").getOrThrow()
+
+        val messages = client.read(queueName, quantity = 10).getOrThrow().sortedBy { it.msgId }
+        assertThat(messages).hasSize(2)
+        assertThat(messages[0].headers).isEqualTo(mapOf("s" to "v", "retries" to "1", "ok" to "true", "tags" to "[\"a\"]"))
+        assertThat(messages[1].message).isEqualTo("null")
+
+        client.drop(queue)
+    }
 }
