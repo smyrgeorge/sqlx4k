@@ -696,7 +696,13 @@ class TableProcessor(
         // Check if it's an enum
         val declaration = propType.declaration
         if (declaration is KSClassDeclaration && declaration.classKind == ClassKind.ENUM_CLASS) {
-            return ".asEnum$nullSuffix<$typeQualifiedName>()"
+            // An encoder registered for the enum writes it (see resolveNativeValue), so it must read it back too;
+            // otherwise the enum is stored by name.
+            return if (isNullable) {
+                ".let { col -> if (col.isNull()) null else converters.get<$typeQualifiedName>()?.decode(col) ?: col.asEnum<$typeQualifiedName>() }"
+            } else {
+                ".let { col -> converters.get<$typeQualifiedName>()?.decode(col) ?: col.asEnum<$typeQualifiedName>() }"
+            }
         }
 
         // Use custom decoder from registry

@@ -175,3 +175,16 @@ data class Aliased(
     val name: AliasedName,
     val note: AliasedName?,
 )
+
+enum class TicketStatus { OPEN, CLOSED }
+
+/**
+ * Entity with enum properties: read back through the encoder registered for the enum, or by name.
+ */
+@Table("tickets")
+data class Ticket(
+    @Id
+    val id: Long,
+    val status: TicketStatus,
+    val previous: TicketStatus?,
+)
