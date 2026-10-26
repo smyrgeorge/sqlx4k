@@ -709,4 +709,41 @@ class PostgreSQLPgmqConsumerTests {
         assertThat(lock.withLock { handled.toMap() }).isEqualTo(ids.associateWith { 1 })
         client.drop(queue)
     }
+
+    // pgmq accepts 47-character queue names, whose insert channel (pgmq.q_<queue>.INSERT) is longer than the
+    // driver accepts: the consumer must report it and keep working by polling (on native, the uncaught failure
+    // used to end the process).
+    @Test
+    fun `consumer should work when listening for inserts fails`(): Unit = runBlocking {
+        val queueName = "t_long_${Random.nextInt(1_000_000)}_".padEnd(47, 'x')
+        val queue = PgmqClient.Queue(queueName)
+        client.create(queue).getOrThrow()
+
+        val processed = mutableListOf<Long>()
+        val readFailures = mutableListOf<Throwable>()
+        val lock = Mutex()
+
+        val consumer = PgmqConsumer(
+            pgmq = client,
+            options = PgmqConsumer.Options(
+                queue = queueName,
+                autoStart = false,
+                enableNotifyInsert = true,
+                queueMinPullDelay = 50.milliseconds,
+                queueMaxPullDelay = 200.milliseconds,
+            ),
+            onMessage = { msg -> lock.withLock { processed += msg.msgId } },
+            onFailToRead = { e -> lock.withLock { readFailures += e } },
+        )
+        consumer.start()
+        val id = client.send(queueName, """{"n": 1}""").getOrThrow()
+
+        withTimeout(10_000.milliseconds) {
+            while (lock.withLock { id !in processed }) delay(100.milliseconds)
+        }
+        assertThat(lock.withLock { readFailures.isNotEmpty() }).isEqualTo(true)
+
+        consumer.stop()
+        client.drop(queue)
+    }
 }

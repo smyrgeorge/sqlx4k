@@ -93,10 +93,19 @@ class PgmqConsumer(
 
     private fun startNotify() {
         notifyJob = scope.launch {
-            pgmq.pg.listen(options.listenChannel) {
-                // Reset the backoff and wake the fetch loop immediately (if it is currently waiting).
-                fetchDelay.store(Duration.ZERO)
-                wakeup.trySend(Unit)
+            // A failure to start listening must not escape: this scope has no exception handler, and an uncaught
+            // exception ends a Kotlin/Native process. (pgmq accepts 47-character queue names, whose channel exceeds
+            // the driver's 60-character limit.) It is reported, and the consumer keeps working by polling.
+            try {
+                pgmq.pg.listen(options.listenChannel) {
+                    // Reset the backoff and wake the fetch loop immediately (if it is currently waiting).
+                    fetchDelay.store(Duration.ZERO)
+                    wakeup.trySend(Unit)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                runCatching { onFailToRead(e) }
             }
         }
     }
