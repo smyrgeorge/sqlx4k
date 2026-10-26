@@ -30,6 +30,7 @@ import io.netty.buffer.ByteBufAllocator
 import io.r2dbc.pool.ConnectionPoolConfiguration
 import io.r2dbc.spi.ConnectionFactoryOptions
 import io.r2dbc.spi.Row
+import java.net.URLDecoder
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -54,6 +55,7 @@ import kotlinx.datetime.toJavaLocalTime
 import kotlinx.datetime.toLocalDateTime
 import reactor.core.publisher.Mono
 import kotlin.jvm.optionals.getOrElse
+import kotlin.text.Charsets.UTF_8
 import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlin.time.toJavaDuration
@@ -70,7 +72,13 @@ import io.r2dbc.spi.Result as NativeR2dbcResultSet
  *  as described by [MySQL](https://dev.mysql.com/doc/connector-j/8.0/en/connector-j-reference-jdbc-url-format.html).
  *
  *  The generic format of the connection URL:
- *  mysql://[host][/database][?properties]
+ *  mysql://[host][:port][/database][?properties]
+ *
+ * The port defaults to 3306. The properties are the ones the native driver (sqlx) reads: `ssl-mode`
+ * (`disabled`, `preferred`, `required`, `verify_ca`, `verify_identity`), `ssl-ca`, `ssl-cert`, `ssl-key`,
+ * `socket` and `timezone` (the session time zone, UTC by default), as well as r2dbc's `ssl=true|false`.
+ * `charset`, `collation` and `statement-cache-capacity` are accepted and have no effect on the JVM. Any
+ * other property is rejected.
  *
  * @param url The connection URL for the MySQL database.
  * @param username The username for authenticating with the database.
@@ -416,6 +424,17 @@ class MySQL(
             return stmt
         }
 
+        // The URL properties the native driver (sqlx) reads, and r2dbc's `ssl`.
+        private val URL_PARAMS = setOf(
+            "ssl", "ssl-mode", "sslmode", "ssl-ca", "sslca", "ssl-cert", "sslcert", "ssl-key", "sslkey", "socket",
+            "timezone", "time-zone", "charset", "collation", "statement-cache-capacity",
+        )
+        private val SSL_MODES = listOf(
+            SslMode.DISABLED, SslMode.PREFERRED, SslMode.REQUIRED, SslMode.VERIFY_CA, SslMode.VERIFY_IDENTITY
+        ).associateBy { it.name.lowercase() }
+
+        private fun invalidUrl(message: String): Nothing = SQLError(SQLError.Code.Pool, message).raise()
+
         private fun connectionFactory(url: String, username: String, password: String): MySqlConnectionFactory {
             val url = if (!url.startsWith("r2dbc:")) "r2dbc:$url" else url
             val options = ConnectionFactoryOptions
@@ -425,22 +444,39 @@ class MySQL(
                 .option(ConnectionFactoryOptions.PASSWORD, password)
                 .build()
 
+            // An unknown property is rejected rather than ignored: a misspelt `ssl-mode` would silently connect
+            // without the TLS verification it asked for.
+            val params = url.substringAfter('?', "").split('&').filter { it.isNotEmpty() }.associate {
+                URLDecoder.decode(it.substringBefore('='), UTF_8) to URLDecoder.decode(it.substringAfter('=', ""), UTF_8)
+            }
+            params.keys.firstOrNull { it !in URL_PARAMS }?.let {
+                invalidUrl("Unknown parameter `$it` in MySQL URL. Supported: ${URL_PARAMS.joinToString()}.")
+            }
+            fun param(vararg names: String): String? = names.firstNotNullOfOrNull { params[it] }
+
+            // Instants are bound and read as UTC: the session uses UTC too (unless `timezone` says otherwise), as on
+            // the native driver (sqlx), or TIMESTAMP columns and NOW() are shifted by the server's time zone.
+            val timeZone = param("timezone", "time-zone") ?: "+00:00"
             val builder = MySqlConnectionConfiguration.builder()
                 .host(options.getRequiredValue(ConnectionFactoryOptions.HOST) as String)
-                .port(options.getValue(ConnectionFactoryOptions.PORT) as Int)
-                .database(options.getValue(ConnectionFactoryOptions.DATABASE) as String)
+                .port(options.getValue(ConnectionFactoryOptions.PORT) as? Int ?: 3306)
                 .username(options.getRequiredValue(ConnectionFactoryOptions.USER) as String)
                 .password(options.getValue(ConnectionFactoryOptions.PASSWORD) as CharSequence)
-                // Instants are bound and read as UTC: the session must use UTC too, as on the native driver (sqlx),
-                // or TIMESTAMP columns and NOW() are shifted by the server's time zone.
                 .connectionTimeZone("UTC")
-                .sessionVariables("time_zone='+00:00'")
+                .sessionVariables("time_zone='${timeZone.replace("'", "''")}'")
+            (options.getValue(ConnectionFactoryOptions.DATABASE) as? String)?.let { builder.database(it) }
+            param("socket")?.let { builder.unixSocket(it) }
 
-            // Map SSL option if present
-            if (options.hasOption(ConnectionFactoryOptions.SSL)) {
-                val ssl = options.getValue(ConnectionFactoryOptions.SSL) as Boolean
-                builder.sslMode(if (ssl) SslMode.REQUIRED else SslMode.DISABLED)
+            // TLS: `ssl-mode`, or r2dbc's `ssl` (a query value is text; `r2dbcs:` sets it as a Boolean).
+            val sslMode = param("ssl-mode", "sslmode")?.let {
+                SSL_MODES[it.lowercase()] ?: invalidUrl("Unknown value '$it' for `ssl-mode` in MySQL URL.")
+            } ?: options.getValue(ConnectionFactoryOptions.SSL)?.let { ssl ->
+                if (ssl.toString().toBoolean()) SslMode.REQUIRED else SslMode.DISABLED
             }
+            sslMode?.let { builder.sslMode(it) }
+            param("ssl-ca", "sslca")?.let { builder.sslCa(it) }
+            param("ssl-cert", "sslcert")?.let { builder.sslCert(it) }
+            param("ssl-key", "sslkey")?.let { builder.sslKey(it) }
 
             return MySqlConnectionFactory.from(builder.extendWith(StringRegistrar()).build())
         }
