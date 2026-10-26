@@ -83,9 +83,12 @@ class MySQL(
         max_connections = options.maxConnections,
         // Capped to the Int the native side takes (about 24.8 days): a longer one wrapped around, to a negative
         // number read there as unset (sqlx's default, e.g. a 30-second acquire timeout) or to a much shorter one.
-        acquire_timeout_milis = options.acquireTimeout?.inWholeMilliseconds?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt() ?: -1,
-        idle_timeout_milis = options.idleTimeout?.inWholeMilliseconds?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt() ?: -1,
-        max_lifetime_milis = options.maxLifetime?.inWholeMilliseconds?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt() ?: -1,
+        acquire_timeout_milis = options.acquireTimeout?.inWholeMilliseconds?.coerceAtMost(Int.MAX_VALUE.toLong())
+            ?.toInt() ?: -1,
+        idle_timeout_milis = options.idleTimeout?.inWholeMilliseconds?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt()
+            ?: -1,
+        max_lifetime_milis = options.maxLifetime?.inWholeMilliseconds?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt()
+            ?: -1,
     ).rtOrError()
 
     override suspend fun migrate(
@@ -299,9 +302,9 @@ class MySQL(
             }
 
         override suspend fun begin(): Result<Transaction> = mutex.withLockCatching(::assertIsOpen) {
-            sqlx { c -> sqlx4k_mysql_cn_tx_begin(rt, cn, c, fn) }.use {
-                it.throwIfError()
-                SqlxTransaction(rt, it.tx!!, encoders, mutex).also { tx ->
+            sqlx { c -> sqlx4k_mysql_cn_tx_begin(rt, cn, c, fn) }.use { result ->
+                result.throwIfError()
+                SqlxTransaction(rt, result.tx!!, encoders, mutex).also { tx ->
                     transactions.removeAll { it.status != Transaction.Status.Open }
                     transactions += tx
                 }
