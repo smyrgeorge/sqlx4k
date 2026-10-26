@@ -10,6 +10,7 @@ import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.ValueEncoder
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
+import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.github.smyrgeorge.sqlx4k.annotation.Column
 import io.github.smyrgeorge.sqlx4k.annotation.Converter
 import io.github.smyrgeorge.sqlx4k.annotation.Id
@@ -72,6 +73,7 @@ object TypeNames {
     val VALUE_ENCODER = ValueEncoder::class.qualifiedName!!
     val VALUE_ENCODER_REGISTRY = ValueEncoderRegistry::class.qualifiedName!!
     val RESULT_SET = ResultSet::class.qualifiedName!!
+    val TYPED_NULL = TypedNull::class.qualifiedName!!
 
     // Kotlin stdlib
     val KOTLIN_RESULT = Result::class.qualifiedName!!

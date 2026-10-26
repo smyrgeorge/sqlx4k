@@ -3,6 +3,7 @@ package io.github.smyrgeorge.sqlx4k.processor
 import assertk.assertThat
 import assertk.assertions.contains
 import assertk.assertions.doesNotContain
+import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.update
 import io.github.smyrgeorge.sqlx4k.processor.util.Article
 import io.github.smyrgeorge.sqlx4k.processor.util.Customer
@@ -25,7 +26,7 @@ class BatchUpdateStatementTests {
     // User entity: Basic batch update with @Id
 
     @Test
-    fun `User batch update joins one row per entity typed by the table`() {
+    fun `User batch update uses FROM VALUES syntax`() {
         val users = listOf(
             User(id = 1, name = "Alice Updated", email = "alice@updated.com"),
             User(id = 2, name = "Bob Updated", email = "bob@updated.com")
@@ -33,11 +34,7 @@ class BatchUpdateStatementTests {
         val sql = users.update().render()
 
         assertThat(sql).contains("update users as t")
-        // The empty first branch types every column from the table (an all-NULL column would otherwise be text).
-        assertThat(sql).contains(
-            "from (select id, name, email from users where false union all select $1, $2, $3" +
-                " union all select $4, $5, $6) as v(id, name, email)"
-        )
+        assertThat(sql).contains("from (values (\$1, \$2, \$3), (\$4, \$5, \$6)) as v(id, name, email)")
     }
 
     @Test
@@ -319,7 +316,8 @@ class BatchUpdateStatementTests {
             )
         )
 
-        assertThat(customers.update().renderValues()).contains(null)
+        // Bound with its type: a VALUES column of untyped NULLs would be taken for text.
+        assertThat(customers.update().renderValues()).contains(TypedNull(String::class))
     }
 
     // Tag entity: Simple entity

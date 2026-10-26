@@ -878,15 +878,15 @@ val updated: Result<Long> = userRepository.batchUpdate(db, updatedUsers)
 
 Both operations are supported by every dialect:
 
-| Dialect       | `batchInsert`                    | `batchUpdate`                                                                                                     |
-|---------------|----------------------------------|-------------------------------------------------------------------------------------------------------------------|
-| PostgreSQL    | `INSERT ... VALUES (...), (...)` | `UPDATE ... AS t SET ... FROM (SELECT ... FROM ... WHERE false UNION ALL SELECT ...) AS v(...) WHERE t.id = v.id` |
-| SQLite        | `INSERT ... VALUES (...), (...)` | `WITH v(...) AS (VALUES (...), (...)) UPDATE ... SET ... FROM v WHERE ...`                                        |
-| MySQL/MariaDB | `INSERT ... VALUES (...), (...)` | `UPDATE ... AS t JOIN (SELECT ... UNION ALL SELECT ...) AS v ON t.id = v.id SET ...`                              |
-| Generic       | `INSERT ... VALUES (...), (...)` | Like PostgreSQL                                                                                                   |
+| Dialect       | `batchInsert`                    | `batchUpdate`                                                                        |
+|---------------|----------------------------------|--------------------------------------------------------------------------------------|
+| PostgreSQL    | `INSERT ... VALUES (...), (...)` | `UPDATE ... AS t SET ... FROM (VALUES (...), (...)) AS v(...) WHERE t.id = v.id`     |
+| SQLite        | `INSERT ... VALUES (...), (...)` | `WITH v(...) AS (VALUES (...), (...)) UPDATE ... SET ... FROM v WHERE ...`           |
+| MySQL/MariaDB | `INSERT ... VALUES (...), (...)` | `UPDATE ... AS t JOIN (SELECT ... UNION ALL SELECT ...) AS v ON t.id = v.id SET ...` |
+| Generic       | `INSERT ... VALUES (...), (...)` | Like PostgreSQL                                                                      |
 
-On PostgreSQL the empty `SELECT ... FROM <table> WHERE false` branch gives every column of the joined rows the table's
-type, so a nullable column whose values are all `null` is not taken for `text`.
+On PostgreSQL a `null` property value is bound with its type (`bigint`, `timestamptz`, ...), as the `VALUES` list
+takes its column types from its rows.
 
 > [!NOTE]
 > On MySQL and MariaDB the drivers report the *matched* rows as affected, so an entity whose values did not change

@@ -823,31 +823,31 @@ class PostgreSQLPreparedStatementTests {
         }
     }
 
-    // The shape of the generated batch UPDATE (sqlx4k-codegen): every column of the joined rows takes the table's
-    // type from the empty first branch, also when all its values are untyped NULLs (in a VALUES list it became text,
-    // which a bigint or timestamptz column rejects).
+    // The shape of the generated batch UPDATE (sqlx4k-codegen): a VALUES list types each column from its rows, so the
+    // nullable properties bind typed NULLs (an all-NULL column of untyped NULLs would be text, which a bigint or
+    // timestamptz column rejects); the SET assigns each value with an assignment cast (a uuid into a varchar, ...).
     @Test
-    fun `batch update rows typed by the table accept all-null columns`(): Unit = runBlocking {
+    fun `batch update rows of VALUES accept typed nulls and assignment casts`(): Unit = runBlocking {
         val table = "t_bu_${Random.nextInt(1_000_000)}"
         try {
             db.execute(
-                "create table $table(id bigint primary key, name text not null, parent_id bigint, deleted_at timestamptz)"
+                "create table $table(id bigint primary key, code varchar(64), parent_id bigint, deleted_at timestamptz)"
             ).getOrThrow()
             db.execute("insert into $table values (1, 'a', 10, now()), (2, 'b', 20, now())").getOrThrow()
 
+            val first = Uuid.parse("00000000-0000-0000-0000-000000000001")
+            val second = Uuid.parse("00000000-0000-0000-0000-000000000002")
             val update = Statement.create(
-                "update $table as t set name = v.name, parent_id = v.parent_id, deleted_at = v.deleted_at " +
-                    "from (select id, name, parent_id, deleted_at from $table where false " +
-                    "union all select ?, ?, ?, ? union all select ?, ?, ?, ?) as v(id, name, parent_id, deleted_at) " +
-                    "where t.id = v.id"
+                "update $table as t set code = v.code, parent_id = v.parent_id, deleted_at = v.deleted_at " +
+                    "from (values (?, ?, ?, ?), (?, ?, ?, ?)) as v(id, code, parent_id, deleted_at) where t.id = v.id"
             )
-                .bind(0, 1).bind(1, "x").bind(2, null).bind(3, null) // an Int into the bigint id
-                .bind(4, 2L).bind(5, "y").bind(6, null).bind(7, null)
+                .bind(0, 1).bind(1, first).bindNull(2, Long::class).bindNull(3, Instant::class)
+                .bind(4, 2L).bind(5, second).bindNull(6, Long::class).bindNull(7, Instant::class)
             assertThat(db.execute(update).getOrThrow()).isEqualTo(2L)
 
-            val rows = db.fetchAll("select name, parent_id, deleted_at from $table order by id").getOrThrow()
+            val rows = db.fetchAll("select code, parent_id, deleted_at from $table order by id").getOrThrow()
             assertThat(rows.map { listOf(it.get(0).asString(), it.get(1).asStringOrNull(), it.get(2).asStringOrNull()) })
-                .isEqualTo(listOf(listOf("x", null, null), listOf("y", null, null)))
+                .isEqualTo(listOf(listOf(first.toString(), null, null), listOf(second.toString(), null, null)))
         } finally {
             runCatching { db.execute("drop table if exists $table").getOrThrow() }
         }

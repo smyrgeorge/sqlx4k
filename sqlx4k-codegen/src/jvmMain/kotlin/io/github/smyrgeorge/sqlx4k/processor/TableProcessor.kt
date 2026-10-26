@@ -535,12 +535,10 @@ class TableProcessor(
         file += "    val items = this.toList()\n"
         file += "    require(items.isNotEmpty()) { \"Cannot create batch update statement for empty collection\" }\n"
 
-        // PostgreSQL/Generic: UPDATE table AS t SET ... FROM (SELECT id, ... FROM table WHERE false
-        //         UNION ALL SELECT ?, ... UNION ALL ...) AS v(...) WHERE t.id = v.id
-        //         The empty first branch gives every column the table's type: a VALUES list types a column from its
-        //         rows only, so a column whose values are all untyped NULLs became text, which a bigint (or
-        //         timestamptz, ...) column rejects. A row of its own per entity, as a multi-row VALUES is typed
-        //         before the union.
+        // PostgreSQL/Generic: UPDATE table AS t SET ... FROM (VALUES ...) AS v(...) WHERE t.id = v.id
+        //         A VALUES list types each column from its rows only: a column whose values are all untyped NULLs
+        //         would be text, which a bigint (or timestamptz, ...) column rejects, so nullable properties bind
+        //         typed NULLs (see typedNullOf). The SET then assigns each value with an assignment cast.
         // SQLite: WITH v(...) AS (VALUES ...) UPDATE table SET ... FROM v WHERE table.id = v.id
         //         SQLite requires CTE syntax because it doesn't support column aliases on inline VALUES
         // MySQL/MariaDB: UPDATE table AS t JOIN (SELECT ? AS id, ... UNION ALL SELECT ?, ...) AS v ON t.id = v.id SET ...
@@ -562,10 +560,8 @@ class TableProcessor(
                 val firstRow = "select ${valueColumns.joinToString { "? as $it" }}"
                 file += "    val rows = \"$firstRow\" + \"$otherRow\".repeat(items.size - 1)\n"
             }
-            else -> {
-                val typedRow = "select $valueColumnsList from $table where false"
-                file += "    val rows = \"$typedRow\" + \"$otherRow\".repeat(items.size)\n"
-            }
+            else ->
+                file += "    val valuePlaceholders = items.indices.joinToString(\", \") { \"$singleValuePlaceholder\" }\n"
         }
         file += "    // language=SQL\n"
         file += when {
@@ -575,7 +571,7 @@ class TableProcessor(
             mySqlLike ->
                 $$"    val sql = \"update $$table as t join ($rows) as v on $$joinClause set $$setClause;\"\n"
             else ->
-                $$"    val sql = \"update $$table as t set $$setClause from ($rows) as v($$valueColumnsList) where $$joinClause;\"\n"
+                $$"    val sql = \"update $$table as t set $$setClause from (values $valuePlaceholders) as v($$valueColumnsList) where $$joinClause;\"\n"
         }
 
         file += "    val statement = Statement.create(sql)\n"
@@ -585,9 +581,11 @@ class TableProcessor(
         val idBindExpr = generateBindExpression(id, "item")
         file += "        statement.bind(offset + 0, $idBindExpr)\n"
         // Then bind the update properties
+        val typedNulls = !mySqlLike && dialect != Dialect.SQLite
         updatePropDeclarations.forEachIndexed { index, prop ->
             val bindExpr = generateBindExpression(prop, "item")
-            file += "        statement.bind(offset + ${index + 1}, $bindExpr)\n"
+            val typedNull = if (typedNulls) typedNullOf(prop) else null
+            file += "        statement.bind(offset + ${index + 1}, ${typedNull?.let { "$bindExpr ?: $it" } ?: bindExpr})\n"
         }
         // Finally bind the expected (current) version
         if (version != null) {
@@ -1279,6 +1277,19 @@ class TableProcessor(
      * @throws IllegalStateException If the `@Converter` annotation is invalid or if the encoder class
      *                                is incompatible with the property type.
      */
+    /**
+     * A typed NULL (`TypedNull(Long::class)`) for a nullable property of a type the drivers bind with its SQL type, or
+     * null for any other property (not nullable, converted, or of another type), which binds an untyped NULL.
+     */
+    private fun typedNullOf(prop: KSPropertyDeclaration): String? {
+        if (prop.getConverterAnnotation() != null) return null
+        val type = prop.type.resolve()
+        if (!type.isMarkedNullable) return null
+        val name = type.declaration.qualifiedName?.asString() ?: return null
+        if (name !in TYPED_NULL_TYPES) return null
+        return "${TypeNames.TYPED_NULL}($name::class)"
+    }
+
     private fun generateBindExpression(prop: KSPropertyDeclaration, prefix: String? = null): String {
         val propName = prop.simpleName()
         val propAccess = if (prefix != null) "$prefix.$propName" else propName
@@ -1314,6 +1325,13 @@ class TableProcessor(
          * The option key used to specify the SQL dialect. Supported: generic (default), mysql, mariadb, postgres, sqlite
          */
         private const val DIALECT_OPTION = "dialect"
+
+        /** The types a typed NULL is bound for (see [typedNullOf]): the ones every driver maps to an SQL type. */
+        private val TYPED_NULL_TYPES = setOf(
+            "kotlin.Boolean", "kotlin.Byte", "kotlin.Short", "kotlin.Int", "kotlin.Long", "kotlin.Float",
+            "kotlin.Double", "kotlin.String", "kotlin.Char", "kotlin.ByteArray", "kotlinx.datetime.LocalDate",
+            "kotlinx.datetime.LocalTime", "kotlinx.datetime.LocalDateTime", "kotlin.time.Instant", "kotlin.uuid.Uuid",
+        )
 
         private const val NAME_PROPERTY_NAME = "name"
         private const val INSERT_PROPERTY_NAME = "insert"
