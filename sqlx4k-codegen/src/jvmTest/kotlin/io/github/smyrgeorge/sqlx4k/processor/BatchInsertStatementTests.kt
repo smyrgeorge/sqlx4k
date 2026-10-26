@@ -50,14 +50,14 @@ class BatchInsertStatementTests {
     }
 
     @Test
-    fun `User batch insert has RETURNING clause with id`() {
+    fun `User batch insert has no RETURNING clause`() {
         val users = listOf(
             User(id = 0, name = "Alice", email = "alice@example.com"),
             User(id = 0, name = "Bob", email = "bob@example.com")
         )
         val sql = users.insert().render()
 
-        assertThat(sql).contains("returning id")
+        assertThat(sql).doesNotContain("returning")
     }
 
     @Test
@@ -159,7 +159,7 @@ class BatchInsertStatementTests {
         val sql = articles.insert().render()
 
         assertThat(sql).contains("insert into articles(title, content)")
-        assertThat(sql).contains("returning id, created_at, updated_at")
+        assertThat(sql).doesNotContain("returning")
     }
 
     @Test
@@ -195,7 +195,7 @@ class BatchInsertStatementTests {
         val sql = orders.insert().render()
 
         assertThat(sql).contains("insert into orders(customer_id, total_amount)")
-        assertThat(sql).contains("returning id, version")
+        assertThat(sql).doesNotContain("returning")
     }
 
     @Test
@@ -287,14 +287,14 @@ class BatchInsertStatementTests {
     }
 
     @Test
-    fun `Tag batch insert RETURNING clause includes id`() {
+    fun `Tag batch insert has no RETURNING clause`() {
         val tags = listOf(
             Tag(id = 0, name = "test1"),
             Tag(id = 0, name = "test2")
         )
         val sql = tags.insert().render()
 
-        assertThat(sql).contains("returning id")
+        assertThat(sql).doesNotContain("returning")
     }
 
     // Edge cases

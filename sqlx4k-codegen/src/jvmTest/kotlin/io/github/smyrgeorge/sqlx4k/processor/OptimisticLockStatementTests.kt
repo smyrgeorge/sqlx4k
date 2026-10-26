@@ -132,7 +132,7 @@ class OptimisticLockStatementTests {
         assertThat(sql).contains("where t.id = v.id and t.version = v.version")
         assertThat(sql).contains("version = t.version + 1")
         assertThat(sql).doesNotContain("version = v.version,")
-        assertThat(sql).contains("returning t.id, t.version")
+        assertThat(sql).doesNotContain("returning")
     }
 
     @Test

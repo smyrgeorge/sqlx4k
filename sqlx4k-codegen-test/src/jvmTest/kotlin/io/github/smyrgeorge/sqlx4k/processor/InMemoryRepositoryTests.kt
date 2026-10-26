@@ -92,7 +92,7 @@ class InMemoryRepositoryTests {
     }
 
     @Test
-    fun `batchInsert assigns ids to every entity`() = runTest {
+    fun `batchInsert stores every entity and returns their number`() = runTest {
         val result = repo.batchInsert(
             ctx,
             listOf(
@@ -100,8 +100,8 @@ class InMemoryRepositoryTests {
                 User(id = 0, name = "Bob", email = "bob@example.com"),
             )
         )
-        assertThat(result).isSuccess()
-        assertThat(result.getOrThrow().map { it.id }).containsExactlyInAnyOrder(1L, 2L)
+        assertThat(result.getOrThrow()).isEqualTo(2L)
+        assertThat(repo.findAllStored().map { it.id }).containsExactlyInAnyOrder(1L, 2L)
     }
 
     @Test
@@ -110,7 +110,7 @@ class InMemoryRepositoryTests {
         val b = repo.insert(ctx, User(id = 0, name = "Bob", email = "bob@example.com")).getOrThrow()
 
         val result = repo.batchUpdate(ctx, listOf(a.copy(name = "A"), b.copy(name = "B")))
-        assertThat(result).isSuccess()
+        assertThat(result.getOrThrow()).isEqualTo(2L)
         assertThat(repo.findAllStored().map { it.name }).containsExactlyInAnyOrder("A", "B")
     }
 

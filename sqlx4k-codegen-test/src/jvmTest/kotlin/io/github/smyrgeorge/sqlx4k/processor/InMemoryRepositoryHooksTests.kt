@@ -86,8 +86,7 @@ class InMemoryRepositoryHooksTests {
                 User(id = 0, name = "Bob", email = "b@example.com"),
             )
         )
-        assertThat(result.getOrThrow().map { it.name })
-            .containsExactlyInAnyOrder("Alice_preInsert_afterInsert", "Bob_preInsert_afterInsert")
+        assertThat(result.getOrThrow()).isEqualTo(2L)
         assertThat(repo.findAllStored().map { it.name })
             .containsExactlyInAnyOrder("Alice_preInsert", "Bob_preInsert")
         assertThat(HooksTracker.calls).containsExactly(

@@ -190,6 +190,83 @@ class CrudRepositoryTests {
         assertThat(error.code).isEqualTo(SQLError.Code.RowMismatch)
     }
 
+    // ==================== BATCH Tests ====================
+
+    private val users = listOf(
+        User(id = 1, name = "A", email = "a@example.com"),
+        User(id = 2, name = "B", email = "b@example.com"),
+    )
+
+    @Test
+    fun `batchInsert executes one INSERT and returns the number of inserted rows`() = runTest {
+        mockExecutor.setExecuteResponse(Result.success(2L))
+
+        val result = repository.batchInsert(mockExecutor, users)
+
+        assertThat(result).isSuccess()
+        assertThat(result.getOrThrow()).isEqualTo(2L)
+        assertThat(mockExecutor.executeCalls.size).isEqualTo(1)
+        assertThat(mockExecutor.hasExecuted("insert into users(name, email) values")).isTrue()
+        assertThat(mockExecutor.fetchAllCalls).isEmpty()
+        assertThat(mockExecutor.lastBoundValues).containsExactly("A", "a@example.com", "B", "b@example.com")
+    }
+
+    @Test
+    fun `batchInsert fails with RowMismatch when the affected rows differ from the entities`() = runTest {
+        mockExecutor.setExecuteResponse(Result.success(1L))
+
+        val result = repository.batchInsert(mockExecutor, users)
+
+        assertThat(result).isFailure()
+        val error = result.exceptionOrNull() as SQLError
+        assertThat(error.code).isEqualTo(SQLError.Code.RowMismatch)
+        assertThat(error.message!!).contains("affected 1 rows instead of 2")
+    }
+
+    @Test
+    fun `batchInsert of an empty collection succeeds without touching the executor`() = runTest {
+        val result = repository.batchInsert(mockExecutor, emptyList())
+
+        assertThat(result.getOrThrow()).isEqualTo(0L)
+        assertThat(mockExecutor.executedStatements).isEmpty()
+    }
+
+    @Test
+    fun `batchUpdate executes one UPDATE and returns the number of updated rows`() = runTest {
+        mockExecutor.setExecuteResponse(Result.success(2L))
+
+        val result = repository.batchUpdate(mockExecutor, users)
+
+        assertThat(result).isSuccess()
+        assertThat(result.getOrThrow()).isEqualTo(2L)
+        assertThat(mockExecutor.executeCalls.size).isEqualTo(1)
+        assertThat(mockExecutor.hasExecuted("update users")).isTrue()
+        assertThat(mockExecutor.fetchAllCalls).isEmpty()
+        assertThat(mockExecutor.lastBoundValues).containsExactly(1L, "A", "a@example.com", 2L, "B", "b@example.com")
+    }
+
+    @Test
+    fun `batchUpdate fails with RowMismatch when the affected rows differ from the entities`() = runTest {
+        mockExecutor.setExecuteResponse(Result.success(1L)) // e.g. an entity whose row does not exist
+
+        val result = repository.batchUpdate(mockExecutor, users)
+
+        assertThat(result).isFailure()
+        val error = result.exceptionOrNull() as SQLError
+        assertThat(error.code).isEqualTo(SQLError.Code.RowMismatch)
+        assertThat(error.message!!).contains("affected 1 rows instead of 2")
+    }
+
+    @Test
+    fun `batchUpdate propagates an execute failure`() = runTest {
+        mockExecutor.setExecuteResponse(Result.failure(SQLError(SQLError.Code.Database, "boom")))
+
+        val result = repository.batchUpdate(mockExecutor, users)
+
+        assertThat(result).isFailure()
+        assertThat((result.exceptionOrNull() as SQLError).message!!).contains("boom")
+    }
+
     // ==================== SAVE Tests ====================
 
     @Test

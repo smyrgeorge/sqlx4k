@@ -100,16 +100,16 @@ class ColumnNameTests {
         val sql = listOf(user, other).insert().render()
 
         assertThat(sql).contains("insert into legacy_users(USER_NAME, mail_address, is_active)")
-        assertThat(sql).contains("returning id")
+        assertThat(sql).doesNotContain("returning")
     }
 
     @Test
-    fun `batch update uses explicit column names in SET and RETURNING clauses`() {
+    fun `batch update uses explicit column names in SET clause`() {
         val other = user.copy(id = 2, userName = "Bob", email = "bob@example.com")
         val sql = listOf(user, other).update().render()
 
         assertThat(sql).contains("set USER_NAME = v.USER_NAME, is_active = v.is_active")
-        assertThat(sql).contains("returning t.id, t.mail_address")
+        assertThat(sql).doesNotContain("returning")
         assertThat(sql).doesNotContain("mail_address = v.")
     }
 

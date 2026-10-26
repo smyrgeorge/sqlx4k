@@ -74,13 +74,13 @@ class BatchUpdateStatementTests {
     }
 
     @Test
-    fun `User batch update has RETURNING clause with id`() {
+    fun `User batch update has no RETURNING clause`() {
         val users = listOf(
             User(id = 1, name = "Test", email = "test@test.com")
         )
         val sql = users.update().render()
 
-        assertThat(sql).contains("returning t.id")
+        assertThat(sql).doesNotContain("returning")
     }
 
     @Test
@@ -218,7 +218,7 @@ class BatchUpdateStatementTests {
     }
 
     @Test
-    fun `Article batch update RETURNING clause includes id and timestamps`() {
+    fun `Article batch update has no RETURNING clause`() {
         val articles = listOf(
             Article(
                 id = 1,
@@ -230,7 +230,7 @@ class BatchUpdateStatementTests {
         )
         val sql = articles.update().render()
 
-        assertThat(sql).contains("returning t.id, t.created_at, t.updated_at")
+        assertThat(sql).doesNotContain("returning")
     }
 
     // Order entity: @Column(insert = false, update = false) on version
@@ -259,13 +259,13 @@ class BatchUpdateStatementTests {
     }
 
     @Test
-    fun `Order batch update RETURNING clause includes id and version`() {
+    fun `Order batch update has no RETURNING clause`() {
         val orders = listOf(
             Order(id = 1, customerId = 100, totalAmount = 250.0, version = 0)
         )
         val sql = orders.update().render()
 
-        assertThat(sql).contains("returning t.id, t.version")
+        assertThat(sql).doesNotContain("returning")
     }
 
     // Customer entity: Tests camelCase to snake_case conversion
@@ -357,13 +357,13 @@ class BatchUpdateStatementTests {
     }
 
     @Test
-    fun `Tag batch update RETURNING clause includes id`() {
+    fun `Tag batch update has no RETURNING clause`() {
         val tags = listOf(
             Tag(id = 1, name = "test")
         )
         val sql = tags.update().render()
 
-        assertThat(sql).contains("returning t.id")
+        assertThat(sql).doesNotContain("returning")
     }
 
     // Edge cases

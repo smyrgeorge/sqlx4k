@@ -145,15 +145,9 @@ class TableProcessor(
         emitApplyUpdateResult(file, classDeclaration, properties)
         emitDelete(file, tableName, classDeclaration, properties)
 
-        // Make batch queries.
-        // Batch insert: Supported by PostgreSQL, SQLite, MariaDB, and Generic (requires multi-row INSERT with RETURNING).
-        // Batch update: Supported by PostgreSQL, SQLite, and Generic (requires FROM VALUES with RETURNING).
-        // Generic dialect: Generates code for all batch operations but may produce SQL syntax errors
-        //                  depending on the actual database being used.
+        // Make batch queries (all dialects: they return no rows, only the number of affected rows).
         emitBatchInsert(file, tableName, classDeclaration, properties)
-        emitApplyBatchInsertResult(file, classDeclaration, properties)
         emitBatchUpdate(file, tableName, classDeclaration, properties)
-        emitApplyBatchUpdateResult(file, classDeclaration, properties)
 
         // Generate RowMapper.
         emitRowMapper(file, classDeclaration, properties)
@@ -441,8 +435,8 @@ class TableProcessor(
     }
 
     /**
-     * Generates a batch INSERT statement for the provided class declaration.
-     * Supported for PostgreSQL, SQLite, MariaDB, and Generic dialects.
+     * Generates a batch INSERT statement for the provided class declaration (every dialect: a multi-row INSERT
+     * without RETURNING).
      *
      * @param file The output stream to write the generated code.
      * @param table The name of the table into which the data will be inserted.
@@ -455,11 +449,8 @@ class TableProcessor(
         clazz: KSClassDeclaration,
         props: Sequence<KSPropertyDeclaration>
     ) {
-        // Only support PostgreSQL, SQLite, MariaDB, and Generic (not MySQL)
-        if (!supportsInsertReturning) return
-
         val ctx = prepareInsertContext(clazz, props)
-        val (_, insertPropDeclarations, insertColumns, className, returningColumns) = ctx
+        val (_, insertPropDeclarations, insertColumns, className) = ctx
 
         val propsCount = insertColumns.size
         val columnNames = insertColumns.joinToString()
@@ -472,8 +463,7 @@ class TableProcessor(
         file += " * Generates a prepared SQL INSERT statement with multiple value rows for batch insertion.\n"
         file += " * Properties marked with `@Id(insert = false)` or `@Column(insert = false)` are excluded.\n"
         file += " *\n"
-        file += " * The statement includes a RETURNING clause to fetch the inserted rows with any\n"
-        file += " * database-generated values.\n"
+        file += " * The inserted rows are not returned: execute it and check the number of affected rows.\n"
         file += " *\n"
         file += " * @return A prepared [Statement] with bound values ready for execution\n"
         file += " * @throws IllegalArgumentException if the collection is empty\n"
@@ -483,7 +473,7 @@ class TableProcessor(
         file += "    require(items.isNotEmpty()) { \"Cannot create batch insert statement for empty collection\" }\n"
         file += "    val valuePlaceholders = items.indices.joinToString(\", \") { \"$singleValuePlaceholder\" }\n"
         file += "    // language=SQL\n"
-        file += $$"    val sql = \"insert into $$table($$columnNames) values $valuePlaceholders returning $$returningColumns;\"\n"
+        file += $$"    val sql = \"insert into $$table($$columnNames) values $valuePlaceholders;\"\n"
         file += "    val statement = Statement.create(sql)\n"
         file += "    items.forEachIndexed { itemIndex, item ->\n"
         file += "        val offset = itemIndex * $propsCount\n"
@@ -497,36 +487,8 @@ class TableProcessor(
     }
 
     /**
-     * Generates a function to merge batch INSERT results back into the entities.
-     *
-     * @param file The output stream to write the generated code.
-     * @param clazz The class declaration for which to generate the merge function.
-     * @param props The sequence of properties from the class.
-     */
-    private fun emitApplyBatchInsertResult(
-        file: OutputStream,
-        clazz: KSClassDeclaration,
-        props: Sequence<KSPropertyDeclaration>
-    ) {
-        // Only support PostgreSQL, SQLite, MariaDB, and Generic (not MySQL)
-        if (!supportsInsertReturning) return
-
-        val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
-        val returningProps = findInsertReturningProps(props.toList())
-            .ifEmpty { error("RETURNING SQL clause cannot be empty for entity (check that a property marked with @Id exists): $className") }
-
-        emitApplyBatchResultFunction(
-            file,
-            className,
-            returningProps,
-            "applyInsertResult",
-            "batch INSERT result (DB-generated columns)"
-        )
-    }
-
-    /**
-     * Generates a batch UPDATE statement for the provided class declaration.
-     * Supported for PostgreSQL, SQLite, and Generic dialects (requires FROM VALUES with RETURNING).
+     * Generates a batch UPDATE statement for the provided class declaration (every dialect, without RETURNING):
+     * the rows of the entities are joined to the table by id (and version).
      *
      * @param file The output stream to write the generated code.
      * @param table The name of the table to be updated.
@@ -539,11 +501,8 @@ class TableProcessor(
         clazz: KSClassDeclaration,
         props: Sequence<KSPropertyDeclaration>
     ) {
-        // Only support PostgreSQL, SQLite, and Generic (not MySQL/MariaDB)
-        if (!supportsUpdateReturning) return
-
         val ctx = prepareUpdateContext(table, clazz, props) ?: return
-        val (allProps, id, updatePropDeclarations, updateColumns, className, idName, idColumn) = ctx
+        val (_, id, updatePropDeclarations, updateColumns, className, idName, idColumn) = ctx
         val version = ctx.version
         val versionColumn = ctx.versionColumn
 
@@ -557,17 +516,17 @@ class TableProcessor(
         file += "/**\n"
         file += " * Creates a batch UPDATE statement for this collection of [$className] entities.\n"
         file += " *\n"
-        file += " * Generates a prepared SQL UPDATE statement using the FROM VALUES syntax\n"
+        file += " * Generates a prepared SQL UPDATE statement that joins the table to the rows of the entities\n"
         file += " * for efficient batch updates. Each entity is identified by its @Id property `$idName`.\n"
         file += " * Properties marked with `@Column(update = false)` are excluded from the update.\n"
         if (version != null) {
             file += " *\n"
             file += " * Optimistic locking: each row is also matched on its @Version property `${version.simpleName()}`\n"
             file += " * and the statement increments the version. Rows whose stored version differs from the\n"
-            file += " * entity's are left untouched and are missing from the returned rows.\n"
+            file += " * entity's are left untouched and are not counted as affected.\n"
         }
         file += " *\n"
-        file += " * The statement includes a RETURNING clause to fetch the updated rows.\n"
+        file += " * The updated rows are not returned: execute it and check the number of affected rows.\n"
         file += " *\n"
         file += " * @return A prepared [Statement] with bound values ready for execution\n"
         file += " * @throws IllegalArgumentException if the collection is empty\n"
@@ -575,26 +534,37 @@ class TableProcessor(
         file += "fun Iterable<$className>.update(): Statement {\n"
         file += "    val items = this.toList()\n"
         file += "    require(items.isNotEmpty()) { \"Cannot create batch update statement for empty collection\" }\n"
-        file += "    val valuePlaceholders = items.indices.joinToString(\", \") { \"$singleValuePlaceholder\" }\n"
 
-        // PostgreSQL/Generic: UPDATE table AS t ... FROM (VALUES ...) AS v(...) WHERE t.id = v.id RETURNING t.col
-        // SQLite: WITH v(...) AS (VALUES ...) UPDATE table ... FROM v WHERE table.id = v.id RETURNING table.col
+        // PostgreSQL/Generic: UPDATE table AS t SET ... FROM (VALUES ...) AS v(...) WHERE t.id = v.id
+        // SQLite: WITH v(...) AS (VALUES ...) UPDATE table SET ... FROM v WHERE table.id = v.id
         //         SQLite requires CTE syntax because it doesn't support column aliases on inline VALUES
+        // MySQL/MariaDB: UPDATE table AS t JOIN (SELECT ? AS id, ... UNION ALL SELECT ?, ...) AS v ON t.id = v.id SET ...
+        //         Neither has UPDATE ... FROM, and they differ in their VALUES syntax (MySQL requires ROW(...)).
+        val mySqlLike = dialect == Dialect.MySQL || dialect == Dialect.MariaDB
         val tableRef = if (dialect == Dialect.SQLite) table else "t"
-        val returningColumns = findUpdateReturningProps(allProps)
-            .ifEmpty { error("RETURNING SQL clause cannot be empty for entity (check that a property marked with @Id exists): $className") }
-            .joinToString { "$tableRef.${it.columnName()}" }
-        val setClause = (updateColumns.map { c -> "$c = v.$c" } + listOfNotNull(versionColumn?.let { "$it = $tableRef.$it + 1" }))
+        // MySQL/MariaDB qualify the SET targets, as the joined rows have the same column names.
+        val target = if (mySqlLike) "t." else ""
+        val setClause = (updateColumns.map { c -> "$target$c = v.$c" } + listOfNotNull(versionColumn?.let { "$target$it = $tableRef.$it + 1" }))
             .joinToString(", ")
         val joinClause = "$tableRef.$idColumn = v.$idColumn" +
                 (versionColumn?.let { " and $tableRef.$it = v.$it" } ?: "")
 
-        file += "    // language=SQL\n"
-        file += if (dialect == Dialect.SQLite) {
-            // SQLite requires CTE (WITH clause) for column aliases on VALUES
-            $$"    val sql = \"with v($$valueColumnsList) as (values $valuePlaceholders) update $$table set $$setClause from v where $$joinClause returning $$returningColumns;\"\n"
+        if (mySqlLike) {
+            val firstRow = "select ${valueColumns.joinToString { "? as $it" }}"
+            val otherRow = " union all select ${valueColumns.joinToString { "?" }}"
+            file += "    val rows = \"$firstRow\" + \"$otherRow\".repeat(items.size - 1)\n"
         } else {
-            $$"    val sql = \"update $$table as t set $$setClause from (values $valuePlaceholders) as v($$valueColumnsList) where $$joinClause returning $$returningColumns;\"\n"
+            file += "    val valuePlaceholders = items.indices.joinToString(\", \") { \"$singleValuePlaceholder\" }\n"
+        }
+        file += "    // language=SQL\n"
+        file += when {
+            // SQLite requires CTE (WITH clause) for column aliases on VALUES
+            dialect == Dialect.SQLite ->
+                $$"    val sql = \"with v($$valueColumnsList) as (values $valuePlaceholders) update $$table set $$setClause from v where $$joinClause;\"\n"
+            mySqlLike ->
+                $$"    val sql = \"update $$table as t join ($rows) as v on $$joinClause set $$setClause;\"\n"
+            else ->
+                $$"    val sql = \"update $$table as t set $$setClause from (values $valuePlaceholders) as v($$valueColumnsList) where $$joinClause;\"\n"
         }
 
         file += "    val statement = Statement.create(sql)\n"
@@ -615,58 +585,6 @@ class TableProcessor(
         file += "    }\n"
 
         file += "    return statement\n"
-        file += "}\n"
-    }
-
-    /**
-     * Generates a function to merge batch UPDATE results back into the entities.
-     *
-     * @param file The output stream to write the generated code.
-     * @param clazz The class declaration for which to generate the merge function.
-     * @param props The sequence of properties from the class.
-     */
-    private fun emitApplyBatchUpdateResult(
-        file: OutputStream,
-        clazz: KSClassDeclaration,
-        props: Sequence<KSPropertyDeclaration>
-    ) {
-        // Only support PostgreSQL, SQLite, and Generic (not MySQL/MariaDB)
-        if (!supportsUpdateReturning) return
-
-        val className = clazz.qualifiedName() ?: clazz.simpleName.asString()
-        val returningProps = findUpdateReturningProps(props.toList())
-            .ifEmpty { error("RETURNING SQL clause cannot be empty for entity (check that a property marked with @Id exists): $className") }
-        // The @Id is always returned (see findUpdateReturningProps).
-        val idIndex = returningProps.indexOfFirst { p -> p.annotations.any { it.qualifiedName() == TypeNames.ID_ANNOTATION } }
-        check(idIndex >= 0) { "The batch UPDATE of $className must return its @Id property" }
-        val idProp = returningProps[idIndex]
-        val idName = idProp.simpleName()
-        val idType = idProp.type.resolve()
-        val idDecoder = generateDecoder(idProp, idType, idType.isMarkedNullable)
-
-        file += "\n"
-        file += "/**\n"
-        file += " * Merges the batch UPDATE result (DB-generated columns) back into this collection of [$className] entities.\n"
-        file += " *\n"
-        file += " * After executing a batch UPDATE statement, use this function to update the entities\n"
-        file += " * with database-generated values (e.g., auto-updated timestamps, version numbers).\n"
-        file += " *\n"
-        file += " * `UPDATE ... FROM (VALUES ...) RETURNING` returns the rows in no particular order, so each row is\n"
-        file += " * matched to its entity by `$idName`.\n"
-        file += " *\n"
-        file += " * @param rows The result rows from the statement execution\n"
-        file += " * @param converters The registry containing custom type decoders\n"
-        file += " * @return A list of new instances with the generated values merged in, in the order of the entities\n"
-        file += " * @throws IllegalArgumentException if the rows don't match the entities\n"
-        file += " */\n"
-        file += "fun Iterable<$className>.applyUpdateResult(rows: List<ResultSet.Row>, converters: ValueEncoderRegistry): List<$className> {\n"
-        file += "    val items = this.toList()\n"
-        file += $$"    require(items.size == rows.size) { \"Result rows count (${rows.size}) doesn't match entities count (${items.size})\" }\n"
-        file += "    val rowsById = rows.associateBy { row -> row.get($idIndex)$idDecoder }\n"
-        file += "    return items.map { item ->\n"
-        file += $$"        val row = requireNotNull(rowsById[item.$$idName]) { \"No result row for the entity with $$idName ${item.$$idName}\" }\n"
-        file += "        item.applyUpdateResult(row, converters)\n"
-        file += "    }\n"
         file += "}\n"
     }
 
@@ -1044,47 +962,6 @@ class TableProcessor(
         }
 
         file += ")\n"
-    }
-
-    /**
-     * Generates the function for applying batch result rows to a collection of entities.
-     *
-     * @param file The output stream to write the generated code.
-     * @param className The fully qualified class name.
-     * @param returningProps The properties to include in the copy.
-     * @param functionName The name of the generated function.
-     * @param docDescription Description for the KDoc.
-     */
-    private fun emitApplyBatchResultFunction(
-        file: OutputStream,
-        className: String,
-        returningProps: List<KSPropertyDeclaration>,
-        functionName: String,
-        docDescription: String
-    ) {
-        if (returningProps.isEmpty()) return
-
-        file += "\n"
-        file += "/**\n"
-        file += " * Merges the $docDescription back into this collection of [$className] entities.\n"
-        file += " *\n"
-        file += " * After executing ${if (functionName.contains("Insert")) "a batch INSERT" else "a batch UPDATE"} statement, use this function to update the entities\n"
-        file += " * with database-generated values (e.g., ${if (functionName.contains("Insert")) "auto-increment IDs, default timestamps" else "auto-updated timestamps, version numbers"}).\n"
-        file += " *\n"
-        file += " * The result rows are matched to entities by position (order is preserved).\n"
-        file += " *\n"
-        file += " * @param rows The result rows from the statement execution\n"
-        file += " * @param converters The registry containing custom type decoders\n"
-        file += " * @return A list of new instances with the generated values merged in\n"
-        file += " * @throws IllegalArgumentException if the number of rows doesn't match the number of entities\n"
-        file += " */\n"
-        file += "fun Iterable<$className>.$functionName(rows: List<ResultSet.Row>, converters: ValueEncoderRegistry): List<$className> {\n"
-        file += "    val items = this.toList()\n"
-        file += $$"    require(items.size == rows.size) { \"Result rows count (${rows.size}) doesn't match entities count (${items.size})\" }\n"
-        file += "    return items.zip(rows).map { (item, row) ->\n"
-        file += "        item.$functionName(row, converters)\n"
-        file += "    }\n"
-        file += "}\n"
     }
 
     /**

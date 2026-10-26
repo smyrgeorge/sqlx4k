@@ -5,6 +5,7 @@ import assertk.assertions.contains
 import assertk.assertions.containsExactly
 import assertk.assertions.isEmpty
 import assertk.assertions.isEqualTo
+import assertk.assertions.isFailure
 import assertk.assertions.isSuccess
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.UserRepositoryWithHooksImpl
@@ -322,6 +323,37 @@ class CrudRepositoryHooksTests {
         assertThat(HooksTracker.hooksCalled).contains("preUpdate:Alice")
         assertThat(HooksTracker.hooksCalled.any { it.startsWith("afterUpdate:") }).isTrue()
         assertThat(HooksTracker.hooksCalled).contains("aroundQuery:update")
+    }
+
+    // ==================== Batch Hook Tests ====================
+
+    @Test
+    fun `batchInsert applies the pre and after hooks per entity around one query`() = runTest {
+        mockExecutor.setExecuteResponse(Result.success(2L))
+        val users = listOf(User(id = 0, name = "A", email = "a@x"), User(id = 0, name = "B", email = "b@x"))
+
+        val result = repository.batchInsert(mockExecutor, users)
+
+        assertThat(result.getOrThrow()).isEqualTo(2L)
+        assertThat(mockExecutor.lastBoundValues).isEqualTo(listOf("A_preInsert", "a@x", "B_preInsert", "b@x"))
+        // The after-hook sees the entities as written.
+        assertThat(HooksTracker.hooksCalled).isEqualTo(
+            listOf(
+                "preInsert:A", "preInsert:B", "aroundQuery:batchInsert",
+                "afterInsert:A_preInsert", "afterInsert:B_preInsert"
+            )
+        )
+    }
+
+    @Test
+    fun `batchUpdate does not call the after hook when it fails`() = runTest {
+        mockExecutor.setExecuteResponse(Result.success(1L))
+        val users = listOf(User(id = 1, name = "A", email = "a@x"), User(id = 2, name = "B", email = "b@x"))
+
+        val result = repository.batchUpdate(mockExecutor, users)
+
+        assertThat(result).isFailure()
+        assertThat(HooksTracker.hooksCalled).isEqualTo(listOf("preUpdate:A", "preUpdate:B", "aroundQuery:batchUpdate"))
     }
 
     // ==================== Hook Execution Order Tests ====================

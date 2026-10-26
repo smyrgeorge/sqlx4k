@@ -97,9 +97,9 @@ class InMemoryOptimisticLockTests {
 
         val result = repo.batchUpdate(ctx, listOf(a.copy(title = "A2"), b.copy(title = "B2")))
 
-        assertThat(result).isSuccess()
-        assertThat(result.getOrThrow().map { it.version }).containsExactlyInAnyOrder(1L, 1L)
+        assertThat(result.getOrThrow()).isEqualTo(2L)
         assertThat(repo.findAllStored().map { it.title }).containsExactlyInAnyOrder("A2", "B2")
+        assertThat(repo.findAllStored().map { it.version }).containsExactlyInAnyOrder(1L, 1L)
     }
 
     @Test

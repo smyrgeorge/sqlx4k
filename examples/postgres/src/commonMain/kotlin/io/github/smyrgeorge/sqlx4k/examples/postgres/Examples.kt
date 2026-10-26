@@ -274,8 +274,8 @@ object Examples {
      * Demonstrates batch insert and update operations for efficiently processing
      * multiple entities in a single database round-trip.
      *
-     * Batch operations use multi-row SQL statements with RETURNING clauses to
-     * retrieve database-generated values for all entities at once.
+     * Each batch operation is a single multi-row statement. It returns the number of affected rows
+     * (the rows are not read back) and fails if that number differs from the number of entities.
      *
      * @param db The database query executor used to perform operations.
      * @param repo The repository handling CRUD operations for the Sqlx4k entity.
@@ -295,16 +295,14 @@ object Examples {
             Sqlx4k(id = 1005, test = "batch-5")
         )
 
-        val insertedEntities = repo.batchInsert(db, entitiesToInsert).getOrThrow()
-        println("batchInsert => inserted ${insertedEntities.size} entities:")
-        insertedEntities.forEach { println("  - $it") }
+        val inserted = repo.batchInsert(db, entitiesToInsert).getOrThrow()
+        println("batchInsert => inserted $inserted rows")
 
         // Batch Update: Update multiple entities in a single operation
-        val entitiesToUpdate = insertedEntities.map { it.copy(test = "${it.test}-updated") }
+        val entitiesToUpdate = entitiesToInsert.map { it.copy(test = "${it.test}-updated") }
 
-        val updatedEntities = repo.batchUpdate(db, entitiesToUpdate).getOrThrow()
-        println("batchUpdate => updated ${updatedEntities.size} entities:")
-        updatedEntities.forEach { println("  - $it") }
+        val updated = repo.batchUpdate(db, entitiesToUpdate).getOrThrow()
+        println("batchUpdate => updated $updated rows")
 
         // Verify the updates
         val allEntities = repo.findAll(db).getOrThrow()

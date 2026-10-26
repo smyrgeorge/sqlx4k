@@ -293,31 +293,34 @@ class InMemoryRepositoryProcessor(
             file += "    }\n\n"
         }
 
-        // batchInsert
-        emitSignature(file, useContext, "batchInsert", "entities: Iterable<$domainQn>", "$resultType<List<$domainQn>>")
-        if (!hasPreInsertHook && !hasAfterInsertHook && !hasAroundQueryHook) {
-            file += " =\n        withStore { runCatching { entities.map { doInsert(it) } } }$toResult\n\n"
-        } else {
-            val items = if (hasPreInsertHook) "processed" else "entities"
-            val body = wrapAround(hasAroundQueryHook, "batchInsert", "withStore { runCatching { $items.map { doInsert(it) } } }")
-            file += " = run {\n"
-            if (hasPreInsertHook) file += "        val processed = entities.map { preInsertHook(context, it) }\n"
-            file += "        $body"
-            if (hasAfterInsertHook) file += ".map { list -> list.map { afterInsertHook(context, it) } }"
-            file += "\n    }$toResult\n\n"
-        }
+        // batchInsert / batchUpdate: the number of affected rows; the after-hooks see the entities as written
+        // (as in the main codegen, the stored rows are not read back).
+        emitBatch(file, domainQn, useContext, resultType, toResult, hasAroundQueryHook, "Insert", hasPreInsertHook, hasAfterInsertHook, "doInsert(it)")
+        emitBatch(file, domainQn, useContext, resultType, toResult, hasAroundQueryHook, "Update", hasPreUpdateHook, hasAfterUpdateHook, "doUpdate(it).getOrThrow()")
+    }
 
-        // batchUpdate
-        emitSignature(file, useContext, "batchUpdate", "entities: Iterable<$domainQn>", "$resultType<List<$domainQn>>")
-        if (!hasPreUpdateHook && !hasAfterUpdateHook && !hasAroundQueryHook) {
-            file += " =\n        withStore { runCatching { entities.map { doUpdate(it).getOrThrow() } } }$toResult\n\n"
+    private fun emitBatch(
+        file: OutputStream,
+        domainQn: String,
+        useContext: Boolean,
+        resultType: String,
+        toResult: String,
+        hasAroundQueryHook: Boolean,
+        op: String,
+        hasPreHook: Boolean,
+        hasAfterHook: Boolean,
+        write: String,
+    ) {
+        emitSignature(file, useContext, "batch$op", "entities: Iterable<$domainQn>", "$resultType<Long>")
+        if (!hasPreHook && !hasAfterHook && !hasAroundQueryHook) {
+            file += " =\n        withStore { runCatching { entities.map { $write }.size.toLong() } }$toResult\n\n"
         } else {
-            val items = if (hasPreUpdateHook) "processed" else "entities"
-            val body = wrapAround(hasAroundQueryHook, "batchUpdate", "withStore { runCatching { $items.map { doUpdate(it).getOrThrow() } } }")
+            val items = if (hasPreHook) "processed" else "entities"
+            val body = wrapAround(hasAroundQueryHook, "batch$op", "withStore { runCatching { $items.map { $write }.size.toLong() } }")
             file += " = run {\n"
-            if (hasPreUpdateHook) file += "        val processed = entities.map { preUpdateHook(context, it) }\n"
+            if (hasPreHook) file += "        val processed = entities.map { pre${op}Hook(context, it) }\n"
             file += "        $body"
-            if (hasAfterUpdateHook) file += ".map { list -> list.map { afterUpdateHook(context, it) } }"
+            if (hasAfterHook) file += ".map { n -> $items.forEach { after${op}Hook(context, it) }; n }"
             file += "\n    }$toResult\n\n"
         }
     }
