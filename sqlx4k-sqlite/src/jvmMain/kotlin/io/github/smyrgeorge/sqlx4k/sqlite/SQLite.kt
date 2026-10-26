@@ -34,8 +34,10 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
@@ -82,6 +84,12 @@ class SQLite(
     override val encoders: ValueEncoderRegistry = ValueEncoderRegistry()
 ) : ISQLite {
     private val dataSource: HikariDataSource = createDataSource(url, options)
+
+    // One permit per connection, taken before blocking an IO thread in HikariCP (and given back when the connection
+    // is closed). Callers beyond the pool size wait here, suspended: blocked in HikariCP, enough of them would take
+    // up every IO thread, and the connections' holders could no longer run a statement to give them back.
+    private val permits = Semaphore(options.maxConnections)
+    private val acquireTimeout: Duration? = options.acquireTimeout
 
     override suspend fun migrate(
         path: String,
@@ -145,6 +153,11 @@ class SQLite(
     override fun poolIdleSize(): Int = dataSource.hikariPoolMXBean?.idleConnections ?: 0
 
     override suspend fun acquire(): Result<Connection> = runCatching {
+        if (dataSource.isClosed) SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").raise()
+        val permitted = acquireTimeout?.let { withTimeoutOrNull(it) { permits.acquire() } != null }
+            ?: true.also { permits.acquire() }
+        if (!permitted) SQLError(SQLError.Code.PoolTimedOut, "Timed out waiting for a connection").raise()
+
         // Taken on an IO thread, interruptibly, so a cancelled caller stops waiting for the pool. A connection
         // handed over just as the caller is cancelled goes straight back to the pool instead of leaking.
         val taken = AtomicReference<NativeJdbcConnection?>(null)
@@ -152,15 +165,17 @@ class SQLite(
             runInterruptible(Dispatchers.IO) { dataSource.connection.also { taken.set(it) } }
         } catch (e: CancellationException) {
             taken.get()?.close()
+            permits.release()
             throw e
         } catch (e: SQLException) {
+            permits.release()
             when {
                 dataSource.isClosed -> SQLError(SQLError.Code.PoolClosed, "Connection pool is closed", e).raise()
                 e is SQLTransientConnectionException -> SQLError(SQLError.Code.PoolTimedOut, e.message, e).raise()
                 else -> e.toSQLError().raise()
             }
         }
-        JdbcConnection(connection, encoders)
+        JdbcConnection(connection, encoders, onClose = permits::release)
     }
 
     override suspend fun execute(sql: String): Result<Long> = executeWithResult(sql).map { it.rowsAffected }
@@ -200,7 +215,9 @@ class SQLite(
 
     class JdbcConnection(
         private val connection: NativeJdbcConnection,
-        override val encoders: ValueEncoderRegistry
+        override val encoders: ValueEncoderRegistry,
+        // Gives the pool permit back, once the connection is closed.
+        private val onClose: () -> Unit = {},
     ) : Connection {
         private val mutex = Mutex()
         private var _status: Connection.Status = Connection.Status.Open
@@ -214,8 +231,12 @@ class SQLite(
                 mutex.withLock {
                     if (status == Connection.Status.Closed) return@withLock
                     _status = Connection.Status.Closed
-                    withContext(Dispatchers.IO) {
-                        connection.close()
+                    try {
+                        withContext(Dispatchers.IO) {
+                            connection.close()
+                        }
+                    } finally {
+                        onClose()
                     }
                 }
             }
