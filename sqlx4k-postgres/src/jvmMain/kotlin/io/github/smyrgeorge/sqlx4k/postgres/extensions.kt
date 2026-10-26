@@ -35,17 +35,22 @@ internal fun <T> Publisher<T>.toMono(): Mono<T> {
     error("Publisher is not a Mono: ${this::class.qualifiedName}")
 }
 
+/**
+ * Waits for the connection this opens (or borrows from a pool). Not awaitSingle(): a connection handed over just as the
+ * caller is cancelled would be dropped, and stay open (or checked out) for good. It is closed (given back) instead.
+ */
+internal suspend fun <C : NativeR2dbcConnection> Mono<C>.awaitConnection(): C =
+    suspendCancellableCoroutine { cont ->
+        val subscription = subscribe(
+            { connection -> cont.resume(connection) { _, c, _ -> c.close().toMono().subscribe() } },
+            { error -> cont.resumeWithException(error) },
+        )
+        cont.invokeOnCancellation { subscription.dispose() }
+    }
+
 internal suspend fun NativeR2dbcConnectionPool.acquire(): NativeR2dbcConnection {
     return try {
-        // Not awaitSingle(): a connection the pool hands over just as the caller is cancelled would be dropped, and
-        // stay checked out for good. It is given back to the pool instead.
-        suspendCancellableCoroutine { cont ->
-            val subscription = create().subscribe(
-                { connection -> cont.resume(connection) { _, c, _ -> c.close().toMono().subscribe() } },
-                { error -> cont.resumeWithException(error) },
-            )
-            cont.invokeOnCancellation { subscription.dispose() }
-        }
+        create().awaitConnection()
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {

@@ -28,7 +28,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.reactive.asFlow
-import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -214,7 +213,8 @@ class PostgreSQLImpl(
         // Listen until the calling coroutine is cancelled, reconnecting if the connection closes.
         while (true) {
             try {
-                val con = connectionFactory.create().awaitSingle()
+                // Closed if it opens just as the listener is cancelled.
+                val con = connectionFactory.create().awaitConnection()
                 // A successful connection resets the reconnect backoff.
                 retryCount = 0
                 try {
