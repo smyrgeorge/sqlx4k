@@ -872,19 +872,22 @@ impl Sqlx4kSqliteCipher {
 /// checked-out connection is given back (and only then closes the idle ones): one the caller still holds (or abandoned)
 /// would hang it for good, and the caller cannot cancel it. The idle connections are closed here instead, and the
 /// pool is marked closed; the checked-out ones are closed as they are given back, as the JVM drivers do.
+///
+/// The idle connections are taken out before the pool is marked closed (a closed pool gives none), but only detached
+/// and closed after: a connection detached from an open pool that keeps `min_connections` makes it open a replacement.
 async fn close_pool<DB: sqlx::Database>(pool: &sqlx::Pool<DB>) {
-    while let Some(cn) = pool.try_acquire() {
+    let idle: Vec<_> = std::iter::from_fn(|| pool.try_acquire()).collect();
+    // Marks the pool closed when called, before it is awaited: no connection is acquired or opened after this.
+    let closing = pool.close();
+    for cn in idle {
         let _ = sqlx::Connection::close(cn.detach()).await;
     }
     if pool.size() == 0 {
-        pool.close().await;
+        closing.await;
     } else {
+        drop(closing);
         let closing = pool.clone();
         tokio::spawn(async move { closing.close().await });
-        // The spawned close marks the pool closed when it first runs: no connection is acquired after this returns.
-        while !pool.is_closed() {
-            tokio::task::yield_now().await;
-        }
     }
 }
 

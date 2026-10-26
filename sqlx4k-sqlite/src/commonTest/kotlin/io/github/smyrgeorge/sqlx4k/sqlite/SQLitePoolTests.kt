@@ -6,6 +6,7 @@ import assertk.assertAll
 import assertk.assertThat
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFailure
+import assertk.assertions.isFalse
 import assertk.assertions.isLessThanOrEqualTo
 import assertk.assertions.isSuccess
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
@@ -21,6 +22,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.time.Duration
@@ -224,5 +227,24 @@ class SQLitePoolTests : SQLiteTestBase() {
         } finally {
             a.close().getOrThrow()
         }
+    }
+
+    // Closing a pool that keeps a minimum of connections must not open new ones while it closes its idle ones: here a
+    // new one would create the database file again, deleted (on disk) while the pool still had it open.
+    @Test
+    fun `closing a pool with min connections opens no new connection`(): Unit = runBlocking {
+        if (isWindows) return@runBlocking // an open file cannot be deleted
+        val options = ConnectionPool.Options.builder()
+            .minConnections(5)
+            .maxConnections(5)
+            .acquireTimeout(10.seconds)
+            .build()
+        val db = testSQLite("SQLitePoolClose", options = options).also { opened += it }
+        withTimeout(10.seconds) { while (db.poolIdleSize() < 5) delay(10.milliseconds) }
+        val path = "$testDirectory/SQLitePoolClose.db"
+        listOf("", "-wal", "-shm", "-journal").forEach { SystemFileSystem.delete(Path("$path$it"), mustExist = false) }
+        db.close().getOrThrow()
+        delay(1.seconds)
+        assertThat(SystemFileSystem.exists(Path(path))).isFalse()
     }
 }
