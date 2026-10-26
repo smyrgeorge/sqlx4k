@@ -174,7 +174,8 @@ class PgmqClient(
     suspend fun installExtension(file: Pair<String, String>) {
         // Split the file content into individual statements.
         val statements: List<Statement> = splitSqlStatements(file.second).map { Statement.create(it) }
-        if (statements.isEmpty()) SQLError(SQLError.Code.Migrate, "Extension file ${file.first} is empty.").raise()
+        // A file of only comments runs no statement.
+        if (file.second.isBlank()) SQLError(SQLError.Code.Migrate, "Extension file ${file.first} is empty.").raise()
 
         // Execute all the statements (of a file) in a single transaction
         pg.transaction {

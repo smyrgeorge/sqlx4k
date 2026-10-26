@@ -198,7 +198,9 @@ object Migrator {
 
                 // Split the file content into individual statements.
                 val statements: List<Statement> = splitSqlStatements(file.content).map { Statement.create(it) }
-                if (statements.isEmpty()) SQLError(
+                // A file of only comments (e.g. a migration retired without leaving a gap in the versions) runs no
+                // statement, but is applied.
+                if (file.content.isBlank()) SQLError(
                     SQLError.Code.Migrate,
                     "Migration file ${file.name} is empty."
                 ).raise()

@@ -134,6 +134,23 @@ class SQLiteMigratorTests : SQLiteTestBase() {
         assertThat(ex.code).isEqualTo(SQLError.Code.Migrate)
     }
 
+    // A migration retired by leaving only a comment in its file (the versions may have no gap) is still applied on a
+    // new database.
+    @Test
+    fun `migration file of only comments is applied`(): Unit = runBlocking {
+        val dir = newTempDir("sqlite-comments")
+        write(dir, "1_a.sql", "select 1;")
+        write(dir, "2_retired.sql", "-- Retired: the table it created is no longer used.\n/* nothing; to run */\n")
+        write(dir, "3_c.sql", "select 1;")
+        val table = "_sqlx4k_migr_sqlite_${Random.nextInt(100000)}"
+        try {
+            assertThat(db.migrate(path = dir.toString(), table = table)).isSuccess()
+            assertThat(listApplied(table)).containsExactly(1L, 2L, 3L)
+        } finally {
+            runCatching { db.execute("DROP TABLE IF EXISTS $table;").getOrThrow() }
+        }
+    }
+
     @Test
     fun `checksum mismatch should fail on re-run`(): Unit = runBlocking {
         // A table of its own: the JVM and native suites run in parallel against the same database.
