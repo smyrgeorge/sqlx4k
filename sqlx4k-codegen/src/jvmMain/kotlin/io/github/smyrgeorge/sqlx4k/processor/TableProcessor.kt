@@ -628,7 +628,7 @@ class TableProcessor(
         properties.forEach { prop ->
             val propName = prop.simpleName()
             val columnName = prop.columnName()
-            val propType = prop.type.resolve()
+            val propType = prop.resolvedType()
             val isNullable = propType.isMarkedNullable
 
             file += "        val $propName = row.get(\"$columnName\")"
@@ -962,7 +962,7 @@ class TableProcessor(
 
         returningProps.forEachIndexed { index, prop ->
             val propName = prop.simpleName()
-            val propType = prop.type.resolve()
+            val propType = prop.resolvedType()
             val isNullable = propType.isMarkedNullable
             val decoder = generateDecoder(prop, propType, isNullable)
             val comma = if (index < returningProps.size - 1) "," else ""
@@ -1036,7 +1036,7 @@ class TableProcessor(
             error("@Version property '$name' in $className cannot also be @Id.")
         }
 
-        val type = version.type.resolve()
+        val type = version.resolvedType()
         val typeQn = type.declaration.qualifiedName?.asString()
         if (type.isMarkedNullable || (typeQn != TypeNames.KOTLIN_INT && typeQn != TypeNames.KOTLIN_LONG)) {
             error("@Version property '$name' in $className must be a non-nullable Int or Long (found '$type').")
@@ -1201,7 +1201,7 @@ class TableProcessor(
         prop: KSPropertyDeclaration,
         converterAnnotation: KSAnnotation
     ) {
-        val propType = prop.type.resolve()
+        val propType = prop.resolvedType()
         val propTypeQualifiedName = propType.declaration.qualifiedName?.asString()
             ?: error("No type name found for property ${prop.simpleName()}")
 
@@ -1283,7 +1283,7 @@ class TableProcessor(
      */
     private fun typedNullOf(prop: KSPropertyDeclaration): String? {
         if (prop.getConverterAnnotation() != null) return null
-        val type = prop.type.resolve()
+        val type = prop.resolvedType()
         if (!type.isMarkedNullable) return null
         val name = type.declaration.qualifiedName?.asString() ?: return null
         if (name !in TYPED_NULL_TYPES) return null
@@ -1298,7 +1298,7 @@ class TableProcessor(
             validateConverterTypeCompatibility(prop, converterAnnotation)
             val encoderClassName = converterAnnotation.getEncoderClassName()
                 ?: error("Cannot get encoder class name from @Converter on property $propName")
-            val propType = prop.type.resolve()
+            val propType = prop.resolvedType()
             return if (propType.isMarkedNullable) {
                 "$propAccess?.let { $encoderClassName.encode(it) }"
             } else {

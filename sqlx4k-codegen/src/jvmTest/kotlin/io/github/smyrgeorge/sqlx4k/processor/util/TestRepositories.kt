@@ -123,6 +123,15 @@ interface DocumentCrudRepository : CrudRepository<Document> {
 }
 
 /**
+ * CrudRepository test interface for the Aliased entity (properties declared through type aliases).
+ */
+@Repository
+interface AliasedCrudRepository : CrudRepository<Aliased> {
+    @Query("SELECT * FROM aliased WHERE id = :id")
+    suspend fun findOneById(context: QueryExecutor, id: Long): Result<Aliased?>
+}
+
+/**
  * Global tracker for hook invocations in tests.
  */
 object HooksTracker {

@@ -1240,7 +1240,7 @@ class RepositoryProcessor(
             file += "    }\n"
         } else {
             val idName = idProp.simpleName.getShortName()
-            when (val idQn = idProp.type.resolve().declaration.qualifiedName()) {
+            when (val idQn = idProp.resolvedType().declaration.qualifiedName()) {
                 TypeNames.KOTLIN_INT, TypeNames.KOTLIN_LONG -> {
                     val zeroLiteral = if (idQn == TypeNames.KOTLIN_INT) "0" else "0L"
                     file += if (useContextParameters) {

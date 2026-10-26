@@ -161,3 +161,17 @@ data class Setting(
     @Version
     val revision: Int = 0,
 )
+
+typealias AliasedKey = Long
+typealias AliasedName = String
+
+/**
+ * Entity whose properties are declared through type aliases: they are mapped by the aliased types.
+ */
+@Table("aliased")
+data class Aliased(
+    @Id
+    val id: AliasedKey,
+    val name: AliasedName,
+    val note: AliasedName?,
+)
