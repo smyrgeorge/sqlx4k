@@ -265,6 +265,9 @@ class PostgreSQLImpl(
         private var _transactionIsolationLevel: IsolationLevel? = null
         override val transactionIsolationLevel: IsolationLevel? get() = _transactionIsolationLevel
 
+        // The last transaction begun on this connection: close() rolls it back if it is still open.
+        private var transaction: R2dbcTransaction? = null
+
         // Runs to completion also when the caller is cancelled: in a cancelled coroutine the release would be
         // cancelled before reaching the pool, and the connection would stay checked out for good.
         override suspend fun close(): Result<Unit> = runCatching {
@@ -272,6 +275,12 @@ class PostgreSQLImpl(
                 mutex.withLock {
                     if (status == Connection.Status.Closed) return@withLock
                     _status = Connection.Status.Closed
+
+                    // End an open transaction first: the isolation level reset below would otherwise run inside it,
+                    // and the pool's rollback on release would undo it (SET is transactional in PostgreSQL), leaving
+                    // the next borrower with this connection's isolation level.
+                    transaction?.let { if (it.status == Transaction.Status.Open) it.rollback() }
+                    transaction = null
 
                     try {
                         transactionIsolationLevel?.let {
@@ -327,7 +336,7 @@ class PostgreSQLImpl(
 
         override suspend fun begin(): Result<Transaction> = mutex.withLockCatching(::assertIsOpen) {
             connection.beginTransaction().toMono().awaitSingleOrNull()
-            R2dbcTransaction(connection, false, encoders)
+            R2dbcTransaction(connection, false, encoders).also { transaction = it }
         }
     }
 

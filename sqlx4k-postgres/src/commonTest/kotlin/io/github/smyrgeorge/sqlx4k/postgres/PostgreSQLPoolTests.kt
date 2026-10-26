@@ -10,6 +10,7 @@ import assertk.assertions.isLessThanOrEqualTo
 import assertk.assertions.isSuccess
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
 import kotlin.random.Random
 import kotlinx.coroutines.async
@@ -163,5 +164,19 @@ class PostgreSQLPoolTests {
         } finally {
             runCatching { db.execute("drop table if exists $table") }
         }
+    }
+
+    // A connection closed with a changed isolation level and a transaction still open must go back to the pool with
+    // the default level: resetting it inside the open transaction was undone by the rollback on release.
+    @Test
+    fun `closing a connection mid-transaction resets its isolation level`(): Unit = runBlocking {
+        val db = pool(maxConnections = 1)
+        val cn = db.acquire().getOrThrow()
+        cn.setTransactionIsolationLevel(Transaction.IsolationLevel.Serializable).getOrThrow()
+        cn.begin().getOrThrow()
+        cn.close().getOrThrow() // the transaction is neither committed nor rolled back
+
+        val level = db.fetchAll("show transaction_isolation").getOrThrow().first().get(0).asString()
+        assertThat(level).isEqualTo("read committed")
     }
 }
