@@ -138,15 +138,20 @@ class SQLiteMigratorTests : SQLiteTestBase() {
     // new database.
     @Test
     fun `migration file of only comments is applied`(): Unit = runBlocking {
+        val users = "t_users_${Random.nextInt(1_000_000)}"
         val dir = newTempDir("sqlite-comments")
-        write(dir, "1_a.sql", "select 1;")
+        write(dir, "1_a.sql", "CREATE TABLE $users (id INTEGER PRIMARY KEY);")
         write(dir, "2_retired.sql", "-- Retired: the table it created is no longer used.\n/* nothing; to run */\n")
-        write(dir, "3_c.sql", "select 1;")
+        write(dir, "3_c.sql", "INSERT INTO $users(id) VALUES (1);")
         val table = "_sqlx4k_migr_sqlite_${Random.nextInt(100000)}"
         try {
             assertThat(db.migrate(path = dir.toString(), table = table)).isSuccess()
-            assertThat(listApplied(table)).containsExactly(1L, 2L, 3L)
+            assertAll {
+                assertThat(listApplied(table)).containsExactly(1L, 2L, 3L)
+                assertThat(countUsers(users)).isEqualTo(1L)
+            }
         } finally {
+            runCatching { db.execute("DROP TABLE IF EXISTS $users;").getOrThrow() }
             runCatching { db.execute("DROP TABLE IF EXISTS $table;").getOrThrow() }
         }
     }
