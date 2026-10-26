@@ -929,17 +929,7 @@ pub extern "C" fn sqlx4k_sqlite_of(
         pool
     };
 
-    let pool = if idle_timeout_milis > 0 {
-        pool.idle_timeout(Duration::from_millis(idle_timeout_milis as u64))
-    } else {
-        pool
-    };
-
-    let pool = if max_lifetime_milis > 0 {
-        pool.max_lifetime(Duration::from_millis(max_lifetime_milis as u64))
-    } else {
-        pool
-    };
+    let pool = with_pool_timeouts(pool, idle_timeout_milis, max_lifetime_milis);
 
     // Create the database file if it does not exist, but only for the default mode and `mode=rwc`:
     // `ro` and `rw` must fail on a missing file instead (the pool below then reports that error).
@@ -1618,6 +1608,37 @@ pub extern "C" fn sqlx4k_sqlite_tx_fetch_all_with_params(
         let result = sqlx4k.tx_fetch_all_with_params(tx, sql, owned).await;
         fun(callback, result)
     });
+}
+
+/// Applies the idle timeout and max lifetime. A value of 0 or less (Kotlin passes -1 for "none") disables the
+/// setting, as on the JVM. Keeping sqlx's defaults (10 minutes idle, 30 minutes lifetime) closed the connections of an
+/// in-memory database, which only lives as long as one of them is open, and so silently wiped it.
+fn with_pool_timeouts(
+    pool: SqlitePoolOptions,
+    idle_timeout_milis: c_int,
+    max_lifetime_milis: c_int,
+) -> SqlitePoolOptions {
+    let millis = |m: c_int| (m > 0).then(|| Duration::from_millis(m as u64));
+    pool.idle_timeout(millis(idle_timeout_milis)).max_lifetime(millis(max_lifetime_milis))
+}
+
+#[cfg(test)]
+mod pool_options_tests {
+    use super::*;
+
+    #[test]
+    fn a_missing_timeout_disables_the_setting() {
+        let pool = with_pool_timeouts(SqlitePoolOptions::new(), -1, -1);
+        assert_eq!(pool.get_idle_timeout(), None);
+        assert_eq!(pool.get_max_lifetime(), None);
+    }
+
+    #[test]
+    fn a_timeout_is_applied() {
+        let pool = with_pool_timeouts(SqlitePoolOptions::new(), 1_000, 2_000);
+        assert_eq!(pool.get_idle_timeout(), Some(Duration::from_secs(1)));
+        assert_eq!(pool.get_max_lifetime(), Some(Duration::from_secs(2)));
+    }
 }
 
 #[cfg(test)]
