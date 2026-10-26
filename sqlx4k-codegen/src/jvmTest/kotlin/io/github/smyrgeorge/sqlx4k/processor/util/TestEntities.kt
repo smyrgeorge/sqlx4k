@@ -229,3 +229,21 @@ data class AliasedCentsEntity(
     @Converter(AliasedCentsEncoder::class)
     val amount: AliasedCents,
 )
+
+/** A generic custom type, decoded through the registry. */
+data class Measured<U>(val amount: Double)
+
+object Metres
+
+typealias AliasedDistance = Measured<Metres>
+
+/**
+ * Entity with a property whose type is an alias of a generic type, decoded through the registry.
+ */
+@Table("aliased_distances")
+data class AliasedDistanceEntity(
+    @Id
+    val id: Long,
+    val distance: AliasedDistance,
+    val detour: AliasedDistance?,
+)

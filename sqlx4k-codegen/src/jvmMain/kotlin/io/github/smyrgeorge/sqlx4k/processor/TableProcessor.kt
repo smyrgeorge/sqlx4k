@@ -708,12 +708,14 @@ class TableProcessor(
             }
         }
 
-        // Use custom decoder from registry
+        // Use custom decoder from registry, looked up by the type as written: an alias of a generic type (`typealias
+        // Distance = Measured<Metres>`) names it in full, where its expanded declaration would lack type arguments.
         val propName = prop.simpleName()
+        val registryType = prop.type.resolve().declaration.qualifiedName?.asString() ?: typeQualifiedName
         return if (isNullable) {
-            ".let { col -> if (col.isNull()) null else converters.get<$typeQualifiedName>()?.decode(col) ?: throw SQLError(SQLError.Code.MissingValueConverter, \"No decoder found for type $typeQualifiedName (property: $propName)\") }"
+            ".let { col -> if (col.isNull()) null else converters.get<$registryType>()?.decode(col) ?: throw SQLError(SQLError.Code.MissingValueConverter, \"No decoder found for type $registryType (property: $propName)\") }"
         } else {
-            ".let { col -> converters.get<$typeQualifiedName>()?.decode(col) ?: throw SQLError(SQLError.Code.MissingValueConverter, \"No decoder found for type $typeQualifiedName (property: $propName)\") }"
+            ".let { col -> converters.get<$registryType>()?.decode(col) ?: throw SQLError(SQLError.Code.MissingValueConverter, \"No decoder found for type $registryType (property: $propName)\") }"
         }
     }
 

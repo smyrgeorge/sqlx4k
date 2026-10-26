@@ -3,14 +3,21 @@ package io.github.smyrgeorge.sqlx4k.processor
 import assertk.assertThat
 import assertk.assertions.isEqualTo
 import assertk.assertions.isTrue
+import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.ValueEncoder
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asDouble
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.AliasedAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.AliasedCentsEntityAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.AliasedConvertedAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.AliasedCrudRepositoryImpl
+import io.github.smyrgeorge.sqlx4k.processor.test.generated.AliasedDistanceEntityAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.util.Aliased
 import io.github.smyrgeorge.sqlx4k.processor.util.AliasedCentsEntity
 import io.github.smyrgeorge.sqlx4k.processor.util.AliasedConverted
+import io.github.smyrgeorge.sqlx4k.processor.util.AliasedDistance
+import io.github.smyrgeorge.sqlx4k.processor.util.AliasedDistanceEntity
+import io.github.smyrgeorge.sqlx4k.processor.util.Measured
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.row
 import io.github.smyrgeorge.sqlx4k.processor.util.Money
@@ -52,5 +59,18 @@ class TypeAliasTests {
         val row = row("id" to "1", "amount" to "12.05")
         assertThat(AliasedCentsEntityAutoRowMapper.map(row, ValueEncoderRegistry.EMPTY))
             .isEqualTo(AliasedCentsEntity(id = 1, amount = 1205))
+    }
+
+    @Test
+    fun `the row mapper decodes a property declared through an alias of a generic type`() {
+        val registry = ValueEncoderRegistry().register<AliasedDistance>(
+            object : ValueEncoder<AliasedDistance> {
+                override fun encode(value: AliasedDistance): Any = value.amount
+                override fun decode(value: ResultSet.Row.Column): AliasedDistance = Measured(value.asDouble())
+            }
+        )
+        val row = row("id" to "1", "distance" to "2.5", "detour" to null)
+        assertThat(AliasedDistanceEntityAutoRowMapper.map(row, registry))
+            .isEqualTo(AliasedDistanceEntity(id = 1, distance = Measured(2.5), detour = null))
     }
 }
