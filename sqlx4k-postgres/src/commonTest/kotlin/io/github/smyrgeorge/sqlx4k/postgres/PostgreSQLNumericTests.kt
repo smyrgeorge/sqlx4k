@@ -8,8 +8,11 @@ import assertk.assertions.isEqualTo
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asDouble
+import io.github.smyrgeorge.sqlx4k.impl.extensions.asFloat
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
+import io.github.smyrgeorge.sqlx4k.postgres.extensions.asDoubleArray
+import io.github.smyrgeorge.sqlx4k.postgres.extensions.asFloatArray
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asStringList
 import kotlin.random.Random
 import kotlin.test.AfterTest
@@ -175,4 +178,22 @@ class PostgreSQLNumericTests {
 
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }
     }
+
+    @Test
+    fun `float infinities and NaN are decoded`(): Unit = runBlocking {
+        val row = db.fetchAll(
+            "select 'Infinity'::float8, '-Infinity'::float4, 'NaN'::float8, " +
+                "array['Infinity', '-Infinity', '1.5']::float8[], array['-Infinity', 'NaN']::float4[]"
+        ).getOrThrow().first()
+        assertAll {
+            assertThat(row.get(0).asDouble()).isEqualTo(Double.POSITIVE_INFINITY)
+            assertThat(row.get(1).asFloat()).isEqualTo(Float.NEGATIVE_INFINITY)
+            assertThat(row.get(2).asDouble().isNaN()).isEqualTo(true)
+            assertThat(row.get(3).asDoubleArray().toList())
+                .isEqualTo(listOf(Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, 1.5))
+            assertThat(row.get(4).asFloatArray().toList().map { it.toString() })
+                .isEqualTo(listOf("-Infinity", "NaN"))
+        }
+    }
 }
+

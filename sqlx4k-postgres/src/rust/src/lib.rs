@@ -1653,8 +1653,8 @@ fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mut c_char {
         "INT2" => row.get_unchecked::<i16, _>(ordinal).to_string(),
         "INT4" => row.get_unchecked::<i32, _>(ordinal).to_string(),
         "INT8" => row.get_unchecked::<i64, _>(ordinal).to_string(),
-        "FLOAT4" => row.get_unchecked::<f32, _>(ordinal).to_string(),
-        "FLOAT8" => row.get_unchecked::<f64, _>(ordinal).to_string(),
+        "FLOAT4" => float_text(row.get_unchecked::<f32, _>(ordinal)),
+        "FLOAT8" => float_text(row.get_unchecked::<f64, _>(ordinal)),
         "BOOL" => row.get_unchecked::<bool, _>(ordinal).to_string(),
         "BYTEA" => {
             // Match the bytea text-input format `\xHH..` so the existing
@@ -1703,8 +1703,8 @@ fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mut c_char {
         "INT2[]" => decode_array::<i16>(row, ordinal),
         "INT4[]" => decode_array::<i32>(row, ordinal),
         "INT8[]" => decode_array::<i64>(row, ordinal),
-        "FLOAT4[]" => decode_array::<f32>(row, ordinal),
-        "FLOAT8[]" => decode_array::<f64>(row, ordinal),
+        "FLOAT4[]" => decode_float_array::<f32>(row, ordinal),
+        "FLOAT8[]" => decode_float_array::<f64>(row, ordinal),
         // Text-like array types — output `{a,b,c}` without per-element quoting so
         // the existing naive `asStringArray()` parser (split on `,`) round-trips.
         // Limitation: elements containing commas will be split incorrectly.
@@ -1779,6 +1779,28 @@ fn decode_or<'r, T: sqlx::Decode<'r, Postgres>>(
 }
 
 /// Decodes an array of `T` (elements may be NULL) into postgres' `{a,NULL,c}` text form; see decode_or.
+/// A float as PostgreSQL and Kotlin write it: Rust writes the infinities as `inf` and `-inf`, which Kotlin cannot
+/// parse (`NaN` is the same in all three).
+fn float_text(value: impl ToString) -> String {
+    match value.to_string().as_str() {
+        "inf" => "Infinity".to_string(),
+        "-inf" => "-Infinity".to_string(),
+        text => text.to_string(),
+    }
+}
+
+fn decode_float_array<T>(row: &PgRow, ordinal: usize) -> String
+where
+    T: ToString + for<'r> sqlx::Decode<'r, Postgres> + Type<Postgres>,
+{
+    decode_or(
+        row,
+        ordinal,
+        |v: Vec<Option<T>>| format_pg_nullable_array_fmt(v.iter(), |e| float_text(e.to_string())),
+        || decode_text_or_binary(row, ordinal, |_| None),
+    )
+}
+
 fn decode_array<T>(row: &PgRow, ordinal: usize) -> String
 where
     T: ToString + for<'r> sqlx::Decode<'r, Postgres> + Type<Postgres>,
