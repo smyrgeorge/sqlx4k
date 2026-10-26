@@ -356,13 +356,19 @@ class MySQL(
 
     companion object {
         /**
+         * INSERT or REPLACE, after any leading comments: the statements whose rows (MariaDB's `RETURNING`) carry the
+         * generated id.
+         */
+        private val INSERT_SQL = Regex(
+            """^(\s+|--[^\n]*+|#[^\n]*+|/\*.*?\*/)*(insert|replace)\b""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        )
+
+        /**
          * Executes the statement and reports its update count and generated id. With returnGeneratedValues(),
          * r2dbc-mysql reports `LAST_INSERT_ID()` from the server's reply to the statement (no extra query); it is 0
          * when the statement generated no id. Every result is consumed: see fetchResultSet.
          */
-        /** INSERT or REPLACE: the statements whose rows (MariaDB's `RETURNING`) carry the generated id. */
-        private val INSERT_SQL = Regex("""^\s*(insert|replace)\b""", RegexOption.IGNORE_CASE)
-
         private suspend fun io.r2dbc.spi.Statement.executeForResult(sql: String): ExecuteResult {
             var rowsAffected = 0L
             var lastInsertId: Long? = null
