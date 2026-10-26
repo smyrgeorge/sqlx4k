@@ -9,7 +9,13 @@ import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
+import io.github.smyrgeorge.sqlx4k.sqlite.SQLite
 import io.github.smyrgeorge.sqlx4k.sqlite.flowWithLock
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlin.concurrent.Volatile
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
@@ -17,9 +23,6 @@ import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
  * A physical connection owned by the pool. Callers never get it directly: every acquisition hands out a new
@@ -138,13 +141,21 @@ internal class PooledConnection(
         override val transactionIsolationLevel: Transaction.IsolationLevel?
             get() = connection.transactionIsolationLevel
 
+        // Runs to completion also when the caller is cancelled, so the connection always goes back to the pool.
         override suspend fun close(): Result<Unit> = runCatching {
-            val released = mutex.withLock {
-                if (status == Connection.Status.Closed) return@withLock false
-                status = Connection.Status.Closed
-                true
+            withContext(NonCancellable) {
+                val released = mutex.withLock {
+                    if (status == Connection.Status.Closed) return@withLock false
+                    status = Connection.Status.Closed
+                    true
+                }
+                if (released) {
+                    // A transaction begun through this lease and never ended must not follow the connection back
+                    // into the pool.
+                    (connection as? SQLite.AndroidConnection)?.rollbackOpenTransaction()
+                    release()
+                }
             }
-            if (released) release()
         }
 
         /** Runs [block] on the connection, while this lease is open and no one else uses the connection. */
@@ -160,8 +171,10 @@ internal class PooledConnection(
         override suspend fun execute(statement: Statement): Result<Long> = guarded { connection.execute(statement) }
         override suspend fun executeWithResult(sql: String): Result<ExecuteResult> =
             guarded { connection.executeWithResult(sql) }
+
         override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> =
             guarded { connection.executeWithResult(statement) }
+
         override suspend fun fetchAll(statement: Statement): Result<ResultSet> =
             guarded { connection.fetchAll(statement) }
 

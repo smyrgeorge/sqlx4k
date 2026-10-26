@@ -138,4 +138,32 @@ class SQLitePoolTests : SQLiteTestBase() {
         // The pool's only connection is still there to serve a query.
         assertThat(db.fetchAll("select 1").getOrThrow().size).isEqualTo(1)
     }
+
+    // A connection closed while a transaction begun on it is still open must not go back to the pool inside it:
+    // the next borrower's writes would run in that transaction and never be committed.
+    @Test
+    fun `closing a connection rolls back its unfinished transaction`(): Unit = runBlocking {
+        // Native: closing a connection with an open transaction is not handled yet.
+        if (testPlatform == TestPlatform.Native) return@runBlocking
+        val options = ConnectionPool.Options.builder().maxConnections(1).acquireTimeout(3.seconds).build()
+        val db = pool(maxConnections = 1, acquireTimeout = 3.seconds)
+        db.execute("create table t_unfinished(id integer primary key);").getOrThrow()
+
+        val cn = db.acquire().getOrThrow()
+        val tx = cn.begin().getOrThrow()
+        tx.execute("insert into t_unfinished(id) values (1);").getOrThrow()
+        cn.close().getOrThrow() // neither committed nor rolled back
+
+        // The pool's only connection is no longer in that transaction: its insert is gone, and the transaction
+        // can no longer be used through the connection that went back to the pool.
+        assertThat(db.fetchAll("select count(*) from t_unfinished;").getOrThrow().first().get(0).asInt()).isEqualTo(0)
+        assertThat(tx.execute("insert into t_unfinished(id) values (3);")).isFailure()
+
+        // A new write is committed for real: it survives closing the pool and reopening the database.
+        db.execute("insert into t_unfinished(id) values (2);").getOrThrow()
+        db.close().getOrThrow()
+        val reopened = openSQLite("sqlite://$testDirectory/SQLitePoolTests.db", options).also { opened += it }
+        assertThat(reopened.fetchAll("select id from t_unfinished;").getOrThrow().map { it.get(0).asInt() })
+            .isEqualTo(listOf(2))
+    }
 }

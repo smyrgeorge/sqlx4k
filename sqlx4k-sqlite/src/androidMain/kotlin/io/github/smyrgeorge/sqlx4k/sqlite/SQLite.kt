@@ -193,6 +193,20 @@ class SQLite(
         private val executor = Executors.newSingleThreadExecutor()
         private val dispatcher: CoroutineDispatcher = executor.asCoroutineDispatcher()
 
+        // The last transaction begun on this connection: see rollbackOpenTransaction.
+        private var openTransaction: AndroidTransaction? = null
+
+        /**
+         * Rolls back the transaction begun on this connection if it was never ended, so the connection does not go
+         * back to the pool inside it: the next borrower's statements would run in that transaction (on the same
+         * thread) and never be committed, and its write lock would stay held.
+         */
+        internal suspend fun rollbackOpenTransaction() {
+            val tx = openTransaction ?: return
+            openTransaction = null
+            if (tx.status == Transaction.Status.Open) tx.rollback()
+        }
+
         // Runs to completion also when the caller is cancelled: withContext(dispatcher) would otherwise throw on
         // entry and the database would never be closed.
         override suspend fun close(): Result<Unit> = runCatching {
@@ -265,7 +279,7 @@ class SQLite(
             withContext(dispatcher) {
                 db.beginTransactionNonExclusive()
                 AndroidTransaction(db, false, encoders, dispatcher)
-            }
+            }.also { openTransaction = it }
         }
     }
 
