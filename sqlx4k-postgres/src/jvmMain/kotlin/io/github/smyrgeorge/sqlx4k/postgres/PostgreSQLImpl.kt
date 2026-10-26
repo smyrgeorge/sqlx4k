@@ -226,7 +226,16 @@ class PostgreSQLImpl(
                         // they are requested: buffer them, so a burst or a slow callback loses none.
                         .onBackpressureBuffer()
                         .asFlow()
-                        .collect { f(it.toNotification()) }
+                        .collect {
+                            // A failing callback must not stop listening (dropping the connection, and every
+                            // notification buffered or sent until it reconnects), as on the native driver.
+                            try {
+                                f(it.toNotification())
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (_: Throwable) {
+                            }
+                        }
                 } finally {
                     // Always release the connection, including when the stream fails mid-flight or the listener is
                     // cancelled (a release in the cancelled coroutine would itself be cancelled).
