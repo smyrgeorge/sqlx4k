@@ -307,14 +307,26 @@ object SqlValidator {
      */
     fun validateTable(fn: String, stmt: JStatement, tableName: String) {
         val actual = when (stmt) {
-            is PlainSelect -> (stmt.fromItem as? Table)?.name
-            is Delete -> stmt.table?.name
-            is Update -> stmt.table?.name
+            is PlainSelect -> stmt.fromItem as? Table
+            is Delete -> stmt.table
+            is Update -> stmt.table
             else -> null
         } ?: return
-        if (!actual.equals(tableName, ignoreCase = true)) {
-            error("@Query ($fn) targets table '$actual' but the repository entity is mapped to table '$tableName'.")
+        if (!actual.isTable(tableName)) {
+            error("@Query ($fn) targets table '${actual.fullyQualifiedName}' but the repository entity is mapped to table '$tableName'.")
         }
+    }
+
+    /**
+     * Whether this table, as a query names it, is the entity's table [tableName], which may be schema-qualified
+     * (`public.users`): the table names match, and the schemas too when both name one. (jsqlparser's [Table.getName]
+     * is the unqualified name.)
+     */
+    private fun Table.isTable(tableName: String): Boolean {
+        if (!name.equals(tableName.substringAfterLast('.'), ignoreCase = true)) return false
+        val schema = schemaName ?: return true
+        val entitySchema = tableName.substringBeforeLast('.', "").ifEmpty { return true }
+        return schema.equals(entitySchema, ignoreCase = true)
     }
 
     /**
@@ -433,12 +445,13 @@ object SqlValidator {
      * queries (joins, subselects, or a different `FROM` table) are skipped to avoid false positives.
      */
     fun validateColumnsExist(fn: String, stmt: JStatement, tableName: String, columnNames: Set<String>) {
-        val aliases = linkedSetOf(tableName.lowercase())
+        // Columns qualified by the table (`users.id`, also for a `public.users` entity) or by its alias.
+        val aliases = linkedSetOf(tableName.lowercase(), tableName.substringAfterLast('.').lowercase())
         val columns = mutableListOf<Column>()
         when (stmt) {
             is PlainSelect -> {
                 val from = stmt.fromItem as? Table ?: return
-                if (!from.name.equals(tableName, ignoreCase = true)) return
+                if (!from.isTable(tableName)) return
                 if (!stmt.joins.isNullOrEmpty()) return
                 from.alias?.name?.let { aliases.add(it.lowercase()) }
                 stmt.selectItems?.forEach { collectColumns(it.expression, columns) }
@@ -449,14 +462,14 @@ object SqlValidator {
             }
 
             is Delete -> {
-                if (!stmt.table.name.equals(tableName, ignoreCase = true)) return
+                if (!stmt.table.isTable(tableName)) return
                 if (!stmt.joins.isNullOrEmpty()) return
                 stmt.table.alias?.name?.let { aliases.add(it.lowercase()) }
                 collectColumns(stmt.where, columns)
             }
 
             is Update -> {
-                if (!stmt.table.name.equals(tableName, ignoreCase = true)) return
+                if (!stmt.table.isTable(tableName)) return
                 if (!stmt.joins.isNullOrEmpty()) return
                 stmt.table.alias?.name?.let { aliases.add(it.lowercase()) }
                 stmt.updateSets.forEach { set -> for (i in set.columns.indices) columns.add(set.getColumn(i)) }
@@ -510,7 +523,7 @@ object SqlValidator {
         if (columnNames.isEmpty()) return sql
         val select = stmt as? PlainSelect ?: return sql
         val from = select.fromItem as? Table ?: return sql
-        if (!from.name.equals(tableName, ignoreCase = true)) return sql
+        if (!from.isTable(tableName)) return sql
         if (!select.joins.isNullOrEmpty()) return sql
         val items = select.selectItems ?: return sql
         if (items.size != 1 || items[0].expression !is AllColumns) return sql
@@ -533,7 +546,7 @@ object SqlValidator {
             is Delete -> stmt.table
             else -> return sql
         }
-        if (target?.name?.equals(tableName, ignoreCase = true) != true) return sql
+        if (target?.isTable(tableName) != true) return sql
         val returning: ReturningClause = when (stmt) {
             is Insert -> stmt.returningClause
             is Update -> stmt.returningClause
@@ -587,7 +600,7 @@ object SqlValidator {
     fun toExistsQuery(stmt: JStatement, sql: String, tableName: String): String {
         val select = stmt as? PlainSelect ?: return sql
         val from = select.fromItem as? Table ?: return sql
-        if (!from.name.equals(tableName, ignoreCase = true)) return sql
+        if (!from.isTable(tableName)) return sql
         select.selectItems = listOf(SelectItem.from(LongValue(1), null))
         return "SELECT EXISTS($select)"
     }

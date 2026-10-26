@@ -115,6 +115,30 @@ class SqlValidatorTests {
         }
     }
 
+    // A schema-qualified @Table("public.users"): the query may name the table with or without its schema.
+    @Test
+    fun `validateTable matches a schema-qualified entity table`() {
+        SqlValidator.validateTable("fn", parse("select * from public.users where id = :id"), "public.users")
+        SqlValidator.validateTable("fn", parse("select * from users where id = :id"), "public.users")
+        SqlValidator.validateTable("fn", parse("update public.users set name = :name"), "users")
+        val ex = assertFailsWith<IllegalStateException> {
+            SqlValidator.validateTable("fn", parse("select * from other.users"), "public.users")
+        }
+        assertThat(ex.message!!).contains("other.users")
+    }
+
+    @Test
+    fun `schema-qualified entity tables are rewritten and validated`() {
+        val exists = "select * from public.users where email = :email"
+        assertThat(SqlValidator.toExistsQuery(parse(exists), exists, "public.users")).contains("SELECT EXISTS(")
+        val star = "select * from public.users"
+        assertThat(SqlValidator.expandSelectStar(parse(star), star, "public.users", userColumns)).contains("id, name, email")
+        assertFailsWith<IllegalStateException> {
+            SqlValidator.validateColumnsExist("fn", parse("select bogus from public.users"), "public.users", userColumnSet)
+        }
+        SqlValidator.validateColumnsExist("fn", parse("select users.id from public.users"), "public.users", userColumnSet)
+    }
+
     @Test
     fun `validateTable skips a subselect FROM clause`() {
         // fromItem is a derived table, not a plain Table -> skipped, no throw even for a different inner table.
