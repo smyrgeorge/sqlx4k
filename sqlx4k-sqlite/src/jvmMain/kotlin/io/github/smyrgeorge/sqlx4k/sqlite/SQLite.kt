@@ -91,6 +91,24 @@ class SQLite(
     private val permits = Semaphore(options.maxConnections)
     private val acquireTimeout: Duration? = options.acquireTimeout
 
+    // Whether the permit was taken is recorded in the block: withTimeoutOrNull returns null when the timeout fires
+    // after acquire() returned, and a permit taken but then reported as timed out (or cancelled) would never be given
+    // back, the pool losing one of its connections for good.
+    private suspend fun takePermit() {
+        val timeout = acquireTimeout ?: return permits.acquire()
+        var taken = false
+        try {
+            withTimeoutOrNull(timeout) {
+                permits.acquire()
+                taken = true
+            }
+        } catch (e: CancellationException) {
+            if (taken) permits.release()
+            throw e
+        }
+        if (!taken) SQLError(SQLError.Code.PoolTimedOut, "Timed out waiting for a connection").raise()
+    }
+
     override suspend fun migrate(
         path: String,
         table: String,
@@ -154,9 +172,7 @@ class SQLite(
 
     override suspend fun acquire(): Result<Connection> = runCatching {
         if (dataSource.isClosed) SQLError(SQLError.Code.PoolClosed, "Connection pool is closed").raise()
-        val permitted = acquireTimeout?.let { withTimeoutOrNull(it) { permits.acquire() } != null }
-            ?: true.also { permits.acquire() }
-        if (!permitted) SQLError(SQLError.Code.PoolTimedOut, "Timed out waiting for a connection").raise()
+        takePermit()
 
         // Taken on an IO thread, interruptibly, so a cancelled caller stops waiting for the pool. A connection
         // handed over just as the caller is cancelled goes straight back to the pool instead of leaking.

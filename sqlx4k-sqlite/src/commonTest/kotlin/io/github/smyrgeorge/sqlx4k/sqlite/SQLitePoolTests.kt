@@ -207,4 +207,22 @@ class SQLitePoolTests : SQLiteTestBase() {
         assertThat(db.fetchAll("select count(*) from t_many;").getOrThrow().first().get(0).asInt()).isEqualTo(200)
         db.execute("drop table t_many;").getOrThrow()
     }
+
+    // Callers that time out waiting for a connection, some just as one is given back to them, must not keep any of the
+    // pool's connections: every one of them can still be acquired afterwards.
+    @Test
+    fun `acquire timeouts racing with releases keep the pool's capacity`(): Unit = runBlocking {
+        val db = pool(maxConnections = 2, acquireTimeout = 2.milliseconds)
+        withContext(Dispatchers.Default) {
+            repeat(20) {
+                (1..100).map { async { db.fetchAll("select 1;") } }.awaitAll()
+            }
+        }
+        val a = db.acquire().getOrThrow()
+        try {
+            db.acquire().getOrThrow().close().getOrThrow()
+        } finally {
+            a.close().getOrThrow()
+        }
+    }
 }

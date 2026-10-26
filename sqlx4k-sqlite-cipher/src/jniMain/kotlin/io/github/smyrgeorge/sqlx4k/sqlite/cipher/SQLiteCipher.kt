@@ -15,6 +15,7 @@ import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
@@ -56,9 +57,21 @@ class SQLiteCipher(
     private val permits = Semaphore(options.maxConnections)
     private val acquireTimeout: Duration? = options.acquireTimeout
 
+    // Whether the permit was taken is recorded in the block: withTimeoutOrNull returns null when the timeout fires
+    // after acquire() returned, and a permit taken but then reported as timed out (or cancelled) would never be given
+    // back, the pool losing one of its connections for good.
     private suspend fun takePermit() {
-        val taken = acquireTimeout?.let { withTimeoutOrNull(it) { permits.acquire() } != null }
-            ?: true.also { permits.acquire() }
+        val timeout = acquireTimeout ?: return permits.acquire()
+        var taken = false
+        try {
+            withTimeoutOrNull(timeout) {
+                permits.acquire()
+                taken = true
+            }
+        } catch (e: CancellationException) {
+            if (taken) permits.release()
+            throw e
+        }
         if (!taken) SQLError(SQLError.Code.PoolTimedOut, "Timed out waiting for a connection").raise()
     }
 
