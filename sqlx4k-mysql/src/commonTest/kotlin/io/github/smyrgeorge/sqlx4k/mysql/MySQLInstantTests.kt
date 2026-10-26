@@ -46,6 +46,35 @@ class MySQLInstantTests {
         }
     }
 
+    // ---- Session time zone: UTC on every driver, whatever the server's ----
+    @Test
+    fun `sessions use the UTC time zone`(): Unit = runBlocking {
+        val zone = db.fetchAll("select @@session.time_zone").getOrThrow().first().get(0).asString()
+        assertThat(zone).isEqualTo("+00:00")
+    }
+
+    // A TIMESTAMP column stores UTC, converted from and to the session time zone.
+    @Test
+    fun `instant in a timestamp column keeps its epoch`(): Unit = runBlocking {
+        val table = newTable()
+        try {
+            db.execute("create table $table(id int primary key, ts timestamp(6) not null)").getOrThrow()
+            val ts = Instant.parse("2025-03-25T07:31:43.330068Z")
+            db.execute(
+                Statement.create("insert into $table(id, ts) values (?, ?)").bind(0, 1).bind(1, ts)
+            ).getOrThrow()
+            val row = db.fetchAll(
+                Statement.create("select ts, unix_timestamp(ts) div 1 from $table where id = ?").bind(0, 1)
+            ).getOrThrow().first()
+            assertAll {
+                assertThat(row.get(0).asInstant()).isEqualTo(ts)
+                assertThat(row.get(1).asString().toLong()).isEqualTo(ts.epochSeconds)
+            }
+        } finally {
+            runCatching { db.execute("drop table if exists $table").getOrThrow() }
+        }
+    }
+
     // ---- Named parameter (:name) ----
     @Test
     fun `instant named param`(): Unit = runBlocking {

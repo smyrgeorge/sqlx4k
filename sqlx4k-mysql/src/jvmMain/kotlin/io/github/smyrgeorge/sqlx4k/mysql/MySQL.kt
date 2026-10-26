@@ -431,6 +431,10 @@ class MySQL(
                 .database(options.getValue(ConnectionFactoryOptions.DATABASE) as String)
                 .username(options.getRequiredValue(ConnectionFactoryOptions.USER) as String)
                 .password(options.getValue(ConnectionFactoryOptions.PASSWORD) as CharSequence)
+                // Instants are bound and read as UTC: the session must use UTC too, as on the native driver (sqlx),
+                // or TIMESTAMP columns and NOW() are shifted by the server's time zone.
+                .connectionTimeZone("UTC")
+                .sessionVariables("time_zone='+00:00'")
 
             // Map SSL option if present
             if (options.hasOption(ConnectionFactoryOptions.SSL)) {
