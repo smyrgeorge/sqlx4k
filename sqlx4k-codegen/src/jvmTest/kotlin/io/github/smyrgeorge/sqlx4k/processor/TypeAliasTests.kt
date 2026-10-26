@@ -5,10 +5,13 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.AliasedAutoRowMapper
+import io.github.smyrgeorge.sqlx4k.processor.test.generated.AliasedConvertedAutoRowMapper
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.AliasedCrudRepositoryImpl
 import io.github.smyrgeorge.sqlx4k.processor.util.Aliased
+import io.github.smyrgeorge.sqlx4k.processor.util.AliasedConverted
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.row
+import io.github.smyrgeorge.sqlx4k.processor.util.Money
 import kotlin.test.Test
 import kotlinx.coroutines.test.runTest
 
@@ -33,5 +36,12 @@ class TypeAliasTests {
 
         assertThat(result.getOrThrow()).isEqualTo(Aliased(id = 1, name = "Bob", note = "n"))
         assertThat(executor.hasExecuted("insert into aliased")).isTrue()
+    }
+
+    @Test
+    fun `the row mapper decodes a converted property declared through an alias`() {
+        val row = row("id" to "1", "price" to "9.5:EUR")
+        assertThat(AliasedConvertedAutoRowMapper.map(row, ValueEncoderRegistry.EMPTY))
+            .isEqualTo(AliasedConverted(id = 1, price = Money(9.5, "EUR")))
     }
 }

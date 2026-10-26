@@ -1248,8 +1248,8 @@ class TableProcessor(
             )
         }
 
-        // Get the type argument T from ValueEncoder<T>
-        val encoderTypeArg = valueEncoderSupertype.arguments.firstOrNull()?.type?.resolve()
+        // Get the type argument T from ValueEncoder<T>, with its aliases expanded as the property's type is.
+        val encoderTypeArg = valueEncoderSupertype.arguments.firstOrNull()?.type?.resolve()?.expandTypeAliases()
         val encoderTypeQualifiedName = encoderTypeArg?.declaration?.qualifiedName?.asString()
 
         if (encoderTypeQualifiedName == null) {

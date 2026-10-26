@@ -1,6 +1,9 @@
 package io.github.smyrgeorge.sqlx4k.processor.util
 
+import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.ValueEncoder
 import io.github.smyrgeorge.sqlx4k.annotation.Column
+import io.github.smyrgeorge.sqlx4k.annotation.Converter
 import io.github.smyrgeorge.sqlx4k.annotation.Id
 import io.github.smyrgeorge.sqlx4k.annotation.Table
 import io.github.smyrgeorge.sqlx4k.annotation.Transient
@@ -187,4 +190,23 @@ data class Ticket(
     val id: Long,
     val status: TicketStatus,
     val previous: TicketStatus?,
+)
+
+typealias AliasedMoney = Money
+
+/** Converts [AliasedMoney], named through its alias in the encoder too. */
+object AliasedMoneyEncoder : ValueEncoder<AliasedMoney> {
+    override fun encode(value: AliasedMoney): Any = value.toString()
+    override fun decode(value: ResultSet.Row.Column): AliasedMoney = Money.parse(value.asString())
+}
+
+/**
+ * Entity with a @Converter property declared through a type alias, whose encoder names the alias as well.
+ */
+@Table("aliased_converted")
+data class AliasedConverted(
+    @Id
+    val id: Long,
+    @Converter(AliasedMoneyEncoder::class)
+    val price: AliasedMoney,
 )

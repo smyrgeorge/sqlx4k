@@ -10,7 +10,8 @@ import com.google.devtools.ksp.symbol.KSTypeAlias
  */
 internal fun KSPropertyDeclaration.resolvedType(): KSType = type.resolve().expandTypeAliases()
 
-private fun KSType.expandTypeAliases(): KSType {
+/** This type with its type aliases expanded, keeping its nullability. */
+internal fun KSType.expandTypeAliases(): KSType {
     val alias = declaration as? KSTypeAlias ?: return this
     val expanded = alias.type.resolve().expandTypeAliases()
     return if (isMarkedNullable) expanded.makeNullable() else expanded
