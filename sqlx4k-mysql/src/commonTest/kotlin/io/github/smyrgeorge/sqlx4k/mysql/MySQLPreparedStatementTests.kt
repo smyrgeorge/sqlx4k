@@ -750,4 +750,27 @@ class MySQLPreparedStatementTests {
             runCatching { db.execute("drop table if exists $table") }
         }
     }
+
+    // A value with NUL characters must be read in full (the native driver passed it as a C string and dropped them).
+    @Test
+    fun `values with NUL characters are read in full`(): Unit = runBlocking {
+        val table = newTable()
+        try {
+            db.execute("create table $table(id int primary key, v varchar(10), t text)").getOrThrow()
+            val value = "a\u0000b\u0000"
+            db.execute(
+                Statement.create("insert into $table(id, v, t) values (1, :v, :v)").bind("v", value)
+            ).getOrThrow()
+            val plain = db.fetchAll("select v, t from $table where id = 1").getOrThrow().first()
+            val prepared = db.fetchAll(Statement.create("select v, t from $table where id = :id").bind("id", 1))
+                .getOrThrow().first()
+            for (row in listOf(plain, prepared)) assertAll {
+                assertThat(row.get(0).asString()).isEqualTo(value)
+                assertThat(row.get(1).asString()).isEqualTo(value)
+            }
+        } finally {
+            runCatching { db.execute("drop table if exists $table") }
+        }
+    }
 }
+

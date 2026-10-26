@@ -14,6 +14,7 @@ import kotlinx.cinterop.asStableRef
 import kotlinx.cinterop.get
 import kotlinx.cinterop.pointed
 import kotlinx.cinterop.staticCFunction
+import kotlinx.cinterop.readBytes
 import kotlinx.cinterop.toKString
 import kotlinx.cinterop.useContents
 import kotlinx.coroutines.NonCancellable
@@ -74,7 +75,8 @@ private fun Sqlx4kMysqlResult.toResultSet(): ResultSet {
                 ordinal = column.ordinal,
                 name = requireNotNull(schemaColumn.name) { "Column name cannot be null" }.toKString(),
                 type = requireNotNull(schemaColumn.kind) { "Column type cannot be null" }.toKString(),
-                value = column.value?.toKString()
+                // Read with its length: the value may hold NUL characters.
+                value = column.value?.readBytes(column.value_len)?.decodeToString()
             )
         }
 

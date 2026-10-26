@@ -156,7 +156,10 @@ impl Default for Sqlx4kMysqlRow {
 #[repr(C)]
 pub struct Sqlx4kMysqlColumn {
     pub ordinal: c_int,
+    /// NUL-terminated, but read with `value_len`: a MySQL text value may hold NUL characters itself.
     pub value: *mut c_char,
+    /// The length of `value` in bytes, without its terminating NUL.
+    pub value_len: c_int,
 }
 
 // ----------------------------------------------------------------------------
@@ -290,8 +293,9 @@ pub extern "C" fn sqlx4k_mysql_free_result(ptr: *mut Sqlx4kMysqlResult) {
             unsafe { Vec::from_raw_parts(row.columns, row.size as usize, row.size as usize) };
         for col in columns {
             if col.value != null_mut() {
-                let value = unsafe { CString::from_raw(col.value) };
-                std::mem::drop(value);
+                // Allocated by `column_value_of` with its length (the value may hold NUL characters).
+                let len = col.value_len as usize + 1;
+                drop(unsafe { Box::from_raw(slice::from_raw_parts_mut(col.value as *mut u8, len)) });
             }
         }
     }
@@ -1357,11 +1361,11 @@ fn mysql_type_name(info: &MySqlTypeInfo) -> &str {
 /// values come back as raw bytes — `from_utf8` happens to succeed on integer
 /// payloads but the resulting string contains embedded NULs that crash
 /// `CString::new`. Decode by type so both protocols round-trip identically.
-fn decode_mysql_column_value(row: &MySqlRow, ordinal: usize) -> *mut c_char {
+fn decode_mysql_column_value(row: &MySqlRow, ordinal: usize) -> (*mut c_char, c_int) {
     let type_name: String = {
         let value_ref = row.try_get_raw(ordinal).unwrap();
         if value_ref.is_null() {
-            return null_mut();
+            return (null_mut(), 0);
         }
         mysql_type_name(&value_ref.type_info()).to_string()
     };
@@ -1406,8 +1410,16 @@ fn decode_mysql_column_value(row: &MySqlRow, ordinal: usize) -> *mut c_char {
             Err(_) => String::new(),
         },
     };
-    let s = if s.as_bytes().contains(&0) { s.replace('\0', "") } else { s };
-    CString::new(s).unwrap_or_default().into_raw()
+    column_value_of(s)
+}
+
+/// Hands a value over with its length: a MySQL text value may hold NUL characters, at which a C string would end
+/// (they used to be dropped). It stays NUL-terminated as well; `sqlx4k_mysql_free_result` frees it.
+fn column_value_of(value: String) -> (*mut c_char, c_int) {
+    let mut bytes = value.into_bytes();
+    let len = bytes.len() as c_int;
+    bytes.push(0);
+    (Box::into_raw(bytes.into_boxed_slice()) as *mut u8 as *mut c_char, len)
 }
 
 /// Decodes a DATE / TIME / DATETIME / TIMESTAMP value without panicking on the values chrono cannot represent:
@@ -1488,9 +1500,13 @@ fn sqlx4k_mysql_row_of(row: &MySqlRow) -> Sqlx4kMysqlRow {
         let columns: Vec<Sqlx4kMysqlColumn> = row
             .columns()
             .iter()
-            .map(|c| Sqlx4kMysqlColumn {
-                ordinal: c.ordinal() as c_int,
-                value: decode_mysql_column_value(row, c.ordinal()),
+            .map(|c| {
+                let (value, value_len) = decode_mysql_column_value(row, c.ordinal());
+                Sqlx4kMysqlColumn {
+                    ordinal: c.ordinal() as c_int,
+                    value,
+                    value_len,
+                }
             })
             .collect();
 
