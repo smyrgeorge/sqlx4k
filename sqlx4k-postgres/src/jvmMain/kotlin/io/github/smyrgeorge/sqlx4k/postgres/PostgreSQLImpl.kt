@@ -478,11 +478,31 @@ class PostgreSQLImpl(
                     ordinal = i,
                     name = c.name,
                     type = type,
-                    value = if (type in TEXT_ARRAY_TYPES) get(i, Array<String?>::class.java)?.toPgArrayText()
-                    else get(i, String::class.java)
+                    value = when (type) {
+                        in TEXT_ARRAY_TYPES -> get(i, Array<String?>::class.java)?.toPgArrayText()
+                        // In the hex form (`\x6100`): with `bytea_output = 'escape'` the server writes `a\000`, which
+                        // the decoders (as the native driver's output) do not read, and r2dbc does not decode.
+                        "BYTEA" -> get(i, String::class.java)?.let { if (it.startsWith("\\x")) it else it.byteaEscapeToHex() }
+                        else -> get(i, String::class.java)
+                    }
                 )
             }
             return ResultSet.Row(columns)
+        }
+
+        /** Converts bytea's escape output form (`\\` is a backslash, `\ooo` an octal byte) to the hex form. */
+        private fun String.byteaEscapeToHex(): String = buildString(length * 2 + 2) {
+            append("\\x")
+            val text = this@byteaEscapeToHex
+            var i = 0
+            while (i < text.length) {
+                val byte = when {
+                    text[i] != '\\' -> text[i++].code
+                    text.getOrNull(i + 1) == '\\' -> '\\'.code.also { i += 2 }
+                    else -> text.substring(i + 1, i + 4).toInt(8).also { i += 4 }
+                }
+                append(byte.toByte().toHexString())
+            }
         }
 
         /**

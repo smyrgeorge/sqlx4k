@@ -1676,15 +1676,21 @@ fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mut c_char {
         "FLOAT4" => float_text(row.get_unchecked::<f32, _>(ordinal)),
         "FLOAT8" => float_text(row.get_unchecked::<f64, _>(ordinal)),
         "BOOL" => row.get_unchecked::<bool, _>(ordinal).to_string(),
-        "BYTEA" => {
-            // Match the bytea text-input format `\xHH..` so the existing
-            // `asByteArray()` decoder (which strips `\x` and parses hex) round-trips.
-            // Use `Vec<u8>` not `&[u8]` — sqlx-rs only supports `&[u8]` decode in
-            // the prepared-statement protocol, while simple-query results require
-            // an owned buffer.
-            let bytes: Vec<u8> = row.get_unchecked(ordinal);
-            format!("\\x{}", hex::encode(bytes))
-        }
+        // Match the bytea text-input format `\xHH..` so the existing
+        // `asByteArray()` decoder (which strips `\x` and parses hex) round-trips.
+        // Use `Vec<u8>` not `&[u8]` — sqlx-rs only supports `&[u8]` decode in
+        // the prepared-statement protocol, while simple-query results require
+        // an owned buffer. sqlx reads only the hex text form: with `bytea_output = 'escape'` (a session, role or
+        // database setting) the value is decoded here instead of failing, which would abort the process.
+        "BYTEA" => decode_or(
+            row,
+            ordinal,
+            |bytes: Vec<u8>| format!("\\x{}", hex::encode(bytes)),
+            || {
+                let text = decode_text_or_binary(row, ordinal, |_| None);
+                decode_bytea_escape(&text).map_or(text, |bytes| format!("\\x{}", hex::encode(bytes)))
+            },
+        ),
         "UUID" => row.get_unchecked::<uuid::Uuid, _>(ordinal).to_string(),
         // Dates, times and timestamps have values chrono cannot represent ('infinity', '24:00:00'): see decode_datetime.
         "DATE" => decode_datetime(row, ordinal, |d: chrono::NaiveDate| d.to_string(), decode_pg_date_binary),
@@ -1920,6 +1926,27 @@ fn decode_pg_time_binary(bytes: &[u8]) -> Option<String> {
 }
 
 /// Text format is passed through as is; binary format is rendered to the same text by `decode_binary`.
+/// Decodes bytea's escape output format: `\\` is a backslash, `\ooo` an octal byte, anything else the byte itself.
+fn decode_bytea_escape(text: &str) -> Option<Vec<u8>> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != b'\\' {
+            out.push(bytes[i]);
+            i += 1;
+        } else if bytes.get(i + 1) == Some(&b'\\') {
+            out.push(b'\\');
+            i += 2;
+        } else {
+            let octal = std::str::from_utf8(bytes.get(i + 1..i + 4)?).ok()?;
+            out.push(u8::from_str_radix(octal, 8).ok()?);
+            i += 4;
+        }
+    }
+    Some(out)
+}
+
 fn decode_text_or_binary(row: &PgRow, ordinal: usize, decode_binary: fn(&[u8]) -> Option<String>) -> String {
     let Ok(value) = row.try_get_raw(ordinal) else { return String::new() };
     match value.format() {

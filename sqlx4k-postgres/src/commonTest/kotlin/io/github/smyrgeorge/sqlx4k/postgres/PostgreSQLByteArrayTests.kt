@@ -389,4 +389,24 @@ class PostgreSQLByteArrayTests {
             assertThat(actual.all { it == 0xAB.toByte() }).isTrue()
         }
     }
+
+    // bytea_output = 'escape' (a session, role or database setting) writes bytea as `ab\000\377\\`, not as hex:
+    // the native driver used to abort the process reading it.
+    @Test
+    fun `bytea is read with bytea_output escape`(): Unit = runBlocking {
+        val payload = byteArrayOf('a'.code.toByte(), 0x00, 0xFF.toByte(), '\\'.code.toByte(), 0x7F)
+        val cn = db.acquire().getOrThrow()
+        try {
+            cn.execute("set bytea_output = 'escape'").getOrThrow()
+            val plain = cn.fetchAll("select '\\x6100ff5c7f'::bytea").getOrThrow().first()
+            val prepared = cn.fetchAll(Statement.create("select ?::bytea").bind(0, payload)).getOrThrow().first()
+            for (row in listOf(plain, prepared)) {
+                assertThat(row.get(0).asByteArray().toList()).isEqualTo(payload.toList())
+            }
+        } finally {
+            cn.execute("reset bytea_output")
+            cn.close().getOrThrow()
+        }
+    }
 }
+
