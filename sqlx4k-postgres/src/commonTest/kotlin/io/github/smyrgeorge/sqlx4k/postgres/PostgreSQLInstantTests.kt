@@ -10,11 +10,13 @@ import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInstant
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInstantOrNull
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
+import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlin.random.Random
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.time.Instant
-import kotlinx.coroutines.runBlocking
 
 class PostgreSQLInstantTests {
 
@@ -32,6 +34,21 @@ class PostgreSQLInstantTests {
         val select = Statement.create("select ?::timestamptz as t").bind(0, ts)
         val row = db.fetchAll(select).getOrThrow().first()
         assertThat(row.get(0).asInstant()).isEqualTo(ts)
+    }
+
+    // ---- Years outside 0000..9999 (e.g. Instant.DISTANT_FUTURE) ----
+    @Test
+    fun `instant beyond year 9999`(): Unit = runBlocking {
+        listOf(Instant.parse("+10000-01-02T03:04:05.123456Z"), Instant.DISTANT_FUTURE).forEach { ts ->
+            val select = Statement.create("select ?::timestamptz as t, extract(year from ?::timestamptz)::int as y")
+                .bind(0, ts)
+                .bind(1, ts)
+            val row = db.fetchAll(select).getOrThrow().first()
+            assertAll {
+                assertThat(row.get(1).asInt()).isEqualTo(ts.toLocalYear())
+                assertThat(row.get(0).asInstant()).isEqualTo(ts)
+            }
+        }
     }
 
     // ---- Named parameter (:name) ----
@@ -394,4 +411,6 @@ class PostgreSQLInstantTests {
             runCatching { db.execute("drop table if exists $table").getOrThrow() }
         }
     }
+
+    private fun Instant.toLocalYear(): Int = toLocalDateTime(TimeZone.UTC).year
 }

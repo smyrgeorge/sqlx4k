@@ -9,7 +9,6 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -34,9 +33,8 @@ fun Instant.toTimestampString(timeZone: TimeZone = TimeZone.UTC): String {
     val microsStr = micros.toString().padStart(6, '0')
 
     return buildString(26) {
-        append(ldt.year.toString().padStart(4, '0')); append('-')
-        append(ldt.month.number.toString().padStart(2, '0')); append('-')
-        append(ldt.day.toString().padStart(2, '0')); append(' ')
+        // ISO 8601: a year outside 0000..9999 is written with its sign (+10000, -0005), as the databases expect.
+        append(ldt.date.toString()); append(' ')
         append(ldt.hour.toString().padStart(2, '0')); append(':')
         append(ldt.minute.toString().padStart(2, '0')); append(':')
         append(ldt.second.toString().padStart(2, '0')); append('.')

@@ -374,6 +374,15 @@ class DecodeExtensionsTests {
     }
 
     @Test
+    fun `asInstant reads a year beyond 9999 with or without its sign`() {
+        val expected = Instant.parse("+10000-01-02T03:04:05.123456Z")
+        assertThat(col("10000-01-02 04:04:05.123456+01", "timestamptz").asInstant()).isEqualTo(expected)
+        assertThat(col("+10000-01-02 03:04:05.123456").asInstant()).isEqualTo(expected)
+        assertThat(col("10000-01-02").asLocalDate()).isEqualTo(LocalDate(10_000, 1, 2))
+        assertThat(col("10000-01-02 03:04:05").asLocalDateTime()).isEqualTo(LocalDateTime(10_000, 1, 2, 3, 4, 5))
+    }
+
+    @Test
     fun `asInstant handles hours-only +02 offset`() {
         assertThat(col("2023-01-01 12:34:56+02").asInstant())
             .isEqualTo(Instant.parse("2023-01-01T12:34:56+02:00"))

@@ -41,17 +41,21 @@ fun ResultSet.Row.Column.asUuid(): Uuid = Uuid.parse(asString())
 fun ResultSet.Row.Column.asUuidOrNull(): Uuid? = asStringOrNull()?.let { Uuid.parse(it) }
 inline fun <reified T : Enum<T>> ResultSet.Row.Column.asEnum(): T = asString().toEnum<T>()
 inline fun <reified T : Enum<T>> ResultSet.Row.Column.asEnumOrNull(): T? = asStringOrNull()?.toEnum<T>()
-fun ResultSet.Row.Column.asLocalDate(): LocalDate = LocalDate.parse(asString())
-fun ResultSet.Row.Column.asLocalDateOrNull(): LocalDate? = asStringOrNull()?.let { LocalDate.parse(it) }
+fun ResultSet.Row.Column.asLocalDate(): LocalDate = LocalDate.parse(asString().withSignedYear())
+fun ResultSet.Row.Column.asLocalDateOrNull(): LocalDate? = asStringOrNull()?.let { LocalDate.parse(it.withSignedYear()) }
 fun ResultSet.Row.Column.asLocalTime(): LocalTime = LocalTime.parse(asString())
 fun ResultSet.Row.Column.asLocalTimeOrNull(): LocalTime? = asStringOrNull()?.let { LocalTime.parse(it) }
-fun ResultSet.Row.Column.asLocalDateTime(): LocalDateTime = LocalDateTime.parse(asString(), localDateTimeFormatter)
-fun ResultSet.Row.Column.asLocalDateTimeOrNull(): LocalDateTime? = asStringOrNull()?.let { LocalDateTime.parse(it, localDateTimeFormatter) }
+fun ResultSet.Row.Column.asLocalDateTime(): LocalDateTime = LocalDateTime.parse(asString().withSignedYear(), localDateTimeFormatter)
+fun ResultSet.Row.Column.asLocalDateTimeOrNull(): LocalDateTime? = asStringOrNull()?.let { LocalDateTime.parse(it.withSignedYear(), localDateTimeFormatter) }
 fun ResultSet.Row.Column.asInstant(): Instant = asString().asInstant()
 fun ResultSet.Row.Column.asInstantOrNull(): Instant? = asStringOrNull()?.asInstant()
 fun ResultSet.Row.Column.asByteArray(): ByteArray = bytes ?: asString().removePrefix("\\x").hexToByteArray()
 fun ResultSet.Row.Column.asByteArrayOrNull(): ByteArray? = bytes ?: asStringOrNull()?.removePrefix("\\x")?.hexToByteArray()
 //@formatter:on
+
+// ISO 8601 requires the sign of a year beyond 9999 (+10000-01-01), which PostgreSQL's text output omits.
+private fun String.withSignedYear(): String =
+    if (isNotEmpty() && this[0].isDigit() && indexOf('-') > 4) "+$this" else this
 
 private fun String.asChar(): Char {
     require(length == 1) { "Invalid char value: $this" }
@@ -88,8 +92,9 @@ private val localDateTimeFormatter: DateTimeFormat<LocalDateTime> = LocalDateTim
 }
 
 // Match: "yyyy-MM-dd[ T]HH:mm:ss[.fraction][(Z|z|+HH|+HHMM|+HH:MM|-HH|-HHMM|-HH:MM)]" (offset optional; space or 'T' separator; Z/z = UTC)
+// The year may be signed or wider than four digits (+10000, -0005).
 private val timestampRegex =
-    Regex("""^(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?)([Zz]|[+-]\d{2}(?::?\d{2})?)?$""")
+    Regex("""^([+-]?\d{4,}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?)([Zz]|[+-]\d{2}(?::?\d{2})?)?$""")
 
 private fun String.asInstant(): Instant {
     fun normalizeFractionTo6(s: String): String {
@@ -132,7 +137,7 @@ private fun String.asInstant(): Instant {
         ?: error("Invalid timestamp with optional offset: '$this'")
 
     // Normalize the ISO-8601 'T' date/time separator to the space the formatter expects.
-    val dateTimePart = normalizeFractionTo6(m.groupValues[1]).replace('T', ' ')
+    val dateTimePart = normalizeFractionTo6(m.groupValues[1]).replace('T', ' ').withSignedYear()
     val offsetPart = m.groupValues.getOrNull(2)
 
     val ldt = LocalDateTime.parse(dateTimePart, localDateTimeFormatter)

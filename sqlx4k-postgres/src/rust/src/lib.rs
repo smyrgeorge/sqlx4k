@@ -253,69 +253,83 @@ fn read_text(p: &Sqlx4kPostgresParam) -> String {
 /// Reads `count` params from a C array and copies their data into owned Rust
 /// values, so the resulting Vec can be moved into an async block without
 /// referencing the caller's memory.
-fn read_params(params: *const Sqlx4kPostgresParam, count: c_int) -> Vec<OwnedParam> {
+///
+/// A value that cannot be read is reported as an error (see `params_error`): a panic here would abort the process.
+fn read_params(params: *const Sqlx4kPostgresParam, count: c_int) -> Result<Vec<OwnedParam>, String> {
     if params.is_null() || count <= 0 {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     let slice = unsafe { slice::from_raw_parts(params, count as usize) };
     slice
         .iter()
-        .map(|p| match p.kind {
-            PARAM_NULL => OwnedParam::Null(p.null_type),
-            PARAM_BOOL => OwnedParam::Bool(p.i64_val != 0),
-            PARAM_INT2 => OwnedParam::Int2(p.i64_val as i16),
-            PARAM_INT4 => OwnedParam::Int4(p.i64_val as i32),
-            PARAM_INT8 => OwnedParam::Int8(p.i64_val),
-            PARAM_FLOAT4 => OwnedParam::Float4(p.f64_val as f32),
-            PARAM_FLOAT8 => OwnedParam::Float8(p.f64_val),
-            PARAM_TEXT => OwnedParam::Text(read_text(p)),
-            PARAM_BLOB => {
-                let len = p.blob_len.max(0) as usize;
-                let bytes = if len == 0 || p.blob.is_null() {
-                    Vec::new()
-                } else {
-                    unsafe { slice::from_raw_parts(p.blob, len) }.to_vec()
-                };
-                OwnedParam::Blob(bytes)
-            }
-            PARAM_DATE => {
-                let s = read_text(p);
-                let d = chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d")
-                    .unwrap_or_else(|e| panic!("Invalid DATE '{}': {}", s, e));
-                OwnedParam::Date(d)
-            }
-            PARAM_TIME => {
-                let s = read_text(p);
-                let t = chrono::NaiveTime::parse_from_str(&s, "%H:%M:%S%.f")
-                    .or_else(|_| chrono::NaiveTime::parse_from_str(&s, "%H:%M:%S"))
-                    .unwrap_or_else(|e| panic!("Invalid TIME '{}': {}", s, e));
-                OwnedParam::Time(t)
-            }
-            PARAM_TIMESTAMP => {
-                let s = read_text(p);
-                let dt = chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S%.f")
-                    .or_else(|_| chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S"))
-                    .unwrap_or_else(|e| panic!("Invalid TIMESTAMP '{}': {}", s, e));
-                OwnedParam::Timestamp(dt)
-            }
-            PARAM_TIMESTAMPTZ => {
-                // Kotlin emits UTC `yyyy-MM-dd HH:mm:ss.uuuuuu` (no offset suffix).
-                // Treat it as UTC.
-                let s = read_text(p);
-                let naive = chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S%.f")
-                    .or_else(|_| chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S"))
-                    .unwrap_or_else(|e| panic!("Invalid TIMESTAMPTZ '{}': {}", s, e));
-                OwnedParam::TimestampTz(naive.and_utc())
-            }
-            PARAM_UUID => {
-                let s = read_text(p);
-                let u = uuid::Uuid::parse_str(&s)
-                    .unwrap_or_else(|e| panic!("Invalid UUID '{}': {}", s, e));
-                OwnedParam::Uuid(u)
-            }
-            other => panic!("Unknown Sqlx4kPostgresParam kind: {}", other),
+        .map(|p| -> Result<OwnedParam, String> {
+            Ok(match p.kind {
+                PARAM_NULL => OwnedParam::Null(p.null_type),
+                PARAM_BOOL => OwnedParam::Bool(p.i64_val != 0),
+                PARAM_INT2 => OwnedParam::Int2(p.i64_val as i16),
+                PARAM_INT4 => OwnedParam::Int4(p.i64_val as i32),
+                PARAM_INT8 => OwnedParam::Int8(p.i64_val),
+                PARAM_FLOAT4 => OwnedParam::Float4(p.f64_val as f32),
+                PARAM_FLOAT8 => OwnedParam::Float8(p.f64_val),
+                PARAM_TEXT => OwnedParam::Text(read_text(p)),
+                PARAM_BLOB => {
+                    let len = p.blob_len.max(0) as usize;
+                    let bytes = if len == 0 || p.blob.is_null() {
+                        Vec::new()
+                    } else {
+                        unsafe { slice::from_raw_parts(p.blob, len) }.to_vec()
+                    };
+                    OwnedParam::Blob(bytes)
+                }
+                PARAM_DATE => {
+                    let s = read_text(p);
+                    let d = chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d")
+                        .map_err(|e| format!("Invalid DATE '{}': {}", s, e))?;
+                    OwnedParam::Date(d)
+                }
+                PARAM_TIME => {
+                    let s = read_text(p);
+                    let t = chrono::NaiveTime::parse_from_str(&s, "%H:%M:%S%.f")
+                        .or_else(|_| chrono::NaiveTime::parse_from_str(&s, "%H:%M:%S"))
+                        .map_err(|e| format!("Invalid TIME '{}': {}", s, e))?;
+                    OwnedParam::Time(t)
+                }
+                PARAM_TIMESTAMP => {
+                    let s = read_text(p);
+                    let dt = chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S%.f")
+                        .or_else(|_| chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S"))
+                        .map_err(|e| format!("Invalid TIMESTAMP '{}': {}", s, e))?;
+                    OwnedParam::Timestamp(dt)
+                }
+                PARAM_TIMESTAMPTZ => {
+                    // Kotlin emits UTC `yyyy-MM-dd HH:mm:ss.uuuuuu` (no offset suffix).
+                    // Treat it as UTC.
+                    let s = read_text(p);
+                    let naive = chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S%.f")
+                        .or_else(|_| chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S"))
+                        .map_err(|e| format!("Invalid TIMESTAMPTZ '{}': {}", s, e))?;
+                    OwnedParam::TimestampTz(naive.and_utc())
+                }
+                PARAM_UUID => {
+                    let s = read_text(p);
+                    let u = uuid::Uuid::parse_str(&s)
+                        .map_err(|e| format!("Invalid UUID '{}': {}", s, e))?;
+                    OwnedParam::Uuid(u)
+                }
+                other => return Err(format!("Unknown Sqlx4kPostgresParam kind: {}", other)),
+            })
         })
         .collect()
+}
+
+/// The result of a call whose parameters could not be read, handing back the transaction (`tx`, or null) it was
+/// given: the caller takes it back from every result.
+fn params_error(err: String, tx: *mut c_void) -> *mut Sqlx4kPostgresResult {
+    Sqlx4kPostgresResult {
+        tx,
+        ..sqlx4k_postgres_error_result_of(Error::Encode(err.into()))
+    }
+    .leak()
 }
 
 fn bind_params<'q>(
@@ -1107,7 +1121,10 @@ pub extern "C" fn sqlx4k_postgresql_stream_open(
 ) {
     let callback = Sqlx4kPostgresPtr { ptr: callback };
     let sql = c_chars_to_str_postgres(sql).to_owned();
-    let owned = read_params(params, params_len);
+    let owned = match read_params(params, params_len) {
+        Ok(owned) => owned,
+        Err(err) => return fun(callback, params_error(err, std::ptr::null_mut())),
+    };
     let fetch_size = stream_fetch_size(fetch_size);
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
@@ -1131,7 +1148,10 @@ pub extern "C" fn sqlx4k_postgresql_cn_stream_open(
     let callback = Sqlx4kPostgresPtr { ptr: callback };
     let cn = Sqlx4kPostgresPtr { ptr: cn };
     let sql = c_chars_to_str_postgres(sql).to_owned();
-    let owned = read_params(params, params_len);
+    let owned = match read_params(params, params_len) {
+        Ok(owned) => owned,
+        Err(err) => return fun(callback, params_error(err, std::ptr::null_mut())),
+    };
     let fetch_size = stream_fetch_size(fetch_size);
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
@@ -1155,7 +1175,10 @@ pub extern "C" fn sqlx4k_postgresql_tx_stream_open(
     let callback = Sqlx4kPostgresPtr { ptr: callback };
     let tx = Sqlx4kPostgresPtr { ptr: tx };
     let sql = c_chars_to_str_postgres(sql).to_owned();
-    let owned = read_params(params, params_len);
+    let owned = match read_params(params, params_len) {
+        Ok(owned) => owned,
+        Err(err) => return fun(callback, params_error(err, tx.ptr)),
+    };
     let fetch_size = stream_fetch_size(fetch_size);
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
@@ -2028,7 +2051,10 @@ pub extern "C" fn sqlx4k_postgresql_query_with_params(
 ) {
     let callback = Sqlx4kPostgresPtr { ptr: callback };
     let sql = c_chars_to_str_postgres(sql).to_owned();
-    let owned = read_params(params, params_len);
+    let owned = match read_params(params, params_len) {
+        Ok(owned) => owned,
+        Err(err) => return fun(callback, params_error(err, std::ptr::null_mut())),
+    };
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
@@ -2048,7 +2074,10 @@ pub extern "C" fn sqlx4k_postgresql_fetch_all_with_params(
 ) {
     let callback = Sqlx4kPostgresPtr { ptr: callback };
     let sql = c_chars_to_str_postgres(sql).to_owned();
-    let owned = read_params(params, params_len);
+    let owned = match read_params(params, params_len) {
+        Ok(owned) => owned,
+        Err(err) => return fun(callback, params_error(err, std::ptr::null_mut())),
+    };
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
@@ -2070,7 +2099,10 @@ pub extern "C" fn sqlx4k_postgresql_cn_query_with_params(
     let cn = Sqlx4kPostgresPtr { ptr: cn };
     let callback = Sqlx4kPostgresPtr { ptr: callback };
     let sql = c_chars_to_str_postgres(sql).to_owned();
-    let owned = read_params(params, params_len);
+    let owned = match read_params(params, params_len) {
+        Ok(owned) => owned,
+        Err(err) => return fun(callback, params_error(err, std::ptr::null_mut())),
+    };
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
@@ -2092,7 +2124,10 @@ pub extern "C" fn sqlx4k_postgresql_cn_fetch_all_with_params(
     let cn = Sqlx4kPostgresPtr { ptr: cn };
     let callback = Sqlx4kPostgresPtr { ptr: callback };
     let sql = c_chars_to_str_postgres(sql).to_owned();
-    let owned = read_params(params, params_len);
+    let owned = match read_params(params, params_len) {
+        Ok(owned) => owned,
+        Err(err) => return fun(callback, params_error(err, std::ptr::null_mut())),
+    };
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
@@ -2114,7 +2149,10 @@ pub extern "C" fn sqlx4k_postgresql_tx_query_with_params(
     let tx = Sqlx4kPostgresPtr { ptr: tx };
     let callback = Sqlx4kPostgresPtr { ptr: callback };
     let sql = c_chars_to_str_postgres(sql).to_owned();
-    let owned = read_params(params, params_len);
+    let owned = match read_params(params, params_len) {
+        Ok(owned) => owned,
+        Err(err) => return fun(callback, params_error(err, tx.ptr)),
+    };
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {
@@ -2136,7 +2174,10 @@ pub extern "C" fn sqlx4k_postgresql_tx_fetch_all_with_params(
     let tx = Sqlx4kPostgresPtr { ptr: tx };
     let callback = Sqlx4kPostgresPtr { ptr: callback };
     let sql = c_chars_to_str_postgres(sql).to_owned();
-    let owned = read_params(params, params_len);
+    let owned = match read_params(params, params_len) {
+        Ok(owned) => owned,
+        Err(err) => return fun(callback, params_error(err, tx.ptr)),
+    };
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kPostgreSql) };
     runtime.spawn(async move {

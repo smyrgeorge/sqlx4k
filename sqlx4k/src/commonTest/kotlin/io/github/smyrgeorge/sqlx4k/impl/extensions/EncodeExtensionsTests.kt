@@ -8,15 +8,15 @@ import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.ValueEncoder
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
-import kotlin.test.Test
-import kotlin.time.Instant
-import kotlin.uuid.Uuid
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.UtcOffset
 import kotlinx.datetime.toInstant
+import kotlin.test.Test
+import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 class EncodeExtensionsTests {
 
@@ -145,6 +145,14 @@ class EncodeExtensionsTests {
         // Year 7 AD with single-digit month/day/hour/minute/second exercises every padStart.
         val ts = utc(year = 7, month = 3, day = 4, hour = 5, minute = 6, second = 7).toTimestampString()
         assertThat(ts).isEqualTo("0007-03-04 05:06:07.000000")
+    }
+
+    @Test
+    fun `toTimestampString writes the sign of a year outside 0000 to 9999`() {
+        assertThat(utc(year = 10_000, month = 1, day = 2, hour = 3, minute = 4, second = 5).toTimestampString())
+            .isEqualTo("+10000-01-02 03:04:05.000000")
+        assertThat(utc(year = -5, month = 1, day = 2, hour = 3, minute = 4, second = 5).toTimestampString())
+            .isEqualTo("-0005-01-02 03:04:05.000000")
     }
 
     // ========================================================================================
