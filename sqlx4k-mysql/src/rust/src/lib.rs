@@ -1382,17 +1382,22 @@ fn mysql_type_name(info: &MySqlTypeInfo) -> &str {
 /// payloads but the resulting string contains embedded NULs that crash
 /// `CString::new`. Decode by type so both protocols round-trip identically.
 fn decode_mysql_column_value(row: &MySqlRow, ordinal: usize) -> (*mut c_char, c_int) {
-    let type_name: String = {
+    let (type_name, unsigned): (String, bool) = {
         let value_ref = row.try_get_raw(ordinal).unwrap();
         if value_ref.is_null() {
             return (null_mut(), 0);
         }
-        mysql_type_name(&value_ref.type_info()).to_string()
+        let info = value_ref.type_info();
+        // The UNSIGNED flag is private to sqlx; the unsigned integers' compatibility checks it.
+        (mysql_type_name(&info).to_string(), <u8 as Type<MySql>>::compatible(&info))
     };
 
     let s: String = match type_name.as_str() {
         // sqlx-mysql reports `TINYINT(1)` (what `BOOLEAN`/`BOOL` creates) as
-        // "BOOLEAN" with `display = 1` rather than the bare "TINYINT" name.
+        // "BOOLEAN" with `display = 1` rather than the bare "TINYINT" name, also when it is
+        // unsigned: its values then reach 255, which an i8 cannot hold (decoding it panicked, aborting
+        // the process, or wrapped around to a negative number).
+        "BOOLEAN" if unsigned => row.get_unchecked::<u8, _>(ordinal).to_string(),
         "BOOLEAN" => row.get_unchecked::<i8, _>(ordinal).to_string(),
         "TINYINT" => row.get_unchecked::<i8, _>(ordinal).to_string(),
         "SMALLINT" => row.get_unchecked::<i16, _>(ordinal).to_string(),

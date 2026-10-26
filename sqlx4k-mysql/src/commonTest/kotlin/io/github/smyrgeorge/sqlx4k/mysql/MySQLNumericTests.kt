@@ -153,4 +153,23 @@ class MySQLNumericTests {
 
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }
     }
+
+    // MySQL reports TINYINT(1) as a boolean, also when it is unsigned: its values reach 255.
+    @Test
+    fun `tinyint 1 columns keep their full range`(): Unit = runBlocking {
+        val table = "t_tiny_${Random.nextInt(1_000_000)}"
+        try {
+            db.execute("create table $table(id int primary key, u tinyint(1) unsigned, s tinyint(1))").getOrThrow()
+            db.execute("insert into $table values (1, 200, -5), (2, 0, 1)").getOrThrow()
+            val sql = "select u, s from $table where id > 0 order by id"
+            val plain = db.fetchAll(sql).getOrThrow()
+            val prepared = db.fetchAll(Statement.create("$sql and id < :max").bind("max", 10)).getOrThrow()
+            for (rows in listOf(plain, prepared)) {
+                assertThat(rows.map { it.get(0).asInt() to it.get(1).asInt() }).isEqualTo(listOf(200 to -5, 0 to 1))
+            }
+        } finally {
+            runCatching { db.execute("drop table if exists $table").getOrThrow() }
+        }
+    }
 }
+
