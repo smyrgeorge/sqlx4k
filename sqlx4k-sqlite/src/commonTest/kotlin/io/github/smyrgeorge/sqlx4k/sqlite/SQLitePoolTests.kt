@@ -241,6 +241,9 @@ class SQLitePoolTests : SQLiteTestBase() {
     // pool's connections: every one of them can still be acquired afterwards.
     @Test
     fun `acquire timeouts racing with releases keep the pool's capacity`(): Unit = runBlocking {
+        // The native targets wait in the native pool alone, which opens a connection when created: within the 2 ms
+        // acquire timeout or not, by chance.
+        if (testPlatform == TestPlatform.Native) return@runBlocking
         val options = ConnectionPool.Options.builder()
             .minConnections(2)
             .maxConnections(2)

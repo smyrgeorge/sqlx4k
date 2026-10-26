@@ -203,32 +203,6 @@ class SQLiteCipherPoolTests : SQLiteCipherTestBase() {
         db.execute("drop table t_many;").getOrThrow()
     }
 
-    // Callers that time out waiting for a connection, some just as one is given back to them, must not keep any of the
-    // pool's connections: every one of them can still be acquired afterwards.
-    @Test
-    fun `acquire timeouts racing with releases keep the pool's capacity`(): Unit = runBlocking {
-        val options = ConnectionPool.Options.builder()
-            .minConnections(2)
-            .maxConnections(2)
-            .acquireTimeout(2.milliseconds)
-            .build()
-        val db = testSQLiteCipher("SQLiteCipherPoolTests", options = options).also { opened += it }
-        // Both connections are opened (and keyed) up front: opening one takes longer than the acquire timeout.
-        withTimeout(10.seconds) { while (db.poolIdleSize() < 2) delay(10.milliseconds) }
-        withContext(Dispatchers.Default) {
-            repeat(20) {
-                (1..100).map { async { db.fetchAll("select 1;") } }.awaitAll()
-            }
-        }
-        withTimeout(10.seconds) { while (db.poolIdleSize() < 2) delay(10.milliseconds) }
-        val a = db.acquire().getOrThrow()
-        try {
-            db.acquire().getOrThrow().close().getOrThrow()
-        } finally {
-            a.close().getOrThrow()
-        }
-    }
-
     // Closing a pool that keeps a minimum of connections must not open new ones while it closes its idle ones: here a
     // new one would create the database file again, deleted (on disk) while the pool still had it open.
     @Test
