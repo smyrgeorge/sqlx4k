@@ -1837,6 +1837,13 @@ fn pg_array_element(value: &str) -> String {
 }
 
 fn decode_text_array(row: &PgRow, ordinal: usize) -> String {
+    // A text value (a plain query) is PostgreSQL's own output, already in this form; sqlx's parser of it reads the
+    // string "NULL" (quoted) as a NULL element.
+    if let Ok(value) = row.try_get_raw(ordinal) {
+        if value.format() == PgValueFormat::Text {
+            return value.as_str().map(str::to_string).unwrap_or_default();
+        }
+    }
     decode_or(
         row,
         ordinal,

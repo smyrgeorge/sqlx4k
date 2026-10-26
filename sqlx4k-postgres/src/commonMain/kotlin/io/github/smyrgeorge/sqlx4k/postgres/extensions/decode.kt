@@ -3,6 +3,7 @@
 package io.github.smyrgeorge.sqlx4k.postgres.extensions
 
 import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asInstant
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLocalDateTime
 import kotlin.time.Instant
@@ -26,6 +27,8 @@ fun ResultSet.Row.Column.asByteArray(): ByteArray = asString().removePrefix("\\x
 fun ResultSet.Row.Column.asByteArrayOrNull(): ByteArray? = asStringOrNull()?.removePrefix("\\x")?.hexToByteArray()
 fun ResultSet.Row.Column.asStringList(): List<String> = asString().asStringArray()
 fun ResultSet.Row.Column.asStringListOrNull(): List<String>? = asStringOrNull()?.asStringArray()
+fun ResultSet.Row.Column.asNullableStringList(): List<String?> = asString().asNullableStringArray()
+fun ResultSet.Row.Column.asNullableStringListOrNull(): List<String?>? = asStringOrNull()?.asNullableStringArray()
 fun ResultSet.Row.Column.asUuidList(): List<Uuid> = asString().asStringArray().map(Uuid::parse)
 fun ResultSet.Row.Column.asUuidListOrNull(): List<Uuid>? = asStringOrNull()?.asStringArray()?.map(Uuid::parse)
 fun ResultSet.Row.Column.asLocalDateTimeList(): List<LocalDateTime> = asString().asStringArray().map { it.asLocalDateTimeElement() }
@@ -51,15 +54,25 @@ private fun String.asBoolean(): Boolean {
  * Limitation: assumes 1-D arrays. Multi-dimensional arrays (`{{1,2},{3,4}}`)
  * are not supported.
  */
-private fun String.asStringArray(): List<String> {
+private fun String.asStringArray(): List<String> = asNullableStringArray().map {
+    it ?: SQLError(
+        code = SQLError.Code.CannotDecode,
+        message = "Postgres array '$this' holds a NULL element: read it with asNullableStringList()."
+    ).raise()
+}
+
+/** Like [asStringArray], but a NULL element (a bare `NULL`, unlike the quoted string `"NULL"`) is read as null. */
+private fun String.asNullableStringArray(): List<String?> {
     val s = trim()
     require(s.startsWith("{") && s.endsWith("}")) { "Invalid Postgres array format: '$this'" }
     val body = s.substring(1, s.length - 1)
     if (body.isEmpty()) return emptyList()
 
-    val out = mutableListOf<String>()
+    val out = mutableListOf<String?>()
     val cur = StringBuilder()
     var inQuotes = false
+    var quoted = false
+    fun element(): String? = cur.toString().takeUnless { !quoted && it.equals("NULL", ignoreCase = true) }
     var i = 0
     while (i < body.length) {
         val c = body[i]
@@ -71,12 +84,14 @@ private fun String.asStringArray(): List<String> {
 
             c == '"' -> {
                 inQuotes = !inQuotes
+                quoted = true
                 i++
             }
 
             !inQuotes && c == ',' -> {
-                out.add(cur.toString())
+                out.add(element())
                 cur.clear()
+                quoted = false
                 i++
             }
 
@@ -86,7 +101,7 @@ private fun String.asStringArray(): List<String> {
             }
         }
     }
-    out.add(cur.toString())
+    out.add(element())
     return out
 }
 

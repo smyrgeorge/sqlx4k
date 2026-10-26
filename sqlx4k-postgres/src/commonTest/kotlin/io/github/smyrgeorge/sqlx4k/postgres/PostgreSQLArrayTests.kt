@@ -6,6 +6,7 @@ import assertk.assertAll
 import assertk.assertThat
 import assertk.assertions.isEqualTo
 import assertk.assertions.isNull
+import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asBooleanArray
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asBooleanArrayOrNull
@@ -25,6 +26,7 @@ import io.github.smyrgeorge.sqlx4k.postgres.extensions.asLongArray
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asLongArrayOrNull
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asShortArray
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asShortArrayOrNull
+import io.github.smyrgeorge.sqlx4k.postgres.extensions.asNullableStringList
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asStringList
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asStringListOrNull
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asUuidList
@@ -238,6 +240,19 @@ class PostgreSQLArrayTests {
         val plain = db.fetchAll(sql).getOrThrow().first()
         val prepared = db.fetchAll(Statement.create("$sql where 1 = :one").bind("one", 1)).getOrThrow().first()
         for (row in listOf(plain, prepared)) assertThat(row.get(0).asStringList()).isEqualTo(values)
+    }
+
+    // A NULL element is not the string 'NULL': asNullableStringList tells them apart, asStringList refuses the NULL.
+    @Test
+    fun `NULL array elements are not read as the string NULL`(): Unit = runBlocking {
+        val sql = "select array['a', null, 'NULL']::text[]"
+        val plain = db.fetchAll(sql).getOrThrow().first()
+        val prepared = db.fetchAll(Statement.create("$sql where 1 = :one").bind("one", 1)).getOrThrow().first()
+        for (row in listOf(plain, prepared)) {
+            assertThat(row.get(0).asNullableStringList()).isEqualTo(listOf("a", null, "NULL"))
+            val error = runCatching { row.get(0).asStringList() }.exceptionOrNull() as SQLError
+            assertThat(error.code).isEqualTo(SQLError.Code.CannotDecode)
+        }
     }
 }
 
