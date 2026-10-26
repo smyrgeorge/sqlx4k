@@ -2,15 +2,18 @@ package io.github.smyrgeorge.sqlx4k.mysql
 
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.r2dbc.spi.R2dbcTimeoutException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resumeWithException
 import org.reactivestreams.Publisher
 import reactor.core.publisher.Mono
 import reactor.pool.PoolAcquireTimeoutException
@@ -18,10 +21,12 @@ import reactor.pool.PoolShutdownException
 import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
 import io.r2dbc.spi.Connection as NativeR2dbcConnection
 
-/** Runs [block], reporting a driver failure as the matching [SQLError]. */
+/** Runs [block], reporting a driver failure as the matching [SQLError] (a cancellation stays a cancellation). */
 internal inline fun <T> rethrowAsSQLError(block: () -> T): T =
     try {
         block()
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         e.toSQLError().raise()
     }
@@ -33,7 +38,17 @@ internal fun <T> Publisher<T>.toMono(): Mono<T> {
 
 internal suspend fun NativeR2dbcConnectionPool.acquire(): NativeR2dbcConnection {
     return try {
-        create().awaitSingle()
+        // Not awaitSingle(): a connection the pool hands over just as the caller is cancelled would be dropped, and
+        // stay checked out for good. It is given back to the pool instead.
+        suspendCancellableCoroutine { cont ->
+            val subscription = create().subscribe(
+                { connection -> cont.resume(connection) { _, c, _ -> c.close().toMono().subscribe() } },
+                { error -> cont.resumeWithException(error) },
+            )
+            cont.invokeOnCancellation { subscription.dispose() }
+        }
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         when (e) {
             is PoolShutdownException -> SQLError(SQLError.Code.PoolClosed, e.message).raise()

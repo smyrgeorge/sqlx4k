@@ -15,7 +15,9 @@ import io.github.smyrgeorge.sqlx4k.impl.extensions.asInt
 import kotlin.random.Random
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
@@ -178,5 +180,25 @@ class PostgreSQLPoolTests {
 
         val level = db.fetchAll("show transaction_isolation").getOrThrow().first().get(0).asString()
         assertThat(level).isEqualTo("read committed")
+    }
+
+    // Queries cancelled at any point, including while the pool hands them a connection, must not keep it.
+    @Test
+    fun `queries cancelled at random points give their connections back`(): Unit = runBlocking {
+        val db = pool(maxConnections = 2, acquireTimeout = 3.seconds)
+        repeat(500) {
+            coroutineScope {
+                repeat(4) {
+                    launch {
+                        withTimeoutOrNull(Random.nextInt(0, 4).milliseconds) { db.fetchAll("select 1").getOrThrow() }
+                    }
+                }
+            }
+        }
+        // Both connections are back: two queries can still hold one each.
+        val cn1 = db.acquire().getOrThrow()
+        val cn2 = db.acquire().getOrThrow()
+        cn1.close().getOrThrow()
+        cn2.close().getOrThrow()
     }
 }
