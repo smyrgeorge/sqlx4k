@@ -5,8 +5,10 @@ import java.io.File
 import java.net.URI
 import java.util.jar.JarFile
 
-actual fun readSqlFilesFromResources(path: String): List<Pair<String, String>> {
-    val classLoader = ClassLoader.getSystemClassLoader()
+actual fun readSqlFilesFromResources(path: String): List<Pair<String, String>> =
+    readSqlFilesFromResources(path, ClassLoader.getSystemClassLoader())
+
+internal fun readSqlFilesFromResources(path: String, classLoader: ClassLoader): List<Pair<String, String>> {
     val url = classLoader.getResource(path) ?: throw IllegalArgumentException("Resource path not found: $path")
 
     return when (url.protocol) {
@@ -22,16 +24,20 @@ actual fun readSqlFilesFromResources(path: String): List<Pair<String, String>> {
         "jar" -> {
             // Running from JAR
             val jarPath = url.path.substringBefore("!")
-            val jarFile = JarFile(File(URI(jarPath)))
-            jarFile.entries().asSequence()
-                .filter { !it.isDirectory }
-                .filter { it.name.startsWith(path) }
-                .filter { it.name.endsWith(".sql") }
-                .map { entry ->
-                    entry.name.substringAfterLast('/') to
-                            jarFile.getInputStream(entry).bufferedReader().use { it.readText() }
-                }
-                .toList()
+            // The entries under the directory, as when unpacked: a bare prefix would also match its siblings
+            // (`db/migrations_seed/` for `db/migrations`).
+            val directory = path.trimEnd('/') + "/"
+            JarFile(File(URI(jarPath))).use { jarFile ->
+                jarFile.entries().asSequence()
+                    .filter { !it.isDirectory }
+                    .filter { it.name.startsWith(directory) }
+                    .filter { it.name.endsWith(".sql") }
+                    .map { entry ->
+                        entry.name.substringAfterLast('/') to
+                                jarFile.getInputStream(entry).bufferedReader().use { it.readText() }
+                    }
+                    .toList()
+            }
         }
 
         else -> throw IllegalArgumentException("Unsupported protocol: ${url.protocol}")
