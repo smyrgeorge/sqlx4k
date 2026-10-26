@@ -171,4 +171,28 @@ class PostgreSQLListenNotifyTests {
 
         job.cancel()
     }
+
+    @Test
+    fun `notifications should be delivered in order`(): Unit = runBlocking {
+        val chan = newChannel()
+        val received = mutableListOf<String>()
+        val lock = Mutex()
+
+        val job = launch {
+            db.listen(chan) { n: Notification ->
+                lock.withLock { received.add(n.value.asString()) }
+            }
+        }
+        // Give listener a moment to subscribe
+        delay(150.milliseconds)
+
+        val sent = (1..50).map { "n-$it" }
+        sent.forEach { db.notify(chan, it) }
+
+        withTimeout(5_000.milliseconds) {
+            while (lock.withLock { received.size } < sent.size) delay(50.milliseconds)
+        }
+        assertThat(lock.withLock { received.toList() }).isEqualTo(sent)
+        job.cancel()
+    }
 }

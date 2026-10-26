@@ -52,6 +52,7 @@ import sqlx4k.postgresql.sqlx4k_postgresql_tx_query_with_params
 import sqlx4k.postgresql.sqlx4k_postgresql_tx_rollback
 import sqlx4k.postgresql.sqlx4k_postgresql_tx_stream_open
 import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.coroutines.CoroutineContext
@@ -236,7 +237,11 @@ class PostgreSQL(
         val channel = Channel<Notification>(capacity = Channel.UNLIMITED)
 
         // Store the channel.
-        Companion.channels[channelId] = channel
+        @OptIn(ExperimentalAtomicApi::class)
+        while (true) {
+            val current = Companion.channels.load()
+            if (Companion.channels.compareAndSet(current, current + (channelId to channel))) break
+        }
 
         // Start the channel consumer.
         PgChannelScope.launch {
@@ -485,7 +490,15 @@ class PostgreSQL(
         @OptIn(ExperimentalAtomicApi::class)
         private val listenerId = AtomicInt(0)
 
-        private val channels: MutableMap<Int, Channel<Notification>> = mutableMapOf()
+        // Written by listen() on the caller's thread and read by notify on the threads of the Rust runtime: an
+        // immutable map, replaced atomically (copy on write).
+        @OptIn(ExperimentalAtomicApi::class)
+        private val channels = AtomicReference<Map<Int, Channel<Notification>>>(emptyMap())
+
+        // Runs on a thread of the Rust runtime. It must not throw (an exception escaping a C callback ends the
+        // process), always frees the result, and hands the notifications over in the order they arrive: the channel
+        // is unlimited, so trySend never suspends (where one coroutine launched per notification could reorder them).
+        @OptIn(ExperimentalAtomicApi::class)
         private val notify = staticCFunction<Int, CPointer<Sqlx4kPostgresResult>?, Unit> { c, r ->
             fun ResultSet.toNotification(): Notification {
                 require(rows.size == 1) { "Expected exactly one row, got ${rows.size}" }
@@ -496,9 +509,9 @@ class PostgreSQL(
                 return Notification(column.name, column)
             }
 
-            channels[c]?.let {
+            runCatching {
                 val notification: Notification = r.use { res -> res.toResultSet() }.toNotification()
-                PgChannelScope.launch { it.send(notification) }
+                channels.load()[c]?.trySend(notification)
             }
         }
 
