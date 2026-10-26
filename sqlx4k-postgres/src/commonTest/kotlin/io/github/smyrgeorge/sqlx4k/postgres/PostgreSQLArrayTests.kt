@@ -223,10 +223,21 @@ class PostgreSQLArrayTests {
         val plain = db.fetchAll(sql).getOrThrow().first()
         val prepared = db.fetchAll(Statement.create("$sql where 1 = :one").bind("one", 1)).getOrThrow().first()
         for (row in listOf(plain, prepared)) {
-            assertThat(row.get(0).asString()).isEqualTo("{a,b c,NULL}")
+            assertThat(row.get(0).asString()).isEqualTo("{a,\"b c\",NULL}")
             assertThat(row.get(1).asString()).isEqualTo("{x}")
             assertThat(row.get(2).asString()).isEqualTo("{}")
             assertThat(row.get(3).asStringOrNull()).isNull()
         }
     }
+
+    // Elements holding a delimiter, a quote, a backslash or whitespace, or reading NULL, are read back as they are.
+    @Test
+    fun `text array elements are read back as they are`(): Unit = runBlocking {
+        val values = listOf("a,b", "q\"uote", "back\\slash", "{brace}", "NULL", "", " spaced ", "plain")
+        val sql = "select array[" + values.joinToString { "'" + it.replace("'", "''") + "'" } + "]::text[]"
+        val plain = db.fetchAll(sql).getOrThrow().first()
+        val prepared = db.fetchAll(Statement.create("$sql where 1 = :one").bind("one", 1)).getOrThrow().first()
+        for (row in listOf(plain, prepared)) assertThat(row.get(0).asStringList()).isEqualTo(values)
+    }
 }
+

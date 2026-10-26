@@ -491,8 +491,23 @@ class PostgreSQLImpl(
          */
         private val TEXT_ARRAY_TYPES = setOf("TEXT_ARRAY", "VARCHAR_ARRAY", "BPCHAR_ARRAY", "NAME_ARRAY")
 
-        /** Renders `{a,b,NULL}`, without quoting the elements, as the native driver and the `as*Array` decoders do. */
-        private fun Array<String?>.toPgArrayText(): String = joinToString(",", "{", "}") { it ?: "NULL" }
+        /**
+         * Renders the array as PostgreSQL writes it (`{a,"b,c",NULL}`), as the native driver does: an element that is
+         * empty, reads `NULL`, or holds a delimiter, quote, backslash or whitespace is quoted, so that the `as*Array`
+         * decoders read it back as it is.
+         */
+        private fun Array<String?>.toPgArrayText(): String = joinToString(",", "{", "}") { it?.toPgArrayElement() ?: "NULL" }
+
+        private fun String.toPgArrayElement(): String {
+            val quote = isEmpty() || equals("NULL", ignoreCase = true) ||
+                any { it == '{' || it == '}' || it == ',' || it == '"' || it == '\\' || it.isWhitespace() }
+            if (!quote) return this
+            return buildString(length + 2) {
+                append('"')
+                this@toPgArrayElement.forEach { if (it == '"' || it == '\\') append('\\'); append(it) }
+                append('"')
+            }
+        }
 
         /**
          * Streams the rows of the statement with reactive backpressure (R2DBC publishes the rows as the

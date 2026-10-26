@@ -1705,10 +1705,8 @@ fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mut c_char {
         "INT8[]" => decode_array::<i64>(row, ordinal),
         "FLOAT4[]" => decode_float_array::<f32>(row, ordinal),
         "FLOAT8[]" => decode_float_array::<f64>(row, ordinal),
-        // Text-like array types — output `{a,b,c}` without per-element quoting so
-        // the existing naive `asStringArray()` parser (split on `,`) round-trips.
-        // Limitation: elements containing commas will be split incorrectly.
-        "TEXT[]" | "VARCHAR[]" | "BPCHAR[]" | "NAME[]" => decode_array::<String>(row, ordinal),
+        // Text-like array types, quoted as PostgreSQL writes them (`{a,"b,c"}`).
+        "TEXT[]" | "VARCHAR[]" | "BPCHAR[]" | "NAME[]" => decode_text_array(row, ordinal),
         "UUID[]" => decode_array::<uuid::Uuid>(row, ordinal),
         "TIMESTAMP[]" => decode_datetime(
             row,
@@ -1787,6 +1785,38 @@ fn float_text(value: impl ToString) -> String {
         "-inf" => "-Infinity".to_string(),
         text => text.to_string(),
     }
+}
+
+/// A text element as PostgreSQL writes it in an array: quoted when it is empty, reads `NULL`, or holds a delimiter,
+/// quote, backslash or whitespace (so that the Kotlin decoders read `{"a,b"}` back as one element).
+fn pg_array_element(value: &str) -> String {
+    let quote = value.is_empty()
+        || value.eq_ignore_ascii_case("NULL")
+        || value
+            .chars()
+            .any(|c| matches!(c, '{' | '}' | ',' | '"' | '\\') || c.is_whitespace());
+    if !quote {
+        return value.to_string();
+    }
+    let mut s = String::with_capacity(value.len() + 2);
+    s.push('"');
+    for c in value.chars() {
+        if c == '"' || c == '\\' {
+            s.push('\\');
+        }
+        s.push(c);
+    }
+    s.push('"');
+    s
+}
+
+fn decode_text_array(row: &PgRow, ordinal: usize) -> String {
+    decode_or(
+        row,
+        ordinal,
+        |v: Vec<Option<String>>| format_pg_nullable_array_fmt(v.iter(), |e| pg_array_element(e)),
+        || decode_text_or_binary(row, ordinal, |_| None),
+    )
 }
 
 fn decode_float_array<T>(row: &PgRow, ordinal: usize) -> String
