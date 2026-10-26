@@ -32,11 +32,14 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -594,9 +597,11 @@ class SQLite(
                 )
             }
 
-            // Connection factory that creates Android SQLite connections
+            // Connection factory that creates Android SQLite connections. The database is opened to completion also
+            // when the caller is cancelled meanwhile (an acquire timeout, ...), and then closed: dropped, it would stay
+            // open until the garbage collector finalizes it.
             val connectionFactory: suspend () -> Connection = {
-                withContext(Dispatchers.IO) {
+                val connection = withContext(NonCancellable + Dispatchers.IO) {
                     val db = when {
                         isInMemory -> SQLiteDatabase.create(null)
 
@@ -622,6 +627,11 @@ class SQLite(
                     }
                     AndroidConnection(db, encoders)
                 }
+                if (!currentCoroutineContext().isActive) {
+                    connection.close()
+                    currentCoroutineContext().ensureActive()
+                }
+                connection
             }
 
             return ConnectionPoolImpl(options, encoders, null, connectionFactory)
