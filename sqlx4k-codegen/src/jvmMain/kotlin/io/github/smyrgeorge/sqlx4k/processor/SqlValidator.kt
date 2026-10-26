@@ -1,12 +1,6 @@
 package io.github.smyrgeorge.sqlx4k.processor
 
 import io.github.smyrgeorge.sqlx4k.Statement
-import io.github.smyrgeorge.sqlx4k.processor.SqlValidator.expandSelectStar
-import io.github.smyrgeorge.sqlx4k.processor.SqlValidator.rejectStackedStatements
-import io.github.smyrgeorge.sqlx4k.processor.SqlValidator.validateColumnsExist
-import io.github.smyrgeorge.sqlx4k.processor.SqlValidator.validateQuerySyntax
-import java.io.File
-import java.util.Properties
 import net.sf.jsqlparser.expression.BinaryExpression
 import net.sf.jsqlparser.expression.Expression
 import net.sf.jsqlparser.expression.Function
@@ -18,7 +12,6 @@ import net.sf.jsqlparser.parser.CCJSqlParserUtil
 import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.schema.Table
 import net.sf.jsqlparser.statement.ReturningClause
-import net.sf.jsqlparser.statement.Statement as JStatement
 import net.sf.jsqlparser.statement.alter.Alter
 import net.sf.jsqlparser.statement.alter.AlterOperation
 import net.sf.jsqlparser.statement.create.table.CreateTable
@@ -53,6 +46,9 @@ import org.apache.calcite.sql.validate.SqlConformanceEnum
 import org.apache.calcite.sql.validate.SqlValidator
 import org.apache.calcite.sql.validate.SqlValidatorCatalogReader
 import org.apache.calcite.sql.validate.SqlValidatorUtil
+import java.io.File
+import java.util.Properties
+import net.sf.jsqlparser.statement.Statement as JStatement
 
 /**
  * A utility object that provides functionality for SQL validation and schema handling.
@@ -565,7 +561,8 @@ object SqlValidator {
      */
     fun withRowLimit(stmt: JStatement, sql: String, rowCount: Long): String {
         val select = stmt as? PlainSelect ?: return sql
-        if (select.limit != null) return sql
+        // Already limited (`LIMIT n` or `FETCH FIRST n ROWS ONLY`, which cannot be combined with a LIMIT).
+        if (select.limit != null || select.fetch != null) return sql
         select.limit = Limit().apply { setRowCount(LongValue(rowCount)) }
         return select.toString()
     }

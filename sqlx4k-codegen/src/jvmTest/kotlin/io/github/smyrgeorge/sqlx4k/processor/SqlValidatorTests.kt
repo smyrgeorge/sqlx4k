@@ -192,7 +192,11 @@ class SqlValidatorTests {
 
     @Test
     fun `validateStatementKind accepts a DELETE for the DELETE kind`() {
-        SqlValidator.validateStatementKind("deleteById", parse("delete from users where id = :id"), StatementKind.DELETE)
+        SqlValidator.validateStatementKind(
+            "deleteById",
+            parse("delete from users where id = :id"),
+            StatementKind.DELETE
+        )
     }
 
     @Test
@@ -561,6 +565,13 @@ class SqlValidatorTests {
     @Test
     fun `withRowLimit leaves a query that already has a LIMIT untouched`() {
         val sql = "select * from users limit 5"
+        assertThat(SqlValidator.withRowLimit(parse(sql), sql, 2)).isEqualTo(sql)
+    }
+
+    // `LIMIT n` and `FETCH FIRST n ROWS ONLY` cannot be combined: the query is already limited.
+    @Test
+    fun `withRowLimit leaves a query that already has a FETCH FIRST untouched`() {
+        val sql = "select * from users where email = :email fetch first 1 rows only"
         assertThat(SqlValidator.withRowLimit(parse(sql), sql, 2)).isEqualTo(sql)
     }
 
