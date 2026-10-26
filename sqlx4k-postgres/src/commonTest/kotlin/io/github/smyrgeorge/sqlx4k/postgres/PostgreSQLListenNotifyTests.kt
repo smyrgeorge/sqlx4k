@@ -198,6 +198,31 @@ class PostgreSQLListenNotifyTests {
         job.cancel()
     }
 
+    @Test
+    fun `a burst of notifications should be delivered completely and in order`(): Unit = runBlocking {
+        val chan = newChannel()
+        val received = mutableListOf<String>()
+        val lock = Mutex()
+
+        val job = launch {
+            db.listen(chan) { n: Notification ->
+                delay(1.milliseconds) // a callback slower than the notifications arrive
+                lock.withLock { received.add(n.value.asString()) }
+            }
+        }
+        withTimeout(5_000.milliseconds) { while (listeners(chan) < 1) delay(50.milliseconds) }
+
+        // Sent at once, from a single statement.
+        db.execute("do $$ begin for i in 1..500 loop perform pg_notify('$chan', 'n-' || i); end loop; end $$;").getOrThrow()
+
+        val sent = (1..500).map { "n-$it" }
+        withTimeout(15_000.milliseconds) {
+            while (lock.withLock { received.size } < sent.size) delay(50.milliseconds)
+        }
+        assertThat(lock.withLock { received.toList() }).isEqualTo(sent)
+        job.cancelAndJoin()
+    }
+
     // The backends listening on a channel (their last query is the LISTEN).
     private suspend fun listeners(chan: String): Long =
         db.fetchAll(

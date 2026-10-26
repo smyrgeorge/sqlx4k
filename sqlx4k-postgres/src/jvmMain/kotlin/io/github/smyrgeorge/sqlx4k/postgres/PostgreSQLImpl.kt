@@ -222,6 +222,9 @@ class PostgreSQLImpl(
                         .execute()
                         .flatMap { it.rowsUpdated }
                         .thenMany(con.notifications)
+                        // The driver drops the subscription (best-effort sink) when notifications arrive faster than
+                        // they are requested: buffer them, so a burst or a slow callback loses none.
+                        .onBackpressureBuffer()
                         .asFlow()
                         .collect { f(it.toNotification()) }
                 } finally {
