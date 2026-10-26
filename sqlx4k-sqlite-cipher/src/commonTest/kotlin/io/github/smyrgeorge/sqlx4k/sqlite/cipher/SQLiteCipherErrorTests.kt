@@ -11,10 +11,12 @@ import assertk.assertions.isNull
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
+import kotlinx.coroutines.runBlocking
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import kotlin.random.Random
 import kotlin.test.AfterTest
 import kotlin.test.Test
-import kotlinx.coroutines.runBlocking
 
 class SQLiteCipherErrorTests : SQLiteCipherTestBase() {
 
@@ -36,6 +38,45 @@ class SQLiteCipherErrorTests : SQLiteCipherTestBase() {
         val error = res.exceptionOrNull() as SQLError
         assertThat(error.code).isEqualTo(SQLError.Code.Pool)
         assertThat(error.message).isNotNull().contains("Invalid SQLite URL")
+    }
+
+    // `mode=rw` opens an existing database only: a mistyped path must fail instead of creating an empty database.
+    @Test
+    fun `mode rw does not create a missing database`() {
+        val path = "$testDirectory/t_missing_${Random.nextInt(1_000_000)}.db"
+        val res = runBlocking {
+            runCatching {
+                val missing = openSQLiteCipher("sqlite://$path?mode=rw", options)
+                try {
+                    missing.fetchAll("select 1;").getOrThrow()
+                } finally {
+                    missing.close()
+                }
+            }
+        }
+        assertThat(res).isFailure()
+        assertThat(SystemFileSystem.exists(Path(path))).isEqualTo(false)
+    }
+
+    // A read-only connection cannot switch the database to WAL (it writes to the database header).
+    @Test
+    fun `mode ro reads a database that is not in WAL mode`(): Unit = runBlocking {
+        val name = "t_ro_${Random.nextInt(1_000_000)}"
+        val writer = openSQLiteCipher("sqlite://$testDirectory/$name.db", options)
+        writer.execute("create table t (v integer);").getOrThrow()
+        writer.execute("insert into t (v) values (42);").getOrThrow()
+        writer.fetchAll("pragma journal_mode = delete;").getOrThrow()
+        writer.close().getOrThrow()
+
+        val reader = openSQLiteCipher("sqlite://$testDirectory/$name.db?mode=ro", options)
+        try {
+            assertThat(reader.fetchAll("select v from t;").getOrThrow().first().get(0).asString()).isEqualTo("42")
+        } finally {
+            reader.close().getOrThrow()
+            listOf("", "-wal", "-shm", "-journal").forEach {
+                SystemFileSystem.delete(Path("$testDirectory/$name.db$it"), mustExist = false)
+            }
+        }
     }
 
     @Test

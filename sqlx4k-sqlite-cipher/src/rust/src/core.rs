@@ -868,13 +868,29 @@ impl Sqlx4kSqliteCipher {
     }
 }
 
+/// The `mode` query parameter of an sqlx-style SQLite URL (`sqlite:///path.db?mode=ro`), if any.
+/// The last occurrence wins, as in sqlx's own parser.
+fn sqlite_url_mode(url: &str) -> Option<&str> {
+    let query = url.splitn(2, '?').nth(1)?;
+    query
+        .split('&')
+        .filter_map(|kv| {
+            let mut it = kv.splitn(2, '=');
+            match (it.next(), it.next()) {
+                (Some("mode"), Some(v)) => Some(v),
+                _ => None,
+            }
+        })
+        .last()
+}
+
 /// Opens (creating if necessary) an encrypted SQLite database and returns a result whose
 /// `rt` field holds the leaked [`Sqlx4kSqliteCipher`] handle, or an error result.
 ///
 /// `password`, when non-empty, is applied as `PRAGMA key` before any other statement, which
-/// is how SQLCipher derives the encryption key. `create_if_missing(true)` ensures a freshly
-/// created database file is created *encrypted* (using the key), avoiding the trap of creating
-/// an unencrypted file first and then failing to open it with a key.
+/// is how SQLCipher derives the encryption key. `create_if_missing` (for the default mode and
+/// `mode=rwc`) ensures a freshly created database file is created *encrypted* (using the key),
+/// avoiding the trap of creating an unencrypted file first and then failing to open it with a key.
 pub fn open(
     url: &str,
     password: &str,
@@ -888,7 +904,12 @@ pub fn open(
         Ok(o) => o,
         Err(err) => return error_result_of(err).leak(),
     };
-    options = options.create_if_missing(true);
+    // `mode` decides whether a missing file may be created and whether the connection is writable, as on the plain
+    // SQLite driver (and as SQLite defines `ro` / `rw` / `rwc`): sqlx parses `mode=rw` as a no-op, so creating the
+    // file unconditionally turned a mistyped path into a new, empty database.
+    let mode = sqlite_url_mode(url);
+    let read_only = mode == Some("ro");
+    options = options.create_if_missing(matches!(mode, None | Some("rwc")));
     if !password.is_empty() {
         // SQLCipher derives the key from `PRAGMA key = '<passphrase>'`. sqlx inserts the pragma
         // value verbatim, so we must quote it as a SQL string literal ourselves (escaping any
@@ -908,14 +929,18 @@ pub fn open(
     // custom `key` pragma, so on an encrypted database that switch runs on the still-encrypted file
     // and silently leaves the connection in rollback-journal ("delete") mode. `after_connect` runs
     // once the connection is fully established (key applied), so the WAL switch takes effect. This
-    // is a no-op for in-memory databases (they ignore WAL and report "memory").
+    // is a no-op for in-memory databases (they ignore WAL and report "memory"). It is skipped for `mode=ro`: changing
+    // the journal mode writes to the database header, which a read-only connection cannot do (it would fail with
+    // "attempt to write a readonly database").
     let pool = SqlitePoolOptions::new()
         .max_connections(max_connections as u32)
-        .after_connect(|conn, _meta| {
+        .after_connect(move |conn, _meta| {
             Box::pin(async move {
-                sqlx::query("PRAGMA journal_mode = WAL;")
-                    .execute(&mut *conn)
-                    .await?;
+                if !read_only {
+                    sqlx::query("PRAGMA journal_mode = WAL;")
+                        .execute(&mut *conn)
+                        .await?;
+                }
                 Ok(())
             })
         });
