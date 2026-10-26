@@ -6,6 +6,7 @@ import assertk.assertAll
 import assertk.assertThat
 import assertk.assertions.isEqualTo
 import assertk.assertions.isNull
+import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asBooleanArray
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asBooleanArrayOrNull
 import io.github.smyrgeorge.sqlx4k.postgres.extensions.asByteArrayList
@@ -213,5 +214,19 @@ class PostgreSQLArrayTests {
     fun `bytea array null`(): Unit = runBlocking {
         val row = db.fetchAll("select null::bytea[] as a").getOrThrow().first()
         assertThat(row.get(0).asByteArrayListOrNull()).isNull()
+    }
+
+    // r2dbc-postgresql cannot decode text-like arrays to a String: reading them used to fail on the JVM.
+    @Test
+    fun `text-like arrays read the same on every driver`(): Unit = runBlocking {
+        val sql = "select array['a', 'b c', null]::text[], array['x']::varchar[], '{}'::text[], null::text[]"
+        val plain = db.fetchAll(sql).getOrThrow().first()
+        val prepared = db.fetchAll(Statement.create("$sql where 1 = :one").bind("one", 1)).getOrThrow().first()
+        for (row in listOf(plain, prepared)) {
+            assertThat(row.get(0).asString()).isEqualTo("{a,b c,NULL}")
+            assertThat(row.get(1).asString()).isEqualTo("{x}")
+            assertThat(row.get(2).asString()).isEqualTo("{}")
+            assertThat(row.get(3).asStringOrNull()).isNull()
+        }
     }
 }

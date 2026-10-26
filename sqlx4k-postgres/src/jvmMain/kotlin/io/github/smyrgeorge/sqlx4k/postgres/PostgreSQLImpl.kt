@@ -460,15 +460,26 @@ class PostgreSQLImpl(
 
         private fun Row.toRow(): ResultSet.Row {
             val columns = metadata.columnMetadatas.mapIndexed { i, c ->
+                val type = c.type.name
                 ResultSet.Row.Column(
                     ordinal = i,
                     name = c.name,
-                    type = c.type.name,
-                    value = get(i, String::class.java)
+                    type = type,
+                    value = if (type in TEXT_ARRAY_TYPES) get(i, Array<String?>::class.java)?.toPgArrayText()
+                    else get(i, String::class.java)
                 )
             }
             return ResultSet.Row(columns)
         }
+
+        /**
+         * Text-like array types. r2dbc-postgresql cannot decode them to a String ("Dimensions mismatch"), so they are
+         * read as arrays and rendered like the native driver does (see [toPgArrayText]).
+         */
+        private val TEXT_ARRAY_TYPES = setOf("TEXT_ARRAY", "VARCHAR_ARRAY", "BPCHAR_ARRAY", "NAME_ARRAY")
+
+        /** Renders `{a,b,NULL}`, without quoting the elements, as the native driver and the `as*Array` decoders do. */
+        private fun Array<String?>.toPgArrayText(): String = joinToString(",", "{", "}") { it ?: "NULL" }
 
         /**
          * Streams the rows of the statement with reactive backpressure (R2DBC publishes the rows as the
