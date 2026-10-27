@@ -19,11 +19,12 @@ internal actual val testDirectory: String get() = context.cacheDir.absolutePath
 internal actual fun openSQLiteCipher(
     url: String,
     options: ConnectionPool.Options,
-    encoders: ValueEncoderRegistry
+    encoders: ValueEncoderRegistry,
+    password: String
 ): ISQLiteCipher = sqliteCipher(
     context = context,
     url = url,
-    password = TEST_PASSPHRASE,
+    password = password,
     options = options,
     encoders = encoders
 )

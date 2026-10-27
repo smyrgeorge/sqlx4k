@@ -72,6 +72,10 @@ class SQLiteCipher(
     options: ConnectionPool.Options = ConnectionPool.Options(),
     override val encoders: ValueEncoderRegistry = ValueEncoderRegistry()
 ) : ISQLiteCipher {
+    init {
+        requireValidPassphrase(password)
+    }
+
     private val rt: CPointer<out CPointed> = sqlx4k_sqlite_cipher_of(
         url = url,
         password = password,

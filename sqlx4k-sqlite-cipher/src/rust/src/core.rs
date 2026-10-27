@@ -928,6 +928,13 @@ pub fn open(
     idle_timeout_milis: c_int,
     max_lifetime_milis: c_int,
 ) -> *mut Sqlx4kSqliteCipherResult {
+    // SQLite would read the `PRAGMA key` statement up to the NUL, and report an error quoting the passphrase.
+    if password.contains('\0') {
+        return error_result_of(sqlx::Error::Configuration(
+            "The SQLCipher passphrase must not contain a NUL character (U+0000).".into(),
+        ))
+        .leak();
+    }
     let mut options: SqliteConnectOptions = match url.parse() {
         Ok(o) => o,
         Err(err) => return error_result_of(err).leak(),

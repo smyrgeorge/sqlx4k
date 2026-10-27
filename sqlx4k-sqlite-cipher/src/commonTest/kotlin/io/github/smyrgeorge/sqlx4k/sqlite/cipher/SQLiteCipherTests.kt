@@ -4,7 +4,10 @@ package io.github.smyrgeorge.sqlx4k.sqlite.cipher
 
 import assertk.assertAll
 import assertk.assertThat
+import assertk.assertions.doesNotContain
 import assertk.assertions.isEqualTo
+import assertk.assertions.isInstanceOf
+import assertk.assertions.isNotNull
 import assertk.assertions.isNull
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
@@ -44,6 +47,18 @@ class SQLiteCipherTests : SQLiteCipherTestBase() {
     fun tearDown(): Unit = runBlocking { db.close().getOrThrow() }
 
     private fun newTable(): String = "t_${Random.nextInt(1_000_000)}"
+
+    @Test
+    fun `a passphrase with a NUL character is rejected without quoting it`() {
+        val url = testDatabaseUrl("SQLiteCipherTests-nul")
+        val options = ConnectionPool.Options.builder().maxConnections(1).build()
+        // Cut short at the NUL on Kotlin/Native: a passphrase starting with one left the database unencrypted.
+        for (password in listOf("\u0000secret", "sec\u0000ret")) {
+            val error = runCatching { openSQLiteCipher(url, options, password = password) }.exceptionOrNull()
+            assertThat(error).isNotNull().isInstanceOf<IllegalArgumentException>()
+            assertThat(error!!.message.orEmpty()).doesNotContain("sec")
+        }
+    }
 
     @OptIn(ExperimentalUuidApi::class, ExperimentalTime::class)
     @Test

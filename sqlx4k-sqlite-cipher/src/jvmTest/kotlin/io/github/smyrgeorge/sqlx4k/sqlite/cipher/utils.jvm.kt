@@ -8,5 +8,9 @@ actual abstract class SQLiteCipherTestBase actual constructor()
 
 internal actual val testDirectory: String = File("build/tmp/sqlite-cipher-tests-jvm").absoluteFile.apply { mkdirs() }.path
 
-internal actual fun openSQLiteCipher(url: String, options: ConnectionPool.Options, encoders: ValueEncoderRegistry): ISQLiteCipher =
-    sqliteCipher(url = url, password = TEST_PASSPHRASE, options = options, encoders = encoders)
+internal actual fun openSQLiteCipher(
+    url: String,
+    options: ConnectionPool.Options,
+    encoders: ValueEncoderRegistry,
+    password: String
+): ISQLiteCipher = sqliteCipher(url = url, password = password, options = options, encoders = encoders)

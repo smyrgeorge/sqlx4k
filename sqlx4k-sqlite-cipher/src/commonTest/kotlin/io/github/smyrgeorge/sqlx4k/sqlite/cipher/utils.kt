@@ -22,6 +22,7 @@ internal expect fun openSQLiteCipher(
     url: String,
     options: ConnectionPool.Options,
     encoders: ValueEncoderRegistry = ValueEncoderRegistry(),
+    password: String = TEST_PASSPHRASE,
 ): ISQLiteCipher
 
 internal const val TEST_PASSPHRASE = "test-passphrase"

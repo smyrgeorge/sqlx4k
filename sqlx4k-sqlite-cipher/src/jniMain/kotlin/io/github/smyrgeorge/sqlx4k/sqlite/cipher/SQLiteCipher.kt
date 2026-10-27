@@ -89,6 +89,7 @@ class SQLiteCipher(
     }
 
     init {
+        requireValidPassphrase(password)
         ensureCipherNativeLoaded()
         rt = decodeResult(
             CipherJni.nativeOf(
