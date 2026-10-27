@@ -69,7 +69,7 @@ class AndroidSQLiteNestedTransactionTests : SQLiteTestBase() {
     }
 
     @Test
-    fun `a transaction cannot be committed while one nested in it is open`(): Unit = runBlocking {
+    fun `committing a transaction while one nested in it is open rolls back both`(): Unit = runBlocking {
         val table = newTable()
         val cn = db.acquire().getOrThrow()
         try {
@@ -78,9 +78,10 @@ class AndroidSQLiteNestedTransactionTests : SQLiteTestBase() {
             val inner = cn.begin().getOrThrow()
             inner.execute("insert into $table(id) values (2);").getOrThrow()
             assertThat(outer.commit()).isFailure()
-            inner.commit().getOrThrow()
-            outer.commit().getOrThrow()
-            assertThat(count(table)).isEqualTo(2L)
+            assertThat(outer.rollbacked).isEqualTo(true)
+            assertThat(inner.rollbacked).isEqualTo(true)
+            cn.execute("insert into $table(id) values (3);").getOrThrow()
+            assertThat(count(table)).isEqualTo(1L)
         } finally {
             cn.close().getOrThrow()
         }

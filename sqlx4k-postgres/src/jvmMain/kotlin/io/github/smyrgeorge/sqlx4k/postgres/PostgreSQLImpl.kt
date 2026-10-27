@@ -396,10 +396,14 @@ class PostgreSQLImpl(
             mutex.withLock {
                 if (commited) return@withLock
                 assertIsOpen()
-                // Its work is part of this one's: ending this one first would leave it (its savepoint) dangling.
+                // Its work is part of this one's: ending this one first would leave it (its savepoint) dangling, and
+                // left open, this one held its locks until the connection closed: both are rolled back.
                 if (child?.status == Transaction.Status.Open) {
-                    SQLError(SQLError.Code.Database, "Cannot commit a transaction while one nested in it is still open.")
-                        .raise()
+                    rollbackLocked()
+                    SQLError(
+                        SQLError.Code.Database,
+                        "The transaction was rolled back: one nested in it was still open when it was committed."
+                    ).raise()
                 }
                 _status = Transaction.Status.Closed
                 if (savepoint != null) {
@@ -418,21 +422,26 @@ class PostgreSQLImpl(
             mutex.withLock {
                 if (rollbacked) return@withLock
                 assertIsOpen()
-                // Rolled back with this one.
-                child?.let { if (it.status == Transaction.Status.Open) it.rollback().getOrThrow() }
-                _status = Transaction.Status.Closed
-                if (savepoint != null) {
-                    rethrowAsSQLError {
-                        connection.rollbackTransactionToSavepoint(savepoint).toMono().awaitSingleOrNull()
-                        connection.releaseSavepoint(savepoint).toMono().awaitSingleOrNull()
-                    }
-                    _rollbacked = true
-                    return@withLock
+                rollbackLocked()
+            }
+        }
+
+        /** Rolls the transaction back, the one nested in it first; its lock is held. */
+        private suspend fun rollbackLocked() {
+            // Rolled back with this one.
+            child?.let { if (it.status == Transaction.Status.Open) it.rollback().getOrThrow() }
+            _status = Transaction.Status.Closed
+            if (savepoint != null) {
+                rethrowAsSQLError {
+                    connection.rollbackTransactionToSavepoint(savepoint).toMono().awaitSingleOrNull()
+                    connection.releaseSavepoint(savepoint).toMono().awaitSingleOrNull()
                 }
-                connection.endTransaction(closeConnectionAfterTx) {
-                    rollbackTransaction().toMono().awaitSingleOrNull()
-                    _rollbacked = true
-                }
+                _rollbacked = true
+                return
+            }
+            connection.endTransaction(closeConnectionAfterTx) {
+                rollbackTransaction().toMono().awaitSingleOrNull()
+                _rollbacked = true
             }
         }
 

@@ -357,14 +357,16 @@ class SQLite(
                 mutex.withLock {
                     if (commited) return@withLock
                     assertIsOpen()
+                    // android.database.sqlite ends the innermost transaction, whichever one is ended, and left open,
+                    // this one held its locks until the connection closed: both are rolled back.
+                    if (withContext(dispatcher) { child } != null) {
+                        rollbackLocked()
+                        throw SQLError(
+                            code = SQLError.Code.Database,
+                            message = "The transaction was rolled back: one nested in it was still open when it was committed."
+                        )
+                    }
                     withContext(dispatcher) {
-                        // android.database.sqlite ends the innermost transaction, whichever one is ended.
-                        if (child != null) {
-                            throw SQLError(
-                                code = SQLError.Code.Database,
-                                message = "Cannot commit a transaction while one nested in it is still open."
-                            )
-                        }
                         _status = Transaction.Status.Closed
                         parent?.child = null
                         if (parent == null && rollbackOnly) {
@@ -390,18 +392,23 @@ class SQLite(
                 mutex.withLock {
                     if (rollbacked) return@withLock
                     assertIsOpen()
-                    // android.database.sqlite ends the innermost transaction, whichever one is ended.
-                    withContext(dispatcher) { child }?.rollback()?.getOrThrow()
-                    _status = Transaction.Status.Closed
-                    withContext(dispatcher) {
-                        parent?.child = null
-                        if (parent != null) outermostTransaction.rollbackOnly = true
-                        // Do NOT call setTransactionSuccessful() — endTransaction() will roll back.
-                        db.completeTransaction(closeConnectionAfterTx) { }
-                    }
-                    _rollbacked = true
+                    rollbackLocked()
                 }
             }
+        }
+
+        /** Rolls the transaction back, the one nested in it first; its lock is held. */
+        private suspend fun rollbackLocked() {
+            // android.database.sqlite ends the innermost transaction, whichever one is ended.
+            withContext(dispatcher) { child }?.rollback()?.getOrThrow()
+            _status = Transaction.Status.Closed
+            withContext(dispatcher) {
+                parent?.child = null
+                if (parent != null) outermostTransaction.rollbackOnly = true
+                // Do NOT call setTransactionSuccessful() — endTransaction() will roll back.
+                db.completeTransaction(closeConnectionAfterTx) { }
+            }
+            _rollbacked = true
         }
 
         override suspend fun execute(sql: String): Result<Long> = mutex.withLockCatching(::assertIsOpen) {

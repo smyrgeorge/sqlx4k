@@ -334,9 +334,14 @@ class SQLiteCipher(
             mutex.withLock {
                 if (commited) return@withLock
                 assertIsOpen()
+                // Committing this one would end that one instead (see child), and left open, this one held its locks until
+                // the connection closed: both are rolled back.
                 if (child?.status == Transaction.Status.Open) {
-                    SQLError(SQLError.Code.Database, "Cannot commit a transaction while one nested in it is still open.")
-                        .raise()
+                    rollbackIfOpenLocked()
+                    SQLError(
+                        SQLError.Code.Database,
+                        "The transaction was rolled back: one nested in it was still open when it was committed."
+                    ).raise()
                 }
                 _status = Transaction.Status.Closed
                 sqlx { c -> sqlx4k_sqlite_cipher_tx_commit(rt, tx, c, fn) }.throwIfError()

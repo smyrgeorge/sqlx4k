@@ -653,7 +653,7 @@ class SQLiteTransactionTests : SQLiteTestBase() {
     }
 
     @Test
-    fun `a transaction cannot be committed while one nested in it is open and its rollback ends both`(): Unit =
+    fun `committing a transaction while one nested in it is open rolls back both`(): Unit =
         runBlocking {
             val table = newTable()
             db.execute("create table $table(id int primary key);").getOrThrow()
@@ -663,9 +663,9 @@ class SQLiteTransactionTests : SQLiteTestBase() {
                 outer.execute("insert into $table(id) values (1);").getOrThrow()
                 val inner = cn.begin().getOrThrow()
                 inner.execute("insert into $table(id) values (2);").getOrThrow()
+                // Left open, the outer one held its locks until the connection closed.
                 assertThat(outer.commit()).isFailure()
-                assertThat(outer.status).isEqualTo(Transaction.Status.Open)
-                outer.rollback().getOrThrow()
+                assertThat(outer.rollbacked).isEqualTo(true)
                 assertThat(inner.rollbacked).isEqualTo(true)
                 // The connection is out of both: this one is committed at once.
                 cn.execute("insert into $table(id) values (3);").getOrThrow()
