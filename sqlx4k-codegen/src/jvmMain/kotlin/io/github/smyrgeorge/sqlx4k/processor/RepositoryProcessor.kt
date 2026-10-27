@@ -1224,6 +1224,7 @@ class RepositoryProcessor(
         file += "     * Automatically determines whether to INSERT (if the entity is new) or\n"
         file += "     * UPDATE (if the entity already exists) based on the ID field value.\n"
         file += "     * For Int IDs, 0 indicates a new entity. For Long IDs, 0L indicates new.\n"
+        file += "     * For nullable IDs, null (or 0) indicates a new entity.\n"
         file += "     *\n"
         if (!useContextParameters) {
             file += "     * @param context The query executor (database connection or transaction)\n"
@@ -1246,13 +1247,21 @@ class RepositoryProcessor(
             file += "    }\n"
         } else {
             val idName = idProp.simpleName.getShortName()
-            when (val idQn = idProp.resolvedType().declaration.qualifiedName()) {
+            val idType = idProp.resolvedType()
+            when (val idQn = idType.declaration.qualifiedName()) {
                 TypeNames.KOTLIN_INT, TypeNames.KOTLIN_LONG -> {
                     val zeroLiteral = if (idQn == TypeNames.KOTLIN_INT) "0" else "0L"
-                    file += if (useContextParameters) {
-                        "        if (entity.$idName == $zeroLiteral) insert(entity) else update(entity)\n"
+                    // A nullable id (`Long? = null` until the database generates it) is new when null: compared
+                    // with 0 only, a new entity was updated (`where id = null`, matching no row), never inserted.
+                    val isNew = if (idType.isMarkedNullable) {
+                        "entity.$idName == null || entity.$idName == $zeroLiteral"
                     } else {
-                        "        if (entity.$idName == $zeroLiteral) insert(context, entity) else update(context, entity)\n"
+                        "entity.$idName == $zeroLiteral"
+                    }
+                    file += if (useContextParameters) {
+                        "        if ($isNew) insert(entity) else update(entity)\n"
+                    } else {
+                        "        if ($isNew) insert(context, entity) else update(context, entity)\n"
                     }
                     file += "    }\n"
                 }

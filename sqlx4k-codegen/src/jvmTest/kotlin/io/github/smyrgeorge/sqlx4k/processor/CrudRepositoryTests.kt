@@ -12,11 +12,13 @@ import assertk.assertions.isSuccess
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.QueryExecutor
 import io.github.smyrgeorge.sqlx4k.SQLError
+import io.github.smyrgeorge.sqlx4k.processor.test.generated.NoteCrudRepositoryImpl
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.UserCrudRepositoryImpl
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.countRow
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.row
 import io.github.smyrgeorge.sqlx4k.processor.util.MockQueryExecutor.Companion.userRow
+import io.github.smyrgeorge.sqlx4k.processor.util.Note
 import io.github.smyrgeorge.sqlx4k.processor.util.User
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -290,6 +292,27 @@ class CrudRepositoryTests {
 
         assertThat(result).isSuccess()
         assertThat(mockExecutor.hasExecuted("update users")).isTrue()
+    }
+
+    @Test
+    fun `save inserts when a nullable id is null`() = runTest {
+        mockExecutor.setFetchAllRows(row("id" to "7", "text" to "a note"))
+
+        val result = NoteCrudRepositoryImpl.save(mockExecutor, Note(id = null, text = "a note"))
+
+        assertThat(result).isSuccess()
+        assertThat(mockExecutor.hasExecuted("insert into notes")).isTrue()
+        assertThat(result.getOrNull()?.id).isEqualTo(7L)
+    }
+
+    @Test
+    fun `save updates when a nullable id is set`() = runTest {
+        mockExecutor.setFetchAllRows(row("id" to "7", "text" to "a note"))
+
+        val result = NoteCrudRepositoryImpl.save(mockExecutor, Note(id = 7, text = "a note"))
+
+        assertThat(result).isSuccess()
+        assertThat(mockExecutor.hasExecuted("update notes")).isTrue()
     }
 
     // ==================== existsBy Tests ====================

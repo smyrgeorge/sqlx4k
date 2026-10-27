@@ -23,6 +23,16 @@ data class User(
 )
 
 /**
+ * Entity whose database-generated ID is null until it is inserted.
+ */
+@Table("notes")
+data class Note(
+    @Id
+    val id: Long? = null,
+    val text: String
+)
+
+/**
  * Entity whose properties share their names with the locals and parameters of the generated functions.
  */
 @Table("saved_queries")

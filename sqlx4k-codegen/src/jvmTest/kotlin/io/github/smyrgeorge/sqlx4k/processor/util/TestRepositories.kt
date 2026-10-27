@@ -9,6 +9,12 @@ import io.github.smyrgeorge.sqlx4k.annotation.Repository
 import kotlinx.coroutines.flow.Flow
 
 /**
+ * CrudRepository test interface for Note entity, whose ID is nullable.
+ */
+@Repository
+interface NoteCrudRepository : CrudRepository<Note>
+
+/**
  * CrudRepository test interface for User entity.
  * Uses explicit context parameter style.
  */
