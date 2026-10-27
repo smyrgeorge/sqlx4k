@@ -4,8 +4,8 @@ use sqlx::MySql;
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::errors::sqlx4k_mysql_error_result_of;
-use crate::types::Sqlx4kMysqlResult;
 use crate::result::slice_of;
+use crate::types::Sqlx4kMysqlResult;
 
 pub const PARAM_NULL: c_int = 0;
 
@@ -52,7 +52,10 @@ pub(crate) enum OwnedParam {
 }
 
 /// A kind that cannot be read is reported as an error (see `params_error`): a panic here would abort the process.
-pub(crate) fn read_params(params: *const Sqlx4kMysqlParam, count: c_int) -> Result<Vec<OwnedParam>, String> {
+pub(crate) fn read_params(
+    params: *const Sqlx4kMysqlParam,
+    count: c_int,
+) -> Result<Vec<OwnedParam>, String> {
     if params.is_null() || count <= 0 {
         return Ok(Vec::new());
     }
@@ -170,22 +173,36 @@ mod tests {
     #[test]
     fn an_unknown_kind_is_an_error() {
         let params = [param(PARAM_INT, |_| {}), param(9, |_| {})];
-        assert_eq!(read_params(params.as_ptr(), 2).err().as_deref(), Some("Unknown Sqlx4kMysqlParam kind: 9"));
+        assert_eq!(
+            read_params(params.as_ptr(), 2).err().as_deref(),
+            Some("Unknown Sqlx4kMysqlParam kind: 9")
+        );
     }
 
     #[test]
     fn a_params_error_hands_back_the_transaction() {
         let tx = 0x10 as *mut c_void;
         let r = crate::test_support::Res(params_error("bad".to_string(), tx));
-        assert_eq!((r.get().error, r.get().tx), (crate::types::ERROR_DATABASE, tx));
-        assert!(r.error_message().unwrap().contains("bad"), "{:?}", r.error_message());
+        assert_eq!(
+            (r.get().error, r.get().tx),
+            (crate::types::ERROR_DATABASE, tx)
+        );
+        assert!(
+            r.error_message().unwrap().contains("bad"),
+            "{:?}",
+            r.error_message()
+        );
     }
 
     #[test]
     #[ignore = "needs the MySQL of docker-compose.yml"]
     fn every_kind_is_bound() {
         block_on(async {
-            let pool = MySqlPoolOptions::new().max_connections(1).connect_with(connect_options()).await.unwrap();
+            let pool = MySqlPoolOptions::new()
+                .max_connections(1)
+                .connect_with(connect_options())
+                .await
+                .unwrap();
             let params = vec![
                 OwnedParam::Null,
                 OwnedParam::Int(-8),
@@ -194,7 +211,10 @@ mod tests {
                 OwnedParam::Blob(vec![1, 2]),
             ];
             let sql = "select ? is null, cast(? as char), cast(? as char), ?, hex(?)";
-            let row = bind_params(sqlx::query(sql), params).fetch_one(&pool).await.unwrap();
+            let row = bind_params(sqlx::query(sql), params)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
             assert_eq!(row.get::<i64, _>(0), 1);
             let values: Vec<String> = (1..5).map(|i| row.get::<String, _>(i)).collect();
             assert_eq!(values, ["-8", "1.5", "x", "0102"]);

@@ -19,18 +19,27 @@ use crate::types::{Sqlx4kMysqlPtr, Sqlx4kMysqlResult, OK};
 
 /// The database of docker-compose.yml (`SQLX4K_TEST_MYSQL_URL` overrides it); its user and password.
 pub(crate) fn url() -> String {
-    std::env::var("SQLX4K_TEST_MYSQL_URL").unwrap_or_else(|_| "mysql://localhost:13306/test".to_string())
+    std::env::var("SQLX4K_TEST_MYSQL_URL")
+        .unwrap_or_else(|_| "mysql://localhost:13306/test".to_string())
 }
 pub(crate) const USERNAME: &str = "mysql";
 pub(crate) const PASSWORD: &str = "mysql";
 
 pub(crate) fn connect_options() -> MySqlConnectOptions {
-    url().parse::<MySqlConnectOptions>().unwrap().username(USERNAME).password(PASSWORD)
+    url()
+        .parse::<MySqlConnectOptions>()
+        .unwrap()
+        .username(USERNAME)
+        .password(PASSWORD)
 }
 
 /// Runs a future to completion on the tests' own runtime (not the driver's).
 pub(crate) fn block_on<F: std::future::Future>(f: F) -> F::Output {
-    tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(f)
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(f)
 }
 
 pub(crate) fn c(s: &str) -> CString {
@@ -49,8 +58,15 @@ pub(crate) fn text(p: *const c_char) -> Option<String> {
 /// A name no other test (or run) uses, for the tables a test creates.
 pub(crate) fn unique(prefix: &str) -> String {
     static NEXT: AtomicUsize = AtomicUsize::new(0);
-    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos();
-    format!("{prefix}_{}_{}_{nanos}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed))
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .subsec_nanos();
+    format!(
+        "{prefix}_{}_{}_{nanos}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    )
 }
 
 /// A result handed over by an export, freed when dropped (the handles it carries are not).
@@ -104,7 +120,12 @@ impl Res {
                     .map(|j| {
                         let column = unsafe { &*row.columns.add(j) };
                         (!column.value.is_null()).then(|| {
-                            let bytes = unsafe { std::slice::from_raw_parts(column.value as *const u8, column.value_len as usize) };
+                            let bytes = unsafe {
+                                std::slice::from_raw_parts(
+                                    column.value as *const u8,
+                                    column.value_len as usize,
+                                )
+                            };
                             String::from_utf8_lossy(bytes).into_owned()
                         })
                     })
@@ -140,7 +161,9 @@ extern "C" fn deliver(callback: Sqlx4kMysqlPtr, result: *mut Sqlx4kMysqlResult) 
 pub(crate) fn call(f: impl FnOnce(*mut c_void, Fun)) -> Res {
     let (sender, receiver) = mpsc::channel::<usize>();
     f(Box::into_raw(Box::new(sender)) as *mut c_void, deliver);
-    let result = receiver.recv_timeout(Duration::from_secs(60)).expect("the export delivered no result");
+    let result = receiver
+        .recv_timeout(Duration::from_secs(60))
+        .expect("the export delivered no result");
     Res(result as *mut Sqlx4kMysqlResult)
 }
 
@@ -163,7 +186,9 @@ impl Pool {
             -1,
         ))
         .ok();
-        Pool { rt: result.get().rt }
+        Pool {
+            rt: result.get().rt,
+        }
     }
 }
 

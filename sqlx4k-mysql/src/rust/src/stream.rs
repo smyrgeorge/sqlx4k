@@ -28,8 +28,13 @@ pub(crate) type StreamChunk = Result<Vec<MySqlRow>, sqlx::Error>;
 
 /// The rows of a query, each result set's rows followed by its result (`Left`), so a chunk can end where a
 /// result set does.
-pub(crate) type RowStream<'e> =
-    Pin<Box<dyn Stream<Item = Result<sqlx::Either<MySqlQueryResult, MySqlRow>, sqlx::Error>> + Send + 'e>>;
+pub(crate) type RowStream<'e> = Pin<
+    Box<
+        dyn Stream<Item = Result<sqlx::Either<MySqlQueryResult, MySqlRow>, sqlx::Error>>
+            + Send
+            + 'e,
+    >,
+>;
 
 /// A result set being streamed to Kotlin, row chunk by row chunk.
 ///
@@ -55,7 +60,10 @@ pub(crate) fn stream_rows_of<'e>(
     if params.is_empty() {
         cn.fetch_many(AssertSqlSafe(sql))
     } else {
-        cn.fetch_many(bind_params(sqlx::query::<MySql>(AssertSqlSafe(sql)), params))
+        cn.fetch_many(bind_params(
+            sqlx::query::<MySql>(AssertSqlSafe(sql)),
+            params,
+        ))
     }
 }
 
@@ -116,7 +124,10 @@ pub(crate) async fn stream_rows(
                 if full {
                     // Stopped while sending the last chunk, the stream was still consumed to its end.
                     let ended = matches!(lookahead, Some(Ok(None)));
-                    let full = std::mem::replace(&mut chunk, Vec::with_capacity(fetch_size.min(STREAM_MAX_PREALLOCATED_ROWS)));
+                    let full = std::mem::replace(
+                        &mut chunk,
+                        Vec::with_capacity(fetch_size.min(STREAM_MAX_PREALLOCATED_ROWS)),
+                    );
                     tokio::select! {
                         _ = &mut cancel => return ended,
                         sent = tx.send(Ok(full)) => if sent.is_err() { return ended },
@@ -168,9 +179,17 @@ mod tests {
 
     /// Streams `sql` on a connection of its own in chunks of `fetch_size`: whether it was consumed to its end, and the
     /// chunks sent (their rows' sizes, or an error). `cancel_first` closes the stream before it starts.
-    fn stream(sql: &str, params: Vec<OwnedParam>, fetch_size: usize, cancel_first: bool, abort_reads: bool) -> (bool, Vec<Result<Vec<usize>, String>>) {
+    fn stream(
+        sql: &str,
+        params: Vec<OwnedParam>,
+        fetch_size: usize,
+        cancel_first: bool,
+        abort_reads: bool,
+    ) -> (bool, Vec<Result<Vec<usize>, String>>) {
         block_on(async {
-            let mut cn = MySqlConnection::connect_with(&connect_options()).await.unwrap();
+            let mut cn = MySqlConnection::connect_with(&connect_options())
+                .await
+                .unwrap();
             let (tx, mut rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
             let (cancel, cancel_rx) = oneshot::channel();
             if cancel_first {
@@ -180,16 +199,26 @@ mod tests {
             }
             let (ended, chunks) = {
                 let rows = stream_rows_of(&mut cn, sql.to_string(), params);
-                tokio::join!(stream_rows(rows, fetch_size, tx, cancel_rx, abort_reads), async {
-                    let mut chunks = Vec::new();
-                    while let Some(chunk) = rx.recv().await {
-                        chunks.push(chunk.map(|rows| rows.iter().map(|r| r.len()).collect()).map_err(|e| e.to_string()));
+                tokio::join!(
+                    stream_rows(rows, fetch_size, tx, cancel_rx, abort_reads),
+                    async {
+                        let mut chunks = Vec::new();
+                        while let Some(chunk) = rx.recv().await {
+                            chunks.push(
+                                chunk
+                                    .map(|rows| rows.iter().map(|r| r.len()).collect())
+                                    .map_err(|e| e.to_string()),
+                            );
+                        }
+                        chunks
                     }
-                    chunks
-                })
+                )
             };
             // The connection is in step with the server after the stream.
-            let one: i64 = sqlx::query_scalar("select 1").fetch_one(&mut cn).await.unwrap();
+            let one: i64 = sqlx::query_scalar("select 1")
+                .fetch_one(&mut cn)
+                .await
+                .unwrap();
             assert_eq!(one, 1);
             cn.close().await.unwrap();
             (ended, chunks)
@@ -202,21 +231,42 @@ mod tests {
         let sql = "with recursive s(n) as (select 1 union all select n + 1 from s where n < 25) select n from s";
         let (ended, chunks) = stream(sql, vec![], 10, false, false);
         assert!(ended);
-        assert_eq!(chunks.into_iter().map(|c| c.unwrap().len()).collect::<Vec<_>>(), [10, 10, 5]);
+        assert_eq!(
+            chunks
+                .into_iter()
+                .map(|c| c.unwrap().len())
+                .collect::<Vec<_>>(),
+            [10, 10, 5]
+        );
     }
 
     #[test]
     #[ignore = "needs the MySQL of docker-compose.yml"]
     fn a_chunk_ends_where_a_result_set_does() {
-        let (ended, chunks) = stream("select 1 as a; select 2 as a, 3 as b; select 4 as c", vec![], 10, false, false);
+        let (ended, chunks) = stream(
+            "select 1 as a; select 2 as a, 3 as b; select 4 as c",
+            vec![],
+            10,
+            false,
+            false,
+        );
         assert!(ended);
-        assert_eq!(chunks.into_iter().map(|c| c.unwrap()).collect::<Vec<_>>(), [vec![1], vec![2], vec![1]]);
+        assert_eq!(
+            chunks.into_iter().map(|c| c.unwrap()).collect::<Vec<_>>(),
+            [vec![1], vec![2], vec![1]]
+        );
     }
 
     #[test]
     #[ignore = "needs the MySQL of docker-compose.yml"]
     fn a_prepared_statement_is_streamed() {
-        let (ended, chunks) = stream("select ? as a union all select ?", vec![OwnedParam::Int(1), OwnedParam::Int(2)], 1, false, false);
+        let (ended, chunks) = stream(
+            "select ? as a union all select ?",
+            vec![OwnedParam::Int(1), OwnedParam::Int(2)],
+            1,
+            false,
+            false,
+        );
         assert!(ended);
         assert_eq!(chunks.len(), 2);
     }
@@ -233,7 +283,8 @@ mod tests {
     #[ignore = "needs the MySQL of docker-compose.yml"]
     fn a_closed_stream_stops_before_its_end() {
         for abort_reads in [false, true] {
-            let (ended, chunks) = stream("select 1 union all select 2", vec![], 1, true, abort_reads);
+            let (ended, chunks) =
+                stream("select 1 union all select 2", vec![], 1, true, abort_reads);
             assert!(!ended);
             assert!(chunks.is_empty());
         }

@@ -112,7 +112,11 @@ impl Sqlx4kMySql {
         result.leak()
     }
 
-    pub(crate) async fn cn_fetch_all(&self, cn: Sqlx4kMysqlPtr, sql: String) -> *mut Sqlx4kMysqlResult {
+    pub(crate) async fn cn_fetch_all(
+        &self,
+        cn: Sqlx4kMysqlPtr,
+        sql: String,
+    ) -> *mut Sqlx4kMysqlResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<MySql>) };
         let result = fetch_last(&mut **cn, AssertSqlSafe(sql)).await;
         sqlx4k_mysql_result_of(result).leak()
@@ -194,7 +198,11 @@ impl Sqlx4kMySql {
         result.leak()
     }
 
-    pub(crate) async fn tx_fetch_all(&self, tx: Sqlx4kMysqlPtr, sql: String) -> *mut Sqlx4kMysqlResult {
+    pub(crate) async fn tx_fetch_all(
+        &self,
+        tx: Sqlx4kMysqlPtr,
+        sql: String,
+    ) -> *mut Sqlx4kMysqlResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, MySql>) };
         let result = fetch_last(&mut *tx, AssertSqlSafe(sql)).await;
         let tx = Box::new(tx);
@@ -252,7 +260,7 @@ impl Sqlx4kMySql {
             // before any other statement; a cancelled stream leaves sqlx to drain the remaining
             // rows on the connection's next use.
             let cn = unsafe { &mut *(cn.raw() as *mut PoolConnection<MySql>) };
-            let rows = stream_rows_of(&mut **cn, sql, params);
+            let rows = stream_rows_of(cn, sql, params);
             stream_rows(rows, fetch_size, tx, cancel_rx, false).await;
         });
         stream_result_of(Sqlx4kMysqlStream {
@@ -274,7 +282,7 @@ impl Sqlx4kMySql {
         let task = RUNTIME.get().unwrap().spawn(async move {
             // Borrowed in place (not re-boxed like `tx_fetch_all`), so the Kotlin-held pointer stays valid.
             let tx = unsafe { &mut *(tx.raw() as *mut Transaction<'static, MySql>) };
-            let rows = stream_rows_of(&mut **tx, sql, params);
+            let rows = stream_rows_of(tx, sql, params);
             stream_rows(rows, fetch_size, chunks, cancel_rx, false).await;
         });
         stream_result_of(Sqlx4kMysqlStream {
@@ -420,8 +428,8 @@ impl Sqlx4kMySql {
 mod tests {
     use super::*;
     use crate::params::read_params;
-    use crate::test_support::{block_on, c, connect_options, text_param, unique, Pool, Res};
     use crate::params::PARAM_TEXT;
+    use crate::test_support::{block_on, c, connect_options, text_param, unique, Pool, Res};
     use crate::types::ERROR_POOL_CLOSED;
     use sqlx::mysql::MySqlPoolOptions;
     use std::time::Instant;
@@ -440,14 +448,24 @@ mod tests {
     }
 
     fn count(db: &Sqlx4kMySql, table: &str) -> String {
-        Res(on_runtime(db.fetch_all(format!("select count(*) from {table}")))).ok().value().unwrap()
+        Res(on_runtime(
+            db.fetch_all(format!("select count(*) from {table}")),
+        ))
+        .ok()
+        .value()
+        .unwrap()
     }
 
     #[test]
     #[ignore = "needs the MySQL of docker-compose.yml"]
     fn closing_a_pool_closes_its_idle_connections_at_once() {
         block_on(async {
-            let pool = MySqlPoolOptions::new().min_connections(2).max_connections(2).connect_with(connect_options()).await.unwrap();
+            let pool = MySqlPoolOptions::new()
+                .min_connections(2)
+                .max_connections(2)
+                .connect_with(connect_options())
+                .await
+                .unwrap();
             while pool.num_idle() < 2 {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
@@ -463,7 +481,11 @@ mod tests {
     #[ignore = "needs the MySQL of docker-compose.yml"]
     fn closing_a_pool_does_not_wait_for_a_connection_held() {
         block_on(async {
-            let pool = MySqlPoolOptions::new().max_connections(1).connect_with(connect_options()).await.unwrap();
+            let pool = MySqlPoolOptions::new()
+                .max_connections(1)
+                .connect_with(connect_options())
+                .await
+                .unwrap();
             let held = pool.acquire().await.unwrap();
             let started = Instant::now();
             close_pool(&pool).await;
@@ -486,19 +508,36 @@ mod tests {
         let pool = Pool::open(2);
         let db = client(&pool);
         let table = unique("t_client");
-        Res(on_runtime(db.query(format!("create table {table}(id int primary key auto_increment, v text)")))).ok();
-        let r = Res(on_runtime(db.query(format!("insert into {table}(v) values ('a'), ('b')")))).ok();
+        Res(on_runtime(db.query(format!(
+            "create table {table}(id int primary key auto_increment, v text)"
+        ))))
+        .ok();
+        let r = Res(on_runtime(
+            db.query(format!("insert into {table}(v) values ('a'), ('b')")),
+        ))
+        .ok();
         assert_eq!(r.get().rows_affected, 2);
         // The id the insert generated (the first of its rows, on MySQL).
         assert_eq!(r.get().last_insert_id, 1);
         let v = c("c");
         let params = read_params([text_param(PARAM_TEXT, &v)].as_ptr(), 1).unwrap();
-        let r = Res(on_runtime(db.query_with_params(format!("update {table} set v = ? where id = 1"), params))).ok();
+        let r = Res(on_runtime(db.query_with_params(
+            format!("update {table} set v = ? where id = 1"),
+            params,
+        )))
+        .ok();
         assert_eq!(r.get().rows_affected, 1);
-        let r = Res(on_runtime(db.fetch_all(format!("select v from {table} order by id")))).ok();
+        let r = Res(on_runtime(
+            db.fetch_all(format!("select v from {table} order by id")),
+        ))
+        .ok();
         assert_eq!(r.rows(), [[Some("c".into())], [Some("b".into())]]);
         let params = read_params([text_param(PARAM_TEXT, &v)].as_ptr(), 1).unwrap();
-        let r = Res(on_runtime(db.fetch_all_with_params(format!("select id from {table} where v = ?"), params))).ok();
+        let r = Res(on_runtime(db.fetch_all_with_params(
+            format!("select id from {table} where v = ?"),
+            params,
+        )))
+        .ok();
         assert_eq!(r.rows(), [[Some("1".into())]]);
         Res(on_runtime(db.query(format!("drop table {table}")))).ok();
     }
@@ -509,12 +548,23 @@ mod tests {
         let pool = Pool::open(2);
         let db = client(&pool);
         let table = unique("t_client_tx");
-        Res(on_runtime(db.query(format!("create table {table}(id int)")))).ok();
+        Res(on_runtime(
+            db.query(format!("create table {table}(id int)")),
+        ))
+        .ok();
         for commit in [true, false] {
             let tx = Res(on_runtime(db.tx_begin())).ok().get().tx;
             // The transaction moves into each call and comes back in its result.
-            let tx = Res(on_runtime(db.tx_query(ptr(tx), format!("insert into {table} values (1)")))).ok().get().tx;
-            let r = Res(on_runtime(db.tx_fetch_all(ptr(tx), format!("select count(*) from {table}")))).ok();
+            let tx = Res(on_runtime(
+                db.tx_query(ptr(tx), format!("insert into {table} values (1)")),
+            ))
+            .ok()
+            .get()
+            .tx;
+            let r = Res(on_runtime(
+                db.tx_fetch_all(ptr(tx), format!("select count(*) from {table}")),
+            ))
+            .ok();
             let tx = r.get().tx;
             assert_eq!(r.value().as_deref(), Some(if commit { "1" } else { "2" }));
             if commit {
@@ -533,12 +583,25 @@ mod tests {
         let pool = Pool::open(2);
         let db = client(&pool);
         let table = unique("t_client_sp");
-        Res(on_runtime(db.query(format!("create table {table}(id int)")))).ok();
+        Res(on_runtime(
+            db.query(format!("create table {table}(id int)")),
+        ))
+        .ok();
         let cn = Res(on_runtime(db.cn_acquire())).ok().get().cn;
         let outer = Res(on_runtime(db.cn_tx_begin(ptr(cn)))).ok().get().tx;
-        let outer = Res(on_runtime(db.tx_query(ptr(outer), format!("insert into {table} values (1)")))).ok().get().tx;
+        let outer = Res(on_runtime(
+            db.tx_query(ptr(outer), format!("insert into {table} values (1)")),
+        ))
+        .ok()
+        .get()
+        .tx;
         let inner = Res(on_runtime(db.cn_tx_begin(ptr(cn)))).ok().get().tx;
-        let inner = Res(on_runtime(db.tx_query(ptr(inner), format!("insert into {table} values (2)")))).ok().get().tx;
+        let inner = Res(on_runtime(
+            db.tx_query(ptr(inner), format!("insert into {table} values (2)")),
+        ))
+        .ok()
+        .get()
+        .tx;
         Res(on_runtime(db.tx_rollback(ptr(inner)))).ok();
         Res(on_runtime(db.tx_commit(ptr(outer)))).ok();
         Res(on_runtime(db.cn_release(ptr(cn)))).ok();
@@ -552,13 +615,38 @@ mod tests {
         let pool = Pool::open(1);
         let db = client(&pool);
         let sql = "with recursive s(n) as (select 1 union all select n + 1 from s where n < 1000) select n from s".to_string();
-        let stream = Res(on_runtime(db.stream_open(sql, vec![], 10))).ok().get().stream;
-        assert_eq!(Res(on_runtime(db.stream_next(ptr(stream)))).ok().rows().len(), 10);
+        let stream = Res(on_runtime(db.stream_open(sql, vec![], 10)))
+            .ok()
+            .get()
+            .stream;
+        assert_eq!(
+            Res(on_runtime(db.stream_next(ptr(stream))))
+                .ok()
+                .rows()
+                .len(),
+            10
+        );
         Res(on_runtime(db.stream_close(ptr(stream)))).ok();
         assert_eq!(db.pool.size(), 0);
-        let stream = Res(on_runtime(db.stream_open("select 1".to_string(), vec![], 10))).ok().get().stream;
-        assert_eq!(Res(on_runtime(db.stream_next(ptr(stream)))).ok().rows().len(), 1);
-        assert_eq!(Res(on_runtime(db.stream_next(ptr(stream)))).ok().get().size, 0);
+        let stream = Res(on_runtime(db.stream_open(
+            "select 1".to_string(),
+            vec![],
+            10,
+        )))
+        .ok()
+        .get()
+        .stream;
+        assert_eq!(
+            Res(on_runtime(db.stream_next(ptr(stream))))
+                .ok()
+                .rows()
+                .len(),
+            1
+        );
+        assert_eq!(
+            Res(on_runtime(db.stream_next(ptr(stream)))).ok().get().size,
+            0
+        );
         Res(on_runtime(db.stream_close(ptr(stream)))).ok();
         on_runtime(async {
             for _ in 0..100 {
@@ -577,6 +665,11 @@ mod tests {
         let pool = Pool::open(1);
         let db = client(&pool);
         Res(on_runtime(db.close())).ok();
-        assert_eq!(Res(on_runtime(db.query("select 1".to_string()))).get().error, ERROR_POOL_CLOSED);
+        assert_eq!(
+            Res(on_runtime(db.query("select 1".to_string())))
+                .get()
+                .error,
+            ERROR_POOL_CLOSED
+        );
     }
 }
