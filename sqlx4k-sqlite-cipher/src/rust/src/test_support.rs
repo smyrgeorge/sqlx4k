@@ -11,7 +11,9 @@ use std::time::Duration;
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{Connection, SqliteConnection};
 
-use crate::core::{free_result, Sqlx4kSqliteCipherParam, Sqlx4kSqliteCipherPtr, Sqlx4kSqliteCipherResult, OK};
+use crate::core::{
+    free_result, Sqlx4kSqliteCipherParam, Sqlx4kSqliteCipherPtr, Sqlx4kSqliteCipherResult, OK,
+};
 use crate::ffi::{sqlx4k_sqlite_cipher_close, sqlx4k_sqlite_cipher_of};
 
 /// The key of the databases the tests open, quoted the way `open` must quote it.
@@ -19,7 +21,11 @@ pub(crate) const KEY: &str = "a test-key, it's";
 
 /// Runs a future to completion on the tests' own runtime (not the driver's).
 pub(crate) fn block_on<F: std::future::Future>(f: F) -> F::Output {
-    tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(f)
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(f)
 }
 
 pub(crate) fn c(s: &str) -> CString {
@@ -38,8 +44,15 @@ pub(crate) fn text(p: *const c_char) -> Option<String> {
 /// A name no other test (or run) uses, for the files and tables a test creates.
 pub(crate) fn unique(prefix: &str) -> String {
     static NEXT: AtomicUsize = AtomicUsize::new(0);
-    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos();
-    format!("{prefix}_{}_{}_{nanos}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed))
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .subsec_nanos();
+    format!(
+        "{prefix}_{}_{}_{nanos}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    )
 }
 
 /// A database file in the temporary directory, not created yet, removed (with its WAL files) when dropped.
@@ -49,7 +62,9 @@ pub(crate) struct TempDb {
 
 impl TempDb {
     pub(crate) fn new() -> TempDb {
-        TempDb { path: std::env::temp_dir().join(unique("sqlx4k_test") + ".db") }
+        TempDb {
+            path: std::env::temp_dir().join(unique("sqlx4k_test") + ".db"),
+        }
     }
 
     pub(crate) fn url(&self) -> String {
@@ -57,7 +72,9 @@ impl TempDb {
     }
 
     pub(crate) fn connect_options(&self) -> SqliteConnectOptions {
-        SqliteConnectOptions::new().filename(&self.path).create_if_missing(true)
+        SqliteConnectOptions::new()
+            .filename(&self.path)
+            .create_if_missing(true)
     }
 }
 
@@ -123,7 +140,12 @@ impl Res {
                     .map(|j| {
                         let column = unsafe { &*row.columns.add(j) };
                         (!column.value.is_null()).then(|| {
-                            let bytes = unsafe { std::slice::from_raw_parts(column.value as *const u8, column.value_len as usize) };
+                            let bytes = unsafe {
+                                std::slice::from_raw_parts(
+                                    column.value as *const u8,
+                                    column.value_len as usize,
+                                )
+                            };
                             String::from_utf8_lossy(bytes).into_owned()
                         })
                     })
@@ -159,7 +181,9 @@ extern "C" fn deliver(callback: Sqlx4kSqliteCipherPtr, result: *mut Sqlx4kSqlite
 pub(crate) fn call(f: impl FnOnce(*mut c_void, Fun)) -> Res {
     let (sender, receiver) = mpsc::channel::<usize>();
     f(Box::into_raw(Box::new(sender)) as *mut c_void, deliver);
-    let result = receiver.recv_timeout(Duration::from_secs(60)).expect("the export delivered no result");
+    let result = receiver
+        .recv_timeout(Duration::from_secs(60))
+        .expect("the export delivered no result");
     Res(result as *mut Sqlx4kSqliteCipherResult)
 }
 
@@ -169,10 +193,23 @@ pub(crate) fn open(url: &str, min_connections: c_int, max_connections: c_int) ->
 }
 
 /// Creates a pool of `url` encrypted with `key` (none when empty), as Kotlin does.
-pub(crate) fn open_with_key(url: &str, key: &str, min_connections: c_int, max_connections: c_int) -> Res {
+pub(crate) fn open_with_key(
+    url: &str,
+    key: &str,
+    min_connections: c_int,
+    max_connections: c_int,
+) -> Res {
     let url = c(url);
     let key = c(key);
-    Res(sqlx4k_sqlite_cipher_of(url.as_ptr(), key.as_ptr(), min_connections, max_connections, 10_000, -1, -1))
+    Res(sqlx4k_sqlite_cipher_of(
+        url.as_ptr(),
+        key.as_ptr(),
+        min_connections,
+        max_connections,
+        10_000,
+        -1,
+        -1,
+    ))
 }
 
 /// A pool of a database file of its own, encrypted with [KEY], closed (and the file removed) when dropped.
@@ -197,7 +234,10 @@ impl Drop for Pool {
 }
 
 /// A parameter of the given kind, its value set by `f`.
-pub(crate) fn param(kind: c_int, f: impl FnOnce(&mut Sqlx4kSqliteCipherParam)) -> Sqlx4kSqliteCipherParam {
+pub(crate) fn param(
+    kind: c_int,
+    f: impl FnOnce(&mut Sqlx4kSqliteCipherParam),
+) -> Sqlx4kSqliteCipherParam {
     let mut p = Sqlx4kSqliteCipherParam {
         kind,
         i64_val: 0,

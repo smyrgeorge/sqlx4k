@@ -707,7 +707,10 @@ mod tests {
     #[test]
     fn an_unknown_kind_of_parameter_is_an_error() {
         let b = buffer(&[(PARAM_INT as u8, &1i64.to_be_bytes()), (9, &[])]);
-        assert_eq!(params_of(&b).err().as_deref(), Some("Unknown parameter kind: 9"));
+        assert_eq!(
+            params_of(&b).err().as_deref(),
+            Some("Unknown parameter kind: 9")
+        );
     }
 
     #[test]

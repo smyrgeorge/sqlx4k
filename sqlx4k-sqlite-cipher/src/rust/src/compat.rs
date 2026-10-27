@@ -27,6 +27,10 @@ pub extern "C" fn fcntl64(fd: c_int, cmd: c_int, arg: *mut c_void) -> c_int {
 }
 
 #[no_mangle]
-pub extern "C" fn __isoc23_strtol(nptr: *const c_char, endptr: *mut *mut c_char, base: c_int) -> c_long {
+pub extern "C" fn __isoc23_strtol(
+    nptr: *const c_char,
+    endptr: *mut *mut c_char,
+    base: c_int,
+) -> c_long {
     unsafe { strtol(nptr, endptr, base) }
 }

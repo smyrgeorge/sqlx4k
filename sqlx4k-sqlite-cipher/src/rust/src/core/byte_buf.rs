@@ -67,7 +67,8 @@ impl ByteBuf {
         } else {
             self.put_u8(1);
             self.put_i32(len);
-            self.inner.extend_from_slice(unsafe { slice_of(ptr as *const u8, len as usize) });
+            self.inner
+                .extend_from_slice(unsafe { slice_of(ptr as *const u8, len as usize) });
         }
     }
     /// Writes a required C string as: i32 len + utf8 bytes.
@@ -215,8 +216,11 @@ mod tests {
             rows_affected: r.i64(),
             last_insert_id: r.i64(),
             handles: [r.i64(), r.i64(), r.i64(), r.i64()],
-            schema: (r.u8() == 1).then(|| (0..r.i32()).map(|_| (r.i32(), r.str(), r.str())).collect()),
-            rows: (0..r.i32()).map(|_| (0..r.i32()).map(|_| (r.i32(), r.opt_str())).collect()).collect(),
+            schema: (r.u8() == 1)
+                .then(|| (0..r.i32()).map(|_| (r.i32(), r.str(), r.str())).collect()),
+            rows: (0..r.i32())
+                .map(|_| (0..r.i32()).map(|_| (r.i32(), r.opt_str())).collect())
+                .collect(),
         };
         assert!(r.b.is_empty(), "{} bytes left", r.b.len());
         decoded
@@ -256,22 +260,46 @@ mod tests {
     fn a_result_with_rows_is_serialized_with_its_schema() {
         let rows = block_on(async {
             let mut cn = memory().await;
-            let rows = cn.fetch_all("select 1 as a, null as b, 'x' || char(0) || 'y' as c, x'01ff' as d").await;
+            let rows = cn
+                .fetch_all("select 1 as a, null as b, 'x' || char(0) || 'y' as c, x'01ff' as d")
+                .await;
             cn.close().await.unwrap();
             rows
         });
         let decoded = round_trip(result_of(rows).leak());
-        let columns = [(0, "a", "INTEGER"), (1, "b", "NULL"), (2, "c", "TEXT"), (3, "d", "BLOB")];
+        let columns = [
+            (0, "a", "INTEGER"),
+            (1, "b", "NULL"),
+            (2, "c", "TEXT"),
+            (3, "d", "BLOB"),
+        ];
         assert_eq!(
             decoded.schema,
-            Some(columns.iter().map(|(i, n, k)| (*i, n.to_string(), k.to_string())).collect())
+            Some(
+                columns
+                    .iter()
+                    .map(|(i, n, k)| (*i, n.to_string(), k.to_string()))
+                    .collect()
+            )
         );
         // A value is written by its length: the NUL inside it is kept.
         assert_eq!(
             decoded.rows,
-            [[(0, Some("1".into())), (1, None), (2, Some("x\0y".into())), (3, Some("01ff".into()))]]
+            [[
+                (0, Some("1".into())),
+                (1, None),
+                (2, Some("x\0y".into())),
+                (3, Some("01ff".into()))
+            ]]
         );
-        assert_eq!((decoded.error, decoded.error_message, decoded.error_native_code), (OK, None, NO_NATIVE_CODE));
+        assert_eq!(
+            (
+                decoded.error,
+                decoded.error_message,
+                decoded.error_native_code
+            ),
+            (OK, None, NO_NATIVE_CODE)
+        );
     }
 
     #[test]
@@ -291,9 +319,19 @@ mod tests {
         let decoded = round_trip(error_result_of(err).leak());
         assert_eq!(decoded.error, ERROR_DATABASE);
         let message = decoded.error_message.unwrap();
-        assert!(message.starts_with("[1] ") && message.contains("no such table: missing_table"), "{message}");
+        assert!(
+            message.starts_with("[1] ") && message.contains("no such table: missing_table"),
+            "{message}"
+        );
         // SQLite has no SQLSTATE.
-        assert_eq!((decoded.error_sql_state, decoded.error_native_code, decoded.error_kind), (None, 1, KIND_OTHER));
+        assert_eq!(
+            (
+                decoded.error_sql_state,
+                decoded.error_native_code,
+                decoded.error_kind
+            ),
+            (None, 1, KIND_OTHER)
+        );
     }
 
     #[test]

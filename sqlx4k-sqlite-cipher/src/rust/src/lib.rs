@@ -10,6 +10,10 @@
 //!
 //! The `jni` module is unavailable on iOS, which uses the FFI/cinterop path exclusively.
 
+// The crate has no Rust API (it is called through its exports): its docs are read with `--document-private-items`,
+// where the links above to its private modules resolve.
+#![allow(rustdoc::private_intra_doc_links)]
+
 mod core;
 mod ffi;
 
