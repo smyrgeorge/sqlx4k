@@ -186,4 +186,10 @@ class SQLiteStreamTests : SQLiteTestBase() {
             drop(table)
         }
     }
+
+    // A fetch size is a hint: the largest one is accepted, not taken for the room to allocate up front.
+    @Test
+    fun `the largest fetch size is accepted`(): Unit = runBlocking {
+        assertThat(db.fetch("select 1 as a;", fetchSize = Int.MAX_VALUE).count()).isEqualTo(1)
+    }
 }

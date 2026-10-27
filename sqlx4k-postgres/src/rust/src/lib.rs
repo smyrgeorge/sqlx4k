@@ -546,6 +546,10 @@ pub fn c_chars_to_str_postgres<'a>(c_chars: *const c_char) -> &'a str {
 /// result on the Rust side.
 const STREAM_CHANNEL_CAPACITY: usize = 2;
 const STREAM_DEFAULT_FETCH_SIZE: usize = 500;
+/// The most rows a chunk is allocated room for up front: a fetch size is a hint, and a large one (`Int.MAX_VALUE`)
+/// asked for room for that many rows at once, hundreds of GB, which aborted the process (`panic = "abort"`). A chunk
+/// still grows to the fetch size.
+const STREAM_MAX_PREALLOCATED_ROWS: usize = 1_000;
 
 type StreamChunk = Result<Vec<PgRow>, sqlx::Error>;
 /// The rows of a query, each statement's rows followed by its result (`Left`), so a chunk can end where a
@@ -597,7 +601,7 @@ async fn stream_rows(
     tx: mpsc::Sender<StreamChunk>,
     mut cancel: oneshot::Receiver<()>,
 ) -> bool {
-    let mut chunk: Vec<PgRow> = Vec::with_capacity(fetch_size);
+    let mut chunk: Vec<PgRow> = Vec::with_capacity(fetch_size.min(STREAM_MAX_PREALLOCATED_ROWS));
     loop {
         let next = tokio::select! {
             _ = &mut cancel => return false,
@@ -614,7 +618,7 @@ async fn stream_rows(
                     sqlx::Either::Left(_) => !chunk.is_empty(),
                 };
                 if full {
-                    let full = std::mem::replace(&mut chunk, Vec::with_capacity(fetch_size));
+                    let full = std::mem::replace(&mut chunk, Vec::with_capacity(fetch_size.min(STREAM_MAX_PREALLOCATED_ROWS)));
                     tokio::select! {
                         _ = &mut cancel => return false,
                         sent = tx.send(Ok(full)) => if sent.is_err() { return false },
