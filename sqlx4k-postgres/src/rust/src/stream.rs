@@ -28,8 +28,9 @@ pub(crate) type StreamChunk = Result<Vec<PgRow>, sqlx::Error>;
 
 /// The rows of a query, each statement's rows followed by its result (`Left`), so a chunk can end where a
 /// statement does.
-pub(crate) type RowStream<'e> =
-    Pin<Box<dyn Stream<Item = Result<sqlx::Either<PgQueryResult, PgRow>, sqlx::Error>> + Send + 'e>>;
+pub(crate) type RowStream<'e> = Pin<
+    Box<dyn Stream<Item = Result<sqlx::Either<PgQueryResult, PgRow>, sqlx::Error>> + Send + 'e>,
+>;
 
 /// A result set being streamed to Kotlin, row chunk by row chunk.
 ///
@@ -103,7 +104,10 @@ pub(crate) async fn stream_rows(
                 };
                 if full {
                     let ended = matches!(lookahead, Some(Ok(None)));
-                    let full = std::mem::replace(&mut chunk, Vec::with_capacity(fetch_size.min(STREAM_MAX_PREALLOCATED_ROWS)));
+                    let full = std::mem::replace(
+                        &mut chunk,
+                        Vec::with_capacity(fetch_size.min(STREAM_MAX_PREALLOCATED_ROWS)),
+                    );
                     tokio::select! {
                         _ = &mut cancel => return ended,
                         sent = tx.send(Ok(full)) => if sent.is_err() { return ended },
@@ -156,9 +160,16 @@ mod tests {
 
     /// Streams `sql` on a connection of its own in chunks of `fetch_size`: whether it was consumed to its end, and the
     /// chunks sent (their rows' sizes, or an error). `cancel_first` closes the stream before it starts.
-    fn stream(sql: &str, params: Vec<OwnedParam>, fetch_size: usize, cancel_first: bool) -> (bool, Vec<Result<Vec<usize>, String>>) {
+    fn stream(
+        sql: &str,
+        params: Vec<OwnedParam>,
+        fetch_size: usize,
+        cancel_first: bool,
+    ) -> (bool, Vec<Result<Vec<usize>, String>>) {
         block_on(async {
-            let mut cn = PgConnection::connect_with(&connect_options()).await.unwrap();
+            let mut cn = PgConnection::connect_with(&connect_options())
+                .await
+                .unwrap();
             let (tx, mut rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
             let (cancel, cancel_rx) = oneshot::channel();
             if cancel_first {
@@ -171,7 +182,11 @@ mod tests {
                 tokio::join!(stream_rows(rows, fetch_size, tx, cancel_rx), async {
                     let mut chunks = Vec::new();
                     while let Some(chunk) = rx.recv().await {
-                        chunks.push(chunk.map(|rows| rows.iter().map(|r| r.len()).collect()).map_err(|e| e.to_string()));
+                        chunks.push(
+                            chunk
+                                .map(|rows| rows.iter().map(|r| r.len()).collect())
+                                .map_err(|e| e.to_string()),
+                        );
                     }
                     chunks
                 })
@@ -195,7 +210,12 @@ mod tests {
     #[test]
     #[ignore = "needs the PostgreSQL of docker-compose.yml"]
     fn a_chunk_ends_where_a_statement_does() {
-        let (ended, chunks) = stream("select 1 as a; select 2 as a, 3 as b; select 4 as c", vec![], 10, false);
+        let (ended, chunks) = stream(
+            "select 1 as a; select 2 as a, 3 as b; select 4 as c",
+            vec![],
+            10,
+            false,
+        );
         assert!(ended);
         // A row each, of its own statement's columns.
         let chunks: Vec<Vec<usize>> = chunks.into_iter().map(|c| c.unwrap()).collect();
@@ -205,9 +225,20 @@ mod tests {
     #[test]
     #[ignore = "needs the PostgreSQL of docker-compose.yml"]
     fn a_prepared_statement_is_streamed() {
-        let (ended, chunks) = stream("select g from generate_series(1, $1) g", vec![OwnedParam::Int4(3)], 2, false);
+        let (ended, chunks) = stream(
+            "select g from generate_series(1, $1) g",
+            vec![OwnedParam::Int4(3)],
+            2,
+            false,
+        );
         assert!(ended);
-        assert_eq!(chunks.into_iter().map(|c| c.unwrap().len()).collect::<Vec<_>>(), [2, 1]);
+        assert_eq!(
+            chunks
+                .into_iter()
+                .map(|c| c.unwrap().len())
+                .collect::<Vec<_>>(),
+            [2, 1]
+        );
     }
 
     #[test]

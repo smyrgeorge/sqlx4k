@@ -168,7 +168,10 @@ mod tests {
             "/../../../sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/SQLError.kt"
         );
         let source = std::fs::read_to_string(path).unwrap();
-        let body = source.split(&format!("enum class {name} {{")).nth(1).unwrap();
+        let body = source
+            .split(&format!("enum class {name} {{"))
+            .nth(1)
+            .unwrap();
         let body = &body[..body.find('}').unwrap()];
         body.lines()
             .map(str::trim)
@@ -246,7 +249,9 @@ mod tests {
     #[test]
     fn a_ptr_hands_back_its_pointer() {
         let mut value = 7;
-        let ptr = Sqlx4kPostgresPtr { ptr: &mut value as *mut i32 as *mut c_void };
+        let ptr = Sqlx4kPostgresPtr {
+            ptr: &mut value as *mut i32 as *mut c_void,
+        };
         assert_eq!(ptr.raw(), &mut value as *mut i32 as *mut c_void);
     }
 }

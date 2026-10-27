@@ -58,13 +58,24 @@ pub(crate) fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mu
             |bytes: Vec<u8>| format!("\\x{}", hex::encode(bytes)),
             || {
                 let text = decode_text_or_binary(row, ordinal, |_| None);
-                decode_bytea_escape(&text).map_or(text, |bytes| format!("\\x{}", hex::encode(bytes)))
+                decode_bytea_escape(&text)
+                    .map_or(text, |bytes| format!("\\x{}", hex::encode(bytes)))
             },
         ),
         "UUID" => row.get_unchecked::<uuid::Uuid, _>(ordinal).to_string(),
         // Dates, times and timestamps have values chrono cannot represent ('infinity', '24:00:00'): see decode_datetime.
-        "DATE" => decode_datetime(row, ordinal, |d: chrono::NaiveDate| d.to_string(), decode_pg_date_binary),
-        "TIME" => decode_datetime(row, ordinal, |t: chrono::NaiveTime| t.to_string(), decode_pg_time_binary),
+        "DATE" => decode_datetime(
+            row,
+            ordinal,
+            |d: chrono::NaiveDate| d.to_string(),
+            decode_pg_date_binary,
+        ),
+        "TIME" => decode_datetime(
+            row,
+            ordinal,
+            |t: chrono::NaiveTime| t.to_string(),
+            decode_pg_time_binary,
+        ),
         "TIMESTAMP" => decode_datetime(
             row,
             ordinal,
@@ -108,7 +119,9 @@ pub(crate) fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mu
             row,
             ordinal,
             |v: Vec<Option<chrono::NaiveDateTime>>| {
-                format_pg_nullable_array_fmt(v.iter(), |dt| dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string())
+                format_pg_nullable_array_fmt(v.iter(), |dt| {
+                    dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string()
+                })
             },
             |bytes| decode_pg_array_binary(bytes, &decode_pg_timestamp_binary),
         ),
@@ -116,7 +129,9 @@ pub(crate) fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mu
             row,
             ordinal,
             |v: Vec<Option<chrono::DateTime<chrono::Utc>>>| {
-                format_pg_nullable_array_fmt(v.iter(), |dt| dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string())
+                format_pg_nullable_array_fmt(v.iter(), |dt| {
+                    dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string()
+                })
             },
             |bytes| decode_pg_array_binary(bytes, &decode_pg_timestamp_binary),
         ),
@@ -125,7 +140,9 @@ pub(crate) fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mu
             ordinal,
             // Each element gets the bytea text form (`\xHH..`) so a downstream
             // `asStringArray().map { it.asByteArray() }` round-trips per element.
-            |v: Vec<Option<Vec<u8>>>| format_pg_nullable_array_fmt(v.iter(), |b| format!("\\x{}", hex::encode(b))),
+            |v: Vec<Option<Vec<u8>>>| {
+                format_pg_nullable_array_fmt(v.iter(), |b| format!("\\x{}", hex::encode(b)))
+            },
             || decode_any(row, ordinal),
         ),
         // JSONB's binary wire format is a 1-byte version header (0x01) followed by the
@@ -151,7 +168,11 @@ pub(crate) fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mu
     };
     // A value may legally contain NUL (e.g. text in a non-UTF8-safe column after
     // lossy decoding); CString::new would fail on it. Strip rather than abort.
-    let s = if s.as_bytes().contains(&0) { s.replace('\0', "") } else { s };
+    let s = if s.as_bytes().contains(&0) {
+        s.replace('\0', "")
+    } else {
+        s
+    };
     CString::new(s).unwrap_or_default().into_raw()
 }
 
@@ -221,31 +242,48 @@ pub(crate) fn decode_datetime<'r, T: sqlx::Decode<'r, Postgres>>(
     render: impl FnOnce(T) -> String,
     binary: fn(&[u8]) -> Option<String>,
 ) -> String {
-    let Ok(value) = row.try_get_raw(ordinal) else { return String::new() };
+    let Ok(value) = row.try_get_raw(ordinal) else {
+        return String::new();
+    };
     match value.format() {
         PgValueFormat::Binary => value.as_bytes().ok().and_then(binary).unwrap_or_default(),
-        PgValueFormat::Text => decode_or(row, ordinal, render, || value.as_str().map(str::to_string).unwrap_or_default()),
+        PgValueFormat::Text => decode_or(row, ordinal, render, || {
+            value.as_str().map(str::to_string).unwrap_or_default()
+        }),
     }
 }
 
-pub(crate) fn decode_text_or_binary(row: &PgRow, ordinal: usize, decode_binary: fn(&[u8]) -> Option<String>) -> String {
-    let Ok(value) = row.try_get_raw(ordinal) else { return String::new() };
+pub(crate) fn decode_text_or_binary(
+    row: &PgRow,
+    ordinal: usize,
+    decode_binary: fn(&[u8]) -> Option<String>,
+) -> String {
+    let Ok(value) = row.try_get_raw(ordinal) else {
+        return String::new();
+    };
     match value.format() {
         PgValueFormat::Text => value.as_str().map(str::to_string).unwrap_or_default(),
-        PgValueFormat::Binary => value.as_bytes().ok().and_then(decode_binary).unwrap_or_default(),
+        PgValueFormat::Binary => value
+            .as_bytes()
+            .ok()
+            .and_then(decode_binary)
+            .unwrap_or_default(),
     }
 }
 
 /// Decodes a value of any type, never panicking: a text value as is (UTF-8 when valid, lossy otherwise), a binary
 /// one by its type (see decode_pg_binary).
 pub(crate) fn decode_any(row: &PgRow, ordinal: usize) -> String {
-    let Ok(value) = row.try_get_raw(ordinal) else { return String::new() };
-    let Ok(bytes) = value.as_bytes() else { return String::new() };
+    let Ok(value) = row.try_get_raw(ordinal) else {
+        return String::new();
+    };
+    let Ok(bytes) = value.as_bytes() else {
+        return String::new();
+    };
     match value.format() {
         PgValueFormat::Text => String::from_utf8_lossy(bytes).into_owned(),
-        PgValueFormat::Binary => {
-            decode_pg_binary(&value.type_info(), bytes).unwrap_or_else(|| decode_unknown_binary(bytes))
-        }
+        PgValueFormat::Binary => decode_pg_binary(&value.type_info(), bytes)
+            .unwrap_or_else(|| decode_unknown_binary(bytes)),
     }
 }
 
@@ -261,20 +299,28 @@ mod tests {
 
     /// The value of `expr` decoded from a plain query (text format) and from a prepared statement (binary format).
     async fn decoded(cn: &mut PgConnection, expr: &str) -> (Option<String>, Option<String>) {
-        let text = cn.fetch_one(AssertSqlSafe(format!("select {expr} as v"))).await.unwrap();
+        let text = cn
+            .fetch_one(AssertSqlSafe(format!("select {expr} as v")))
+            .await
+            .unwrap();
         let binary = sqlx::query(AssertSqlSafe(format!("select {expr} as v where $1 = 1")))
             .bind(1)
             .fetch_one(&mut *cn)
             .await
             .unwrap();
-        (take(decode_postgresql_column_value(&text, 0)), take(decode_postgresql_column_value(&binary, 0)))
+        (
+            take(decode_postgresql_column_value(&text, 0)),
+            take(decode_postgresql_column_value(&binary, 0)),
+        )
     }
 
     #[test]
     #[ignore = "needs the PostgreSQL of docker-compose.yml"]
     fn values_decode_alike_from_text_and_binary_results() {
         block_on(async {
-            let mut cn = PgConnection::connect_with(&connect_options()).await.unwrap();
+            let mut cn = PgConnection::connect_with(&connect_options())
+                .await
+                .unwrap();
             for (expr, expected) in [
                 ("null::int4", None),
                 ("(-2)::int2", Some("-2")),
@@ -285,10 +331,16 @@ mod tests {
                 ("true", Some("true")),
                 ("'héllo'::text", Some("héllo")),
                 ("'\\xdead'::bytea", Some("\\xdead")),
-                ("'00000000-0000-0000-0000-000000000001'::uuid", Some("00000000-0000-0000-0000-000000000001")),
+                (
+                    "'00000000-0000-0000-0000-000000000001'::uuid",
+                    Some("00000000-0000-0000-0000-000000000001"),
+                ),
                 ("'2024-02-29'::date", Some("2024-02-29")),
                 ("'infinity'::date", Some("infinity")),
-                ("'2024-02-29 10:00:00'::timestamp", Some("2024-02-29 10:00:00.000000")),
+                (
+                    "'2024-02-29 10:00:00'::timestamp",
+                    Some("2024-02-29 10:00:00.000000"),
+                ),
                 ("'-infinity'::timestamptz", Some("-infinity")),
                 ("12345.6789::numeric", Some("12345.6789")),
                 ("'NaN'::numeric", Some("NaN")),
@@ -313,7 +365,9 @@ mod tests {
     #[ignore = "needs the PostgreSQL of docker-compose.yml"]
     fn bytea_in_escape_output_decodes_as_hex() {
         block_on(async {
-            let mut cn = PgConnection::connect_with(&connect_options()).await.unwrap();
+            let mut cn = PgConnection::connect_with(&connect_options())
+                .await
+                .unwrap();
             cn.execute("set bytea_output = 'escape'").await.unwrap();
             let (text, binary) = decoded(&mut cn, "'\\x00ff5c'::bytea").await;
             assert_eq!(text.as_deref(), Some("\\x00ff5c"));

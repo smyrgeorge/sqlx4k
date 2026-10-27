@@ -35,7 +35,8 @@ pub extern "C" fn sqlx4k_postgresql_of(
 
     // Create the tokio runtime, once: get_or_init also when two pools are created concurrently (checking and then
     // setting raced, and the losing set().unwrap() panicked).
-    let runtime = RUNTIME.get_or_init(|| Runtime::new().expect("failed to create the tokio runtime"));
+    let runtime =
+        RUNTIME.get_or_init(|| Runtime::new().expect("failed to create the tokio runtime"));
 
     // Create the db pool options.
     let pool = PgPoolOptions::new().max_connections(max_connections as u32);
@@ -212,7 +213,16 @@ mod tests {
 
     #[test]
     fn a_malformed_url_is_an_error() {
-        let r = Res(sqlx4k_postgresql_of(c("not a url").as_ptr(), c("u").as_ptr(), c("p").as_ptr(), -1, 1, -1, -1, -1));
+        let r = Res(sqlx4k_postgresql_of(
+            c("not a url").as_ptr(),
+            c("u").as_ptr(),
+            c("p").as_ptr(),
+            -1,
+            1,
+            -1,
+            -1,
+            -1,
+        ));
         assert_eq!(r.get().error, ERROR_DATABASE);
         assert!(r.get().rt.is_null());
     }
@@ -221,7 +231,16 @@ mod tests {
     #[ignore = "needs the PostgreSQL of docker-compose.yml"]
     fn a_wrong_password_is_an_error() {
         let url = c(&crate::test_support::url());
-        let r = Res(sqlx4k_postgresql_of(url.as_ptr(), c(USERNAME).as_ptr(), c("wrong").as_ptr(), 1, 1, 5_000, -1, -1));
+        let r = Res(sqlx4k_postgresql_of(
+            url.as_ptr(),
+            c(USERNAME).as_ptr(),
+            c("wrong").as_ptr(),
+            1,
+            1,
+            5_000,
+            -1,
+            -1,
+        ));
         assert_eq!(r.get().error, ERROR_DATABASE);
         assert_eq!(r.sql_state().as_deref(), Some("28P01"));
     }
@@ -230,7 +249,17 @@ mod tests {
     #[ignore = "needs the PostgreSQL of docker-compose.yml"]
     fn a_pool_keeps_its_minimum_of_connections() {
         let url = c(&crate::test_support::url());
-        let r = Res(sqlx4k_postgresql_of(url.as_ptr(), c(USERNAME).as_ptr(), c(PASSWORD).as_ptr(), 2, 3, 5_000, -1, -1)).ok();
+        let r = Res(sqlx4k_postgresql_of(
+            url.as_ptr(),
+            c(USERNAME).as_ptr(),
+            c(PASSWORD).as_ptr(),
+            2,
+            3,
+            5_000,
+            -1,
+            -1,
+        ))
+        .ok();
         let pool = Pool { rt: r.get().rt };
         for _ in 0..100 {
             if sqlx4k_postgresql_pool_idle_size(pool.rt) == 2 {
@@ -248,17 +277,48 @@ mod tests {
         let pool = Pool::open(2);
         let table = unique("t_ffi_pool");
         query(&pool, &format!("create table {table}(id int8, v text)")).ok();
-        assert_eq!(query(&pool, &format!("insert into {table} values (1, 'a'), (2, 'b')")).ok().get().rows_affected, 2);
+        assert_eq!(
+            query(
+                &pool,
+                &format!("insert into {table} values (1, 'a'), (2, 'b')")
+            )
+            .ok()
+            .get()
+            .rows_affected,
+            2
+        );
         let v = c("c");
-        let params = [text_param(PARAM_TEXT, &v), param(PARAM_INT8, |p| p.i64_val = 2)];
+        let params = [
+            text_param(PARAM_TEXT, &v),
+            param(PARAM_INT8, |p| p.i64_val = 2),
+        ];
         let sql = c(&format!("update {table} set v = $1 where id = $2"));
-        let r = call(|cb, fun| sqlx4k_postgresql_query_with_params(pool.rt, sql.as_ptr(), params.as_ptr(), 2, cb, fun)).ok();
+        let r = call(|cb, fun| {
+            sqlx4k_postgresql_query_with_params(pool.rt, sql.as_ptr(), params.as_ptr(), 2, cb, fun)
+        })
+        .ok();
         assert_eq!(r.get().rows_affected, 1);
         let sql = c(&format!("select v from {table} where id >= $1 order by id"));
         let params = [param(PARAM_INT8, |p| p.i64_val = 1)];
-        let r = call(|cb, fun| sqlx4k_postgresql_fetch_all_with_params(pool.rt, sql.as_ptr(), params.as_ptr(), 1, cb, fun)).ok();
+        let r = call(|cb, fun| {
+            sqlx4k_postgresql_fetch_all_with_params(
+                pool.rt,
+                sql.as_ptr(),
+                params.as_ptr(),
+                1,
+                cb,
+                fun,
+            )
+        })
+        .ok();
         assert_eq!(r.rows(), [[Some("a".into())], [Some("c".into())]]);
-        assert_eq!(fetch_all(&pool, &format!("select count(*) from {table}")).ok().value().as_deref(), Some("2"));
+        assert_eq!(
+            fetch_all(&pool, &format!("select count(*) from {table}"))
+                .ok()
+                .value()
+                .as_deref(),
+            Some("2")
+        );
         query(&pool, &format!("drop table {table}")).ok();
     }
 
@@ -267,11 +327,23 @@ mod tests {
     fn a_failing_or_unreadable_statement_is_an_error() {
         let pool = Pool::open(1);
         let r = fetch_all(&pool, "select * from missing_table");
-        assert_eq!((r.get().error, r.sql_state().as_deref()), (ERROR_DATABASE, Some("42P01")));
+        assert_eq!(
+            (r.get().error, r.sql_state().as_deref()),
+            (ERROR_DATABASE, Some("42P01"))
+        );
         let bad = c("not a date");
         let params = [text_param(crate::params::PARAM_DATE, &bad)];
         let sql = c("select $1::date");
-        let r = call(|cb, fun| sqlx4k_postgresql_fetch_all_with_params(pool.rt, sql.as_ptr(), params.as_ptr(), 1, cb, fun));
+        let r = call(|cb, fun| {
+            sqlx4k_postgresql_fetch_all_with_params(
+                pool.rt,
+                sql.as_ptr(),
+                params.as_ptr(),
+                1,
+                cb,
+                fun,
+            )
+        });
         assert_eq!(r.get().error, ERROR_DATABASE);
         assert!(r.error_message().unwrap().contains("Invalid DATE"));
     }

@@ -119,7 +119,10 @@ pub(crate) fn read_text(p: &Sqlx4kPostgresParam) -> String {
 /// referencing the caller's memory.
 ///
 /// A value that cannot be read is reported as an error (see `params_error`): a panic here would abort the process.
-pub(crate) fn read_params(params: *const Sqlx4kPostgresParam, count: c_int) -> Result<Vec<OwnedParam>, String> {
+pub(crate) fn read_params(
+    params: *const Sqlx4kPostgresParam,
+    count: c_int,
+) -> Result<Vec<OwnedParam>, String> {
     if params.is_null() || count <= 0 {
         return Ok(Vec::new());
     }
@@ -300,9 +303,15 @@ mod tests {
         assert!(matches!(&read[8], OwnedParam::Blob(v) if v == &blob));
         assert!(matches!(&read[9], OwnedParam::Date(v) if v.to_string() == "2024-02-29"));
         assert!(matches!(&read[10], OwnedParam::Time(v) if v.to_string() == "12:34:56.500"));
-        assert!(matches!(&read[11], OwnedParam::Timestamp(v) if v.to_string() == "2024-02-29 12:34:56"));
-        assert!(matches!(&read[12], OwnedParam::TimestampTz(v) if v.to_string() == "2024-02-29 12:34:56.123456 UTC"));
-        assert!(matches!(&read[13], OwnedParam::Uuid(v) if v.to_string() == "67e55044-10b1-426f-9247-bb680e5fe0c8"));
+        assert!(
+            matches!(&read[11], OwnedParam::Timestamp(v) if v.to_string() == "2024-02-29 12:34:56")
+        );
+        assert!(
+            matches!(&read[12], OwnedParam::TimestampTz(v) if v.to_string() == "2024-02-29 12:34:56.123456 UTC")
+        );
+        assert!(
+            matches!(&read[13], OwnedParam::Uuid(v) if v.to_string() == "67e55044-10b1-426f-9247-bb680e5fe0c8")
+        );
     }
 
     #[test]
@@ -359,7 +368,11 @@ mod tests {
     #[ignore = "needs the PostgreSQL of docker-compose.yml"]
     fn every_kind_is_bound() {
         block_on(async {
-            let pool = PgPoolOptions::new().max_connections(1).connect_with(connect_options()).await.unwrap();
+            let pool = PgPoolOptions::new()
+                .max_connections(1)
+                .connect_with(connect_options())
+                .await
+                .unwrap();
             let params = vec![
                 OwnedParam::Bool(true),
                 OwnedParam::Int2(-2),
@@ -371,20 +384,39 @@ mod tests {
                 OwnedParam::Blob(vec![1, 2]),
                 OwnedParam::Date(chrono::NaiveDate::from_ymd_opt(2024, 2, 29).unwrap()),
                 OwnedParam::Time(chrono::NaiveTime::from_hms_opt(1, 2, 3).unwrap()),
-                OwnedParam::Timestamp(chrono::NaiveDate::from_ymd_opt(2024, 2, 29).unwrap().and_hms_opt(1, 2, 3).unwrap()),
+                OwnedParam::Timestamp(
+                    chrono::NaiveDate::from_ymd_opt(2024, 2, 29)
+                        .unwrap()
+                        .and_hms_opt(1, 2, 3)
+                        .unwrap(),
+                ),
                 OwnedParam::TimestampTz(chrono::DateTime::from_timestamp(0, 0).unwrap()),
                 OwnedParam::Uuid(uuid::Uuid::nil()),
             ];
             let sql = "select $1::bool::text, $2::int2::text, $3::int4::text, $4::int8::text, $5::float4::text, \
                        $6::float8::text, $7::text, encode($8::bytea, 'hex'), $9::date::text, $10::time::text, \
                        $11::timestamp::text, ($12::timestamptz at time zone 'UTC')::text, $13::uuid::text";
-            let row = bind_params(sqlx::query(sql), params).fetch_one(&pool).await.unwrap();
+            let row = bind_params(sqlx::query(sql), params)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
             let values: Vec<String> = (0..13).map(|i| row.get::<String, _>(i)).collect();
             assert_eq!(
                 values,
                 [
-                    "true", "-2", "4", "8", "1.5", "-2.25", "x", "0102", "2024-02-29", "01:02:03",
-                    "2024-02-29 01:02:03", "1970-01-01 00:00:00", "00000000-0000-0000-0000-000000000000"
+                    "true",
+                    "-2",
+                    "4",
+                    "8",
+                    "1.5",
+                    "-2.25",
+                    "x",
+                    "0102",
+                    "2024-02-29",
+                    "01:02:03",
+                    "2024-02-29 01:02:03",
+                    "1970-01-01 00:00:00",
+                    "00000000-0000-0000-0000-000000000000"
                 ]
             );
             pool.close().await;
@@ -395,7 +427,11 @@ mod tests {
     #[ignore = "needs the PostgreSQL of docker-compose.yml"]
     fn nulls_are_bound_with_their_type_or_none() {
         block_on(async {
-            let pool = PgPoolOptions::new().max_connections(1).connect_with(connect_options()).await.unwrap();
+            let pool = PgPoolOptions::new()
+                .max_connections(1)
+                .connect_with(connect_options())
+                .await
+                .unwrap();
             // A typed NULL keeps its type: pg_typeof reads it without a cast.
             for (kind, type_name) in [
                 (PARAM_BOOL, "boolean"),
@@ -413,18 +449,24 @@ mod tests {
             ] {
                 // A statement of its own each (sqlx caches a statement, with its parameter types, by its SQL).
                 let sql = format!("select pg_typeof($1)::text, $1 is null -- {kind}");
-                let row = bind_params(sqlx::query(sqlx::AssertSqlSafe(sql)), vec![OwnedParam::Null(kind)])
-                    .fetch_one(&pool)
-                    .await
-                    .unwrap();
+                let row = bind_params(
+                    sqlx::query(sqlx::AssertSqlSafe(sql)),
+                    vec![OwnedParam::Null(kind)],
+                )
+                .fetch_one(&pool)
+                .await
+                .unwrap();
                 assert_eq!(row.get::<String, _>(0), type_name);
                 assert!(row.get::<bool, _>(1));
             }
             // An untyped NULL takes the type the query gives it.
-            let row = bind_params(sqlx::query("select $1::int4 is null"), vec![OwnedParam::Null(PARAM_NULL)])
-                .fetch_one(&pool)
-                .await
-                .unwrap();
+            let row = bind_params(
+                sqlx::query("select $1::int4 is null"),
+                vec![OwnedParam::Null(PARAM_NULL)],
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
             assert!(row.get::<bool, _>(0));
             pool.close().await;
         });

@@ -4,7 +4,6 @@ use futures_util::TryStreamExt;
 use sqlx::postgres::{PgRow, PgTypeInfo, PgValueRef};
 use sqlx::{AssertSqlSafe, Column, Executor, Postgres, Row, TypeInfo, ValueRef};
 use std::ffi::{c_char, c_int, CStr, CString};
-use std::ptr::null_mut;
 use std::slice;
 
 use crate::decode::decode_postgresql_column_value;
@@ -31,7 +30,7 @@ pub extern "C" fn sqlx4k_postgres_free_result(ptr: *mut Sqlx4kPostgresResult) {
         }
     }
 
-    if ptr.schema == null_mut() {
+    if ptr.schema.is_null() {
         return;
     }
 
@@ -45,17 +44,15 @@ pub extern "C" fn sqlx4k_postgres_free_result(ptr: *mut Sqlx4kPostgresResult) {
         std::mem::drop(kind);
     }
 
-    if ptr.rows == null_mut() {
+    if ptr.rows.is_null() {
         return;
     }
 
-    let rows: Vec<Sqlx4kPostgresRow> =
-        unsafe { vec_of(ptr.rows, ptr.size as usize) };
+    let rows: Vec<Sqlx4kPostgresRow> = unsafe { vec_of(ptr.rows, ptr.size as usize) };
     for row in rows {
-        let columns: Vec<Sqlx4kPostgresColumn> =
-            unsafe { vec_of(row.columns, row.size as usize) };
+        let columns: Vec<Sqlx4kPostgresColumn> = unsafe { vec_of(row.columns, row.size as usize) };
         for col in columns {
-            if col.value != null_mut() {
+            if !col.value.is_null() {
                 let value = unsafe { CString::from_raw(col.value) };
                 std::mem::drop(value);
             }
@@ -87,11 +84,13 @@ where
     Ok(if current.is_empty() { last } else { current })
 }
 
-pub(crate) fn sqlx4k_postgresql_result_of(result: Result<Vec<PgRow>, sqlx::Error>) -> Sqlx4kPostgresResult {
+pub(crate) fn sqlx4k_postgresql_result_of(
+    result: Result<Vec<PgRow>, sqlx::Error>,
+) -> Sqlx4kPostgresResult {
     match result {
         Ok(rows) => {
-            let schema: Sqlx4kPostgresSchema = if rows.len() > 0 {
-                sqlx4k_postgresql_schema_of(rows.get(0).unwrap())
+            let schema: Sqlx4kPostgresSchema = if !rows.is_empty() {
+                sqlx4k_postgresql_schema_of(rows.first().unwrap())
             } else {
                 Sqlx4kPostgresSchema::default()
             };
@@ -99,8 +98,7 @@ pub(crate) fn sqlx4k_postgresql_result_of(result: Result<Vec<PgRow>, sqlx::Error
             let schema = Box::new(schema);
             let schema = Box::leak(schema);
 
-            let rows: Vec<Sqlx4kPostgresRow> =
-                rows.iter().map(|r| sqlx4k_postgresql_row_of(r)).collect();
+            let rows: Vec<Sqlx4kPostgresRow> = rows.iter().map(sqlx4k_postgresql_row_of).collect();
             let size = rows.len();
             let rows: Box<[Sqlx4kPostgresRow]> = rows.into_boxed_slice();
             let rows: &mut [Sqlx4kPostgresRow] = Box::leak(rows);
@@ -214,7 +212,7 @@ mod tests {
     use crate::test_support::{block_on, c, connect_options, Res};
     use crate::types::{ERROR_POOL_CLOSED, OK};
     use sqlx::{Connection, PgConnection};
-    use std::ptr::null;
+    use std::ptr::{null, null_mut};
 
     #[test]
     fn a_c_string_reads_as_str() {
@@ -262,14 +260,30 @@ mod tests {
     #[ignore = "needs the PostgreSQL of docker-compose.yml"]
     fn rows_are_read_with_their_schema() {
         block_on(async {
-            let mut cn = PgConnection::connect_with(&connect_options()).await.unwrap();
-            let rows = fetch_last(&mut cn, "select 1::int4 as a, null::text as b, 'x' as c union all select 2, 'y', 'z'".to_string())
-                .await;
+            let mut cn = PgConnection::connect_with(&connect_options())
+                .await
+                .unwrap();
+            let rows = fetch_last(
+                &mut cn,
+                "select 1::int4 as a, null::text as b, 'x' as c union all select 2, 'y', 'z'"
+                    .to_string(),
+            )
+            .await;
             let r = Res(sqlx4k_postgresql_result_of(rows).leak()).ok();
-            assert_eq!(r.columns(), [("a".into(), "INT4".into()), ("b".into(), "TEXT".into()), ("c".into(), "TEXT".into())]);
+            assert_eq!(
+                r.columns(),
+                [
+                    ("a".into(), "INT4".into()),
+                    ("b".into(), "TEXT".into()),
+                    ("c".into(), "TEXT".into())
+                ]
+            );
             assert_eq!(
                 r.rows(),
-                [[Some("1".into()), None, Some("x".into())], [Some("2".into()), Some("y".into()), Some("z".into())]]
+                [
+                    [Some("1".into()), None, Some("x".into())],
+                    [Some("2".into()), Some("y".into()), Some("z".into())]
+                ]
             );
             cn.close().await.unwrap();
         });
@@ -279,16 +293,27 @@ mod tests {
     #[ignore = "needs the PostgreSQL of docker-compose.yml"]
     fn the_rows_of_the_last_statement_are_kept() {
         block_on(async {
-            let mut cn = PgConnection::connect_with(&connect_options()).await.unwrap();
-            let rows = fetch_last(&mut cn, "select 1 as a; select 2 as b, 3 as c".to_string()).await;
+            let mut cn = PgConnection::connect_with(&connect_options())
+                .await
+                .unwrap();
+            let rows =
+                fetch_last(&mut cn, "select 1 as a; select 2 as b, 3 as c".to_string()).await;
             let r = Res(sqlx4k_postgresql_result_of(rows).leak()).ok();
-            assert_eq!(r.columns().iter().map(|c| c.0.as_str()).collect::<Vec<_>>(), ["b", "c"]);
+            assert_eq!(
+                r.columns().iter().map(|c| c.0.as_str()).collect::<Vec<_>>(),
+                ["b", "c"]
+            );
             assert_eq!(r.rows(), [[Some("2".into()), Some("3".into())]]);
             // A last statement that returns no rows: no rows.
-            let rows = fetch_last(&mut cn, "select 1 as a; select 2 as b where false".to_string()).await;
+            let rows = fetch_last(
+                &mut cn,
+                "select 1 as a; select 2 as b where false".to_string(),
+            )
+            .await;
             assert!(rows.unwrap().is_empty());
             // A failing statement fails it.
-            let rows = fetch_last(&mut cn, "select 1; select * from missing_table".to_string()).await;
+            let rows =
+                fetch_last(&mut cn, "select 1; select * from missing_table".to_string()).await;
             assert!(rows.is_err());
             cn.close().await.unwrap();
         });
@@ -298,7 +323,9 @@ mod tests {
     #[ignore = "needs the PostgreSQL of docker-compose.yml"]
     fn a_row_of_no_columns_is_read() {
         block_on(async {
-            let mut cn = PgConnection::connect_with(&connect_options()).await.unwrap();
+            let mut cn = PgConnection::connect_with(&connect_options())
+                .await
+                .unwrap();
             let rows = fetch_last(&mut cn, "select".to_string()).await;
             let r = Res(sqlx4k_postgresql_result_of(rows).leak()).ok();
             assert_eq!(r.get().size, 1);

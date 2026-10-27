@@ -32,10 +32,18 @@ pub extern "C" fn sqlx4k_postgresql_listen(
     // Registered before the task starts, so that sqlx4k_postgresql_unlisten finds it as soon as listen returns.
     let (stop_tx, mut stop) = oneshot::channel::<()>();
     let (stopped, stopped_rx) = oneshot::channel::<()>();
-    listeners().lock().unwrap().insert(notify_id, (stop_tx, stopped_rx));
+    listeners()
+        .lock()
+        .unwrap()
+        .insert(notify_id, (stop_tx, stopped_rx));
     runtime.spawn(async move {
         // A pool of 1 without timeouts (as they don't apply here), only used to handle re-connections.
-        let options = sqlx4k.pool.options().clone().max_connections(1).min_connections(0);
+        let options = sqlx4k
+            .pool
+            .options()
+            .clone()
+            .max_connections(1)
+            .min_connections(0);
         let listener = async {
             let pool = options.connect_with(sqlx4k.connect_options.clone()).await?;
             let mut listener = PgListener::connect_with(&pool).await?;
@@ -100,8 +108,11 @@ pub extern "C" fn sqlx4k_postgresql_listen(
 /// notified once it has stopped and closed its connection.
 pub(crate) type ListenerControl = (oneshot::Sender<()>, oneshot::Receiver<()>);
 
-pub(crate) fn listeners() -> &'static std::sync::Mutex<std::collections::HashMap<c_int, ListenerControl>> {
-    static LISTENERS: OnceLock<std::sync::Mutex<std::collections::HashMap<c_int, ListenerControl>>> = OnceLock::new();
+pub(crate) fn listeners(
+) -> &'static std::sync::Mutex<std::collections::HashMap<c_int, ListenerControl>> {
+    static LISTENERS: OnceLock<
+        std::sync::Mutex<std::collections::HashMap<c_int, ListenerControl>>,
+    > = OnceLock::new();
     LISTENERS.get_or_init(Default::default)
 }
 
@@ -131,7 +142,9 @@ pub(crate) const LISTEN_MIN_BACKOFF: Duration = Duration::from_millis(100);
 
 pub(crate) const LISTEN_MAX_BACKOFF: Duration = Duration::from_secs(30);
 
-pub(crate) fn sqlx4k_postgresql_result_of_pg_notification(item: PgNotification) -> Sqlx4kPostgresResult {
+pub(crate) fn sqlx4k_postgresql_result_of_pg_notification(
+    item: PgNotification,
+) -> Sqlx4kPostgresResult {
     let column = Sqlx4kPostgresSchemaColumn {
         ordinal: 0,
         name: CString::new(item.channel()).unwrap().into_raw(),
@@ -198,7 +211,8 @@ mod tests {
         let (sender, receiver) = mpsc::channel();
         receivers().lock().unwrap().insert(id, sender);
         let channels = c(channels);
-        call(|cb, fun| sqlx4k_postgresql_listen(pool.rt, channels.as_ptr(), id, notify, cb, fun)).ok();
+        call(|cb, fun| sqlx4k_postgresql_listen(pool.rt, channels.as_ptr(), id, notify, cb, fun))
+            .ok();
         (id, receiver)
     }
 
@@ -209,7 +223,9 @@ mod tests {
 
     /// The channel and payload of the next notification.
     fn next(receiver: &mpsc::Receiver<usize>) -> (String, String) {
-        let r = Res(receiver.recv_timeout(Duration::from_secs(10)).expect("no notification") as *mut Sqlx4kPostgresResult);
+        let r = Res(receiver
+            .recv_timeout(Duration::from_secs(10))
+            .expect("no notification") as *mut Sqlx4kPostgresResult);
         let (channel, kind) = r.columns().remove(0);
         assert_eq!(kind, "TEXT");
         (channel, r.value().unwrap())

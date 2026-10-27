@@ -71,7 +71,9 @@ pub(crate) fn pg_seconds(seconds: i64, micros: i64) -> String {
     if micros == 0 {
         format!("{seconds:02}")
     } else {
-        format!("{seconds:02}.{micros:06}").trim_end_matches('0').to_string()
+        format!("{seconds:02}.{micros:06}")
+            .trim_end_matches('0')
+            .to_string()
     }
 }
 
@@ -79,7 +81,9 @@ pub(crate) fn pg_seconds(seconds: i64, micros: i64) -> String {
 /// a delimiter, quote, backslash or whitespace.
 pub(crate) fn pg_range_bound(value: &str) -> String {
     let quote = value.is_empty()
-        || value.chars().any(|c| matches!(c, '"' | '\\' | '(' | ')' | '[' | ']' | ',') || c.is_whitespace());
+        || value
+            .chars()
+            .any(|c| matches!(c, '"' | '\\' | '(' | ')' | '[' | ']' | ',') || c.is_whitespace());
     if !quote {
         return value.to_string();
     }
@@ -96,14 +100,27 @@ pub(crate) fn pg_range_bound(value: &str) -> String {
 }
 
 /// Like format_pg_array_fmt, for elements that may be NULL (rendered `NULL`, as postgres does).
-pub(crate) fn format_pg_nullable_array_fmt<'a, T: 'a, I: Iterator<Item = &'a Option<T>>, F: FnMut(&'a T) -> String>(
+pub(crate) fn format_pg_nullable_array_fmt<
+    'a,
+    T: 'a,
+    I: Iterator<Item = &'a Option<T>>,
+    F: FnMut(&'a T) -> String,
+>(
     iter: I,
     mut format_one: F,
 ) -> String {
-    format_pg_array_fmt(iter, |v| v.as_ref().map_or_else(|| "NULL".to_string(), &mut format_one))
+    format_pg_array_fmt(iter, |v| {
+        v.as_ref()
+            .map_or_else(|| "NULL".to_string(), &mut format_one)
+    })
 }
 
-pub(crate) fn format_pg_array_fmt<'a, T: 'a, I: Iterator<Item = &'a T>, F: FnMut(&'a T) -> String>(
+pub(crate) fn format_pg_array_fmt<
+    'a,
+    T: 'a,
+    I: Iterator<Item = &'a T>,
+    F: FnMut(&'a T) -> String,
+>(
     iter: I,
     mut format_one: F,
 ) -> String {
@@ -154,9 +171,15 @@ mod tests {
 
     #[test]
     fn trailing_zeros_of_a_fraction_are_trimmed() {
-        assert_eq!(trim_pg_fraction("10:00:00.500000".to_string()), "10:00:00.5");
+        assert_eq!(
+            trim_pg_fraction("10:00:00.500000".to_string()),
+            "10:00:00.5"
+        );
         assert_eq!(trim_pg_fraction("10:00:00.000000".to_string()), "10:00:00");
-        assert_eq!(trim_pg_fraction("2024-01-01 10:00:00".to_string()), "2024-01-01 10:00:00");
+        assert_eq!(
+            trim_pg_fraction("2024-01-01 10:00:00".to_string()),
+            "2024-01-01 10:00:00"
+        );
         assert_eq!(trim_pg_fraction("infinity".to_string()), "infinity");
     }
 
@@ -172,7 +195,10 @@ mod tests {
     fn a_range_bound_is_quoted_when_it_must_be() {
         assert_eq!(pg_range_bound("10"), "10");
         assert_eq!(pg_range_bound(""), "\"\"");
-        assert_eq!(pg_range_bound("2020-01-01 10:00:00"), "\"2020-01-01 10:00:00\"");
+        assert_eq!(
+            pg_range_bound("2020-01-01 10:00:00"),
+            "\"2020-01-01 10:00:00\""
+        );
         assert_eq!(pg_range_bound("a,b"), "\"a,b\"");
         // Quotes and backslashes are doubled, not escaped.
         assert_eq!(pg_range_bound("a\"b\\c"), "\"a\"\"b\\\\c\"");
@@ -180,8 +206,17 @@ mod tests {
 
     #[test]
     fn arrays_are_written_in_braces() {
-        assert_eq!(format_pg_array_fmt([1, 2, 3].iter(), |v| v.to_string()), "{1,2,3}");
-        assert_eq!(format_pg_array_fmt(Vec::<i32>::new().iter(), |v| v.to_string()), "{}");
-        assert_eq!(format_pg_nullable_array_fmt([Some(1), None].iter(), |v| v.to_string()), "{1,NULL}");
+        assert_eq!(
+            format_pg_array_fmt([1, 2, 3].iter(), |v| v.to_string()),
+            "{1,2,3}"
+        );
+        assert_eq!(
+            format_pg_array_fmt(Vec::<i32>::new().iter(), |v| v.to_string()),
+            "{}"
+        );
+        assert_eq!(
+            format_pg_nullable_array_fmt([Some(1), None].iter(), |v| v.to_string()),
+            "{1,NULL}"
+        );
     }
 }
