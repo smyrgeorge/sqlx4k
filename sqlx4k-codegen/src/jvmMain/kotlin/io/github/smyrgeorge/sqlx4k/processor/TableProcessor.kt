@@ -1304,7 +1304,9 @@ class TableProcessor(
 
     private fun generateBindExpression(prop: KSPropertyDeclaration, prefix: String? = null): String {
         val propName = prop.simpleName()
-        val propAccess = if (prefix != null) "$prefix.$propName" else propName
+        // Through `this` with no prefix: a bare name would resolve to a local of the generated function (`sql`,
+        // `statement`, `generatedId`) before the property of its receiver.
+        val propAccess = if (prefix != null) "$prefix.$propName" else "this.$propName"
         val converterAnnotation = prop.getConverterAnnotation()
         if (converterAnnotation != null) {
             validateConverterTypeCompatibility(prop, converterAnnotation)

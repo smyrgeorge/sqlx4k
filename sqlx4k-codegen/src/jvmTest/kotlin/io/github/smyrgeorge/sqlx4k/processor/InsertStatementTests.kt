@@ -3,12 +3,16 @@ package io.github.smyrgeorge.sqlx4k.processor
 import assertk.assertThat
 import assertk.assertions.contains
 import assertk.assertions.doesNotContain
+import assertk.assertions.isEqualTo
+import io.github.smyrgeorge.sqlx4k.processor.test.generated.delete
 import io.github.smyrgeorge.sqlx4k.processor.test.generated.insert
+import io.github.smyrgeorge.sqlx4k.processor.test.generated.update
 import io.github.smyrgeorge.sqlx4k.processor.util.Article
 import io.github.smyrgeorge.sqlx4k.processor.util.Comment
 import io.github.smyrgeorge.sqlx4k.processor.util.Customer
 import io.github.smyrgeorge.sqlx4k.processor.util.Order
 import io.github.smyrgeorge.sqlx4k.processor.util.Product
+import io.github.smyrgeorge.sqlx4k.processor.util.SavedQuery
 import io.github.smyrgeorge.sqlx4k.processor.util.Tag
 import io.github.smyrgeorge.sqlx4k.processor.util.User
 import io.github.smyrgeorge.sqlx4k.processor.util.render
@@ -314,5 +318,22 @@ class InsertStatementTests {
         val product = Product(id = "p1", name = "Test", price = 123.456)
 
         assertThat(product.insert().renderValues()).contains(123.456)
+    }
+
+    // SavedQuery entity: properties named as the locals and parameters of the generated functions
+
+    @Test
+    fun `SavedQuery insert binds its properties, not the locals named as them`() {
+        val query = SavedQuery(id = 0, sql = "select 1", statement = "a statement", generatedId = 42)
+
+        assertThat(query.insert().renderValues()).isEqualTo(listOf("select 1", "a statement", 42L))
+    }
+
+    @Test
+    fun `SavedQuery update and delete bind its properties, not the locals named as them`() {
+        val query = SavedQuery(id = 7, sql = "select 1", statement = "a statement", generatedId = 42)
+
+        assertThat(query.update().renderValues()).isEqualTo(listOf("select 1", "a statement", 42L, 7L))
+        assertThat(query.delete().renderValues()).isEqualTo(listOf(7L))
     }
 }

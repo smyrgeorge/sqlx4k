@@ -23,6 +23,18 @@ data class User(
 )
 
 /**
+ * Entity whose properties share their names with the locals and parameters of the generated functions.
+ */
+@Table("saved_queries")
+data class SavedQuery(
+    @Id
+    val id: Long,
+    val sql: String,
+    val statement: String,
+    val generatedId: Long
+)
+
+/**
  * Entity with application-generated ID (UUID-style).
  * ID is included in INSERT.
  */
