@@ -4,6 +4,7 @@ import assertk.assertThat
 import assertk.assertions.containsExactly
 import assertk.assertions.isEmpty
 import assertk.assertions.isEqualTo
+import io.github.smyrgeorge.sqlx4k.impl.extensions.isUpsertStatement
 import io.github.smyrgeorge.sqlx4k.impl.extensions.scanSql
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.splitSqlStatements
 import kotlin.test.Test
@@ -923,5 +924,15 @@ class ScanSqlTests {
         val sql = "insert into t values ('a\\';b');\n# a note; with a semicolon\nselect 1;"
         assertThat(splitSqlStatements(sql, Dialect.MySQL))
             .containsExactly("insert into t values ('a\\';b')", "# a note; with a semicolon\nselect 1")
+    }
+
+    @Test
+    fun `isUpsertStatement recognises ON CONFLICT DO UPDATE outside quotes and comments`() {
+        assertThat("insert into t(k) values (1) on conflict(k) do update set n = n + 1".isUpsertStatement()).isEqualTo(true)
+        assertThat("INSERT INTO t(k) VALUES (1)\nON CONFLICT (k)\nDO UPDATE SET n = 2".isUpsertStatement()).isEqualTo(true)
+        assertThat("insert into t(k) values (1) on conflict do nothing".isUpsertStatement()).isEqualTo(false)
+        assertThat("insert into t(v) values ('on conflict do update')".isUpsertStatement()).isEqualTo(false)
+        assertThat("insert into t(v) values (1) -- on conflict do update".isUpsertStatement()).isEqualTo(false)
+        assertThat("insert into t(v) values (1)".isUpsertStatement()).isEqualTo(false)
     }
 }

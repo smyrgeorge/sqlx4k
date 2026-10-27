@@ -258,6 +258,26 @@ internal inline fun String.scanSql(
 }
 
 /**
+ * Whether the SQL statement is an UPSERT (`INSERT ... ON CONFLICT ... DO UPDATE`, as SQLite and PostgreSQL write it),
+ * judged by its words outside quotes and comments.
+ *
+ * SQLite drivers use it for [io.github.smyrgeorge.sqlx4k.ExecuteResult.lastInsertId]: an UPSERT that updates the row
+ * instead of inserting it leaves the connection's last inserted rowid as it was, with the row counted as changed.
+ */
+fun String.isUpsertStatement(): Boolean {
+    val words = ArrayList<String>()
+    scanSql(writeOutput = false) { i, c, _ ->
+        if (!c.isIdentStart() || i > 0 && this[i - 1].isIdentPart()) return@scanSql null
+        var end = i + 1
+        while (end < length && this[end].isIdentPart()) end++
+        words += substring(i, end).lowercase()
+        end
+    }
+    fun has(first: String, second: String) = words.zipWithNext().any { (a, b) -> a == first && b == second }
+    return has("on", "conflict") && has("do", "update")
+}
+
+/**
  * Whether the SQL statement is an `INSERT` (or SQLite's `REPLACE`), judged by its first keyword after any leading
  * whitespace and comments. A statement that starts with a `WITH` clause is not recognised.
  *

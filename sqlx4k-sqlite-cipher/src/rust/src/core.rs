@@ -487,11 +487,21 @@ pub struct Sqlx4kSqliteCipher {
 
 impl Sqlx4kSqliteCipher {
     pub async fn query(&self, sql: String) -> *mut Sqlx4kSqliteCipherResult {
-        let result = self.pool.execute(AssertSqlSafe(sql)).await;
+        let (result, before) = if is_upsert(&sql) {
+            match self.pool.acquire().await {
+                Ok(mut cn) => {
+                    let before = last_insert_rowid(&mut cn).await;
+                    (cn.execute(AssertSqlSafe(sql)).await, before)
+                }
+                Err(err) => (Err(err), None),
+            }
+        } else {
+            (self.pool.execute(AssertSqlSafe(sql)).await, None)
+        };
         let result = match result {
             Ok(res) => Sqlx4kSqliteCipherResult {
                 rows_affected: res.rows_affected(),
-                last_insert_id: res.last_insert_rowid(),
+                last_insert_id: inserted_rowid(&res, before),
                 ..Default::default()
             },
             Err(err) => error_result_of(err),
@@ -540,11 +550,12 @@ impl Sqlx4kSqliteCipher {
         sql: String,
     ) -> *mut Sqlx4kSqliteCipherResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<Sqlite>) };
+        let before = if is_upsert(&sql) { last_insert_rowid(&mut **cn).await } else { None };
         let result = cn.execute(AssertSqlSafe(sql)).await;
         let result = match result {
             Ok(res) => Sqlx4kSqliteCipherResult {
                 rows_affected: res.rows_affected(),
-                last_insert_id: res.last_insert_rowid(),
+                last_insert_id: inserted_rowid(&res, before),
                 ..Default::default()
             },
             Err(err) => error_result_of(err),
@@ -624,13 +635,14 @@ impl Sqlx4kSqliteCipher {
         sql: String,
     ) -> *mut Sqlx4kSqliteCipherResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Sqlite>) };
+        let before = if is_upsert(&sql) { last_insert_rowid(&mut *tx).await } else { None };
         let result = tx.execute(AssertSqlSafe(sql)).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
         let result = match result {
             Ok(res) => Sqlx4kSqliteCipherResult {
                 rows_affected: res.rows_affected(),
-                last_insert_id: res.last_insert_rowid(),
+                last_insert_id: inserted_rowid(&res, before),
                 ..Default::default()
             },
             Err(err) => error_result_of(err),
@@ -767,12 +779,23 @@ impl Sqlx4kSqliteCipher {
         sql: String,
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kSqliteCipherResult {
+        let upsert = is_upsert(&sql);
         let q = bind_params(sqlx::query::<Sqlite>(AssertSqlSafe(sql)), params);
-        let result = q.execute(&self.pool).await;
+        let (result, before) = if upsert {
+            match self.pool.acquire().await {
+                Ok(mut cn) => {
+                    let before = last_insert_rowid(&mut cn).await;
+                    (q.execute(&mut *cn).await, before)
+                }
+                Err(err) => (Err(err), None),
+            }
+        } else {
+            (q.execute(&self.pool).await, None)
+        };
         let result = match result {
             Ok(res) => Sqlx4kSqliteCipherResult {
                 rows_affected: res.rows_affected(),
-                last_insert_id: res.last_insert_rowid(),
+                last_insert_id: inserted_rowid(&res, before),
                 ..Default::default()
             },
             Err(err) => error_result_of(err),
@@ -797,12 +820,14 @@ impl Sqlx4kSqliteCipher {
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kSqliteCipherResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<Sqlite>) };
+        let upsert = is_upsert(&sql);
         let q = bind_params(sqlx::query::<Sqlite>(AssertSqlSafe(sql)), params);
+        let before = if upsert { last_insert_rowid(&mut **cn).await } else { None };
         let result = q.execute(&mut **cn).await;
         let result = match result {
             Ok(res) => Sqlx4kSqliteCipherResult {
                 rows_affected: res.rows_affected(),
-                last_insert_id: res.last_insert_rowid(),
+                last_insert_id: inserted_rowid(&res, before),
                 ..Default::default()
             },
             Err(err) => error_result_of(err),
@@ -829,14 +854,16 @@ impl Sqlx4kSqliteCipher {
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kSqliteCipherResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Sqlite>) };
+        let upsert = is_upsert(&sql);
         let q = bind_params(sqlx::query::<Sqlite>(AssertSqlSafe(sql)), params);
+        let before = if upsert { last_insert_rowid(&mut *tx).await } else { None };
         let result = q.execute(&mut *tx).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
         let result = match result {
             Ok(res) => Sqlx4kSqliteCipherResult {
                 rows_affected: res.rows_affected(),
-                last_insert_id: res.last_insert_rowid(),
+                last_insert_id: inserted_rowid(&res, before),
                 ..Default::default()
             },
             Err(err) => error_result_of(err),
@@ -1413,5 +1440,77 @@ mod real_tests {
         for (value, expected) in cases {
             assert_eq!(format_sqlite_real(*value), *expected, "formatting {value:e}");
         }
+    }
+}
+
+/// Whether the SQL is an UPSERT (`INSERT ... ON CONFLICT ... DO UPDATE`), judged by its words outside quotes and
+/// comments.
+fn is_upsert(sql: &str) -> bool {
+    let words = sql_words(sql);
+    let has = |a: &str, b: &str| words.windows(2).any(|w| w[0] == a && w[1] == b);
+    has("on", "conflict") && has("do", "update")
+}
+
+/// The words of the SQL outside quotes and comments, lowercased.
+fn sql_words(sql: &str) -> Vec<String> {
+    let chars: Vec<char> = sql.chars().collect();
+    let mut words = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '\'' || c == '"' || c == '`' || c == '[' {
+            let close = if c == '[' { ']' } else { c };
+            i += 1;
+            while i < chars.len() {
+                if chars[i] == close {
+                    // A doubled quote is one quote character of the string.
+                    if close != ']' && chars.get(i + 1) == Some(&close) {
+                        i += 2;
+                        continue;
+                    }
+                    break;
+                }
+                i += 1;
+            }
+            i += 1;
+        } else if c == '-' && chars.get(i + 1) == Some(&'-') {
+            while i < chars.len() && chars[i] != '\n' {
+                i += 1;
+            }
+        } else if c == '/' && chars.get(i + 1) == Some(&'*') {
+            i += 2;
+            while i < chars.len() && !(chars[i] == '*' && chars.get(i + 1) == Some(&'/')) {
+                i += 1;
+            }
+            i += 2;
+        } else if c.is_alphanumeric() || c == '_' {
+            let start = i;
+            while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
+                i += 1;
+            }
+            words.push(chars[start..i].iter().collect::<String>().to_lowercase());
+        } else {
+            i += 1;
+        }
+    }
+    words
+}
+
+/// The connection's last inserted rowid, or `None` when it cannot be read.
+async fn last_insert_rowid(cn: &mut SqliteConnection) -> Option<i64> {
+    sqlx::query_scalar::<_, i64>("select last_insert_rowid()").fetch_one(cn).await.ok()
+}
+
+/// The rowid the statement inserted, as far as it is known. SQLite keeps the last inserted rowid per connection, and an
+/// UPSERT that updates the row instead of inserting it leaves it as it was, with the row counted as changed: the
+/// rowid of an earlier insert (into another table, maybe by an earlier borrower of the connection) was reported as the
+/// UPSERT's. `before` is the connection's last inserted rowid before an UPSERT; when it is unchanged, the rowid is
+/// reported as 0, none (a rowid is 0 only when inserted as such).
+fn inserted_rowid(res: &sqlx::sqlite::SqliteQueryResult, before: Option<i64>) -> i64 {
+    let rowid = res.last_insert_rowid();
+    if before == Some(rowid) {
+        0
+    } else {
+        rowid
     }
 }

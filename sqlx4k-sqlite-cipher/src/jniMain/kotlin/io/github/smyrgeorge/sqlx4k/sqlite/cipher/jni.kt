@@ -194,7 +194,8 @@ internal class JniResult(
         throwIfError()
         return ExecuteResult(
             rowsAffected = rowsAffected,
-            lastInsertId = lastInsertId.takeIf { rowsAffected > 0 && sql.isInsertStatement() },
+            // 0 (none) for an UPSERT that left it unchanged, having updated the row instead of inserting it.
+            lastInsertId = lastInsertId.takeIf { it != 0L && rowsAffected > 0 && sql.isInsertStatement() },
         )
     }
 

@@ -118,11 +118,12 @@ internal fun CPointer<Sqlx4kSqliteCipherResult>?.resultSetOrError(): ResultSet =
 
 /**
  * SQLite keeps the last inserted rowid per connection, so it is the statement's own generated id only for an
- * `INSERT` that inserted rows; otherwise it would be a previous insert's.
+ * `INSERT` that inserted rows; otherwise it would be a previous insert's. The native side reports it as 0 (none) for
+ * an UPSERT that left it unchanged, having updated the row instead of inserting it.
  */
 private fun Sqlx4kSqliteCipherResult.toExecuteResult(sql: String): ExecuteResult {
     val rowsAffected = rows_affected.toLong()
-    val lastInsertId = last_insert_id.takeIf { rowsAffected > 0 && sql.isInsertStatement() }
+    val lastInsertId = last_insert_id.takeIf { it != 0L && rowsAffected > 0 && sql.isInsertStatement() }
     return ExecuteResult(rowsAffected = rowsAffected, lastInsertId = lastInsertId)
 }
 

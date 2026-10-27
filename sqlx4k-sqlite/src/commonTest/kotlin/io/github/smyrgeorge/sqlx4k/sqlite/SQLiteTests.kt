@@ -6,6 +6,7 @@ import assertk.assertAll
 import assertk.assertThat
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFailure
+import assertk.assertions.isNotNull
 import assertk.assertions.isNull
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
@@ -268,5 +269,38 @@ class SQLiteTests : SQLiteTestBase() {
         } finally {
             db.execute("drop table $table;").getOrThrow()
         }
+    }
+
+    // An UPSERT that updates its row leaves the connection's last inserted rowid as an earlier insert left it.
+    @Test
+    fun `an UPSERT that updated its row reports no generated id`(): Unit = runBlocking {
+        val items = "t_upsert_items_${Random.nextInt(1_000_000)}"
+        val counters = "t_upsert_counters_${Random.nextInt(1_000_000)}"
+        db.execute("create table $items(id integer primary key, v text);").getOrThrow()
+        db.execute("create table $counters(k text primary key, n int not null);").getOrThrow()
+        val upsert = "insert into $counters(k, n) values ('x', 1) on conflict(k) do update set n = n + 1;"
+        val cn = db.acquire().getOrThrow()
+        try {
+            // Rowid 2, which the UPSERT's insert below (rowid 1) does not share: an UPSERT's id is reported only
+            // when it changed the connection's last inserted rowid.
+            cn.execute("insert into $items(v) values ('a'), ('b');").getOrThrow()
+            assertThat(cn.executeWithResult(upsert).getOrThrow().lastInsertId).isEqualTo(1L)
+            val updated = cn.executeWithResult(upsert).getOrThrow()
+            assertThat(updated.rowsAffected).isEqualTo(1L)
+            assertThat(updated.lastInsertId).isNull()
+            val bound = Statement.create(
+                "insert into $counters(k, n) values (?, 1) on conflict(k) do update set n = n + 1;"
+            ).bind(0, "x")
+            assertThat(cn.executeWithResult(bound).getOrThrow().lastInsertId).isNull()
+            cn.begin().getOrThrow().let { tx ->
+                assertThat(tx.executeWithResult(upsert).getOrThrow().lastInsertId).isNull()
+                tx.commit().getOrThrow()
+            }
+        } finally {
+            cn.close().getOrThrow()
+        }
+        assertThat(db.executeWithResult(upsert).getOrThrow().lastInsertId).isNull()
+        db.execute("drop table $items;").getOrThrow()
+        db.execute("drop table $counters;").getOrThrow()
     }
 }

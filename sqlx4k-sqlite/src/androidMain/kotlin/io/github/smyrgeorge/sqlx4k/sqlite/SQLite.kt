@@ -19,6 +19,7 @@ import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
 import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.extensions.isInsertStatement
+import io.github.smyrgeorge.sqlx4k.impl.extensions.isUpsertStatement
 import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimeString
 import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
@@ -559,12 +560,12 @@ class SQLite(
             val ownTransaction = !inTransaction()
             if (ownTransaction) beginTransactionNonExclusive()
             try {
+                fun lastInsertRowid(): Long = compileStatement("select last_insert_rowid()").use { it.simpleQueryForLong() }
+                // An UPSERT that updates the row instead of inserting it leaves the last inserted rowid as it was (an
+                // earlier insert's), with the row counted as changed: it is the UPSERT's only when it changed.
+                val before = if (sql.isUpsertStatement()) lastInsertRowid() else null
                 val rowsAffected = update().toLong()
-                val lastInsertId = if (rowsAffected > 0) {
-                    compileStatement("select last_insert_rowid()").use { it.simpleQueryForLong() }
-                } else {
-                    null
-                }
+                val lastInsertId = if (rowsAffected > 0) lastInsertRowid().takeIf { it != before } else null
                 if (ownTransaction) setTransactionSuccessful()
                 return ExecuteResult(rowsAffected = rowsAffected, lastInsertId = lastInsertId)
             } finally {
