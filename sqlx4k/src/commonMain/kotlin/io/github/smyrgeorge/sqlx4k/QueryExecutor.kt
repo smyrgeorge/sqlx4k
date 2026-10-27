@@ -7,6 +7,8 @@ import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
 import kotlin.time.Duration
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -203,6 +205,11 @@ interface QueryExecutor {
                 when (val r = f(tx)) {
                     is Result<*> if r.isFailure -> throw r.exceptionOrNull()!! // Trigger rollback
                     else -> r
+                }.also {
+                    // A caller cancelled meanwhile (e.g. timed out by withTimeout) is told the block did not complete:
+                    // its work is rolled back, not committed. A native driver's statements run to completion also
+                    // when their caller is cancelled, so the block could reach its end without noticing.
+                    currentCoroutineContext().ensureActive()
                 }
             } catch (e: Throwable) {
                 // NonCancellable: if the block was cancelled, the rollback must still run (and release the connection).

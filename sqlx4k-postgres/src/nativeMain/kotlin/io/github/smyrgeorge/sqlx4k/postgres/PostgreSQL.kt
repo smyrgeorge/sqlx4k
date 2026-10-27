@@ -168,10 +168,11 @@ class PostgreSQL(
     override fun poolIdleSize(): Int = sqlx4k_postgresql_pool_idle_size(rt)
 
     override suspend fun acquire(): Result<Connection> = runCatching {
-        sqlx { c -> sqlx4k_postgresql_cn_acquire(rt, c, fn) }.use {
+        val acquired = sqlx { c -> sqlx4k_postgresql_cn_acquire(rt, c, fn) }.use {
             it.throwIfError()
             SqlxConnection(rt, it.cn!!, encoders)
         }
+        releasedIfCancelled(acquired) { it.close() }
     }
 
     override suspend fun execute(sql: String): Result<Long> = runCatching {
@@ -205,10 +206,11 @@ class PostgreSQL(
     }
 
     override suspend fun begin(): Result<Transaction> = runCatching {
-        sqlx { c -> sqlx4k_postgresql_tx_begin(rt, c, fn) }.use {
+        val acquired = sqlx { c -> sqlx4k_postgresql_tx_begin(rt, c, fn) }.use {
             it.throwIfError()
             SqlxTransaction(rt, it.tx!!, encoders)
         }
+        releasedIfCancelled(acquired) { it.rollback() }
     }
 
     /**
@@ -416,6 +418,9 @@ class PostgreSQL(
                     transactions += tx
                 }
             }
+        }.mapCatching { tx ->
+            // Outside the lock, which the rollback takes.
+            releasedIfCancelled(tx) { it.rollback() }
         }
     }
 

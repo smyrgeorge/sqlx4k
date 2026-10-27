@@ -23,7 +23,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Semaphore
@@ -133,6 +135,9 @@ internal class ConnectionPoolImpl(
         // so this is safe even when the failing path already tore the connection down.
         handoff.exchange(null)?.let { orphan -> withContext(NonCancellable) { orphan.closeInternal() } }
         return when (error) {
+            // The caller's own timeout (withTimeout throws a TimeoutCancellationException as well) is a cancellation,
+            // not the pool's acquire timeout.
+            is CancellationException if !currentCoroutineContext().isActive -> throw error
             is TimeoutCancellationException -> Result.failure(
                 SQLError(
                     code = SQLError.Code.PoolTimedOut,

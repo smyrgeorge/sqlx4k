@@ -18,8 +18,11 @@ import kotlinx.cinterop.readBytes
 import kotlinx.cinterop.toKString
 import kotlinx.cinterop.useContents
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import sqlx4k.mysql.Sqlx4kMysqlPtr
@@ -188,4 +191,18 @@ internal fun streamFlow(
             sqlx { c -> sqlx4k_mysql_stream_close(rt, stream, c, fn) }.use { it.throwIfError() }
         }
     }
+}
+
+/**
+ * Returns [resource] (a connection or a transaction a [sqlx] call acquired), unless the caller was cancelled during the
+ * call: the call completes also then, and the caller (e.g. one timed out by `withTimeoutOrNull`) never receives it, so
+ * it would never go back to the pool. It is [release]d then, and the cancellation thrown.
+ */
+internal suspend inline fun <T> releasedIfCancelled(resource: T, crossinline release: suspend (T) -> Unit): T {
+    val context = currentCoroutineContext()
+    if (!context.isActive) {
+        withContext(NonCancellable) { release(resource) }
+        context.ensureActive()
+    }
+    return resource
 }

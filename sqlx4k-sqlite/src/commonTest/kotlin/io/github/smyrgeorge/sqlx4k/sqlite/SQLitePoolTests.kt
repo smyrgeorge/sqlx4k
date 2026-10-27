@@ -8,6 +8,7 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isFailure
 import assertk.assertions.isFalse
 import assertk.assertions.isLessThanOrEqualTo
+import assertk.assertions.isNull
 import assertk.assertions.isSuccess
 import io.github.smyrgeorge.sqlx4k.Connection
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
@@ -292,5 +293,43 @@ class SQLitePoolTests : SQLiteTestBase() {
         db.close().getOrThrow()
         delay(1.seconds)
         assertThat(SystemFileSystem.exists(Path(path))).isFalse()
+    }
+
+    // A connection handed over to a caller that timed out meanwhile must go back to the pool: the caller never
+    // receives it, so nothing else would close it.
+    @Test
+    fun `a connection acquired for a caller that timed out goes back to the pool`(): Unit = runBlocking {
+        val db = pool(maxConnections = 1, acquireTimeout = 3.seconds)
+        val held = db.acquire().getOrThrow()
+        // Given back while the caller below waits for it, after its timeout.
+        val release = launch {
+            delay(300.milliseconds)
+            held.close().getOrThrow()
+        }
+        val acquired = withTimeoutOrNull(100.milliseconds) { db.acquire().getOrThrow() }
+        release.join()
+        assertThat(acquired).isNull()
+        // The pool's only connection is still available.
+        db.acquire().getOrThrow().close().getOrThrow()
+        db.begin().getOrThrow().rollback().getOrThrow()
+    }
+
+    // A transaction block whose caller times out while it runs is rolled back: the caller is told it did not
+    // complete, and a retry must not write twice.
+    @Test
+    fun `a transaction whose caller timed out is rolled back`(): Unit = runBlocking {
+        val db = pool(maxConnections = 2)
+        db.execute("create table t_timed_out(id integer primary key);").getOrThrow()
+        val done = withTimeoutOrNull(100.milliseconds) {
+            db.transaction {
+                execute("insert into t_timed_out(id) values (1);").getOrThrow()
+                // Outlasts the timeout.
+                fetchAll(
+                    "with recursive c(n) as (select 1 union all select n + 1 from c where n < 20000000) select count(*) from c;"
+                ).getOrThrow()
+            }
+        }
+        assertThat(done).isNull()
+        assertThat(db.fetchAll("select count(*) from t_timed_out;").getOrThrow().first().get(0).asInt()).isEqualTo(0)
     }
 }
