@@ -6,7 +6,7 @@ use std::ffi::{c_char, c_int, c_void};
 use std::time::Duration;
 use tokio::runtime::Runtime;
 
-use crate::client::{sqlite_url_mode, with_pool_timeouts, Sqlx4kSqlite};
+use crate::client::{check_database, sqlite_url_mode, with_pool_timeouts, Sqlx4kSqlite};
 use crate::errors::sqlx4k_sqlite_error_result_of;
 use crate::params::{read_params, Sqlx4kSqliteParam};
 use crate::result::c_chars_to_str_sqlite;
@@ -90,6 +90,10 @@ pub extern "C" fn sqlx4k_sqlite_of(
         if let Err(err) = created {
             return sqlx4k_sqlite_error_result_of(err).leak();
         }
+    }
+
+    if let Err(err) = runtime.block_on(check_database(&options)) {
+        return sqlx4k_sqlite_error_result_of(err).leak();
     }
 
     let pool = pool.connect_with(options);
@@ -259,6 +263,20 @@ mod tests {
             // SQLITE_CANTOPEN
             assert_eq!((r.get().error, r.get().error_native_code), (ERROR_DATABASE, 14), "{mode}");
             assert!(!db.path.exists(), "{mode}");
+        }
+    }
+
+    #[test]
+    fn a_file_that_is_no_database_fails_the_open_at_once() {
+        for mode in ["", "?mode=ro"] {
+            let db = TempDb::new();
+            std::fs::write(&db.path, vec![b'x'; 4096]).unwrap();
+            let started = std::time::Instant::now();
+            let r = open(&format!("{}{mode}", db.url()), -1, 1);
+            // SQLITE_NOTADB, not PoolTimedOut after the acquire timeout.
+            assert_eq!((r.get().error, r.get().error_native_code), (ERROR_DATABASE, 26), "{mode}: {:?}", r.error_message());
+            assert!(r.get().rt.is_null());
+            assert!(started.elapsed() < Duration::from_secs(5));
         }
     }
 

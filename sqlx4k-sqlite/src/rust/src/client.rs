@@ -1,8 +1,8 @@
 //! The pool (its options from the URL) and the queries run on it, on a connection or in a transaction.
 
 use sqlx::pool::PoolConnection;
-use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
-use sqlx::{Acquire, AssertSqlSafe, Executor, Sqlite, Transaction};
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
+use sqlx::{Acquire, AssertSqlSafe, ConnectOptions, Connection, Executor, Sqlite, Transaction};
 use std::ffi::{c_int, c_void};
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
@@ -43,6 +43,17 @@ pub(crate) async fn close_pool<DB: sqlx::Database>(pool: &sqlx::Pool<DB>) {
         let closing = pool.clone();
         tokio::spawn(async move { closing.close().await });
     }
+}
+
+/// Reads the database on a connection of its own, so that a file that is no database fails the open at once with
+/// SQLITE_NOTADB. The pool would find it only in `after_connect`, its first read: sqlx closes a connection whose
+/// `after_connect` fails and opens another, until the acquire timeout, so the open waited for it (30 seconds by
+/// default) and failed with PoolTimedOut.
+pub(crate) async fn check_database(options: &SqliteConnectOptions) -> Result<(), sqlx::Error> {
+    let mut cn = options.connect().await?;
+    let read = sqlx::query("select count(*) from sqlite_master").execute(&mut cn).await;
+    let _ = cn.close().await;
+    read.map(|_| ())
 }
 
 /// The `mode` query parameter of an sqlx-style SQLite URL (`sqlite:///path.db?mode=ro`), if any.
