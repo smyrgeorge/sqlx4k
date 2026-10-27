@@ -1489,7 +1489,15 @@ fn decode_mysql_column_value(row: &MySqlRow, ordinal: usize) -> (*mut c_char, c_
             |dt: chrono::NaiveDateTime| dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string(),
             decode_mysql_datetime_binary,
         ),
-        // VARCHAR / CHAR / TEXT (all varieties) / JSON / ENUM / SET / YEAR / BIT
+        // YEAR arrives as text in the text protocol, as a 2-byte integer in the binary protocol (read as text, it
+        // was raw bytes). BIT arrives as its bytes, most significant first, in either protocol: it is read as the
+        // number it holds (`1` for b'1'), which the Kotlin decoders read (asBoolean, asLong), rather than as the
+        // control characters its bytes were as text.
+        "YEAR" | "BIT" => match row.try_get_unchecked::<u64, _>(ordinal) {
+            Ok(value) => value.to_string(),
+            Err(_) => String::new(),
+        },
+        // VARCHAR / CHAR / TEXT (all varieties) / JSON / ENUM / SET
         // and anything else fall through to `&str`. In the text protocol they
         // arrive as text bytes; for text-typed columns this also works in the
         // binary protocol. Decode leniently so that a binary-only type we don't

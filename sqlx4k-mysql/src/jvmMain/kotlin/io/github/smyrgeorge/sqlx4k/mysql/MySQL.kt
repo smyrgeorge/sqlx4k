@@ -9,6 +9,7 @@ import io.asyncer.r2dbc.mysql.api.MySqlReadableMetadata
 import io.asyncer.r2dbc.mysql.codec.Codec
 import io.asyncer.r2dbc.mysql.codec.CodecContext
 import io.asyncer.r2dbc.mysql.codec.CodecRegistry
+import io.asyncer.r2dbc.mysql.constant.MySqlType
 import io.asyncer.r2dbc.mysql.constant.SslMode
 import io.asyncer.r2dbc.mysql.extension.CodecRegistrar
 import io.github.smyrgeorge.sqlx4k.Connection
@@ -510,6 +511,11 @@ class MySQL(
             ): Any {
                 val bytes = ByteArray(value.readableBytes())
                 value.readBytes(bytes)
+                // BIT arrives as its bytes, most significant first: read as the number it holds (`1` for b'1'), as
+                // the native driver does, rather than as the control characters its bytes are as text.
+                if (info.type == MySqlType.BIT) {
+                    return bytes.fold(0UL) { acc, b -> (acc shl 8) or b.toUByte().toULong() }.toString()
+                }
                 return String(bytes)
             }
 

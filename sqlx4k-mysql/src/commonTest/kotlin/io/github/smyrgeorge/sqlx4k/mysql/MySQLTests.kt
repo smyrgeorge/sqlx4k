@@ -235,4 +235,29 @@ class MySQLTests {
             cn.close()
         }
     }
+
+    // YEAR (a 2-byte integer in the prepared protocol) and BIT (its bytes in either protocol) read as numbers through
+    // both protocols.
+    @Test
+    fun `year and bit values read as numbers`(): Unit = runBlocking {
+        val table = "t_year_bit_${Random.nextInt(1_000_000)}"
+        db.execute("create table $table(y year, b1 bit(1), b8 bit(8), b64 bit(64))").getOrThrow()
+        try {
+            db.execute("insert into $table values (2024, b'1', b'10000000', b'1111111111111111111111111111111111111111111111111111111111111110')")
+                .getOrThrow()
+            val sql = "select y, b1, b8, b64 from $table"
+            val plain = db.fetchAll(sql).getOrThrow().first()
+            val prepared = db.fetchAll(Statement.create("$sql where 1 = :one").bind("one", 1)).getOrThrow().first()
+            for ((name, row) in listOf("plain" to plain, "prepared" to prepared)) {
+                assertAll {
+                    assertThat(row.get("y").asInt(), "$name: year").isEqualTo(2024)
+                    assertThat(row.get("b1").asBoolean(), "$name: bit(1)").isTrue()
+                    assertThat(row.get("b8").asInt(), "$name: bit(8)").isEqualTo(128)
+                    assertThat(row.get("b64").asString(), "$name: bit(64)").isEqualTo("18446744073709551614")
+                }
+            }
+        } finally {
+            db.execute("drop table if exists $table").getOrThrow()
+        }
+    }
 }
