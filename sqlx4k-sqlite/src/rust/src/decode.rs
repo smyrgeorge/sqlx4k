@@ -8,7 +8,10 @@ pub(crate) fn column_value_into_raw(value: String) -> (*mut c_char, c_int) {
     let len = value.len();
     let mut bytes = value.into_bytes();
     bytes.push(0);
-    (Box::into_raw(bytes.into_boxed_slice()) as *mut u8 as *mut c_char, len as c_int)
+    (
+        Box::into_raw(bytes.into_boxed_slice()) as *mut u8 as *mut c_char,
+        len as c_int,
+    )
 }
 
 pub(crate) fn free_column_value(value: *mut c_char, len: c_int) {
@@ -44,11 +47,15 @@ pub(crate) fn format_sqlite_real(value: f64) -> String {
     if value < 0.0 {
         out.push('-');
     }
-    if exponent < -4 || exponent >= 17 {
+    if !(-4..17).contains(&exponent) {
         out.push_str(&digits[..1]);
         out.push('.');
         out.push_str(if digits.len() > 1 { &digits[1..] } else { "0" });
-        out.push_str(&format!("e{}{:02}", if exponent < 0 { '-' } else { '+' }, exponent.abs()));
+        out.push_str(&format!(
+            "e{}{:02}",
+            if exponent < 0 { '-' } else { '+' },
+            exponent.abs()
+        ));
     } else if exponent >= 0 {
         let int_len = exponent as usize + 1;
         if digits.len() > int_len {
@@ -103,7 +110,11 @@ mod real_tests {
             (f64::NEG_INFINITY, "-Inf"),
         ];
         for (value, expected) in cases {
-            assert_eq!(format_sqlite_real(*value), *expected, "formatting {value:e}");
+            assert_eq!(
+                format_sqlite_real(*value),
+                *expected,
+                "formatting {value:e}"
+            );
         }
     }
 }
@@ -131,7 +142,15 @@ mod tests {
 
     #[test]
     fn a_real_reads_back_as_itself() {
-        for value in [1.5, 7.0 / 3.0, 0.1 + 0.2, 1e-7, 123456789012345678.0, -5e-324, f64::MAX] {
+        for value in [
+            1.5,
+            7.0 / 3.0,
+            0.1 + 0.2,
+            1e-7,
+            123456789012345678.0,
+            -5e-324,
+            f64::MAX,
+        ] {
             let text = format_sqlite_real(value);
             assert_eq!(text.parse::<f64>().unwrap(), value, "{text}");
         }

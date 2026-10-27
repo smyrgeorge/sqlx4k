@@ -18,7 +18,11 @@ use crate::types::{Sqlx4kSqlitePtr, Sqlx4kSqliteResult, OK};
 
 /// Runs a future to completion on the tests' own runtime (not the driver's).
 pub(crate) fn block_on<F: std::future::Future>(f: F) -> F::Output {
-    tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(f)
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(f)
 }
 
 pub(crate) fn c(s: &str) -> CString {
@@ -37,8 +41,15 @@ pub(crate) fn text(p: *const c_char) -> Option<String> {
 /// A name no other test (or run) uses, for the files and tables a test creates.
 pub(crate) fn unique(prefix: &str) -> String {
     static NEXT: AtomicUsize = AtomicUsize::new(0);
-    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos();
-    format!("{prefix}_{}_{}_{nanos}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed))
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .subsec_nanos();
+    format!(
+        "{prefix}_{}_{}_{nanos}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    )
 }
 
 /// A database file in the temporary directory, not created yet, removed (with its WAL files) when dropped.
@@ -48,7 +59,9 @@ pub(crate) struct TempDb {
 
 impl TempDb {
     pub(crate) fn new() -> TempDb {
-        TempDb { path: std::env::temp_dir().join(unique("sqlx4k_test") + ".db") }
+        TempDb {
+            path: std::env::temp_dir().join(unique("sqlx4k_test") + ".db"),
+        }
     }
 
     pub(crate) fn url(&self) -> String {
@@ -56,7 +69,9 @@ impl TempDb {
     }
 
     pub(crate) fn connect_options(&self) -> SqliteConnectOptions {
-        SqliteConnectOptions::new().filename(&self.path).create_if_missing(true)
+        SqliteConnectOptions::new()
+            .filename(&self.path)
+            .create_if_missing(true)
     }
 }
 
@@ -122,7 +137,12 @@ impl Res {
                     .map(|j| {
                         let column = unsafe { &*row.columns.add(j) };
                         (!column.value.is_null()).then(|| {
-                            let bytes = unsafe { std::slice::from_raw_parts(column.value as *const u8, column.value_len as usize) };
+                            let bytes = unsafe {
+                                std::slice::from_raw_parts(
+                                    column.value as *const u8,
+                                    column.value_len as usize,
+                                )
+                            };
                             String::from_utf8_lossy(bytes).into_owned()
                         })
                     })
@@ -158,14 +178,25 @@ extern "C" fn deliver(callback: Sqlx4kSqlitePtr, result: *mut Sqlx4kSqliteResult
 pub(crate) fn call(f: impl FnOnce(*mut c_void, Fun)) -> Res {
     let (sender, receiver) = mpsc::channel::<usize>();
     f(Box::into_raw(Box::new(sender)) as *mut c_void, deliver);
-    let result = receiver.recv_timeout(Duration::from_secs(60)).expect("the export delivered no result");
+    let result = receiver
+        .recv_timeout(Duration::from_secs(60))
+        .expect("the export delivered no result");
     Res(result as *mut Sqlx4kSqliteResult)
 }
 
 /// Creates a pool of `url`, as Kotlin does (SQLite has no user or password).
 pub(crate) fn open(url: &str, min_connections: c_int, max_connections: c_int) -> Res {
     let url = c(url);
-    Res(sqlx4k_sqlite_of(url.as_ptr(), null(), null(), min_connections, max_connections, 10_000, -1, -1))
+    Res(sqlx4k_sqlite_of(
+        url.as_ptr(),
+        null(),
+        null(),
+        min_connections,
+        max_connections,
+        10_000,
+        -1,
+        -1,
+    ))
 }
 
 /// A pool of a database file of its own, closed (and the file removed) when dropped.

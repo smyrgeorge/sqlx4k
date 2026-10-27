@@ -26,7 +26,8 @@ pub(crate) const STREAM_MAX_PREALLOCATED_ROWS: usize = 1_000;
 
 pub(crate) type StreamChunk = Result<Vec<SqliteRow>, sqlx::Error>;
 
-pub(crate) type RowStream<'e> = Pin<Box<dyn Stream<Item = Result<SqliteRow, sqlx::Error>> + Send + 'e>>;
+pub(crate) type RowStream<'e> =
+    Pin<Box<dyn Stream<Item = Result<SqliteRow, sqlx::Error>> + Send + 'e>>;
 
 /// A result set being streamed to Kotlin, row chunk by row chunk.
 ///
@@ -65,7 +66,8 @@ pub(crate) async fn stream_rows(
     tx: mpsc::Sender<StreamChunk>,
     mut cancel: oneshot::Receiver<()>,
 ) {
-    let mut chunk: Vec<SqliteRow> = Vec::with_capacity(fetch_size.min(STREAM_MAX_PREALLOCATED_ROWS));
+    let mut chunk: Vec<SqliteRow> =
+        Vec::with_capacity(fetch_size.min(STREAM_MAX_PREALLOCATED_ROWS));
     loop {
         let next = tokio::select! {
             _ = &mut cancel => return,
@@ -75,7 +77,10 @@ pub(crate) async fn stream_rows(
             Ok(Some(row)) => {
                 chunk.push(row);
                 if chunk.len() >= fetch_size {
-                    let full = std::mem::replace(&mut chunk, Vec::with_capacity(fetch_size.min(STREAM_MAX_PREALLOCATED_ROWS)));
+                    let full = std::mem::replace(
+                        &mut chunk,
+                        Vec::with_capacity(fetch_size.min(STREAM_MAX_PREALLOCATED_ROWS)),
+                    );
                     tokio::select! {
                         _ = &mut cancel => return,
                         sent = tx.send(Ok(full)) => if sent.is_err() { return },
@@ -129,7 +134,12 @@ mod tests {
 
     /// Streams `sql` on a connection of its own in chunks of `fetch_size`: the chunks sent (their rows' first values,
     /// or an error). `cancel_first` closes the stream before it starts.
-    fn stream(sql: &str, params: Vec<OwnedParam>, fetch_size: usize, cancel_first: bool) -> Vec<Result<Vec<i64>, String>> {
+    fn stream(
+        sql: &str,
+        params: Vec<OwnedParam>,
+        fetch_size: usize,
+        cancel_first: bool,
+    ) -> Vec<Result<Vec<i64>, String>> {
         block_on(async {
             let mut cn = memory().await;
             let (tx, mut rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
@@ -144,13 +154,20 @@ mod tests {
                 tokio::join!(stream_rows(rows, fetch_size, tx, cancel_rx), async {
                     let mut chunks = Vec::new();
                     while let Some(chunk) = rx.recv().await {
-                        chunks.push(chunk.map(|rows| rows.iter().map(|r| r.get::<i64, _>(0)).collect()).map_err(|e| e.to_string()));
+                        chunks.push(
+                            chunk
+                                .map(|rows| rows.iter().map(|r| r.get::<i64, _>(0)).collect())
+                                .map_err(|e| e.to_string()),
+                        );
                     }
                     chunks
                 })
             };
             // The connection is usable after the stream.
-            let one: i64 = sqlx::query_scalar("select 1").fetch_one(&mut cn).await.unwrap();
+            let one: i64 = sqlx::query_scalar("select 1")
+                .fetch_one(&mut cn)
+                .await
+                .unwrap();
             assert_eq!(one, 1);
             cn.close().await.unwrap();
             chunks
@@ -164,18 +181,32 @@ mod tests {
     #[test]
     fn rows_are_sent_in_chunks_of_the_fetch_size() {
         let chunks = stream(SERIES, vec![], 10, false);
-        assert_eq!(chunks.iter().flat_map(|c| c.clone().unwrap()).collect::<Vec<_>>(), (1..=25).collect::<Vec<_>>());
+        assert_eq!(
+            chunks
+                .iter()
+                .flat_map(|c| c.clone().unwrap())
+                .collect::<Vec<_>>(),
+            (1..=25).collect::<Vec<_>>()
+        );
         assert_eq!(sizes(chunks), [10, 10, 5]);
     }
 
     #[test]
     fn a_huge_fetch_size_is_one_chunk() {
-        assert_eq!(sizes(stream(SERIES, vec![], i32::MAX as usize, false)), [25]);
+        assert_eq!(
+            sizes(stream(SERIES, vec![], i32::MAX as usize, false)),
+            [25]
+        );
     }
 
     #[test]
     fn a_prepared_statement_is_streamed() {
-        let chunks = stream("select ? union all select ?", vec![OwnedParam::Int(1), OwnedParam::Int(2)], 1, false);
+        let chunks = stream(
+            "select ? union all select ?",
+            vec![OwnedParam::Int(1), OwnedParam::Int(2)],
+            1,
+            false,
+        );
         assert_eq!(chunks, [Ok(vec![1]), Ok(vec![2])]);
     }
 

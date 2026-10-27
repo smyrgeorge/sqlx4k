@@ -39,7 +39,8 @@ pub extern "C" fn sqlx4k_sqlite_of(
 
     // Create the tokio runtime, once: get_or_init also when two pools are created concurrently (checking and then
     // setting raced: a losing set().unwrap() panicked, and the process aborted).
-    let runtime = RUNTIME.get_or_init(|| Runtime::new().expect("failed to create the tokio runtime"));
+    let runtime =
+        RUNTIME.get_or_init(|| Runtime::new().expect("failed to create the tokio runtime"));
 
     // Create the db pool options.
     //
@@ -82,8 +83,8 @@ pub extern "C" fn sqlx4k_sqlite_of(
     // Creation can legitimately fail too (e.g. an unwritable directory), so surface it as an error.
     if create_if_missing {
         let created = runtime.block_on(async {
-            if !sqlx::Sqlite::database_exists(&url).await? {
-                sqlx::Sqlite::create_database(&url).await?;
+            if !sqlx::Sqlite::database_exists(url).await? {
+                sqlx::Sqlite::create_database(url).await?;
             }
             Ok::<(), sqlx::Error>(())
         });
@@ -267,7 +268,11 @@ mod tests {
             let db = TempDb::new();
             let r = open(&format!("{}?mode={mode}", db.url()), -1, 1);
             // SQLITE_CANTOPEN
-            assert_eq!((r.get().error, r.get().error_native_code), (ERROR_DATABASE, 14), "{mode}");
+            assert_eq!(
+                (r.get().error, r.get().error_native_code),
+                (ERROR_DATABASE, 14),
+                "{mode}"
+            );
             assert!(!db.path.exists(), "{mode}");
         }
     }
@@ -280,7 +285,12 @@ mod tests {
             let started = std::time::Instant::now();
             let r = open(&format!("{}{mode}", db.url()), -1, 1);
             // SQLITE_NOTADB, not PoolTimedOut after the acquire timeout.
-            assert_eq!((r.get().error, r.get().error_native_code), (ERROR_DATABASE, 26), "{mode}: {:?}", r.error_message());
+            assert_eq!(
+                (r.get().error, r.get().error_native_code),
+                (ERROR_DATABASE, 26),
+                "{mode}: {:?}",
+                r.error_message()
+            );
             assert!(r.get().rt.is_null());
             assert!(started.elapsed() < Duration::from_secs(5));
         }
@@ -294,16 +304,33 @@ mod tests {
         query(rt, "insert into t values (1)").ok();
         close(rt);
         let rt = open(&format!("{}?mode=ro", db.url()), -1, 1).ok().get().rt;
-        assert_eq!(fetch_all(rt, "select count(*) from t").ok().value().as_deref(), Some("1"));
+        assert_eq!(
+            fetch_all(rt, "select count(*) from t")
+                .ok()
+                .value()
+                .as_deref(),
+            Some("1")
+        );
         // SQLITE_READONLY
-        assert_eq!(query(rt, "insert into t values (2)").get().error_native_code, 8);
+        assert_eq!(
+            query(rt, "insert into t values (2)")
+                .get()
+                .error_native_code,
+            8
+        );
         close(rt);
     }
 
     #[test]
     fn a_file_pool_is_in_wal_mode() {
         let pool = Pool::open(1);
-        assert_eq!(fetch_all(pool.rt, "pragma journal_mode").ok().value().as_deref(), Some("wal"));
+        assert_eq!(
+            fetch_all(pool.rt, "pragma journal_mode")
+                .ok()
+                .value()
+                .as_deref(),
+            Some("wal")
+        );
     }
 
     #[test]
@@ -311,7 +338,13 @@ mod tests {
         let rt = open("sqlite::memory:", 1, 1).ok().get().rt;
         query(rt, "create table t(id int)").ok();
         query(rt, "insert into t values (1)").ok();
-        assert_eq!(fetch_all(rt, "select count(*) from t").ok().value().as_deref(), Some("1"));
+        assert_eq!(
+            fetch_all(rt, "select count(*) from t")
+                .ok()
+                .value()
+                .as_deref(),
+            Some("1")
+        );
         close(rt);
     }
 
@@ -337,22 +370,40 @@ mod tests {
         let r = query(pool.rt, "insert into t values (1, 'a'), (2, 'b')").ok();
         assert_eq!((r.get().rows_affected, r.get().last_insert_id), (2, 2));
         let v = c("c");
-        let params = [text_param(PARAM_TEXT, &v), param(PARAM_INT, |p| p.i64_val = 2)];
+        let params = [
+            text_param(PARAM_TEXT, &v),
+            param(PARAM_INT, |p| p.i64_val = 2),
+        ];
         let sql = c("update t set v = ? where id = ?");
-        let r = call(|cb, fun| sqlx4k_sqlite_query_with_params(pool.rt, sql.as_ptr(), params.as_ptr(), 2, cb, fun)).ok();
+        let r = call(|cb, fun| {
+            sqlx4k_sqlite_query_with_params(pool.rt, sql.as_ptr(), params.as_ptr(), 2, cb, fun)
+        })
+        .ok();
         assert_eq!(r.get().rows_affected, 1);
         let sql = c("select v from t where id >= ? order by id");
         let params = [param(PARAM_INT, |p| p.i64_val = 1)];
-        let r = call(|cb, fun| sqlx4k_sqlite_fetch_all_with_params(pool.rt, sql.as_ptr(), params.as_ptr(), 1, cb, fun)).ok();
+        let r = call(|cb, fun| {
+            sqlx4k_sqlite_fetch_all_with_params(pool.rt, sql.as_ptr(), params.as_ptr(), 1, cb, fun)
+        })
+        .ok();
         assert_eq!(r.rows(), [[Some("a".into())], [Some("c".into())]]);
-        assert_eq!(fetch_all(pool.rt, "select count(*) from t").ok().value().as_deref(), Some("2"));
+        assert_eq!(
+            fetch_all(pool.rt, "select count(*) from t")
+                .ok()
+                .value()
+                .as_deref(),
+            Some("2")
+        );
     }
 
     #[test]
     fn a_failing_statement_is_an_error() {
         let pool = Pool::open(1);
         let r = fetch_all(pool.rt, "select * from missing_table");
-        assert_eq!((r.get().error, r.get().error_native_code), (ERROR_DATABASE, 1));
+        assert_eq!(
+            (r.get().error, r.get().error_native_code),
+            (ERROR_DATABASE, 1)
+        );
         assert!(r.get().error_sql_state.is_null());
     }
 
@@ -361,6 +412,9 @@ mod tests {
         let pool = Pool::open(1);
         close(pool.rt);
         assert_eq!(query(pool.rt, "select 1").get().error, ERROR_POOL_CLOSED);
-        assert_eq!(fetch_all(pool.rt, "select 1").get().error, ERROR_POOL_CLOSED);
+        assert_eq!(
+            fetch_all(pool.rt, "select 1").get().error,
+            ERROR_POOL_CLOSED
+        );
     }
 }

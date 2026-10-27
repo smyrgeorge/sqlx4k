@@ -160,7 +160,9 @@ mod tests {
 
     fn count(pool: &Pool) -> Option<String> {
         let sql = c("select count(*) from t");
-        call(|cb, fun| sqlx4k_sqlite_fetch_all(pool.rt, sql.as_ptr(), cb, fun)).ok().value()
+        call(|cb, fun| sqlx4k_sqlite_fetch_all(pool.rt, sql.as_ptr(), cb, fun))
+            .ok()
+            .value()
     }
 
     fn create(pool: &Pool) {
@@ -172,17 +174,45 @@ mod tests {
     fn the_statements_of_a_transaction_are_committed_together() {
         let pool = Pool::open(2);
         create(&pool);
-        let tx = call(|cb, fun| sqlx4k_sqlite_tx_begin(pool.rt, cb, fun)).ok().get().tx;
+        let tx = call(|cb, fun| sqlx4k_sqlite_tx_begin(pool.rt, cb, fun))
+            .ok()
+            .get()
+            .tx;
         // The transaction moves into each call and comes back in its result.
-        let tx = tx_query(&pool, tx, "insert into t values (1)").ok().get().tx;
+        let tx = tx_query(&pool, tx, "insert into t values (1)")
+            .ok()
+            .get()
+            .tx;
         let sql = c("insert into t values (?)");
         let params = [param(PARAM_INT, |p| p.i64_val = 2)];
-        let r = call(|cb, fun| sqlx4k_sqlite_tx_query_with_params(pool.rt, tx, sql.as_ptr(), params.as_ptr(), 1, cb, fun)).ok();
+        let r = call(|cb, fun| {
+            sqlx4k_sqlite_tx_query_with_params(
+                pool.rt,
+                tx,
+                sql.as_ptr(),
+                params.as_ptr(),
+                1,
+                cb,
+                fun,
+            )
+        })
+        .ok();
         assert_eq!((r.get().rows_affected, r.get().last_insert_id), (1, 2));
         let tx = r.get().tx;
         let sql = c("select id from t where id >= ? order by id");
         let params = [param(PARAM_INT, |p| p.i64_val = 1)];
-        let r = call(|cb, fun| sqlx4k_sqlite_tx_fetch_all_with_params(pool.rt, tx, sql.as_ptr(), params.as_ptr(), 1, cb, fun)).ok();
+        let r = call(|cb, fun| {
+            sqlx4k_sqlite_tx_fetch_all_with_params(
+                pool.rt,
+                tx,
+                sql.as_ptr(),
+                params.as_ptr(),
+                1,
+                cb,
+                fun,
+            )
+        })
+        .ok();
         assert_eq!(r.rows(), [[Some("1".into())], [Some("2".into())]]);
         let tx = r.get().tx;
         // Not committed yet: another connection sees none.
@@ -199,8 +229,14 @@ mod tests {
     fn a_transaction_rolled_back_leaves_nothing() {
         let pool = Pool::open(2);
         create(&pool);
-        let tx = call(|cb, fun| sqlx4k_sqlite_tx_begin(pool.rt, cb, fun)).ok().get().tx;
-        let tx = tx_query(&pool, tx, "insert into t values (1)").ok().get().tx;
+        let tx = call(|cb, fun| sqlx4k_sqlite_tx_begin(pool.rt, cb, fun))
+            .ok()
+            .get()
+            .tx;
+        let tx = tx_query(&pool, tx, "insert into t values (1)")
+            .ok()
+            .get()
+            .tx;
         call(|cb, fun| sqlx4k_sqlite_tx_rollback(pool.rt, tx, cb, fun)).ok();
         assert_eq!(count(&pool).as_deref(), Some("0"));
     }
@@ -208,12 +244,29 @@ mod tests {
     #[test]
     fn a_parameter_of_an_unknown_kind_is_an_error_handing_the_transaction_back() {
         let pool = Pool::open(1);
-        let tx = call(|cb, fun| sqlx4k_sqlite_tx_begin(pool.rt, cb, fun)).ok().get().tx;
+        let tx = call(|cb, fun| sqlx4k_sqlite_tx_begin(pool.rt, cb, fun))
+            .ok()
+            .get()
+            .tx;
         let sql = c("select ?");
         let params = [param(9, |_| {})];
-        let r = call(|cb, fun| sqlx4k_sqlite_tx_fetch_all_with_params(pool.rt, tx, sql.as_ptr(), params.as_ptr(), 1, cb, fun));
+        let r = call(|cb, fun| {
+            sqlx4k_sqlite_tx_fetch_all_with_params(
+                pool.rt,
+                tx,
+                sql.as_ptr(),
+                params.as_ptr(),
+                1,
+                cb,
+                fun,
+            )
+        });
         assert_eq!(r.get().error, ERROR_DATABASE);
-        assert!(r.error_message().unwrap().contains("kind: 9"), "{:?}", r.error_message());
+        assert!(
+            r.error_message().unwrap().contains("kind: 9"),
+            "{:?}",
+            r.error_message()
+        );
         assert_eq!(r.get().tx, tx);
         call(|cb, fun| sqlx4k_sqlite_tx_rollback(pool.rt, tx, cb, fun)).ok();
     }
@@ -221,7 +274,10 @@ mod tests {
     #[test]
     fn a_failing_statement_hands_the_transaction_back() {
         let pool = Pool::open(1);
-        let tx = call(|cb, fun| sqlx4k_sqlite_tx_begin(pool.rt, cb, fun)).ok().get().tx;
+        let tx = call(|cb, fun| sqlx4k_sqlite_tx_begin(pool.rt, cb, fun))
+            .ok()
+            .get()
+            .tx;
         let r = tx_query(&pool, tx, "select * from missing_table");
         assert_eq!(r.get().error, ERROR_DATABASE);
         let tx = r.get().tx;

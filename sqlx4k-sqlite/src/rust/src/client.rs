@@ -51,7 +51,9 @@ pub(crate) async fn close_pool<DB: sqlx::Database>(pool: &sqlx::Pool<DB>) {
 /// default) and failed with PoolTimedOut.
 pub(crate) async fn check_database(options: &SqliteConnectOptions) -> Result<(), sqlx::Error> {
     let mut cn = options.connect().await?;
-    let read = sqlx::query("select count(*) from sqlite_master").execute(&mut cn).await;
+    let read = sqlx::query("select count(*) from sqlite_master")
+        .execute(&mut cn)
+        .await;
     let _ = cn.close().await;
     read.map(|_| ())
 }
@@ -59,7 +61,7 @@ pub(crate) async fn check_database(options: &SqliteConnectOptions) -> Result<(),
 /// The `mode` query parameter of an sqlx-style SQLite URL (`sqlite:///path.db?mode=ro`), if any.
 /// The last occurrence wins, as in sqlx's own parser.
 pub(crate) fn sqlite_url_mode(url: &str) -> Option<&str> {
-    let query = url.splitn(2, '?').nth(1)?;
+    let query = url.split_once('?')?.1;
     query
         .split('&')
         .filter_map(|kv| {
@@ -69,7 +71,7 @@ pub(crate) fn sqlite_url_mode(url: &str) -> Option<&str> {
                 _ => None,
             }
         })
-        .last()
+        .next_back()
 }
 
 #[derive(Debug)]
@@ -136,9 +138,17 @@ impl Sqlx4kSqlite {
         Sqlx4kSqliteResult::default().leak()
     }
 
-    pub(crate) async fn cn_query(&self, cn: Sqlx4kSqlitePtr, sql: String) -> *mut Sqlx4kSqliteResult {
+    pub(crate) async fn cn_query(
+        &self,
+        cn: Sqlx4kSqlitePtr,
+        sql: String,
+    ) -> *mut Sqlx4kSqliteResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<Sqlite>) };
-        let before = if is_upsert(&sql) { last_insert_rowid(&mut **cn).await } else { None };
+        let before = if is_upsert(&sql) {
+            last_insert_rowid(cn).await
+        } else {
+            None
+        };
         let result = cn.execute(AssertSqlSafe(sql)).await;
         let result = match result {
             Ok(res) => Sqlx4kSqliteResult {
@@ -151,7 +161,11 @@ impl Sqlx4kSqlite {
         result.leak()
     }
 
-    pub(crate) async fn cn_fetch_all(&self, cn: Sqlx4kSqlitePtr, sql: String) -> *mut Sqlx4kSqliteResult {
+    pub(crate) async fn cn_fetch_all(
+        &self,
+        cn: Sqlx4kSqlitePtr,
+        sql: String,
+    ) -> *mut Sqlx4kSqliteResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<Sqlite>) };
         let result = cn.fetch_all(AssertSqlSafe(sql)).await;
         sqlx4k_sqlite_result_of(result).leak()
@@ -213,9 +227,17 @@ impl Sqlx4kSqlite {
         result.leak()
     }
 
-    pub(crate) async fn tx_query(&self, tx: Sqlx4kSqlitePtr, sql: String) -> *mut Sqlx4kSqliteResult {
+    pub(crate) async fn tx_query(
+        &self,
+        tx: Sqlx4kSqlitePtr,
+        sql: String,
+    ) -> *mut Sqlx4kSqliteResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Sqlite>) };
-        let before = if is_upsert(&sql) { last_insert_rowid(&mut *tx).await } else { None };
+        let before = if is_upsert(&sql) {
+            last_insert_rowid(&mut tx).await
+        } else {
+            None
+        };
         let result = tx.execute(AssertSqlSafe(sql)).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
@@ -234,7 +256,11 @@ impl Sqlx4kSqlite {
         result.leak()
     }
 
-    pub(crate) async fn tx_fetch_all(&self, tx: Sqlx4kSqlitePtr, sql: String) -> *mut Sqlx4kSqliteResult {
+    pub(crate) async fn tx_fetch_all(
+        &self,
+        tx: Sqlx4kSqlitePtr,
+        sql: String,
+    ) -> *mut Sqlx4kSqliteResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Sqlite>) };
         let result = tx.fetch_all(AssertSqlSafe(sql)).await;
         let tx = Box::new(tx);
@@ -286,7 +312,7 @@ impl Sqlx4kSqlite {
             // The connection stays with Kotlin, which serializes its use and closes this stream
             // before any other statement.
             let cn = unsafe { &mut *(cn.raw() as *mut PoolConnection<Sqlite>) };
-            let rows = stream_rows_of(&mut **cn, sql, params);
+            let rows = stream_rows_of(cn, sql, params);
             stream_rows(rows, fetch_size, tx, cancel_rx).await;
         });
         stream_result_of(Sqlx4kSqliteStream {
@@ -308,7 +334,7 @@ impl Sqlx4kSqlite {
         let task = RUNTIME.get().unwrap().spawn(async move {
             // Borrowed in place (not re-boxed like `tx_fetch_all`), so the Kotlin-held pointer stays valid.
             let tx = unsafe { &mut *(tx.raw() as *mut Transaction<'static, Sqlite>) };
-            let rows = stream_rows_of(&mut **tx, sql, params);
+            let rows = stream_rows_of(tx, sql, params);
             stream_rows(rows, fetch_size, chunks, cancel_rx).await;
         });
         stream_result_of(Sqlx4kSqliteStream {
@@ -392,7 +418,11 @@ impl Sqlx4kSqlite {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<Sqlite>) };
         let upsert = is_upsert(&sql);
         let q = bind_params(sqlx::query::<Sqlite>(AssertSqlSafe(sql)), params);
-        let before = if upsert { last_insert_rowid(&mut **cn).await } else { None };
+        let before = if upsert {
+            last_insert_rowid(cn).await
+        } else {
+            None
+        };
         let result = q.execute(&mut **cn).await;
         let result = match result {
             Ok(res) => Sqlx4kSqliteResult {
@@ -426,7 +456,11 @@ impl Sqlx4kSqlite {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, Sqlite>) };
         let upsert = is_upsert(&sql);
         let q = bind_params(sqlx::query::<Sqlite>(AssertSqlSafe(sql)), params);
-        let before = if upsert { last_insert_rowid(&mut *tx).await } else { None };
+        let before = if upsert {
+            last_insert_rowid(&mut tx).await
+        } else {
+            None
+        };
         let result = q.execute(&mut *tx).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
@@ -474,7 +508,8 @@ pub(crate) fn with_pool_timeouts(
     max_lifetime_milis: c_int,
 ) -> SqlitePoolOptions {
     let millis = |m: c_int| (m > 0).then(|| Duration::from_millis(m as u64));
-    pool.idle_timeout(millis(idle_timeout_milis)).max_lifetime(millis(max_lifetime_milis))
+    pool.idle_timeout(millis(idle_timeout_milis))
+        .max_lifetime(millis(max_lifetime_milis))
 }
 
 #[cfg(test)]
@@ -518,7 +553,12 @@ mod tests {
     }
 
     fn count(db: &Sqlx4kSqlite) -> String {
-        Res(on_runtime(db.fetch_all("select count(*) from t".to_string()))).ok().value().unwrap()
+        Res(on_runtime(
+            db.fetch_all("select count(*) from t".to_string()),
+        ))
+        .ok()
+        .value()
+        .unwrap()
     }
 
     /// Waits (a while) until the pool has `n` idle connections.
@@ -537,17 +577,31 @@ mod tests {
         assert_eq!(sqlite_url_mode("sqlite://a.db"), None);
         assert_eq!(sqlite_url_mode("sqlite://a.db?cache=shared"), None);
         assert_eq!(sqlite_url_mode("sqlite://a.db?mode=ro"), Some("ro"));
-        assert_eq!(sqlite_url_mode("sqlite://a.db?cache=shared&mode=rw"), Some("rw"));
-        assert_eq!(sqlite_url_mode("sqlite://a.db?mode=ro&mode=rwc"), Some("rwc"));
+        assert_eq!(
+            sqlite_url_mode("sqlite://a.db?cache=shared&mode=rw"),
+            Some("rw")
+        );
+        assert_eq!(
+            sqlite_url_mode("sqlite://a.db?mode=ro&mode=rwc"),
+            Some("rwc")
+        );
         assert_eq!(sqlite_url_mode("sqlite://a.db?mode"), None);
-        assert_eq!(sqlite_url_mode("sqlite::memory:?mode=memory"), Some("memory"));
+        assert_eq!(
+            sqlite_url_mode("sqlite::memory:?mode=memory"),
+            Some("memory")
+        );
     }
 
     #[test]
     fn closing_a_pool_closes_its_idle_connections_at_once() {
         let db = TempDb::new();
         block_on(async {
-            let pool = SqlitePoolOptions::new().min_connections(2).max_connections(2).connect_with(db.connect_options()).await.unwrap();
+            let pool = SqlitePoolOptions::new()
+                .min_connections(2)
+                .max_connections(2)
+                .connect_with(db.connect_options())
+                .await
+                .unwrap();
             while pool.num_idle() < 2 {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
@@ -563,7 +617,11 @@ mod tests {
     fn closing_a_pool_does_not_wait_for_a_connection_held() {
         let db = TempDb::new();
         block_on(async {
-            let pool = SqlitePoolOptions::new().max_connections(1).connect_with(db.connect_options()).await.unwrap();
+            let pool = SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(db.connect_options())
+                .await
+                .unwrap();
             let held = pool.acquire().await.unwrap();
             let started = Instant::now();
             close_pool(&pool).await;
@@ -584,17 +642,34 @@ mod tests {
     fn queries_run_on_the_pool() {
         let pool = Pool::open(2);
         let db = client(&pool);
-        Res(on_runtime(db.query("create table t(id integer primary key, k text unique, v text)".to_string()))).ok();
-        let r = Res(on_runtime(db.query("insert into t(k, v) values ('a', 'a'), ('b', 'b')".to_string()))).ok();
+        Res(on_runtime(db.query(
+            "create table t(id integer primary key, k text unique, v text)".to_string(),
+        )))
+        .ok();
+        let r = Res(on_runtime(db.query(
+            "insert into t(k, v) values ('a', 'a'), ('b', 'b')".to_string(),
+        )))
+        .ok();
         assert_eq!((r.get().rows_affected, r.get().last_insert_id), (2, 2));
         let v = c("c");
         let params = read_params([text_param(PARAM_TEXT, &v)].as_ptr(), 1).unwrap();
-        let r = Res(on_runtime(db.query_with_params("update t set v = ? where id = 1".to_string(), params))).ok();
+        let r = Res(on_runtime(db.query_with_params(
+            "update t set v = ? where id = 1".to_string(),
+            params,
+        )))
+        .ok();
         assert_eq!(r.get().rows_affected, 1);
-        let r = Res(on_runtime(db.fetch_all("select v from t order by id".to_string()))).ok();
+        let r = Res(on_runtime(
+            db.fetch_all("select v from t order by id".to_string()),
+        ))
+        .ok();
         assert_eq!(r.rows(), [[Some("c".into())], [Some("b".into())]]);
         let params = read_params([text_param(PARAM_TEXT, &v)].as_ptr(), 1).unwrap();
-        let r = Res(on_runtime(db.fetch_all_with_params("select id from t where v = ?".to_string(), params))).ok();
+        let r = Res(on_runtime(db.fetch_all_with_params(
+            "select id from t where v = ?".to_string(),
+            params,
+        )))
+        .ok();
         assert_eq!(r.rows(), [[Some("1".into())]]);
     }
 
@@ -602,8 +677,13 @@ mod tests {
     fn an_upsert_reports_the_rowid_it_inserted_only() {
         let pool = Pool::open(1);
         let db = client(&pool);
-        Res(on_runtime(db.query("create table t(id integer primary key, k text unique, v int)".to_string()))).ok();
-        let upsert = |k: &str| format!("insert into t(k, v) values ('{k}', 1) on conflict(k) do update set v = v + 1");
+        Res(on_runtime(db.query(
+            "create table t(id integer primary key, k text unique, v int)".to_string(),
+        )))
+        .ok();
+        let upsert = |k: &str| {
+            format!("insert into t(k, v) values ('{k}', 1) on conflict(k) do update set v = v + 1")
+        };
         let r = Res(on_runtime(db.query(upsert("a")))).ok();
         assert_eq!((r.get().rows_affected, r.get().last_insert_id), (1, 1));
         let r = Res(on_runtime(db.query(upsert("a")))).ok();
@@ -622,8 +702,16 @@ mod tests {
         for commit in [true, false] {
             let tx = Res(on_runtime(db.tx_begin())).ok().get().tx;
             // The transaction moves into each call and comes back in its result.
-            let tx = Res(on_runtime(db.tx_query(ptr(tx), "insert into t values (1)".to_string()))).ok().get().tx;
-            let r = Res(on_runtime(db.tx_fetch_all(ptr(tx), "select count(*) from t".to_string()))).ok();
+            let tx = Res(on_runtime(
+                db.tx_query(ptr(tx), "insert into t values (1)".to_string()),
+            ))
+            .ok()
+            .get()
+            .tx;
+            let r = Res(on_runtime(
+                db.tx_fetch_all(ptr(tx), "select count(*) from t".to_string()),
+            ))
+            .ok();
             let tx = r.get().tx;
             assert_eq!(r.value().as_deref(), Some(if commit { "1" } else { "2" }));
             if commit {
@@ -642,9 +730,19 @@ mod tests {
         Res(on_runtime(db.query("create table t(id int)".to_string()))).ok();
         let cn = Res(on_runtime(db.cn_acquire())).ok().get().cn;
         let outer = Res(on_runtime(db.cn_tx_begin(ptr(cn)))).ok().get().tx;
-        let outer = Res(on_runtime(db.tx_query(ptr(outer), "insert into t values (1)".to_string()))).ok().get().tx;
+        let outer = Res(on_runtime(
+            db.tx_query(ptr(outer), "insert into t values (1)".to_string()),
+        ))
+        .ok()
+        .get()
+        .tx;
         let inner = Res(on_runtime(db.cn_tx_begin(ptr(cn)))).ok().get().tx;
-        let inner = Res(on_runtime(db.tx_query(ptr(inner), "insert into t values (2)".to_string()))).ok().get().tx;
+        let inner = Res(on_runtime(
+            db.tx_query(ptr(inner), "insert into t values (2)".to_string()),
+        ))
+        .ok()
+        .get()
+        .tx;
         Res(on_runtime(db.tx_rollback(ptr(inner)))).ok();
         Res(on_runtime(db.tx_commit(ptr(outer)))).ok();
         Res(on_runtime(db.cn_release(ptr(cn)))).ok();
@@ -654,7 +752,10 @@ mod tests {
     #[test]
     fn releasing_no_connection_does_nothing() {
         let pool = Pool::open(1);
-        Res(on_runtime(client(&pool).cn_release(ptr(std::ptr::null_mut())))).ok();
+        Res(on_runtime(
+            client(&pool).cn_release(ptr(std::ptr::null_mut())),
+        ))
+        .ok();
     }
 
     #[test]
@@ -662,15 +763,40 @@ mod tests {
         let pool = Pool::open(1);
         let db = client(&pool);
         let sql = "with recursive s(n) as (select 1 union all select n + 1 from s where n < 10000) select n from s";
-        let stream = Res(on_runtime(db.stream_open(sql.to_string(), vec![], 10))).ok().get().stream;
-        assert_eq!(Res(on_runtime(db.stream_next(ptr(stream)))).ok().rows().len(), 10);
+        let stream = Res(on_runtime(db.stream_open(sql.to_string(), vec![], 10)))
+            .ok()
+            .get()
+            .stream;
+        assert_eq!(
+            Res(on_runtime(db.stream_next(ptr(stream))))
+                .ok()
+                .rows()
+                .len(),
+            10
+        );
         Res(on_runtime(db.stream_close(ptr(stream)))).ok();
         // Kept open (unlike the network drivers'): there is nothing to drain, and an in-memory database would be lost.
         wait_idle(db, 1);
         assert_eq!(db.pool.size(), 1);
-        let stream = Res(on_runtime(db.stream_open("select 1".to_string(), vec![], 10))).ok().get().stream;
-        assert_eq!(Res(on_runtime(db.stream_next(ptr(stream)))).ok().rows().len(), 1);
-        assert_eq!(Res(on_runtime(db.stream_next(ptr(stream)))).ok().get().size, 0);
+        let stream = Res(on_runtime(db.stream_open(
+            "select 1".to_string(),
+            vec![],
+            10,
+        )))
+        .ok()
+        .get()
+        .stream;
+        assert_eq!(
+            Res(on_runtime(db.stream_next(ptr(stream))))
+                .ok()
+                .rows()
+                .len(),
+            1
+        );
+        assert_eq!(
+            Res(on_runtime(db.stream_next(ptr(stream)))).ok().get().size,
+            0
+        );
         Res(on_runtime(db.stream_close(ptr(stream)))).ok();
         wait_idle(db, 1);
     }
@@ -680,6 +806,11 @@ mod tests {
         let pool = Pool::open(1);
         let db = client(&pool);
         Res(on_runtime(db.close())).ok();
-        assert_eq!(Res(on_runtime(db.query("select 1".to_string()))).get().error, ERROR_POOL_CLOSED);
+        assert_eq!(
+            Res(on_runtime(db.query("select 1".to_string())))
+                .get()
+                .error,
+            ERROR_POOL_CLOSED
+        );
     }
 }

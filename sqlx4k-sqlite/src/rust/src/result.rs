@@ -30,7 +30,7 @@ pub extern "C" fn sqlx4k_sqlite_free_result(ptr: *mut Sqlx4kSqliteResult) {
         }
     }
 
-    if ptr.schema == null_mut() {
+    if ptr.schema.is_null() {
         return;
     }
 
@@ -44,15 +44,13 @@ pub extern "C" fn sqlx4k_sqlite_free_result(ptr: *mut Sqlx4kSqliteResult) {
         std::mem::drop(kind);
     }
 
-    if ptr.rows == null_mut() {
+    if ptr.rows.is_null() {
         return;
     }
 
-    let rows: Vec<Sqlx4kSqliteRow> =
-        unsafe { vec_of(ptr.rows, ptr.size as usize) };
+    let rows: Vec<Sqlx4kSqliteRow> = unsafe { vec_of(ptr.rows, ptr.size as usize) };
     for row in rows {
-        let columns: Vec<Sqlx4kSqliteColumn> =
-            unsafe { vec_of(row.columns, row.size as usize) };
+        let columns: Vec<Sqlx4kSqliteColumn> = unsafe { vec_of(row.columns, row.size as usize) };
         for col in columns {
             free_column_value(col.value, col.value_len);
         }
@@ -63,11 +61,13 @@ pub fn c_chars_to_str_sqlite<'a>(c_chars: *const c_char) -> &'a str {
     unsafe { CStr::from_ptr(c_chars).to_str().unwrap() }
 }
 
-pub(crate) fn sqlx4k_sqlite_result_of(result: Result<Vec<SqliteRow>, sqlx::Error>) -> Sqlx4kSqliteResult {
+pub(crate) fn sqlx4k_sqlite_result_of(
+    result: Result<Vec<SqliteRow>, sqlx::Error>,
+) -> Sqlx4kSqliteResult {
     match result {
         Ok(rows) => {
-            let schema: Sqlx4kSqliteSchema = if rows.len() > 0 {
-                sqlx4k_sqlite_schema_of(rows.get(0).unwrap())
+            let schema: Sqlx4kSqliteSchema = if !rows.is_empty() {
+                sqlx4k_sqlite_schema_of(rows.first().unwrap())
             } else {
                 Sqlx4kSqliteSchema::default()
             };
@@ -75,7 +75,7 @@ pub(crate) fn sqlx4k_sqlite_result_of(result: Result<Vec<SqliteRow>, sqlx::Error
             let schema = Box::new(schema);
             let schema = Box::leak(schema);
 
-            let rows: Vec<Sqlx4kSqliteRow> = rows.iter().map(|r| sqlx4k_sqlite_row_of(r)).collect();
+            let rows: Vec<Sqlx4kSqliteRow> = rows.iter().map(sqlx4k_sqlite_row_of).collect();
             let size = rows.len();
             let rows: Box<[Sqlx4kSqliteRow]> = rows.into_boxed_slice();
             let rows: &mut [Sqlx4kSqliteRow] = Box::leak(rows);
@@ -138,8 +138,12 @@ pub(crate) fn sqlx4k_sqlite_row_of(row: &SqliteRow) -> Sqlx4kSqliteRow {
                 let info: std::borrow::Cow<SqliteTypeInfo> = value_ref.type_info();
                 let type_info = info.name();
                 let value: Option<String> = match type_info {
-                    "BLOB" => row.get_unchecked::<Option<&[u8]>, _>(c.ordinal()).map(hex::encode),
-                    "REAL" => row.get_unchecked::<Option<f64>, _>(c.ordinal()).map(format_sqlite_real),
+                    "BLOB" => row
+                        .get_unchecked::<Option<&[u8]>, _>(c.ordinal())
+                        .map(hex::encode),
+                    "REAL" => row
+                        .get_unchecked::<Option<f64>, _>(c.ordinal())
+                        .map(format_sqlite_real),
                     // TEXT (and INTEGER, which SQLite renders as text). TEXT may hold invalid UTF-8,
                     // which must not abort the host process: replace it with U+FFFD, like the JVM driver.
                     _ => row
@@ -257,15 +261,39 @@ mod tests {
     fn rows_are_read_with_their_schema_and_values_by_length() {
         let r = fetched("select 1 as a, null as b, 'x' || char(0) || 'y' as c, 1.5 as d, x'01ff' as e union all select 2, 3, '', 1e300, x''").ok();
         let columns = r.columns();
-        let columns: Vec<(&str, &str)> = columns.iter().map(|(n, k)| (n.as_str(), k.as_str())).collect();
+        let columns: Vec<(&str, &str)> = columns
+            .iter()
+            .map(|(n, k)| (n.as_str(), k.as_str()))
+            .collect();
         // The types of the first row's values.
-        assert_eq!(columns, [("a", "INTEGER"), ("b", "NULL"), ("c", "TEXT"), ("d", "REAL"), ("e", "BLOB")]);
+        assert_eq!(
+            columns,
+            [
+                ("a", "INTEGER"),
+                ("b", "NULL"),
+                ("c", "TEXT"),
+                ("d", "REAL"),
+                ("e", "BLOB")
+            ]
+        );
         // The NUL inside a value is kept, a REAL is written as SQLite writes it, a BLOB as hex.
         assert_eq!(
             r.rows(),
             [
-                [Some("1".into()), None, Some("x\0y".into()), Some("1.5".into()), Some("01ff".into())],
-                [Some("2".into()), Some("3".into()), Some("".into()), Some("1.0e+300".into()), Some("".into())],
+                [
+                    Some("1".into()),
+                    None,
+                    Some("x\0y".into()),
+                    Some("1.5".into()),
+                    Some("01ff".into())
+                ],
+                [
+                    Some("2".into()),
+                    Some("3".into()),
+                    Some("".into()),
+                    Some("1.0e+300".into()),
+                    Some("".into())
+                ],
             ]
         );
     }

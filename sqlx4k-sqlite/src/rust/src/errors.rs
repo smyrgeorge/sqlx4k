@@ -28,8 +28,8 @@ pub fn sqlx4k_sqlite_error_result_of(err: sqlx::Error) -> Sqlx4kSqliteResult {
     let (code, message) = match err {
         Error::Configuration(e) => (ERROR_POOL, format!("Invalid SQLite URL :: {}", e)),
         Error::Database(e) => match e.code() {
-            Some(code) => (ERROR_DATABASE, format!("[{}] {}", code, e.to_string())),
-            None => (ERROR_DATABASE, format!("{}", e.to_string())),
+            Some(code) => (ERROR_DATABASE, format!("[{code}] {e}")),
+            None => (ERROR_DATABASE, e.to_string()),
         },
         Error::PoolTimedOut => (ERROR_POOL_TIMED_OUT, "PoolTimedOut".to_string()),
         Error::PoolClosed => (
@@ -74,7 +74,7 @@ pub(crate) fn sqlx4k_sqlite_constraint_kind_of(kind: ErrorKind) -> Option<c_int>
 /// Classifies a SQLite error as a `SQLError.Kind` ordinal: constraint violations come from sqlx,
 /// lock failures from the primary result code (the low byte of the extended code). Mirrors
 /// `sqliteKindOf` in the Kotlin driver.
-/// https://www.sqlite.org/rescode.html
+/// <https://www.sqlite.org/rescode.html>
 pub(crate) fn sqlx4k_sqlite_kind_of(kind: ErrorKind, code: Option<c_int>) -> c_int {
     if let Some(kind) = sqlx4k_sqlite_constraint_kind_of(kind) {
         return kind;
@@ -95,26 +95,63 @@ mod tests {
 
     fn mapped(err: Error) -> (c_int, String, Option<String>, c_int, c_int) {
         let r = sqlx4k_sqlite_error_result_of(err);
-        let mapped = (r.error, text(r.error_message).unwrap(), text(r.error_sql_state), r.error_native_code, r.error_kind);
+        let mapped = (
+            r.error,
+            text(r.error_message).unwrap(),
+            text(r.error_sql_state),
+            r.error_native_code,
+            r.error_kind,
+        );
         crate::result::sqlx4k_sqlite_free_result(r.leak());
         mapped
     }
 
     #[test]
     fn pool_errors_have_codes_of_their_own() {
-        assert_eq!(mapped(Error::PoolTimedOut), (ERROR_POOL_TIMED_OUT, "PoolTimedOut".into(), None, NO_NATIVE_CODE, KIND_OTHER));
+        assert_eq!(
+            mapped(Error::PoolTimedOut),
+            (
+                ERROR_POOL_TIMED_OUT,
+                "PoolTimedOut".into(),
+                None,
+                NO_NATIVE_CODE,
+                KIND_OTHER
+            )
+        );
         assert_eq!(
             mapped(Error::PoolClosed),
-            (ERROR_POOL_CLOSED, "The connection pool is already closed".into(), None, NO_NATIVE_CODE, KIND_OTHER)
+            (
+                ERROR_POOL_CLOSED,
+                "The connection pool is already closed".into(),
+                None,
+                NO_NATIVE_CODE,
+                KIND_OTHER
+            )
         );
-        assert_eq!(mapped(Error::WorkerCrashed), (ERROR_WORKER_CRASHED, "WorkerCrashed".into(), None, NO_NATIVE_CODE, KIND_OTHER));
+        assert_eq!(
+            mapped(Error::WorkerCrashed),
+            (
+                ERROR_WORKER_CRASHED,
+                "WorkerCrashed".into(),
+                None,
+                NO_NATIVE_CODE,
+                KIND_OTHER
+            )
+        );
     }
 
     #[test]
     fn an_invalid_url_is_a_pool_error() {
-        let (code, message, sql_state, native, kind) = mapped(Error::Configuration("bad mode".into()));
-        assert_eq!((code, message.as_str()), (ERROR_POOL, "Invalid SQLite URL :: bad mode"));
-        assert_eq!((sql_state, native, kind), (None, NO_NATIVE_CODE, KIND_OTHER));
+        let (code, message, sql_state, native, kind) =
+            mapped(Error::Configuration("bad mode".into()));
+        assert_eq!(
+            (code, message.as_str()),
+            (ERROR_POOL, "Invalid SQLite URL :: bad mode")
+        );
+        assert_eq!(
+            (sql_state, native, kind),
+            (None, NO_NATIVE_CODE, KIND_OTHER)
+        );
     }
 
     #[test]
@@ -122,7 +159,10 @@ mod tests {
         let (code, message, sql_state, native, kind) = mapped(Error::Protocol("unexpected".into()));
         assert_eq!(code, ERROR_DATABASE);
         assert!(message.contains("unexpected"), "{message}");
-        assert_eq!((sql_state, native, kind), (None, NO_NATIVE_CODE, KIND_OTHER));
+        assert_eq!(
+            (sql_state, native, kind),
+            (None, NO_NATIVE_CODE, KIND_OTHER)
+        );
     }
 
     #[test]
@@ -157,10 +197,18 @@ mod tests {
         // SQLITE_BUSY, SQLITE_LOCKED, and extended codes of theirs (SQLITE_BUSY_SNAPSHOT, SQLITE_LOCKED_SHAREDCACHE);
         // not SQLITE_ERROR, SQLITE_CONSTRAINT or SQLITE_IOERR_READ.
         for code in [5, 6, 517, 262] {
-            assert_eq!(sqlx4k_sqlite_kind_of(ErrorKind::Other, Some(code)), KIND_LOCK_TIMEOUT, "{code}");
+            assert_eq!(
+                sqlx4k_sqlite_kind_of(ErrorKind::Other, Some(code)),
+                KIND_LOCK_TIMEOUT,
+                "{code}"
+            );
         }
         for code in [Some(1), Some(19), Some(266), None] {
-            assert_eq!(sqlx4k_sqlite_kind_of(ErrorKind::Other, code), KIND_OTHER, "{code:?}");
+            assert_eq!(
+                sqlx4k_sqlite_kind_of(ErrorKind::Other, code),
+                KIND_OTHER,
+                "{code:?}"
+            );
         }
     }
 
@@ -168,27 +216,55 @@ mod tests {
     fn a_database_error_carries_its_extended_code_and_kind() {
         block_on(async {
             let mut cn = memory().await;
-            cn.execute("create table p(id integer primary key)").await.unwrap();
+            cn.execute("create table p(id integer primary key)")
+                .await
+                .unwrap();
             cn.execute(
                 "create table t(id integer primary key, u int unique, v int not null check (v > 0), p int references p(id))",
             )
             .await
             .unwrap();
-            cn.execute("insert into t values (1, 1, 1, null)").await.unwrap();
+            cn.execute("insert into t values (1, 1, 1, null)")
+                .await
+                .unwrap();
             for (sql, native, kind) in [
                 // SQLITE_CONSTRAINT_PRIMARYKEY, _UNIQUE, _NOTNULL, _CHECK, _FOREIGNKEY
-                ("insert into t values (1, 2, 1, null)", 1555, KIND_UNIQUE_VIOLATION),
-                ("insert into t values (2, 1, 1, null)", 2067, KIND_UNIQUE_VIOLATION),
-                ("insert into t values (2, 2, null, null)", 1299, KIND_NOT_NULL_VIOLATION),
-                ("insert into t values (2, 2, 0, null)", 275, KIND_CHECK_VIOLATION),
-                ("insert into t values (2, 2, 1, 9)", 787, KIND_FOREIGN_KEY_VIOLATION),
+                (
+                    "insert into t values (1, 2, 1, null)",
+                    1555,
+                    KIND_UNIQUE_VIOLATION,
+                ),
+                (
+                    "insert into t values (2, 1, 1, null)",
+                    2067,
+                    KIND_UNIQUE_VIOLATION,
+                ),
+                (
+                    "insert into t values (2, 2, null, null)",
+                    1299,
+                    KIND_NOT_NULL_VIOLATION,
+                ),
+                (
+                    "insert into t values (2, 2, 0, null)",
+                    275,
+                    KIND_CHECK_VIOLATION,
+                ),
+                (
+                    "insert into t values (2, 2, 1, 9)",
+                    787,
+                    KIND_FOREIGN_KEY_VIOLATION,
+                ),
                 // SQLITE_ERROR
                 ("select * from missing_table", 1, KIND_OTHER),
             ] {
                 let err = cn.execute(sql).await.unwrap_err();
                 let (code, message, sql_state, n, k) = mapped(err);
                 // SQLite has no SQLSTATE.
-                assert_eq!((code, sql_state, n, k), (ERROR_DATABASE, None, native, kind), "{sql}");
+                assert_eq!(
+                    (code, sql_state, n, k),
+                    (ERROR_DATABASE, None, native, kind),
+                    "{sql}"
+                );
                 assert!(message.starts_with(&format!("[{native}] ")), "{message}");
             }
             cn.close().await.unwrap();
@@ -203,7 +279,8 @@ mod tests {
             let mut a = options.connect().await.unwrap();
             let mut b = options.connect().await.unwrap();
             a.execute("begin immediate").await.unwrap();
-            let (code, _, _, native, kind) = mapped(b.execute("begin immediate").await.unwrap_err());
+            let (code, _, _, native, kind) =
+                mapped(b.execute("begin immediate").await.unwrap_err());
             assert_eq!((code, native, kind), (ERROR_DATABASE, 5, KIND_LOCK_TIMEOUT));
             a.execute("rollback").await.unwrap();
             a.close().await.unwrap();

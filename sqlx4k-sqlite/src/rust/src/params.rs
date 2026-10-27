@@ -4,8 +4,8 @@ use sqlx::Sqlite;
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::errors::sqlx4k_sqlite_error_result_of;
-use crate::types::Sqlx4kSqliteResult;
 use crate::result::slice_of;
+use crate::types::Sqlx4kSqliteResult;
 
 pub const PARAM_NULL: c_int = 0;
 
@@ -44,7 +44,10 @@ pub(crate) enum OwnedParam {
 /// without referencing the caller's memory.
 ///
 /// A kind that cannot be read is reported as an error (see `params_error`): a panic here would abort the process.
-pub(crate) fn read_params(params: *const Sqlx4kSqliteParam, count: c_int) -> Result<Vec<OwnedParam>, String> {
+pub(crate) fn read_params(
+    params: *const Sqlx4kSqliteParam,
+    count: c_int,
+) -> Result<Vec<OwnedParam>, String> {
     if params.is_null() || count <= 0 {
         return Ok(Vec::new());
     }
@@ -182,15 +185,25 @@ mod tests {
     #[test]
     fn an_unknown_kind_is_an_error() {
         let params = [param(PARAM_INT, |_| {}), param(9, |_| {})];
-        assert_eq!(read_params(params.as_ptr(), 2).err().as_deref(), Some("Unknown Sqlx4kSqliteParam kind: 9"));
+        assert_eq!(
+            read_params(params.as_ptr(), 2).err().as_deref(),
+            Some("Unknown Sqlx4kSqliteParam kind: 9")
+        );
     }
 
     #[test]
     fn a_params_error_hands_back_the_transaction() {
         let tx = 0x10 as *mut c_void;
         let r = crate::test_support::Res(params_error("bad".to_string(), tx));
-        assert_eq!((r.get().error, r.get().tx), (crate::types::ERROR_DATABASE, tx));
-        assert!(r.error_message().unwrap().contains("bad"), "{:?}", r.error_message());
+        assert_eq!(
+            (r.get().error, r.get().tx),
+            (crate::types::ERROR_DATABASE, tx)
+        );
+        assert!(
+            r.error_message().unwrap().contains("bad"),
+            "{:?}",
+            r.error_message()
+        );
     }
 
     #[test]
@@ -205,7 +218,10 @@ mod tests {
                 OwnedParam::Blob(vec![1, 2]),
             ];
             let sql = "select ? is null, typeof(?), ?, hex(?), hex(?)";
-            let row = bind_params(sqlx::query(sql), params).fetch_one(&mut cn).await.unwrap();
+            let row = bind_params(sqlx::query(sql), params)
+                .fetch_one(&mut cn)
+                .await
+                .unwrap();
             assert_eq!(row.get::<i64, _>(0), 1);
             assert_eq!(row.get::<String, _>(1), "integer");
             assert_eq!(row.get::<f64, _>(2), 1.5);

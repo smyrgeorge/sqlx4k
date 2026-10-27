@@ -166,7 +166,10 @@ mod tests {
     #[test]
     fn statements_run_on_the_connection_acquired() {
         let pool = Pool::open(2);
-        let cn = call(|cb, fun| sqlx4k_sqlite_cn_acquire(pool.rt, cb, fun)).ok().get().cn;
+        let cn = call(|cb, fun| sqlx4k_sqlite_cn_acquire(pool.rt, cb, fun))
+            .ok()
+            .get()
+            .cn;
         assert!(!cn.is_null());
         // A temporary table is the connection's own: the statements after see it.
         cn_query(&pool, cn, "create temp table t(id integer primary key)").ok();
@@ -174,21 +177,55 @@ mod tests {
         assert_eq!((r.get().rows_affected, r.get().last_insert_id), (3, 3));
         let params = [param(PARAM_INT, |p| p.i64_val = 2)];
         let sql = c("delete from t where id = ?");
-        let r = call(|cb, fun| sqlx4k_sqlite_cn_query_with_params(pool.rt, cn, sql.as_ptr(), params.as_ptr(), 1, cb, fun)).ok();
+        let r = call(|cb, fun| {
+            sqlx4k_sqlite_cn_query_with_params(
+                pool.rt,
+                cn,
+                sql.as_ptr(),
+                params.as_ptr(),
+                1,
+                cb,
+                fun,
+            )
+        })
+        .ok();
         assert_eq!(r.get().rows_affected, 1);
         let sql = c("select id from t where id > ? order by id");
         let params = [param(PARAM_INT, |p| p.i64_val = 0)];
-        let r = call(|cb, fun| sqlx4k_sqlite_cn_fetch_all_with_params(pool.rt, cn, sql.as_ptr(), params.as_ptr(), 1, cb, fun)).ok();
+        let r = call(|cb, fun| {
+            sqlx4k_sqlite_cn_fetch_all_with_params(
+                pool.rt,
+                cn,
+                sql.as_ptr(),
+                params.as_ptr(),
+                1,
+                cb,
+                fun,
+            )
+        })
+        .ok();
         assert_eq!(r.rows(), [[Some("1".into())], [Some("3".into())]]);
-        assert_eq!(cn_fetch_all(&pool, cn, "select count(*) from t").ok().value().as_deref(), Some("2"));
+        assert_eq!(
+            cn_fetch_all(&pool, cn, "select count(*) from t")
+                .ok()
+                .value()
+                .as_deref(),
+            Some("2")
+        );
         call(|cb, fun| sqlx4k_sqlite_cn_release(pool.rt, cn, cb, fun)).ok();
     }
 
     #[test]
     fn a_transaction_is_begun_on_the_connection() {
         let pool = Pool::open(2);
-        let cn = call(|cb, fun| sqlx4k_sqlite_cn_acquire(pool.rt, cb, fun)).ok().get().cn;
-        let tx = call(|cb, fun| sqlx4k_sqlite_cn_tx_begin(pool.rt, cn, cb, fun)).ok().get().tx;
+        let cn = call(|cb, fun| sqlx4k_sqlite_cn_acquire(pool.rt, cb, fun))
+            .ok()
+            .get()
+            .cn;
+        let tx = call(|cb, fun| sqlx4k_sqlite_cn_tx_begin(pool.rt, cn, cb, fun))
+            .ok()
+            .get()
+            .tx;
         assert!(!tx.is_null());
         call(|cb, fun| sqlx4k_sqlite_tx_commit(pool.rt, tx, cb, fun)).ok();
         call(|cb, fun| sqlx4k_sqlite_cn_release(pool.rt, cn, cb, fun)).ok();
@@ -197,9 +234,20 @@ mod tests {
     #[test]
     fn a_failing_statement_leaves_the_connection_usable() {
         let pool = Pool::open(1);
-        let cn = call(|cb, fun| sqlx4k_sqlite_cn_acquire(pool.rt, cb, fun)).ok().get().cn;
-        assert_eq!(cn_fetch_all(&pool, cn, "select * from missing_table").get().error, ERROR_DATABASE);
-        assert_eq!(cn_fetch_all(&pool, cn, "select 1").ok().value().as_deref(), Some("1"));
+        let cn = call(|cb, fun| sqlx4k_sqlite_cn_acquire(pool.rt, cb, fun))
+            .ok()
+            .get()
+            .cn;
+        assert_eq!(
+            cn_fetch_all(&pool, cn, "select * from missing_table")
+                .get()
+                .error,
+            ERROR_DATABASE
+        );
+        assert_eq!(
+            cn_fetch_all(&pool, cn, "select 1").ok().value().as_deref(),
+            Some("1")
+        );
         call(|cb, fun| sqlx4k_sqlite_cn_release(pool.rt, cn, cb, fun)).ok();
     }
 }
