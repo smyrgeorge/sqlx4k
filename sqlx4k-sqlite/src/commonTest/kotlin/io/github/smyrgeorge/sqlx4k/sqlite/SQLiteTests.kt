@@ -5,6 +5,7 @@ package io.github.smyrgeorge.sqlx4k.sqlite
 import assertk.assertAll
 import assertk.assertThat
 import assertk.assertions.isEqualTo
+import assertk.assertions.isFailure
 import assertk.assertions.isNull
 import assertk.assertions.isTrue
 import io.github.smyrgeorge.sqlx4k.ConnectionPool
@@ -225,6 +226,29 @@ class SQLiteTests : SQLiteTestBase() {
                 assertThat(row.get(1).asString()).isEqualTo("a\uFFFDb")
                 assertThat(row.get(2).asString()).isEqualTo("a\uFFFD")
             }
+        }
+    }
+
+    // Every target enforces foreign keys, as the native driver (sqlx) does: SQLite leaves them off by default.
+    @Test
+    fun `foreign keys are enforced`(): Unit = runBlocking {
+        val parent = "t_fk_parent_${Random.nextInt(1_000_000)}"
+        val child = "t_fk_child_${Random.nextInt(1_000_000)}"
+        db.execute("create table $parent(id integer primary key);").getOrThrow()
+        db.execute(
+            "create table $child(id integer primary key, parent_id integer references $parent(id) on delete cascade);"
+        ).getOrThrow()
+        try {
+            assertThat(db.fetchAll("pragma foreign_keys;").getOrThrow().first().get(0).asInt()).isEqualTo(1)
+            assertThat(db.fetchAll("pragma recursive_triggers;").getOrThrow().first().get(0).asInt()).isEqualTo(0)
+            assertThat(db.execute("insert into $child(id, parent_id) values (1, 42);")).isFailure()
+            db.execute("insert into $parent(id) values (1);").getOrThrow()
+            db.execute("insert into $child(id, parent_id) values (1, 1);").getOrThrow()
+            db.execute("delete from $parent where id = 1;").getOrThrow()
+            assertThat(db.fetchAll("select count(*) from $child;").getOrThrow().first().get(0).asInt()).isEqualTo(0)
+        } finally {
+            db.execute("drop table $child;").getOrThrow()
+            db.execute("drop table $parent;").getOrThrow()
         }
     }
 }

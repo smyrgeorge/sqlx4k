@@ -637,6 +637,9 @@ class SQLite(
                 // don't support WAL mode, and switching the journal mode writes to the database header,
                 // which a read-only (`mode=ro`) connection cannot do.
                 if (!isInMemory && !parsed.isReadOnly) connectionInitSql = "PRAGMA journal_mode=WAL"
+                // Enforce foreign keys, as the other targets do (SQLite leaves them off by default): a `jdbc:` URL's
+                // own `foreign_keys` parameter takes precedence.
+                addDataSourceProperty("foreign_keys", "true")
             }
 
             // HikariCP opens a first connection here, so a database that cannot be opened fails right away

@@ -667,6 +667,8 @@ class SQLite(
                             }
                         }
                     }
+                    // Enforce foreign keys, as the other targets do (SQLite leaves them off by default).
+                    db.setForeignKeyConstraintsEnabled(true)
                     AndroidConnection(db, encoders)
                 }
                 if (!currentCoroutineContext().isActive) {
