@@ -7,7 +7,7 @@ use sqlx::pool::PoolConnection;
 use sqlx::postgres::types::Oid;
 use sqlx::postgres::{
     PgArgumentBuffer, PgConnectOptions, PgConnection, PgListener, PgNotification, PgPool,
-    PgPoolOptions, PgQueryResult, PgRow, PgTypeInfo, PgValueFormat, PgValueRef,
+    PgPoolOptions, PgQueryResult, PgRow, PgTypeInfo, PgTypeKind, PgValueFormat, PgValueRef,
 };
 // Re-export sqlx's chrono/uuid feature shims so we don't need direct dependencies
 // on those crates — sqlx already pulls them in when the matching features are on.
@@ -1750,7 +1750,7 @@ fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mut c_char {
                     None => "NULL".to_string(),
                 })
             },
-            || decode_text_or_binary(row, ordinal, |_| None),
+            || decode_any(row, ordinal),
         ),
         "INT2[]" => decode_array::<i16>(row, ordinal),
         "INT4[]" => decode_array::<i32>(row, ordinal),
@@ -1766,7 +1766,7 @@ fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mut c_char {
             |v: Vec<Option<chrono::NaiveDateTime>>| {
                 format_pg_nullable_array_fmt(v.iter(), |dt| dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string())
             },
-            |bytes| decode_pg_array_binary(bytes, decode_pg_timestamp_binary),
+            |bytes| decode_pg_array_binary(bytes, &decode_pg_timestamp_binary),
         ),
         "TIMESTAMPTZ[]" => decode_datetime(
             row,
@@ -1774,7 +1774,7 @@ fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mut c_char {
             |v: Vec<Option<chrono::DateTime<chrono::Utc>>>| {
                 format_pg_nullable_array_fmt(v.iter(), |dt| dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string())
             },
-            |bytes| decode_pg_array_binary(bytes, decode_pg_timestamp_binary),
+            |bytes| decode_pg_array_binary(bytes, &decode_pg_timestamp_binary),
         ),
         "BYTEA[]" => decode_or(
             row,
@@ -1782,7 +1782,7 @@ fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mut c_char {
             // Each element gets the bytea text form (`\xHH..`) so a downstream
             // `asStringArray().map { it.asByteArray() }` round-trips per element.
             |v: Vec<Option<Vec<u8>>>| format_pg_nullable_array_fmt(v.iter(), |b| format!("\\x{}", hex::encode(b))),
-            || decode_text_or_binary(row, ordinal, |_| None),
+            || decode_any(row, ordinal),
         ),
         // JSONB's binary wire format is a 1-byte version header (0x01) followed by the
         // canonical JSON text. Decoding as `&str` (the fallthrough below) would keep that
@@ -1801,11 +1801,9 @@ fn decode_postgresql_column_value(row: &PgRow, ordinal: usize) -> *mut c_char {
         // NUMERIC[] has the same problem: its binary form is an array of binary NUMERICs.
         // Render it as the `{1.5,NULL,NaN}` text PostgreSQL prints for the simple protocol.
         "NUMERIC[]" => decode_text_or_binary(row, ordinal, decode_pg_numeric_array_binary),
-        // TEXT/VARCHAR/CHAR/NAME/JSON and anything else fall back to the raw bytes.
-        // In the simple-query / text protocol every value arrives as text; in the
-        // extended protocol a binary-only type we don't model must never take the
-        // process down, so decode leniently instead of unwrapping.
-        _ => decode_text_lossy(row, ordinal),
+        // TEXT/VARCHAR/CHAR/NAME/JSON and every other type: in the simple-query / text protocol every value
+        // arrives as text; in the extended protocol a binary value is decoded by its type (see decode_pg_binary).
+        _ => decode_any(row, ordinal),
     };
     // A value may legally contain NUL (e.g. text in a non-UTF8-safe column after
     // lossy decoding); CString::new would fail on it. Strip rather than abort.
@@ -1874,7 +1872,7 @@ fn decode_text_array(row: &PgRow, ordinal: usize) -> String {
         row,
         ordinal,
         |v: Vec<Option<String>>| format_pg_nullable_array_fmt(v.iter(), |e| pg_array_element(e)),
-        || decode_text_or_binary(row, ordinal, |_| None),
+        || decode_any(row, ordinal),
     )
 }
 
@@ -1886,7 +1884,7 @@ where
         row,
         ordinal,
         |v: Vec<Option<T>>| format_pg_nullable_array_fmt(v.iter(), |e| float_text(e.to_string())),
-        || decode_text_or_binary(row, ordinal, |_| None),
+        || decode_any(row, ordinal),
     )
 }
 
@@ -1898,7 +1896,7 @@ where
         row,
         ordinal,
         |v: Vec<Option<T>>| format_pg_nullable_array_fmt(v.iter(), |e| e.to_string()),
-        || decode_text_or_binary(row, ordinal, |_| None),
+        || decode_any(row, ordinal),
     )
 }
 
@@ -1993,12 +1991,12 @@ fn decode_text_or_binary(row: &PgRow, ordinal: usize, decode_binary: fn(&[u8]) -
 /// elements in row-major order, each as `len: i32` (-1 for NULL) and `len` bytes of `numeric_send`.
 /// Renders the canonical text form (`{1.5,NULL}`, `{{1,2},{3,4}}`, `[0:1]={1,2}`).
 pub(crate) fn decode_pg_numeric_array_binary(bytes: &[u8]) -> Option<String> {
-    decode_pg_array_binary(bytes, decode_pg_numeric_binary)
+    decode_pg_array_binary(bytes, &decode_pg_numeric_binary)
 }
 
 /// Decodes a binary array (`array_send`, see decode_pg_numeric_array_binary) whose elements are decoded by
 /// `decode_element`, into the canonical text form.
-fn decode_pg_array_binary(bytes: &[u8], decode_element: fn(&[u8]) -> Option<String>) -> Option<String> {
+fn decode_pg_array_binary(bytes: &[u8], decode_element: &dyn Fn(&[u8]) -> Option<String>) -> Option<String> {
     let read_i32 = |i: usize| -> Option<i32> { Some(i32::from_be_bytes(bytes.get(i..i + 4)?.try_into().ok()?)) };
     let ndim = read_i32(0)?;
     if ndim < 0 {
@@ -2031,7 +2029,7 @@ fn write_pg_array_level(
     bytes: &[u8],
     pos: &mut usize,
     dims: &[usize],
-    decode_element: fn(&[u8]) -> Option<String>,
+    decode_element: &dyn Fn(&[u8]) -> Option<String>,
     out: &mut String,
 ) -> Option<()> {
     out.push('{');
@@ -2126,15 +2124,247 @@ pub(crate) fn decode_pg_numeric_binary(bytes: &[u8]) -> Option<String> {
     Some(out)
 }
 
-/// Text-ish fallback that never panics: UTF-8 when valid, lossy otherwise.
-fn decode_text_lossy(row: &PgRow, ordinal: usize) -> String {
-    match row.try_get_raw(ordinal) {
-        Ok(value) => match value.as_bytes() {
-            Ok(bytes) => String::from_utf8_lossy(bytes).into_owned(),
-            Err(_) => String::new(),
-        },
-        Err(_) => String::new(),
+/// Decodes a value of any type, never panicking: a text value as is (UTF-8 when valid, lossy otherwise), a binary
+/// one by its type (see decode_pg_binary).
+fn decode_any(row: &PgRow, ordinal: usize) -> String {
+    let Ok(value) = row.try_get_raw(ordinal) else { return String::new() };
+    let Ok(bytes) = value.as_bytes() else { return String::new() };
+    match value.format() {
+        PgValueFormat::Text => String::from_utf8_lossy(bytes).into_owned(),
+        PgValueFormat::Binary => {
+            decode_pg_binary(&value.type_info(), bytes).unwrap_or_else(|| decode_unknown_binary(bytes))
+        }
     }
+}
+
+/// Decodes a binary value into the text PostgreSQL writes for it. sqlx asks for binary results of every prepared
+/// statement, so a type not decoded by decode_postgresql_column_value arrives in binary there: its raw bytes read as
+/// text were control characters (`interval '1 day'` read `"\u{1}"`), and an array sqlx cannot decode (of more than
+/// one dimension, or not starting at 1) read as an empty string. `None` for a type not known here, or a malformed
+/// value.
+fn decode_pg_binary(info: &PgTypeInfo, bytes: &[u8]) -> Option<String> {
+    match info.kind() {
+        // Each element quoted as array_out writes it.
+        PgTypeKind::Array(element) => {
+            decode_pg_array_binary(bytes, &|e| decode_pg_binary(element, e).map(|e| pg_array_element(&e)))
+        }
+        PgTypeKind::Range(element) => decode_pg_range_binary(bytes, element),
+        PgTypeKind::Domain(base) => decode_pg_binary(base, bytes),
+        // An enum is sent as its label.
+        PgTypeKind::Enum(_) => Some(String::from_utf8_lossy(bytes).into_owned()),
+        _ => decode_pg_scalar_binary(info.name(), bytes),
+    }
+}
+
+/// A binary value of a type not known here: its bytes as text when they read as text (a type sent as text, such as
+/// citext), else in bytea's hex form (`\xHH..`), rather than control characters.
+fn decode_unknown_binary(bytes: &[u8]) -> String {
+    match std::str::from_utf8(bytes) {
+        Ok(text) if !text.chars().any(|c| c.is_control() && !matches!(c, '\t' | '\n' | '\r')) => text.to_string(),
+        _ => format!("\\x{}", hex::encode(bytes)),
+    }
+}
+
+/// Decodes a binary value of a scalar type by its name: sqlx's (`INT4`) for a type it knows, PostgreSQL's (`regclass`)
+/// for one it looked up.
+fn decode_pg_scalar_binary(name: &str, bytes: &[u8]) -> Option<String> {
+    fn be<const N: usize>(bytes: &[u8]) -> Option<[u8; N]> {
+        bytes.try_into().ok()
+    }
+    Some(match name.to_ascii_lowercase().as_str() {
+        "int2" => i16::from_be_bytes(be(bytes)?).to_string(),
+        "int4" => i32::from_be_bytes(be(bytes)?).to_string(),
+        "int8" => i64::from_be_bytes(be(bytes)?).to_string(),
+        // Sent as their OID number (their text form is the object's name, which only the server can look up).
+        "oid" | "xid" | "cid" | "regclass" | "regproc" | "regprocedure" | "regoper" | "regoperator" | "regtype"
+        | "regnamespace" | "regrole" | "regconfig" | "regdictionary" | "regcollation" => {
+            u32::from_be_bytes(be(bytes)?).to_string()
+        }
+        "xid8" => u64::from_be_bytes(be(bytes)?).to_string(),
+        "float4" => float_text(f32::from_be_bytes(be(bytes)?)),
+        "float8" => float_text(f64::from_be_bytes(be(bytes)?)),
+        "bool" => (if *bytes.first()? != 0 { "t" } else { "f" }).to_string(),
+        "bytea" => format!("\\x{}", hex::encode(bytes)),
+        "uuid" => uuid::Uuid::from_slice(bytes).ok()?.to_string(),
+        "date" => return decode_pg_date_binary(bytes),
+        // Their fractional seconds without trailing zeros, as PostgreSQL writes them.
+        "time" => return decode_pg_time_binary(bytes).map(trim_pg_fraction),
+        "timestamp" | "timestamptz" => return decode_pg_timestamp_binary(bytes).map(trim_pg_fraction),
+        "timetz" => return decode_pg_timetz_binary(bytes),
+        "interval" => return decode_pg_interval_binary(bytes),
+        "numeric" => return decode_pg_numeric_binary(bytes),
+        // Its text form depends on lc_monetary (`$1,234.56`): written as the plain amount, with two decimals.
+        "money" => {
+            let cents = i64::from_be_bytes(be(bytes)?) as i128;
+            let sign = if cents < 0 { "-" } else { "" };
+            format!("{sign}{}.{:02}", cents.abs() / 100, cents.abs() % 100)
+        }
+        "inet" | "cidr" => return decode_pg_inet_binary(bytes),
+        "macaddr" | "macaddr8" => bytes.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(":"),
+        "bit" | "varbit" => return decode_pg_bit_binary(bytes),
+        "point" => format!(
+            "({},{})",
+            float_text(f64::from_be_bytes(be(bytes.get(..8)?)?)),
+            float_text(f64::from_be_bytes(be(bytes.get(8..)?)?))
+        ),
+        // A version byte, then the text.
+        "jsonb" | "jsonpath" => String::from_utf8_lossy(bytes.strip_prefix(&[1]).unwrap_or(bytes)).into_owned(),
+        "text" | "varchar" | "char" | "bpchar" | "\"char\"" | "name" | "json" | "xml" | "unknown" | "citext" => {
+            String::from_utf8_lossy(bytes).into_owned()
+        }
+        _ => return None,
+    })
+}
+
+/// A time or timestamp written with six fractional digits (`10:00:00.500000`) without its trailing zeros
+/// (`10:00:00.5`, `10:00:00`).
+fn trim_pg_fraction(value: String) -> String {
+    match value.rfind('.') {
+        Some(dot) => value[..dot + 1].to_string() + value[dot + 1..].trim_end_matches('0'),
+        None => value,
+    }
+    .trim_end_matches('.')
+    .to_string()
+}
+
+/// Seconds and fractional seconds as PostgreSQL writes them in a time: `SS`, or `SS.f` without trailing zeros.
+fn pg_seconds(seconds: i64, micros: i64) -> String {
+    if micros == 0 {
+        format!("{seconds:02}")
+    } else {
+        format!("{seconds:02}.{micros:06}").trim_end_matches('0').to_string()
+    }
+}
+
+/// Binary INTERVAL (`time: i64` microseconds, `day: i32`, `month: i32`), written in the default IntervalStyle
+/// (`postgres`): `1 year 2 mons -3 days +04:05:06.5`.
+fn decode_pg_interval_binary(bytes: &[u8]) -> Option<String> {
+    let time = i64::from_be_bytes(bytes.get(..8)?.try_into().ok()?);
+    let day = i32::from_be_bytes(bytes.get(8..12)?.try_into().ok()?);
+    let month = i32::from_be_bytes(bytes.get(12..16)?.try_into().ok()?);
+    if bytes.len() != 16 {
+        return None;
+    }
+    match (time, day, month) {
+        (i64::MAX, i32::MAX, i32::MAX) => return Some("infinity".to_string()),
+        (i64::MIN, i32::MIN, i32::MIN) => return Some("-infinity".to_string()),
+        _ => {}
+    }
+    let mut out = String::new();
+    // As EncodeInterval: each non-zero part makes the next one carry its sign (`+`) when it was negative.
+    let mut is_before = false;
+    for (value, unit) in [(month as i64 / 12, "year"), (month as i64 % 12, "mon"), (day as i64, "day")] {
+        if value == 0 {
+            continue;
+        }
+        let plus = if is_before && value > 0 { "+" } else { "" };
+        let plural = if value != 1 { "s" } else { "" };
+        let space = if out.is_empty() { "" } else { " " };
+        out.push_str(&format!("{space}{plus}{value} {unit}{plural}"));
+        is_before = value < 0;
+    }
+    if out.is_empty() || time != 0 {
+        let sign = if time < 0 { "-" } else if is_before { "+" } else { "" };
+        let space = if out.is_empty() { "" } else { " " };
+        let micros = time.unsigned_abs();
+        let (hours, minutes) = (micros / 3_600_000_000, micros / 60_000_000 % 60);
+        let seconds = pg_seconds((micros / 1_000_000 % 60) as i64, (micros % 1_000_000) as i64);
+        out.push_str(&format!("{space}{sign}{hours:02}:{minutes:02}:{seconds}"));
+    }
+    Some(out)
+}
+
+/// Binary TIMETZ (`time: i64` microseconds, `zone: i32` seconds west of UTC): `12:34:56.5+02`, `12:00:00-03:30`.
+fn decode_pg_timetz_binary(bytes: &[u8]) -> Option<String> {
+    let micros = i64::from_be_bytes(bytes.get(..8)?.try_into().ok()?);
+    if !(0..=86_400_000_000).contains(&micros) {
+        return None;
+    }
+    let (secs, frac) = (micros / 1_000_000, micros % 1_000_000);
+    let time = format!("{:02}:{:02}:{}", secs / 3600, secs % 3600 / 60, pg_seconds(secs % 60, frac));
+    let zone = i32::from_be_bytes(bytes.get(8..12)?.try_into().ok()?);
+    let offset = -(zone as i64);
+    let sign = if offset < 0 { '-' } else { '+' };
+    let (hours, minutes, seconds) = (offset.abs() / 3600, offset.abs() / 60 % 60, offset.abs() % 60);
+    let mut out = format!("{time}{sign}{hours:02}");
+    if minutes != 0 || seconds != 0 {
+        out.push_str(&format!(":{minutes:02}"));
+    }
+    if seconds != 0 {
+        out.push_str(&format!(":{seconds:02}"));
+    }
+    Some(out)
+}
+
+/// Binary INET / CIDR (`family: u8` (2 for IPv4, 3 for IPv6), `bits: u8`, `is_cidr: u8`, `length: u8`, the address):
+/// an inet with a full netmask is written without it, as PostgreSQL does.
+fn decode_pg_inet_binary(bytes: &[u8]) -> Option<String> {
+    let (family, bits, is_cidr) = (*bytes.first()?, *bytes.get(1)?, *bytes.get(2)? != 0);
+    let address = bytes.get(4..)?;
+    let (address, max_bits) = match family {
+        2 => (std::net::Ipv4Addr::from(<[u8; 4]>::try_from(address).ok()?).to_string(), 32),
+        3 => (std::net::Ipv6Addr::from(<[u8; 16]>::try_from(address).ok()?).to_string(), 128),
+        _ => return None,
+    };
+    Some(if is_cidr || bits != max_bits { format!("{address}/{bits}") } else { address })
+}
+
+/// Binary BIT / VARBIT (`length: i32` in bits, then the bits, most significant first): `0101`.
+fn decode_pg_bit_binary(bytes: &[u8]) -> Option<String> {
+    let length = i32::from_be_bytes(bytes.get(..4)?.try_into().ok()?);
+    let data = bytes.get(4..)?;
+    (0..usize::try_from(length).ok()?)
+        .map(|i| Some(if data.get(i / 8)? & (0x80 >> (i % 8)) != 0 { '1' } else { '0' }))
+        .collect()
+}
+
+/// Binary range (`flags: u8`, then the lower and upper bound present, each as `length: i32` and the element), written
+/// as range_out does: `[1,10)`, `(,5]`, `empty`, a bound quoted when it holds a delimiter or whitespace.
+fn decode_pg_range_binary(bytes: &[u8], element: &PgTypeInfo) -> Option<String> {
+    const EMPTY: u8 = 0x01;
+    const LOWER_INCLUSIVE: u8 = 0x02;
+    const UPPER_INCLUSIVE: u8 = 0x04;
+    const LOWER_INFINITE: u8 = 0x08;
+    const UPPER_INFINITE: u8 = 0x10;
+    let flags = *bytes.first()?;
+    if flags & EMPTY != 0 {
+        return Some("empty".to_string());
+    }
+    let mut pos = 1;
+    let mut bound = |present: bool| -> Option<String> {
+        if !present {
+            return Some(String::new());
+        }
+        let length = usize::try_from(i32::from_be_bytes(bytes.get(pos..pos + 4)?.try_into().ok()?)).ok()?;
+        let value = bytes.get(pos + 4..pos + 4 + length)?;
+        pos += 4 + length;
+        decode_pg_binary(element, value).map(|value| pg_range_bound(&value))
+    };
+    let lower = bound(flags & LOWER_INFINITE == 0)?;
+    let upper = bound(flags & UPPER_INFINITE == 0)?;
+    let open = if flags & LOWER_INCLUSIVE != 0 { '[' } else { '(' };
+    let close = if flags & UPPER_INCLUSIVE != 0 { ']' } else { ')' };
+    Some(format!("{open}{lower},{upper}{close}"))
+}
+
+/// A range bound as range_out writes it: quoted, with its quotes and backslashes doubled, when it is empty or holds
+/// a delimiter, quote, backslash or whitespace.
+fn pg_range_bound(value: &str) -> String {
+    let quote = value.is_empty()
+        || value.chars().any(|c| matches!(c, '"' | '\\' | '(' | ')' | '[' | ']' | ',') || c.is_whitespace());
+    if !quote {
+        return value.to_string();
+    }
+    let mut s = String::with_capacity(value.len() + 2);
+    s.push('"');
+    for c in value.chars() {
+        if c == '"' || c == '\\' {
+            s.push(c);
+        }
+        s.push(c);
+    }
+    s.push('"');
+    s
 }
 
 /// Like format_pg_array_fmt, for elements that may be NULL (rendered `NULL`, as postgres does).
