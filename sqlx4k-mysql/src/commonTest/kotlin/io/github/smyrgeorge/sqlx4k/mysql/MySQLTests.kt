@@ -24,10 +24,13 @@ import io.github.smyrgeorge.sqlx4k.impl.extensions.asUuid
 import kotlin.random.Random
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -197,6 +200,47 @@ class MySQLTests {
         }
 
         runCatching { db.execute("drop table if exists $table;").getOrThrow() }
+    }
+
+    // How the generated MySQL update() reads its row back: in the transaction of the update, which keeps the row
+    // locked, so another writer cannot bump its version before it is read back (reported as a lock failure).
+    @Test
+    fun `a row is read back before another writer can change it`(): Unit = runBlocking {
+        val table = newTable()
+        db.execute("create table $table(id bigint primary key, version int not null);").getOrThrow()
+        db.execute("insert into $table(id, version) values (1, 1);").getOrThrow()
+        try {
+            var other: kotlinx.coroutines.Job? = null
+            val readBack = db.withReadBackTransaction { cx ->
+                cx.execute("update $table set version = 2 where id = 1 and version = 1;").mapCatching {
+                    // Another writer, on another connection, between the update and the read back.
+                    other = launch { db.execute("update $table set version = version + 1 where id = 1;").getOrThrow() }
+                    delay(300.milliseconds)
+                    cx.fetchAll("select id from $table where id = 1 and version = 2;").getOrThrow()
+                }
+            }.getOrThrow()
+            other!!.join()
+            assertThat(readBack.size).isEqualTo(1)
+            val version = db.fetchAll("select version from $table where id = 1;").getOrThrow().first().get(0).asInt()
+            assertThat(version).isEqualTo(3)
+        } finally {
+            db.execute("drop table if exists $table;").getOrThrow()
+        }
+    }
+
+    @Test
+    fun `a failed read back rolls back its write`(): Unit = runBlocking {
+        val table = newTable()
+        db.execute("create table $table(id bigint primary key);").getOrThrow()
+        try {
+            val res = db.withReadBackTransaction { cx ->
+                cx.execute("insert into $table(id) values (1);").mapCatching { error("read back failed") }
+            }
+            assertThat(res.isFailure).isTrue()
+            assertThat(db.fetchAll("select count(*) from $table;").getOrThrow().first().get(0).asInt()).isEqualTo(0)
+        } finally {
+            db.execute("drop table if exists $table;").getOrThrow()
+        }
     }
 
     // Valid values chrono cannot represent (TIME past 24 hours or negative, zero dates) must come back as MySQL
