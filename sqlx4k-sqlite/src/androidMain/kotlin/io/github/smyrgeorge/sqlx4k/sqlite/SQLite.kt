@@ -24,6 +24,7 @@ import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
+import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.splitSqlStatements
 import io.github.smyrgeorge.sqlx4k.impl.types.SqlRawLiteral
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.github.smyrgeorge.sqlx4k.sqlite.pool.ConnectionPoolImpl
@@ -237,18 +238,14 @@ class SQLite(
         }
 
         override suspend fun execute(sql: String): Result<Long> = mutex.withLockCatching(::assertIsOpen) {
-            withContext(dispatcher) {
-                db.execSQL(sql)
-                // execSQL returns void; return -1 as "unknown affected rows"
-                -1L
-            }
+            withContext(dispatcher) { db.executeScript(sql).rowsAffected }
         }
 
         override suspend fun execute(statement: Statement): Result<Long> =
             executeWithResult(statement).map { it.rowsAffected }
 
         override suspend fun executeWithResult(sql: String): Result<ExecuteResult> =
-            mutex.withLockCatching(::assertIsOpen) { withContext(dispatcher) { db.executeForResult(sql) } }
+            mutex.withLockCatching(::assertIsOpen) { withContext(dispatcher) { db.executeScript(sql) } }
 
         override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> {
             val nq = statement.render(encoders).getOrElse { return Result.failure(it) }
@@ -256,7 +253,7 @@ class SQLite(
         }
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> = mutex.withLockCatching(::assertIsOpen) {
-            withContext(dispatcher) { db.rawQuery(sql, null).use { it.toResultSet() } }
+            withContext(dispatcher) { db.rawQuery(sql, emptyList()).use { it.toResultSet() } }
         }
 
         override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
@@ -268,7 +265,7 @@ class SQLite(
 
         // The connection is held (its mutex locked) for the whole collection.
         override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = mutex.flowWithLock(::assertIsOpen) {
-            cursorRows(fetchSize, dispatcher) { db.rawQuery(sql, null) }
+            cursorRows(fetchSize, dispatcher) { db.rawQuery(sql, emptyList()) }
         }
 
         override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> =
@@ -397,17 +394,14 @@ class SQLite(
         }
 
         override suspend fun execute(sql: String): Result<Long> = mutex.withLockCatching(::assertIsOpen) {
-            withContext(dispatcher) {
-                db.execSQL(sql)
-                -1L
-            }
+            withContext(dispatcher) { db.executeScript(sql).rowsAffected }
         }
 
         override suspend fun execute(statement: Statement): Result<Long> =
             executeWithResult(statement).map { it.rowsAffected }
 
         override suspend fun executeWithResult(sql: String): Result<ExecuteResult> =
-            mutex.withLockCatching(::assertIsOpen) { withContext(dispatcher) { db.executeForResult(sql) } }
+            mutex.withLockCatching(::assertIsOpen) { withContext(dispatcher) { db.executeScript(sql) } }
 
         override suspend fun executeWithResult(statement: Statement): Result<ExecuteResult> {
             val nq = statement.render(encoders).getOrElse { return Result.failure(it) }
@@ -415,7 +409,7 @@ class SQLite(
         }
 
         override suspend fun fetchAll(sql: String): Result<ResultSet> = mutex.withLockCatching(::assertIsOpen) {
-            withContext(dispatcher) { db.rawQuery(sql, null).use { it.toResultSet() } }
+            withContext(dispatcher) { db.rawQuery(sql, emptyList()).use { it.toResultSet() } }
         }
 
         override suspend fun fetchAll(statement: Statement): Result<ResultSet> {
@@ -427,7 +421,7 @@ class SQLite(
 
         // The transaction is held (its mutex locked) for the whole collection.
         override fun fetch(sql: String, fetchSize: Int): Flow<ResultSet.Row> = mutex.flowWithLock(::assertIsOpen) {
-            cursorRows(fetchSize, dispatcher) { db.rawQuery(sql, null) }
+            cursorRows(fetchSize, dispatcher) { db.rawQuery(sql, emptyList()) }
         }
 
         override fun fetch(statement: Statement, fetchSize: Int): Flow<ResultSet.Row> =
@@ -491,12 +485,57 @@ class SQLite(
          * through `bindString`. `editTable` is documented as a hint for the cursor (only used by Android's
          * CursorAdapter / undo support); an empty string satisfies the non-null Kotlin signature without consequence.
          */
-        private fun SQLiteDatabase.rawQuery(query: Statement.NativeQuery): Cursor {
+        private fun SQLiteDatabase.rawQuery(query: Statement.NativeQuery): Cursor = rawQuery(query.sql, query.values)
+
+        private fun SQLiteDatabase.rawQuery(sql: String, values: List<Any?>): Cursor {
+            val mayWrite = sql.mayWrite()
             val factory = SQLiteDatabase.CursorFactory { _, driver, editTable, program ->
-                program.bindAll(query.values)
-                SQLiteCursor(driver, editTable, program)
+                program.bindAll(values)
+                if (mayWrite) SinglePassCursor(driver, editTable, program) else SQLiteCursor(driver, editTable, program)
             }
-            return rawQueryWithFactory(factory, query.sql, null, "")
+            return rawQueryWithFactory(factory, sql, null, "")
+        }
+
+        /**
+         * A cursor over the rows of a statement that may write (an `INSERT ... RETURNING`, ...). SQLiteCursor holds a
+         * window of the rows (about 2 MB), and reads past it by running the statement again from its start, skipping
+         * the rows it read: the statement's writes would be made again (rows inserted twice, ...). Reading past it
+         * fails instead.
+         */
+        private class SinglePassCursor(
+            driver: android.database.sqlite.SQLiteCursorDriver,
+            editTable: String?,
+            query: android.database.sqlite.SQLiteQuery,
+        ) : SQLiteCursor(driver, editTable, query) {
+            override fun onMove(oldPosition: Int, newPosition: Int): Boolean {
+                val window = window
+                if (window != null && newPosition !in window.startPosition until window.startPosition + window.numRows) {
+                    SQLError(
+                        code = SQLError.Code.Database,
+                        message = "The rows of a statement that writes do not fit the Android platform driver's " +
+                                "cursor window: reading on would run the statement (and its writes) again. " +
+                                "Return fewer or smaller rows."
+                    ).raise()
+                }
+                return super.onMove(oldPosition, newPosition)
+            }
+        }
+
+        /**
+         * Runs [sql], which may hold several statements. android.database.sqlite prepares the first statement of the
+         * SQL only, and ignores the rest: they are run one by one, as the other targets run them all. The rows
+         * affected are those of all of them, the rowid generated that of the last.
+         */
+        private fun SQLiteDatabase.executeScript(sql: String): ExecuteResult {
+            val statements = splitSqlStatements(sql)
+            if (statements.size <= 1) return executeForResult(sql)
+            var rowsAffected = 0L
+            var last: ExecuteResult? = null
+            for (statement in statements) {
+                last = executeForResult(statement)
+                rowsAffected += last.rowsAffected
+            }
+            return ExecuteResult(rowsAffected = rowsAffected, lastInsertId = last?.lastInsertId)
         }
 
         private fun SQLiteDatabase.executeForResult(sql: String): ExecuteResult =

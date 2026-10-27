@@ -251,4 +251,22 @@ class SQLiteTests : SQLiteTestBase() {
             db.execute("drop table $parent;").getOrThrow()
         }
     }
+
+    @Test
+    fun `execute returns the rows affected and runs every statement of the SQL`(): Unit = runBlocking {
+        val table = "t_exec_${Random.nextInt(1_000_000)}"
+        db.execute("create table $table(id integer primary key, v int not null);").getOrThrow()
+        try {
+            db.execute("insert into $table(id, v) values (1, 0); insert into $table(id, v) values (2, 0);").getOrThrow()
+            db.execute("insert into $table(id, v) values (3, 0);").getOrThrow()
+            assertThat(db.fetchAll("select count(*) from $table;").getOrThrow().first().get(0).asInt()).isEqualTo(3)
+            assertThat(db.execute("update $table set v = 1;").getOrThrow()).isEqualTo(3L)
+            assertThat(db.execute("update $table set v = 2 where id = 2;").getOrThrow()).isEqualTo(1L)
+            db.transaction {
+                assertThat(execute("update $table set v = 3 where id > 1;").getOrThrow()).isEqualTo(2L)
+            }
+        } finally {
+            db.execute("drop table $table;").getOrThrow()
+        }
+    }
 }

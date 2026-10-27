@@ -123,3 +123,22 @@ internal fun SQLiteDatabase.commitOutermostTransaction(close: Boolean) {
         if (close) runCatching { close() }
     }
 }
+
+/**
+ * Whether running the SQL again could change the database: anything but a query (`SELECT`, `VALUES`, a `WITH` clause
+ * whose statements only read, `PRAGMA`, `EXPLAIN`), judged by its first keyword after any leading whitespace and
+ * comments, and for a `WITH` clause by the keywords of the statements that write (outside quotes and comments).
+ */
+internal fun String.mayWrite(): Boolean {
+    val code = replace(SQL_QUOTES_AND_COMMENTS, " ").trimStart()
+    val keyword = code.takeWhile { it.isLetter() }.lowercase()
+    return when (keyword) {
+        "select", "values", "pragma", "explain" -> false
+        "with" -> SQL_WRITE_KEYWORD.containsMatchIn(code)
+        else -> true
+    }
+}
+
+private val SQL_QUOTES_AND_COMMENTS = Regex("""'(?:[^']|'')*'|"(?:[^"]|"")*"|`[^`]*`|\[[^\]]*]|--[^\n]*|/\*[\s\S]*?\*/""")
+private val SQL_WRITE_KEYWORD = Regex("""\b(insert|update|delete|replace)\b""", RegexOption.IGNORE_CASE)
+
