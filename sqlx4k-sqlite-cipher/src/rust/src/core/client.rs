@@ -3,7 +3,7 @@
 
 use sqlx::pool::PoolConnection;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
-use sqlx::{Acquire, AssertSqlSafe, Executor, Sqlite, Transaction};
+use sqlx::{Acquire, AssertSqlSafe, ConnectOptions, Connection, Executor, Sqlite, Transaction};
 use std::ffi::{c_int, c_void};
 use std::time::Duration;
 use tokio::runtime::Runtime;
@@ -561,6 +561,10 @@ pub fn open(
 
     let pool = with_pool_timeouts(pool, idle_timeout_milis, max_lifetime_milis);
 
+    if let Err(err) = runtime.block_on(check_key(&options)) {
+        return error_result_of(err).leak();
+    }
+
     let pool = pool.connect_with(options);
 
     // Create the pool here.
@@ -578,6 +582,17 @@ pub fn open(
         ..Default::default()
     }
     .leak()
+}
+
+/// Reads the database on a connection of its own, so that a wrong key (or none, or a key for a database not encrypted,
+/// or a file that is no database) fails the open at once with SQLITE_NOTADB. The pool would find it only in
+/// `after_connect`, its first read: sqlx closes a connection whose `after_connect` fails and opens another, until the
+/// acquire timeout, so the open waited for it (30 seconds by default) and failed with PoolTimedOut.
+async fn check_key(options: &SqliteConnectOptions) -> Result<(), sqlx::Error> {
+    let mut cn = options.connect().await?;
+    let read = sqlx::query("select count(*) from sqlite_master").execute(&mut cn).await;
+    let _ = cn.close().await;
+    read.map(|_| ())
 }
 
 pub fn pool_size(rt: *mut c_void) -> c_int {
@@ -625,7 +640,7 @@ mod pool_options_tests {
 mod tests {
     use super::*;
     use crate::core::params::{read_params, PARAM_TEXT};
-    use crate::core::types::{ERROR_POOL, ERROR_POOL_CLOSED, ERROR_POOL_TIMED_OUT};
+    use crate::core::types::{ERROR_DATABASE, ERROR_POOL, ERROR_POOL_CLOSED};
     use crate::test_support::{block_on, c, text_param, Pool, Res, TempDb, KEY};
     use std::time::Instant;
 
@@ -808,9 +823,9 @@ mod tests {
     const PLAIN_HEADER: &[u8] = b"SQLite format 3\0";
 
     /// Opens the database file of `db` with `key`, runs `sql` on it and closes it: the result of `sql`, or of the
-    /// open when it failed (given a second).
+    /// open when it failed.
     fn with_key(db: &TempDb, key: &str, sql: &str) -> Res {
-        let opened = Res(open(&db.url(), key, -1, 1, 1_000, -1, -1));
+        let opened = Res(open(&db.url(), key, -1, 1, 10_000, -1, -1));
         if !opened.is_ok() {
             return opened;
         }
@@ -820,9 +835,6 @@ mod tests {
         r
     }
 
-    // A wrong key (or none, or one for a database not encrypted) is found by the first read, the WAL switch of
-    // `after_connect`; sqlx closes a connection whose `after_connect` fails and opens another, until the acquire
-    // timeout: the open fails with PoolTimedOut, not SQLITE_NOTADB.
     #[test]
     fn a_database_is_encrypted_with_its_key() {
         let db = TempDb::new();
@@ -831,8 +843,13 @@ mod tests {
         assert_ne!(&file[..16], PLAIN_HEADER);
         assert!(!file.windows(6).any(|w| w == b"secret"));
         assert_eq!(with_key(&db, KEY, "select v from t").ok().value().as_deref(), Some("secret"));
+        // A wrong key, or none, fails the open at once (not after the acquire timeout) with SQLITE_NOTADB.
         for key in ["wrong", ""] {
-            assert_eq!(with_key(&db, key, "select v from t").get().error, ERROR_POOL_TIMED_OUT, "{key:?}");
+            let started = Instant::now();
+            let r = with_key(&db, key, "select v from t");
+            assert_eq!((r.get().error, r.get().error_native_code), (ERROR_DATABASE, 26), "{key:?}: {:?}", r.error_message());
+            assert!(r.get().rt.is_null());
+            assert!(started.elapsed() < Duration::from_secs(5));
         }
     }
 
@@ -842,7 +859,28 @@ mod tests {
         with_key(&db, "", "create table t(v text)").ok();
         assert_eq!(header(&db), PLAIN_HEADER);
         // An unencrypted database cannot be opened with a key.
-        assert_eq!(with_key(&db, KEY, "select * from t").get().error, ERROR_POOL_TIMED_OUT);
+        assert_eq!(with_key(&db, KEY, "select * from t").get().error_native_code, 26);
+    }
+
+    #[test]
+    fn a_file_that_is_no_database_fails_the_open() {
+        let db = TempDb::new();
+        std::fs::write(&db.path, vec![b'x'; 4096]).unwrap();
+        for key in [KEY, ""] {
+            assert_eq!(with_key(&db, key, "select 1").get().error_native_code, 26, "{key:?}");
+        }
+    }
+
+    #[test]
+    fn a_read_only_database_is_checked_too() {
+        let db = TempDb::new();
+        with_key(&db, KEY, "create table t(v text)").ok();
+        let url = format!("{}?mode=ro", db.url());
+        let r = Res(open(&url, "wrong", -1, 1, 10_000, -1, -1));
+        assert_eq!(r.get().error_native_code, 26);
+        let r = Res(open(&url, KEY, -1, 1, 10_000, -1, -1)).ok();
+        let pool = unsafe { &*(r.get().rt as *const Sqlx4kSqliteCipher) };
+        Res(on_runtime(pool.close())).ok();
     }
 
     #[test]
