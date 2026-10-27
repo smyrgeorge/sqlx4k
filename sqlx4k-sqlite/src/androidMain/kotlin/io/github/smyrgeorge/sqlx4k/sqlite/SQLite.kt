@@ -281,11 +281,13 @@ class SQLite(
             // the same dispatcher to AndroidTransaction so commit/rollback also run
             // on that thread (Android SQLiteDatabase sessions are thread-local).
             withContext(dispatcher) {
-                val outermost = !db.inTransaction()
+                // A begin() while a transaction is open nests in the innermost one.
+                val parent = transactions.lastOrNull { it.status == Transaction.Status.Open }
                 db.beginTransactionNonExclusive()
                 // Recorded as soon as it is begun: a caller cancelled meanwhile never receives it, and closing the
                 // connection must still roll it back.
-                AndroidTransaction(db, false, encoders, dispatcher, outermost).also { tx ->
+                AndroidTransaction(db, false, encoders, dispatcher, parent).also { tx ->
+                    parent?.child = tx
                     transactions.removeAll { it.status != Transaction.Status.Open }
                     transactions += tx
                 }
@@ -300,10 +302,21 @@ class SQLite(
         // Must be the same dispatcher used by the owning AndroidConnection so that
         // beginTransaction/setTransactionSuccessful/endTransaction all run on the same thread.
         private val dispatcher: CoroutineDispatcher,
-        // Not nested in another transaction of the connection: its commit runs the COMMIT.
-        private val outermost: Boolean = true
+        // The transaction of the connection this one is nested in, if any.
+        private val parent: AndroidTransaction? = null
     ) : Transaction {
         private val mutex = Mutex()
+
+        // Nesting without savepoints (see below): a nested transaction is part of the outermost one, which commits
+        // or rolls back the work of both. The fields below are read and written on the connection's dispatcher.
+
+        // The transaction nested in this one, while it is open.
+        internal var child: AndroidTransaction? = null
+
+        // Set on the outermost transaction when one nested in it was rolled back: its work cannot be rolled back
+        // alone, so the whole transaction can only be rolled back.
+        private var rollbackOnly: Boolean = false
+        private val outermostTransaction: AndroidTransaction get() = parent?.outermostTransaction ?: this
         private var _status: Transaction.Status = Transaction.Status.Open
         private var _commited: Boolean = false
         private var _rollbacked: Boolean = false
@@ -336,9 +349,26 @@ class SQLite(
                 mutex.withLock {
                     if (commited) return@withLock
                     assertIsOpen()
-                    _status = Transaction.Status.Closed
                     withContext(dispatcher) {
-                        if (outermost) db.commitOutermostTransaction(closeConnectionAfterTx)
+                        // android.database.sqlite ends the innermost transaction, whichever one is ended.
+                        if (child != null) {
+                            throw SQLError(
+                                code = SQLError.Code.Database,
+                                message = "Cannot commit a transaction while one nested in it is still open."
+                            )
+                        }
+                        _status = Transaction.Status.Closed
+                        parent?.child = null
+                        if (parent == null && rollbackOnly) {
+                            db.completeTransaction(closeConnectionAfterTx) { }
+                            _rollbacked = true
+                            throw SQLError(
+                                code = SQLError.Code.Database,
+                                message = "The transaction was rolled back, as one nested in it was: the Android " +
+                                        "platform SQLite driver has no savepoints to roll back the nested one alone."
+                            )
+                        }
+                        if (parent == null) db.commitOutermostTransaction(closeConnectionAfterTx)
                         else db.completeTransaction(closeConnectionAfterTx) { setTransactionSuccessful() }
                     }
                     // Only once the COMMIT itself succeeded (it runs when the transaction ends).
@@ -352,8 +382,12 @@ class SQLite(
                 mutex.withLock {
                     if (rollbacked) return@withLock
                     assertIsOpen()
+                    // android.database.sqlite ends the innermost transaction, whichever one is ended.
+                    withContext(dispatcher) { child }?.rollback()?.getOrThrow()
                     _status = Transaction.Status.Closed
                     withContext(dispatcher) {
+                        parent?.child = null
+                        if (parent != null) outermostTransaction.rollbackOnly = true
                         // Do NOT call setTransactionSuccessful() — endTransaction() will roll back.
                         db.completeTransaction(closeConnectionAfterTx) { }
                     }
