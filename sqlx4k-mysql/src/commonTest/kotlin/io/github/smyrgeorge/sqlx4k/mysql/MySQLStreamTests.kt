@@ -200,6 +200,32 @@ class MySQLStreamTests {
         }
     }
 
+    // A stream closed when its last rows are read (the end of the result is reached while a full channel holds back
+    // the last chunk) must leave the connection ready: its next statement used to wait for a result the server had
+    // already sent. The session's wait_timeout bounds such a wait, failing the next statement instead.
+    @Test
+    fun `a connection stays usable after a stream closed at the end of its result`(): Unit = runBlocking {
+        val table = seed(35)
+        try {
+            val cn = db.acquire().getOrThrow()
+            try {
+                cn.execute("set session wait_timeout = 5;").getOrThrow()
+                repeat(5) { i ->
+                    val first = cn.fetch("select id from $table order by id;", fetchSize = 10)
+                        .map { it.get("id").asInt() }
+                        .take(5)
+                        .toList()
+                    assertThat(first).isEqualTo(listOf(1, 2, 3, 4, 5))
+                    assertThat(cn.fetchAll("select $i as c;").getOrThrow().first().get("c").asInt()).isEqualTo(i)
+                }
+            } finally {
+                cn.close().getOrThrow()
+            }
+        } finally {
+            drop(table)
+        }
+    }
+
     @Test
     fun `rows are streamed in a transaction`(): Unit = runBlocking {
         val table = seed(1_000)

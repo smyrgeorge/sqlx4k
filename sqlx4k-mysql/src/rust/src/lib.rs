@@ -486,8 +486,12 @@ async fn stream_rows(
     abort_reads: bool,
 ) -> bool {
     let mut chunk: Vec<MySqlRow> = Vec::with_capacity(fetch_size.min(STREAM_MAX_PREALLOCATED_ROWS));
+    // The item after the end of a result set, read before the stream can stop (see below).
+    let mut lookahead = None;
     loop {
-        let next = if abort_reads {
+        let next = if let Some(next) = lookahead.take() {
+            next
+        } else if abort_reads {
             tokio::select! {
                 _ = &mut cancel => return false,
                 next = rows.try_next() => next,
@@ -506,14 +510,22 @@ async fn stream_rows(
                         chunk.push(row);
                         chunk.len() >= fetch_size
                     }
-                    // The end of a result set.
-                    sqlx::Either::Left(_) => !chunk.is_empty(),
+                    // The end of a result set. sqlx updates what the connection still waits for (another
+                    // result set, or none) only once polled past it: the stream must not stop there, or the
+                    // connection's next statement waited for a result the server had already sent, until the
+                    // server's wait_timeout. It is read past at once.
+                    sqlx::Either::Left(_) => {
+                        lookahead = Some(rows.try_next().await);
+                        !chunk.is_empty()
+                    }
                 };
                 if full {
+                    // Stopped while sending the last chunk, the stream was still consumed to its end.
+                    let ended = matches!(lookahead, Some(Ok(None)));
                     let full = std::mem::replace(&mut chunk, Vec::with_capacity(fetch_size.min(STREAM_MAX_PREALLOCATED_ROWS)));
                     tokio::select! {
-                        _ = &mut cancel => return false,
-                        sent = tx.send(Ok(full)) => if sent.is_err() { return false },
+                        _ = &mut cancel => return ended,
+                        sent = tx.send(Ok(full)) => if sent.is_err() { return ended },
                     }
                 }
             }
