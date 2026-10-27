@@ -140,5 +140,6 @@ internal fun String.mayWrite(): Boolean {
 }
 
 private val SQL_QUOTES_AND_COMMENTS = Regex("""'(?:[^']|'')*'|"(?:[^"]|"")*"|`[^`]*`|\[[^\]]*]|--[^\n]*|/\*[\s\S]*?\*/""")
-private val SQL_WRITE_KEYWORD = Regex("""\b(insert|update|delete|replace)\b""", RegexOption.IGNORE_CASE)
+// `replace` followed by `(` is the string function, not a REPLACE statement.
+private val SQL_WRITE_KEYWORD = Regex("""\b(insert|update|delete)\b|\breplace\b(?!\s*\()""", RegexOption.IGNORE_CASE)
 

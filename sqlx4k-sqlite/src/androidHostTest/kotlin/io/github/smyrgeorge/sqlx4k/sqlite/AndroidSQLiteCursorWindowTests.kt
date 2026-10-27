@@ -29,6 +29,8 @@ class AndroidSQLiteCursorWindowTests : SQLiteTestBase() {
         assertThat("pragma table_info(t)".mayWrite()).isFalse()
         assertThat("with c(n) as (select 1) select n from c".mayWrite()).isFalse()
         assertThat("with c(n) as (select 'insert') select n as \"update\" from c -- delete".mayWrite()).isFalse()
+        assertThat("with c(n) as (select replace(name, 'a', 'b') from t) select n from c".mayWrite()).isFalse()
+        assertThat("with c(n) as (select 1) replace into t(v) select n from c".mayWrite()).isTrue()
         assertThat("insert into t(v) values (1) returning id".mayWrite()).isTrue()
         assertThat("update t set v = 1 returning id".mayWrite()).isTrue()
         assertThat("delete from t returning id".mayWrite()).isTrue()
