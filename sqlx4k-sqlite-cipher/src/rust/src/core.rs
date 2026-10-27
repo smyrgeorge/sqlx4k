@@ -206,7 +206,7 @@ pub fn read_params(params: *const Sqlx4kSqliteCipherParam, count: c_int) -> Vec<
     if params.is_null() || count <= 0 {
         return Vec::new();
     }
-    let slice = unsafe { slice::from_raw_parts(params, count as usize) };
+    let slice = unsafe { slice_of(params, count as usize) };
     slice
         .iter()
         .map(|p| match p.kind {
@@ -218,7 +218,7 @@ pub fn read_params(params: *const Sqlx4kSqliteCipherParam, count: c_int) -> Vec<
                 let bytes = if len == 0 || p.text.is_null() {
                     &[][..]
                 } else {
-                    unsafe { slice::from_raw_parts(p.text as *const u8, len) }
+                    unsafe { slice_of(p.text as *const u8, len) }
                 };
                 OwnedParam::Text(String::from_utf8_lossy(bytes).into_owned())
             }
@@ -227,7 +227,7 @@ pub fn read_params(params: *const Sqlx4kSqliteCipherParam, count: c_int) -> Vec<
                 let bytes = if len == 0 || p.blob.is_null() {
                     Vec::new()
                 } else {
-                    unsafe { slice::from_raw_parts(p.blob, len) }.to_vec()
+                    unsafe { slice_of(p.blob, len) }.to_vec()
                 };
                 OwnedParam::Blob(bytes)
             }
@@ -275,7 +275,7 @@ pub fn free_result(ptr: *mut Sqlx4kSqliteCipherResult) {
 
     let schema: Sqlx4kSqliteCipherSchema = unsafe { *Box::from_raw(ptr.schema) };
     let columns: Vec<Sqlx4kSqliteCipherSchemaColumn> =
-        unsafe { Vec::from_raw_parts(schema.columns, schema.size as usize, schema.size as usize) };
+        unsafe { vec_of(schema.columns, schema.size as usize) };
     for col in columns {
         let name = unsafe { CString::from_raw(col.name) };
         std::mem::drop(name);
@@ -288,10 +288,10 @@ pub fn free_result(ptr: *mut Sqlx4kSqliteCipherResult) {
     }
 
     let rows: Vec<Sqlx4kSqliteCipherRow> =
-        unsafe { Vec::from_raw_parts(ptr.rows, ptr.size as usize, ptr.size as usize) };
+        unsafe { vec_of(ptr.rows, ptr.size as usize) };
     for row in rows {
         let columns: Vec<Sqlx4kSqliteCipherColumn> =
-            unsafe { Vec::from_raw_parts(row.columns, row.size as usize, row.size as usize) };
+            unsafe { vec_of(row.columns, row.size as usize) };
         for col in columns {
             free_column_value(col.value, col.value_len);
         }
@@ -1294,7 +1294,7 @@ impl ByteBuf {
         } else {
             self.put_u8(1);
             self.put_i32(len);
-            self.inner.extend_from_slice(unsafe { slice::from_raw_parts(ptr as *const u8, len as usize) });
+            self.inner.extend_from_slice(unsafe { slice_of(ptr as *const u8, len as usize) });
         }
     }
     /// Writes a required C string as: i32 len + utf8 bytes.
@@ -1343,7 +1343,7 @@ pub fn serialize_result(ptr: *const Sqlx4kSqliteCipherResult) -> Vec<u8> {
             buf.put_u8(0);
         } else {
             buf.put_u8(1);
-            let cols = unsafe { slice::from_raw_parts(schema.columns, schema.size as usize) };
+            let cols = unsafe { slice_of(schema.columns, schema.size as usize) };
             buf.put_i32(schema.size);
             for c in cols {
                 buf.put_i32(c.ordinal);
@@ -1357,14 +1357,14 @@ pub fn serialize_result(ptr: *const Sqlx4kSqliteCipherResult) -> Vec<u8> {
     if result.rows.is_null() || result.size <= 0 {
         buf.put_i32(0);
     } else {
-        let rows = unsafe { slice::from_raw_parts(result.rows, result.size as usize) };
+        let rows = unsafe { slice_of(result.rows, result.size as usize) };
         buf.put_i32(result.size);
         for row in rows {
             if row.columns.is_null() || row.size <= 0 {
                 buf.put_i32(0);
                 continue;
             }
-            let cols = unsafe { slice::from_raw_parts(row.columns, row.size as usize) };
+            let cols = unsafe { slice_of(row.columns, row.size as usize) };
             buf.put_i32(row.size);
             for c in cols {
                 buf.put_i32(c.ordinal);
@@ -1518,3 +1518,36 @@ fn inserted_rowid(res: &sqlx::sqlite::SqliteQueryResult, before: Option<i64>) ->
         rowid
     }
 }
+
+/// `slice::from_raw_parts`, for a pointer that may be null when the length is 0: Kotlin passes no array for no
+/// parameters, and `from_raw_parts` requires a non-null pointer even then (undefined behaviour otherwise).
+unsafe fn slice_of<'a, T>(ptr: *const T, len: usize) -> &'a [T] {
+    if ptr.is_null() || len == 0 {
+        &[]
+    } else {
+        unsafe { slice::from_raw_parts(ptr, len) }
+    }
+}
+
+/// `Vec::from_raw_parts` of an array leaked as a boxed slice of `len` elements, for a pointer that is null when the
+/// array is empty (an empty result's schema, a row of no columns): `from_raw_parts` requires a non-null pointer even
+/// then (undefined behaviour otherwise; an abort where its precondition checks are compiled in).
+unsafe fn vec_of<T>(ptr: *mut T, len: usize) -> Vec<T> {
+    if ptr.is_null() {
+        Vec::new()
+    } else {
+        unsafe { Vec::from_raw_parts(ptr, len, len) }
+    }
+}
+
+#[cfg(test)]
+mod free_result_tests {
+    use super::*;
+
+    // Debug builds check `from_raw_parts`'s preconditions: freeing an empty result rebuilt a vector from a null pointer.
+    #[test]
+    fn frees_an_empty_result() {
+        free_result(result_of(Ok(vec![])).leak());
+    }
+}
+

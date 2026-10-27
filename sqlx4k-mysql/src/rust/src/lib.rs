@@ -193,7 +193,7 @@ fn read_text(p: &Sqlx4kMysqlParam) -> String {
     let bytes = if len == 0 || p.text.is_null() {
         &[][..]
     } else {
-        unsafe { slice::from_raw_parts(p.text as *const u8, len) }
+        unsafe { slice_of(p.text as *const u8, len) }
     };
     String::from_utf8_lossy(bytes).into_owned()
 }
@@ -210,7 +210,7 @@ fn read_params(params: *const Sqlx4kMysqlParam, count: c_int) -> Vec<OwnedParam>
     if params.is_null() || count <= 0 {
         return Vec::new();
     }
-    let slice = unsafe { slice::from_raw_parts(params, count as usize) };
+    let slice = unsafe { slice_of(params, count as usize) };
     slice
         .iter()
         .map(|p| match p.kind {
@@ -223,7 +223,7 @@ fn read_params(params: *const Sqlx4kMysqlParam, count: c_int) -> Vec<OwnedParam>
                 let bytes = if len == 0 || p.blob.is_null() {
                     Vec::new()
                 } else {
-                    unsafe { slice::from_raw_parts(p.blob, len) }.to_vec()
+                    unsafe { slice_of(p.blob, len) }.to_vec()
                 };
                 OwnedParam::Blob(bytes)
             }
@@ -302,7 +302,7 @@ pub extern "C" fn sqlx4k_mysql_free_result(ptr: *mut Sqlx4kMysqlResult) {
 
     let schema: Sqlx4kMysqlSchema = unsafe { *Box::from_raw(ptr.schema) };
     let columns: Vec<Sqlx4kMysqlSchemaColumn> =
-        unsafe { Vec::from_raw_parts(schema.columns, schema.size as usize, schema.size as usize) };
+        unsafe { vec_of(schema.columns, schema.size as usize) };
     for col in columns {
         let name = unsafe { CString::from_raw(col.name) };
         std::mem::drop(name);
@@ -315,10 +315,10 @@ pub extern "C" fn sqlx4k_mysql_free_result(ptr: *mut Sqlx4kMysqlResult) {
     }
 
     let rows: Vec<Sqlx4kMysqlRow> =
-        unsafe { Vec::from_raw_parts(ptr.rows, ptr.size as usize, ptr.size as usize) };
+        unsafe { vec_of(ptr.rows, ptr.size as usize) };
     for row in rows {
         let columns: Vec<Sqlx4kMysqlColumn> =
-            unsafe { Vec::from_raw_parts(row.columns, row.size as usize, row.size as usize) };
+            unsafe { vec_of(row.columns, row.size as usize) };
         for col in columns {
             if col.value != null_mut() {
                 // Allocated by `column_value_of` with its length (the value may hold NUL characters).
@@ -1754,3 +1754,36 @@ pub extern "C" fn sqlx4k_mysql_tx_fetch_all_with_params(
         fun(callback, result)
     });
 }
+
+/// `slice::from_raw_parts`, for a pointer that may be null when the length is 0: Kotlin passes no array for no
+/// parameters, and `from_raw_parts` requires a non-null pointer even then (undefined behaviour otherwise).
+unsafe fn slice_of<'a, T>(ptr: *const T, len: usize) -> &'a [T] {
+    if ptr.is_null() || len == 0 {
+        &[]
+    } else {
+        unsafe { slice::from_raw_parts(ptr, len) }
+    }
+}
+
+/// `Vec::from_raw_parts` of an array leaked as a boxed slice of `len` elements, for a pointer that is null when the
+/// array is empty (an empty result's schema, a row of no columns): `from_raw_parts` requires a non-null pointer even
+/// then (undefined behaviour otherwise; an abort where its precondition checks are compiled in).
+unsafe fn vec_of<T>(ptr: *mut T, len: usize) -> Vec<T> {
+    if ptr.is_null() {
+        Vec::new()
+    } else {
+        unsafe { Vec::from_raw_parts(ptr, len, len) }
+    }
+}
+
+#[cfg(test)]
+mod free_result_tests {
+    use super::*;
+
+    // Debug builds check `from_raw_parts`'s preconditions: freeing an empty result rebuilt a vector from a null pointer.
+    #[test]
+    fn frees_an_empty_result() {
+        sqlx4k_mysql_free_result(sqlx4k_mysql_result_of(Ok(vec![])).leak());
+    }
+}
+
