@@ -602,10 +602,16 @@ async fn stream_rows(
     mut cancel: oneshot::Receiver<()>,
 ) -> bool {
     let mut chunk: Vec<PgRow> = Vec::with_capacity(fetch_size.min(STREAM_MAX_PREALLOCATED_ROWS));
+    // The item after the end of a statement, read before sending the chunk the statement ended (see below).
+    let mut lookahead = None;
     loop {
-        let next = tokio::select! {
-            _ = &mut cancel => return false,
-            next = rows.try_next() => next,
+        let next = if let Some(next) = lookahead.take() {
+            next
+        } else {
+            tokio::select! {
+                _ = &mut cancel => return false,
+                next = rows.try_next() => next,
+            }
         };
         match next {
             Ok(Some(item)) => {
@@ -614,14 +620,19 @@ async fn stream_rows(
                         chunk.push(row);
                         chunk.len() >= fetch_size
                     }
-                    // The end of a statement.
-                    sqlx::Either::Left(_) => !chunk.is_empty(),
+                    // The end of a statement: what follows is read first, so that a stream stopped while sending
+                    // its last chunk is known to have been consumed to its end (its connection is clean).
+                    sqlx::Either::Left(_) => {
+                        lookahead = Some(rows.try_next().await);
+                        !chunk.is_empty()
+                    }
                 };
                 if full {
+                    let ended = matches!(lookahead, Some(Ok(None)));
                     let full = std::mem::replace(&mut chunk, Vec::with_capacity(fetch_size.min(STREAM_MAX_PREALLOCATED_ROWS)));
                     tokio::select! {
-                        _ = &mut cancel => return false,
-                        sent = tx.send(Ok(full)) => if sent.is_err() { return false },
+                        _ = &mut cancel => return ended,
+                        sent = tx.send(Ok(full)) => if sent.is_err() { return ended },
                     }
                 }
             }
