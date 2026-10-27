@@ -16,6 +16,10 @@ use crate::types::{
 
 #[no_mangle]
 pub extern "C" fn sqlx4k_mysql_free_result(ptr: *mut Sqlx4kMysqlResult) {
+    // Like C's free(NULL): Box::from_raw requires a non-null pointer.
+    if ptr.is_null() {
+        return;
+    }
     let ptr: Sqlx4kMysqlResult = unsafe { *Box::from_raw(ptr) };
 
     if ptr.error >= 0 {
@@ -211,5 +215,81 @@ mod free_result_tests {
     #[test]
     fn frees_an_empty_result() {
         sqlx4k_mysql_free_result(sqlx4k_mysql_result_of(Ok(vec![])).leak());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{block_on, c, connect_options, Res};
+    use crate::types::{ERROR_POOL_CLOSED, OK};
+    use sqlx::{Connection, MySqlConnection};
+    use std::ptr::null;
+
+    #[test]
+    fn a_c_string_reads_as_str() {
+        let s = c("héllo");
+        assert_eq!(c_chars_to_str_mysql(s.as_ptr()), "héllo");
+    }
+
+    #[test]
+    fn a_null_pointer_reads_as_an_empty_slice_or_vec() {
+        assert!(unsafe { slice_of::<u8>(null(), 0) }.is_empty());
+        assert!(unsafe { slice_of::<u8>(null(), 5) }.is_empty());
+        assert!(unsafe { vec_of::<u8>(null_mut(), 0) }.is_empty());
+        let bytes = [1u8, 2, 3];
+        assert_eq!(unsafe { slice_of(bytes.as_ptr(), 2) }, &[1, 2]);
+    }
+
+    #[test]
+    fn freeing_a_null_result_does_nothing() {
+        sqlx4k_mysql_free_result(null_mut());
+    }
+
+    #[test]
+    fn no_rows_make_an_empty_result() {
+        let r = Res(sqlx4k_mysql_result_of(Ok(vec![])).leak());
+        assert_eq!((r.get().error, r.get().size), (OK, 0));
+        assert!(r.columns().is_empty());
+    }
+
+    #[test]
+    fn an_error_makes_an_error_result() {
+        let r = Res(sqlx4k_mysql_result_of(Err(sqlx::Error::PoolClosed)).leak());
+        assert_eq!((r.get().error, r.get().size), (ERROR_POOL_CLOSED, 0));
+    }
+
+    async fn last(cn: &mut MySqlConnection, sql: &str) -> Result<Vec<MySqlRow>, sqlx::Error> {
+        fetch_last(&mut *cn, sqlx::AssertSqlSafe(sql.to_string())).await
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn rows_are_read_with_their_schema_and_values_by_length() {
+        block_on(async {
+            let mut cn = MySqlConnection::connect_with(&connect_options()).await.unwrap();
+            let rows = last(&mut cn, "select 1 as a, null as b, concat('x', char(0 using utf8mb4), 'y') as c").await;
+            let r = Res(sqlx4k_mysql_result_of(rows).leak()).ok();
+            assert_eq!(r.columns().iter().map(|c| c.0.as_str()).collect::<Vec<_>>(), ["a", "b", "c"]);
+            // The NUL inside the value is kept.
+            assert_eq!(r.rows(), [[Some("1".into()), None, Some("x\0y".into())]]);
+            cn.close().await.unwrap();
+        });
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn the_rows_of_the_last_result_set_with_rows_are_kept() {
+        block_on(async {
+            let mut cn = MySqlConnection::connect_with(&connect_options()).await.unwrap();
+            let r = Res(sqlx4k_mysql_result_of(last(&mut cn, "select 1 as a; select 2 as b, 3 as c").await).leak()).ok();
+            assert_eq!(r.columns().iter().map(|c| c.0.as_str()).collect::<Vec<_>>(), ["b", "c"]);
+            assert_eq!(r.rows(), [[Some("2".into()), Some("3".into())]]);
+            // A result set with no rows (as the status a CALL ends with) is passed over.
+            let r = Res(sqlx4k_mysql_result_of(last(&mut cn, "select 1 as a; select 2 as b from dual where false").await).leak()).ok();
+            assert_eq!(r.rows(), [[Some("1".into())]]);
+            assert!(last(&mut cn, "select 1; select * from missing_table").await.is_err());
+            cn.close().await.unwrap();
+        });
     }
 }

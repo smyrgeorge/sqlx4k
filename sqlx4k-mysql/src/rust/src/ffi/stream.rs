@@ -112,3 +112,104 @@ pub extern "C" fn sqlx4k_mysql_stream_close(
         fun(callback, result)
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ffi::connection::{sqlx4k_mysql_cn_acquire, sqlx4k_mysql_cn_fetch_all, sqlx4k_mysql_cn_query, sqlx4k_mysql_cn_release};
+    use crate::ffi::transaction::{sqlx4k_mysql_tx_begin, sqlx4k_mysql_tx_commit, sqlx4k_mysql_tx_query};
+    use crate::params::PARAM_INT;
+    use crate::test_support::{c, call, param, Pool};
+    use crate::types::ERROR_DATABASE;
+    use std::ptr::null;
+
+    const SERIES: &str = "with recursive s(n) as (select 1 union all select n + 1 from s where n < 5) select n from s";
+
+    /// Reads a stream to its end and closes it: the rows of each chunk.
+    fn read(pool: &Pool, stream: *mut c_void) -> Vec<Vec<Vec<Option<String>>>> {
+        let mut chunks = Vec::new();
+        loop {
+            let chunk = call(|cb, fun| sqlx4k_mysql_stream_next(pool.rt, stream, cb, fun)).ok();
+            if chunk.get().size == 0 {
+                break;
+            }
+            chunks.push(chunk.rows());
+        }
+        call(|cb, fun| sqlx4k_mysql_stream_close(pool.rt, stream, cb, fun)).ok();
+        chunks
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn the_rows_of_a_pool_stream_come_in_chunks() {
+        let pool = Pool::open(1);
+        let sql = c(SERIES);
+        let stream = call(|cb, fun| sqlx4k_mysql_stream_open(pool.rt, sql.as_ptr(), null(), 0, 2, cb, fun)).ok().get().stream;
+        let chunks = read(&pool, stream);
+        assert_eq!(chunks.iter().map(Vec::len).collect::<Vec<_>>(), [2, 2, 1]);
+        let values: Vec<String> = chunks.concat().into_iter().map(|r| r[0].clone().unwrap()).collect();
+        assert_eq!(values, ["1", "2", "3", "4", "5"]);
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn a_prepared_statement_is_streamed() {
+        let pool = Pool::open(1);
+        let sql = c("select ? as a union all select ? union all select ?");
+        let params = [param(PARAM_INT, |p| p.i64_val = 1), param(PARAM_INT, |p| p.i64_val = 2), param(PARAM_INT, |p| p.i64_val = 3)];
+        let stream = call(|cb, fun| sqlx4k_mysql_stream_open(pool.rt, sql.as_ptr(), params.as_ptr(), 3, 10, cb, fun))
+            .ok()
+            .get()
+            .stream;
+        assert_eq!(read(&pool, stream).concat().len(), 3);
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn a_failing_query_fails_its_first_chunk() {
+        let pool = Pool::open(1);
+        let sql = c("select * from missing_table");
+        let stream = call(|cb, fun| sqlx4k_mysql_stream_open(pool.rt, sql.as_ptr(), null(), 0, 10, cb, fun)).ok().get().stream;
+        let chunk = call(|cb, fun| sqlx4k_mysql_stream_next(pool.rt, stream, cb, fun));
+        assert_eq!(chunk.get().error, ERROR_DATABASE);
+        call(|cb, fun| sqlx4k_mysql_stream_close(pool.rt, stream, cb, fun)).ok();
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn a_stream_of_a_connection_leaves_it_usable_also_when_closed_early() {
+        let pool = Pool::open(1);
+        let cn = call(|cb, fun| sqlx4k_mysql_cn_acquire(pool.rt, cb, fun)).ok().get().cn;
+        let sql = c("create temporary table t as with recursive s(n) as (select 1 union all select n + 1 from s where n < 1000) select n from s");
+        call(|cb, fun| sqlx4k_mysql_cn_query(pool.rt, cn, sql.as_ptr(), cb, fun)).ok();
+        let sql = c("select n from t order by n");
+        let stream = call(|cb, fun| sqlx4k_mysql_cn_stream_open(pool.rt, cn, sql.as_ptr(), null(), 0, 10, cb, fun))
+            .ok()
+            .get()
+            .stream;
+        let first = call(|cb, fun| sqlx4k_mysql_stream_next(pool.rt, stream, cb, fun)).ok();
+        assert_eq!(first.rows()[0], [Some("1".into())]);
+        call(|cb, fun| sqlx4k_mysql_stream_close(pool.rt, stream, cb, fun)).ok();
+        let sql = c("select count(*) from t");
+        let r = call(|cb, fun| sqlx4k_mysql_cn_fetch_all(pool.rt, cn, sql.as_ptr(), cb, fun)).ok();
+        assert_eq!(r.value().as_deref(), Some("1000"));
+        call(|cb, fun| sqlx4k_mysql_cn_release(pool.rt, cn, cb, fun)).ok();
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn a_stream_of_a_transaction_sees_its_writes() {
+        let pool = Pool::open(1);
+        let tx = call(|cb, fun| sqlx4k_mysql_tx_begin(pool.rt, cb, fun)).ok().get().tx;
+        let sql = c(&format!("create temporary table t as {SERIES}"));
+        let tx = call(|cb, fun| sqlx4k_mysql_tx_query(pool.rt, tx, sql.as_ptr(), cb, fun)).ok().get().tx;
+        let sql = c("select n from t");
+        // The stream borrows the transaction in place: the same pointer is used after it.
+        let stream = call(|cb, fun| sqlx4k_mysql_tx_stream_open(pool.rt, tx, sql.as_ptr(), null(), 0, 10, cb, fun))
+            .ok()
+            .get()
+            .stream;
+        assert_eq!(read(&pool, stream).concat().len(), 5);
+        call(|cb, fun| sqlx4k_mysql_tx_commit(pool.rt, tx, cb, fun)).ok();
+    }
+}

@@ -90,3 +90,91 @@ pub(crate) fn bind_params<'q>(
     }
     q
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{block_on, c, connect_options, param, text_param};
+    use sqlx::mysql::MySqlPoolOptions;
+    use sqlx::Row;
+    use std::ffi::CString;
+    use std::ptr::null;
+
+    fn read(params: &[Sqlx4kMysqlParam]) -> Vec<OwnedParam> {
+        read_params(params.as_ptr(), params.len() as c_int)
+    }
+
+    #[test]
+    fn no_params_read_as_none() {
+        assert!(read_params(null(), 0).is_empty());
+        assert!(read_params(null(), 3).is_empty());
+    }
+
+    #[test]
+    fn every_kind_is_read() {
+        let s = c("hello");
+        let blob = [1u8, 0, 255];
+        let read = read(&[
+            param(PARAM_NULL, |_| {}),
+            param(PARAM_INT, |p| p.i64_val = i64::MIN),
+            param(PARAM_REAL, |p| p.f64_val = -2.25),
+            text_param(PARAM_TEXT, &s),
+            param(PARAM_BLOB, |p| {
+                p.blob = blob.as_ptr();
+                p.blob_len = 3
+            }),
+        ]);
+        assert!(matches!(read[0], OwnedParam::Null));
+        assert!(matches!(read[1], OwnedParam::Int(i64::MIN)));
+        assert!(matches!(read[2], OwnedParam::Real(v) if v == -2.25));
+        assert!(matches!(&read[3], OwnedParam::Text(v) if v == "hello"));
+        assert!(matches!(&read[4], OwnedParam::Blob(v) if v == &blob));
+    }
+
+    #[test]
+    fn a_text_is_read_by_its_length() {
+        let bytes = b"a\0b and more";
+        let p = param(PARAM_TEXT, |p| {
+            p.text = bytes.as_ptr() as *const c_char;
+            p.text_len = 3
+        });
+        assert_eq!(read_text(&p), "a\0b");
+        let s = CString::new("a").unwrap();
+        assert_eq!(read_text(&param(PARAM_TEXT, |p| p.text = s.as_ptr())), "");
+        assert_eq!(read_text(&param(PARAM_TEXT, |_| {})), "");
+    }
+
+    #[test]
+    fn an_empty_or_missing_blob_reads_empty() {
+        let read = read(&[param(PARAM_BLOB, |p| p.blob_len = 5)]);
+        assert!(matches!(&read[0], OwnedParam::Blob(v) if v.is_empty()));
+    }
+
+    // Kotlin only passes the kinds above; another one is a bug on its side (and aborts a release build).
+    #[test]
+    #[should_panic(expected = "Unknown Sqlx4kMysqlParam kind: 9")]
+    fn an_unknown_kind_panics() {
+        read(&[param(9, |_| {})]);
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn every_kind_is_bound() {
+        block_on(async {
+            let pool = MySqlPoolOptions::new().max_connections(1).connect_with(connect_options()).await.unwrap();
+            let params = vec![
+                OwnedParam::Null,
+                OwnedParam::Int(-8),
+                OwnedParam::Real(1.5),
+                OwnedParam::Text("x".to_string()),
+                OwnedParam::Blob(vec![1, 2]),
+            ];
+            let sql = "select ? is null, cast(? as char), cast(? as char), ?, hex(?)";
+            let row = bind_params(sqlx::query(sql), params).fetch_one(&pool).await.unwrap();
+            assert_eq!(row.get::<i64, _>(0), 1);
+            let values: Vec<String> = (1..5).map(|i| row.get::<String, _>(i)).collect();
+            assert_eq!(values, ["-8", "1.5", "x", "0102"]);
+            pool.close().await;
+        });
+    }
+}

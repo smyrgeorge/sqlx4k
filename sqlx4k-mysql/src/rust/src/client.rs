@@ -415,3 +415,168 @@ impl Sqlx4kMySql {
         result.leak()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::params::read_params;
+    use crate::test_support::{block_on, c, connect_options, text_param, unique, Pool, Res};
+    use crate::params::PARAM_TEXT;
+    use crate::types::ERROR_POOL_CLOSED;
+    use sqlx::mysql::MySqlPoolOptions;
+    use std::time::Instant;
+
+    /// Runs `f` on the driver's runtime, as the exports do.
+    fn on_runtime<F: std::future::Future>(f: F) -> F::Output {
+        RUNTIME.get().unwrap().block_on(f)
+    }
+
+    fn client(pool: &Pool) -> &'static Sqlx4kMySql {
+        unsafe { &*(pool.rt as *const Sqlx4kMySql) }
+    }
+
+    fn ptr(p: *mut c_void) -> Sqlx4kMysqlPtr {
+        Sqlx4kMysqlPtr { ptr: p }
+    }
+
+    fn count(db: &Sqlx4kMySql, table: &str) -> String {
+        Res(on_runtime(db.fetch_all(format!("select count(*) from {table}")))).ok().value().unwrap()
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn closing_a_pool_closes_its_idle_connections_at_once() {
+        block_on(async {
+            let pool = MySqlPoolOptions::new().min_connections(2).max_connections(2).connect_with(connect_options()).await.unwrap();
+            while pool.num_idle() < 2 {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            let started = Instant::now();
+            close_pool(&pool).await;
+            assert!(pool.is_closed());
+            assert_eq!(pool.size(), 0);
+            assert!(started.elapsed() < CLOSE_GRACE);
+        });
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn closing_a_pool_does_not_wait_for_a_connection_held() {
+        block_on(async {
+            let pool = MySqlPoolOptions::new().max_connections(1).connect_with(connect_options()).await.unwrap();
+            let held = pool.acquire().await.unwrap();
+            let started = Instant::now();
+            close_pool(&pool).await;
+            assert!(started.elapsed() < CLOSE_GRACE * 2);
+            assert!(pool.is_closed());
+            drop(held);
+            for _ in 0..100 {
+                if pool.size() == 0 {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            assert_eq!(pool.size(), 0);
+        });
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn queries_run_on_the_pool() {
+        let pool = Pool::open(2);
+        let db = client(&pool);
+        let table = unique("t_client");
+        Res(on_runtime(db.query(format!("create table {table}(id int primary key auto_increment, v text)")))).ok();
+        let r = Res(on_runtime(db.query(format!("insert into {table}(v) values ('a'), ('b')")))).ok();
+        assert_eq!(r.get().rows_affected, 2);
+        // The id the insert generated (the first of its rows, on MySQL).
+        assert_eq!(r.get().last_insert_id, 1);
+        let v = c("c");
+        let params = read_params([text_param(PARAM_TEXT, &v)].as_ptr(), 1);
+        let r = Res(on_runtime(db.query_with_params(format!("update {table} set v = ? where id = 1"), params))).ok();
+        assert_eq!(r.get().rows_affected, 1);
+        let r = Res(on_runtime(db.fetch_all(format!("select v from {table} order by id")))).ok();
+        assert_eq!(r.rows(), [[Some("c".into())], [Some("b".into())]]);
+        let params = read_params([text_param(PARAM_TEXT, &v)].as_ptr(), 1);
+        let r = Res(on_runtime(db.fetch_all_with_params(format!("select id from {table} where v = ?"), params))).ok();
+        assert_eq!(r.rows(), [[Some("1".into())]]);
+        Res(on_runtime(db.query(format!("drop table {table}")))).ok();
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn a_transaction_is_committed_or_rolled_back() {
+        let pool = Pool::open(2);
+        let db = client(&pool);
+        let table = unique("t_client_tx");
+        Res(on_runtime(db.query(format!("create table {table}(id int)")))).ok();
+        for commit in [true, false] {
+            let tx = Res(on_runtime(db.tx_begin())).ok().get().tx;
+            // The transaction moves into each call and comes back in its result.
+            let tx = Res(on_runtime(db.tx_query(ptr(tx), format!("insert into {table} values (1)")))).ok().get().tx;
+            let r = Res(on_runtime(db.tx_fetch_all(ptr(tx), format!("select count(*) from {table}")))).ok();
+            let tx = r.get().tx;
+            assert_eq!(r.value().as_deref(), Some(if commit { "1" } else { "2" }));
+            if commit {
+                Res(on_runtime(db.tx_commit(ptr(tx)))).ok();
+            } else {
+                Res(on_runtime(db.tx_rollback(ptr(tx)))).ok();
+            }
+        }
+        assert_eq!(count(db, &table), "1");
+        Res(on_runtime(db.query(format!("drop table {table}")))).ok();
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn a_transaction_begun_in_another_one_on_a_connection_is_a_savepoint() {
+        let pool = Pool::open(2);
+        let db = client(&pool);
+        let table = unique("t_client_sp");
+        Res(on_runtime(db.query(format!("create table {table}(id int)")))).ok();
+        let cn = Res(on_runtime(db.cn_acquire())).ok().get().cn;
+        let outer = Res(on_runtime(db.cn_tx_begin(ptr(cn)))).ok().get().tx;
+        let outer = Res(on_runtime(db.tx_query(ptr(outer), format!("insert into {table} values (1)")))).ok().get().tx;
+        let inner = Res(on_runtime(db.cn_tx_begin(ptr(cn)))).ok().get().tx;
+        let inner = Res(on_runtime(db.tx_query(ptr(inner), format!("insert into {table} values (2)")))).ok().get().tx;
+        Res(on_runtime(db.tx_rollback(ptr(inner)))).ok();
+        Res(on_runtime(db.tx_commit(ptr(outer)))).ok();
+        Res(on_runtime(db.cn_release(ptr(cn)))).ok();
+        assert_eq!(count(db, &table), "1");
+        Res(on_runtime(db.query(format!("drop table {table}")))).ok();
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn a_pool_stream_gives_its_connection_back_once_consumed_and_closes_it_otherwise() {
+        let pool = Pool::open(1);
+        let db = client(&pool);
+        let sql = "with recursive s(n) as (select 1 union all select n + 1 from s where n < 1000) select n from s".to_string();
+        let stream = Res(on_runtime(db.stream_open(sql, vec![], 10))).ok().get().stream;
+        assert_eq!(Res(on_runtime(db.stream_next(ptr(stream)))).ok().rows().len(), 10);
+        Res(on_runtime(db.stream_close(ptr(stream)))).ok();
+        assert_eq!(db.pool.size(), 0);
+        let stream = Res(on_runtime(db.stream_open("select 1".to_string(), vec![], 10))).ok().get().stream;
+        assert_eq!(Res(on_runtime(db.stream_next(ptr(stream)))).ok().rows().len(), 1);
+        assert_eq!(Res(on_runtime(db.stream_next(ptr(stream)))).ok().get().size, 0);
+        Res(on_runtime(db.stream_close(ptr(stream)))).ok();
+        on_runtime(async {
+            for _ in 0..100 {
+                if db.pool.num_idle() == 1 {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        });
+        assert_eq!(db.pool.num_idle(), 1);
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn a_closed_pool_runs_nothing() {
+        let pool = Pool::open(1);
+        let db = client(&pool);
+        Res(on_runtime(db.close())).ok();
+        assert_eq!(Res(on_runtime(db.query("select 1".to_string()))).get().error, ERROR_POOL_CLOSED);
+    }
+}

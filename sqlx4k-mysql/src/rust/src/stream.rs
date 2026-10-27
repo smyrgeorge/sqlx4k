@@ -152,3 +152,99 @@ pub(crate) fn stream_result_of(stream: Sqlx4kMysqlStream) -> *mut Sqlx4kMysqlRes
     }
     .leak()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{block_on, connect_options};
+    use sqlx::{Connection, Row};
+
+    #[test]
+    fn a_fetch_size_of_zero_or_less_is_the_default() {
+        assert_eq!(stream_fetch_size(0), STREAM_DEFAULT_FETCH_SIZE);
+        assert_eq!(stream_fetch_size(-1), STREAM_DEFAULT_FETCH_SIZE);
+        assert_eq!(stream_fetch_size(7), 7);
+    }
+
+    /// Streams `sql` on a connection of its own in chunks of `fetch_size`: whether it was consumed to its end, and the
+    /// chunks sent (their rows' sizes, or an error). `cancel_first` closes the stream before it starts.
+    fn stream(sql: &str, params: Vec<OwnedParam>, fetch_size: usize, cancel_first: bool, abort_reads: bool) -> (bool, Vec<Result<Vec<usize>, String>>) {
+        block_on(async {
+            let mut cn = MySqlConnection::connect_with(&connect_options()).await.unwrap();
+            let (tx, mut rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
+            let (cancel, cancel_rx) = oneshot::channel();
+            if cancel_first {
+                drop(cancel);
+            } else {
+                std::mem::forget(cancel);
+            }
+            let (ended, chunks) = {
+                let rows = stream_rows_of(&mut cn, sql.to_string(), params);
+                tokio::join!(stream_rows(rows, fetch_size, tx, cancel_rx, abort_reads), async {
+                    let mut chunks = Vec::new();
+                    while let Some(chunk) = rx.recv().await {
+                        chunks.push(chunk.map(|rows| rows.iter().map(|r| r.len()).collect()).map_err(|e| e.to_string()));
+                    }
+                    chunks
+                })
+            };
+            // The connection is in step with the server after the stream.
+            let one: i64 = sqlx::query_scalar("select 1").fetch_one(&mut cn).await.unwrap();
+            assert_eq!(one, 1);
+            cn.close().await.unwrap();
+            (ended, chunks)
+        })
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn rows_are_sent_in_chunks_of_the_fetch_size() {
+        let sql = "with recursive s(n) as (select 1 union all select n + 1 from s where n < 25) select n from s";
+        let (ended, chunks) = stream(sql, vec![], 10, false, false);
+        assert!(ended);
+        assert_eq!(chunks.into_iter().map(|c| c.unwrap().len()).collect::<Vec<_>>(), [10, 10, 5]);
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn a_chunk_ends_where_a_result_set_does() {
+        let (ended, chunks) = stream("select 1 as a; select 2 as a, 3 as b; select 4 as c", vec![], 10, false, false);
+        assert!(ended);
+        assert_eq!(chunks.into_iter().map(|c| c.unwrap()).collect::<Vec<_>>(), [vec![1], vec![2], vec![1]]);
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn a_prepared_statement_is_streamed() {
+        let (ended, chunks) = stream("select ? as a union all select ?", vec![OwnedParam::Int(1), OwnedParam::Int(2)], 1, false, false);
+        assert!(ended);
+        assert_eq!(chunks.len(), 2);
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn an_empty_result_sends_no_chunk() {
+        let (ended, chunks) = stream("select 1 from dual where false", vec![], 10, false, false);
+        assert!(ended);
+        assert!(chunks.is_empty());
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn a_closed_stream_stops_before_its_end() {
+        for abort_reads in [false, true] {
+            let (ended, chunks) = stream("select 1 union all select 2", vec![], 1, true, abort_reads);
+            assert!(!ended);
+            assert!(chunks.is_empty());
+        }
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn an_error_is_sent_and_ends_the_stream() {
+        let (ended, chunks) = stream("select * from missing_table", vec![], 10, false, false);
+        assert!(ended);
+        assert_eq!(chunks.len(), 1);
+        assert!(chunks[0].as_ref().unwrap_err().contains("missing_table"));
+    }
+}

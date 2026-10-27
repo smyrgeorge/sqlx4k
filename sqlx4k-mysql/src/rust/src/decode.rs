@@ -181,3 +181,111 @@ pub(crate) fn decode_mysql_time_binary(bytes: &[u8]) -> Option<String> {
     let hms = format!("{sign}{hours:02}:{:02}:{:02}", rest[6], rest[7]);
     Some(if micros == 0 { hms } else { format!("{hms}.{micros:06}") })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{block_on, connect_options};
+    use sqlx::{AssertSqlSafe, Connection, Executor, MySqlConnection};
+
+    fn take((p, len): (*mut c_char, c_int)) -> Option<String> {
+        if p.is_null() {
+            return None;
+        }
+        let bytes = unsafe { Box::from_raw(std::slice::from_raw_parts_mut(p as *mut u8, len as usize + 1)) };
+        assert_eq!(bytes[len as usize], 0, "NUL-terminated");
+        Some(String::from_utf8(bytes[..len as usize].to_vec()).unwrap())
+    }
+
+    #[test]
+    fn a_value_is_handed_over_with_its_length() {
+        let (p, len) = column_value_of("a\0bc".to_string());
+        assert_eq!(len, 4);
+        assert_eq!(take((p, len)).as_deref(), Some("a\0bc"));
+    }
+
+    #[test]
+    fn binary_dates_and_datetimes_decode() {
+        // year 2024 (LE), month, day, hour, minute, second, micros (LE)
+        let full = [11, 0xe8, 0x07, 2, 29, 10, 20, 30, 0x40, 0xe2, 0x01, 0x00];
+        assert_eq!(mysql_datetime_fields(&full), Some((2024, 2, 29, 10, 20, 30, 123_456)));
+        assert_eq!(decode_mysql_date_binary(&full[..5].iter().copied().enumerate().map(|(i, b)| if i == 0 { 4 } else { b }).collect::<Vec<_>>()).as_deref(), Some("2024-02-29"));
+        assert_eq!(decode_mysql_datetime_binary(&full).as_deref(), Some("2024-02-29 10:20:30.123456"));
+        // Trailing fields omitted when zero, all of them for a zero date.
+        assert_eq!(decode_mysql_datetime_binary(&[4, 0xe8, 0x07, 2, 29]).as_deref(), Some("2024-02-29 00:00:00.000000"));
+        assert_eq!(decode_mysql_date_binary(&[0]).as_deref(), Some("0000-00-00"));
+        assert_eq!(mysql_datetime_fields(&[7, 1]), None);
+    }
+
+    #[test]
+    fn binary_times_decode_beyond_24_hours_and_negative() {
+        assert_eq!(decode_mysql_time_binary(&[0]).as_deref(), Some("00:00:00"));
+        // sign, days (LE), hours, minutes, seconds
+        assert_eq!(decode_mysql_time_binary(&[8, 0, 34, 0, 0, 0, 22, 59, 59]).as_deref(), Some("838:59:59"));
+        assert_eq!(decode_mysql_time_binary(&[8, 1, 0, 0, 0, 0, 1, 30, 0]).as_deref(), Some("-01:30:00"));
+        assert_eq!(decode_mysql_time_binary(&[12, 0, 0, 0, 0, 0, 1, 2, 3, 0x40, 0xe2, 0x01, 0x00]).as_deref(), Some("01:02:03.123456"));
+        assert_eq!(decode_mysql_time_binary(&[8, 0, 0]), None);
+    }
+
+    /// The value of `expr` decoded from a plain query (text protocol) and from a prepared statement (binary protocol).
+    async fn decoded_from(cn: &mut MySqlConnection, expr: &str, from: &str) -> (Option<String>, Option<String>) {
+        let text = cn.fetch_one(AssertSqlSafe(format!("select {expr} as v from {from}"))).await.unwrap();
+        let binary = sqlx::query(AssertSqlSafe(format!("select {expr} as v from {from} where ? = 1")))
+            .bind(1)
+            .fetch_one(&mut *cn)
+            .await
+            .unwrap();
+        (take(decode_mysql_column_value(&text, 0)), take(decode_mysql_column_value(&binary, 0)))
+    }
+
+    async fn decoded(cn: &mut MySqlConnection, expr: &str) -> (Option<String>, Option<String>) {
+        decoded_from(cn, expr, "dual").await
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn values_decode_alike_from_both_protocols() {
+        block_on(async {
+            let mut cn = MySqlConnection::connect_with(&connect_options()).await.unwrap();
+            cn.execute("set time_zone = '+00:00'").await.unwrap();
+            for (expr, expected) in [
+                ("null", None),
+                ("cast(-2 as signed)", Some("-2")),
+                ("cast(18446744073709551615 as unsigned)", Some("18446744073709551615")),
+                ("1.5e0", Some("1.5")),
+                ("cast(12.5 as decimal(5,2))", Some("12.50")),
+                ("'héllo'", Some("héllo")),
+                ("concat('a', char(0 using utf8mb4), 'b')", Some("a\0b")),
+                ("x'dead'", Some("dead")),
+                ("date '2024-02-29'", Some("2024-02-29")),
+                ("timestamp '2024-02-29 10:00:00'", Some("2024-02-29 10:00:00.000000")),
+                ("cast('838:59:59' as time)", Some("838:59:59")),
+                ("cast('-01:30:00' as time)", Some("-01:30:00")),
+                ("cast('{\"a\": 1}' as json)", Some("{\"a\": 1}")),
+            ] {
+                let (text, binary) = decoded(&mut cn, expr).await;
+                assert_eq!(text.as_deref(), expected, "{expr} (text)");
+                assert_eq!(binary.as_deref(), expected, "{expr} (binary)");
+            }
+            cn.close().await.unwrap();
+        });
+    }
+
+    #[test]
+    #[ignore = "needs the MySQL of docker-compose.yml"]
+    fn column_types_decode_alike_from_both_protocols() {
+        block_on(async {
+            let mut cn = MySqlConnection::connect_with(&connect_options()).await.unwrap();
+            cn.execute("create temporary table t(y year, b1 bit(1), b8 bit(8), f tinyint(1) unsigned, s varchar(8) collate utf8mb4_bin, v varbinary(8))")
+                .await
+                .unwrap();
+            cn.execute("insert into t values (2024, b'1', b'10000000', 200, 'txt', x'0001')").await.unwrap();
+            for (column, expected) in [("y", "2024"), ("b1", "1"), ("b8", "128"), ("f", "200"), ("s", "txt"), ("v", "0001")] {
+                let (text, binary) = decoded_from(&mut cn, column, "t").await;
+                assert_eq!(text.as_deref(), Some(expected), "{column} (text)");
+                assert_eq!(binary.as_deref(), Some(expected), "{column} (binary)");
+            }
+            cn.close().await.unwrap();
+        });
+    }
+}
