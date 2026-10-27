@@ -248,3 +248,77 @@ pub(crate) fn decode_any(row: &PgRow, ordinal: usize) -> String {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{block_on, connect_options};
+    use sqlx::{AssertSqlSafe, Connection, Executor, PgConnection};
+
+    fn take(p: *mut c_char) -> Option<String> {
+        (!p.is_null()).then(|| unsafe { CString::from_raw(p) }.into_string().unwrap())
+    }
+
+    /// The value of `expr` decoded from a plain query (text format) and from a prepared statement (binary format).
+    async fn decoded(cn: &mut PgConnection, expr: &str) -> (Option<String>, Option<String>) {
+        let text = cn.fetch_one(AssertSqlSafe(format!("select {expr} as v"))).await.unwrap();
+        let binary = sqlx::query(AssertSqlSafe(format!("select {expr} as v where $1 = 1")))
+            .bind(1)
+            .fetch_one(&mut *cn)
+            .await
+            .unwrap();
+        (take(decode_postgresql_column_value(&text, 0)), take(decode_postgresql_column_value(&binary, 0)))
+    }
+
+    #[test]
+    #[ignore = "needs the PostgreSQL of docker-compose.yml"]
+    fn values_decode_alike_from_text_and_binary_results() {
+        block_on(async {
+            let mut cn = PgConnection::connect_with(&connect_options()).await.unwrap();
+            for (expr, expected) in [
+                ("null::int4", None),
+                ("(-2)::int2", Some("-2")),
+                ("4::int4", Some("4")),
+                ("9223372036854775807::int8", Some("9223372036854775807")),
+                ("1.5::float4", Some("1.5")),
+                ("'-Infinity'::float8", Some("-Infinity")),
+                ("true", Some("true")),
+                ("'héllo'::text", Some("héllo")),
+                ("'\\xdead'::bytea", Some("\\xdead")),
+                ("'00000000-0000-0000-0000-000000000001'::uuid", Some("00000000-0000-0000-0000-000000000001")),
+                ("'2024-02-29'::date", Some("2024-02-29")),
+                ("'infinity'::date", Some("infinity")),
+                ("'2024-02-29 10:00:00'::timestamp", Some("2024-02-29 10:00:00.000000")),
+                ("'-infinity'::timestamptz", Some("-infinity")),
+                ("12345.6789::numeric", Some("12345.6789")),
+                ("'NaN'::numeric", Some("NaN")),
+                ("'{\"a\": 1}'::jsonb", Some("{\"a\": 1}")),
+                ("array[1, null, 3]::int4[]", Some("{1,NULL,3}")),
+                ("array['a b', 'c']::text[]", Some("{\"a b\",c}")),
+                ("array[[1, 2], [3, 4]]", Some("{{1,2},{3,4}}")),
+                ("array[1.5, null]::numeric[]", Some("{1.5,NULL}")),
+                ("interval '1 day 02:00:00'", Some("1 day 02:00:00")),
+                ("inet '10.0.0.1/8'", Some("10.0.0.1/8")),
+                ("int4range(1, 10)", Some("[1,10)")),
+            ] {
+                let (text, binary) = decoded(&mut cn, expr).await;
+                assert_eq!(text.as_deref(), expected, "{expr} (text)");
+                assert_eq!(binary.as_deref(), expected, "{expr} (binary)");
+            }
+            cn.close().await.unwrap();
+        });
+    }
+
+    #[test]
+    #[ignore = "needs the PostgreSQL of docker-compose.yml"]
+    fn bytea_in_escape_output_decodes_as_hex() {
+        block_on(async {
+            let mut cn = PgConnection::connect_with(&connect_options()).await.unwrap();
+            cn.execute("set bytea_output = 'escape'").await.unwrap();
+            let (text, binary) = decoded(&mut cn, "'\\x00ff5c'::bytea").await;
+            assert_eq!(text.as_deref(), Some("\\x00ff5c"));
+            assert_eq!(binary.as_deref(), Some("\\x00ff5c"));
+            cn.close().await.unwrap();
+        });
+    }
+}

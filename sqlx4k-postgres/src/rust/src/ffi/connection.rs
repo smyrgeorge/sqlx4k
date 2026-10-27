@@ -144,3 +144,70 @@ pub extern "C" fn sqlx4k_postgresql_cn_fetch_all_with_params(
         fun(callback, result)
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ffi::transaction::sqlx4k_postgresql_tx_commit;
+    use crate::params::{PARAM_DATE, PARAM_INT8};
+    use crate::test_support::{c, call, param, text_param, Pool, Res};
+    use crate::types::ERROR_DATABASE;
+
+    fn cn_query(pool: &Pool, cn: *mut c_void, sql: &str) -> Res {
+        let sql = c(sql);
+        call(|cb, fun| sqlx4k_postgresql_cn_query(pool.rt, cn, sql.as_ptr(), cb, fun))
+    }
+
+    fn cn_fetch_all(pool: &Pool, cn: *mut c_void, sql: &str) -> Res {
+        let sql = c(sql);
+        call(|cb, fun| sqlx4k_postgresql_cn_fetch_all(pool.rt, cn, sql.as_ptr(), cb, fun))
+    }
+
+    #[test]
+    #[ignore = "needs the PostgreSQL of docker-compose.yml"]
+    fn statements_run_on_the_connection_acquired() {
+        let pool = Pool::open(2);
+        let cn = call(|cb, fun| sqlx4k_postgresql_cn_acquire(pool.rt, cb, fun)).ok().get().cn;
+        assert!(!cn.is_null());
+        // A temporary table is the connection's own: the statements after see it.
+        cn_query(&pool, cn, "create temp table t(id int8)").ok();
+        assert_eq!(cn_query(&pool, cn, "insert into t values (1), (2), (3)").ok().get().rows_affected, 3);
+        let params = [param(PARAM_INT8, |p| p.i64_val = 2)];
+        let sql = c("delete from t where id = $1");
+        let r = call(|cb, fun| sqlx4k_postgresql_cn_query_with_params(pool.rt, cn, sql.as_ptr(), params.as_ptr(), 1, cb, fun)).ok();
+        assert_eq!(r.get().rows_affected, 1);
+        let sql = c("select id from t where id > $1 order by id");
+        let params = [param(PARAM_INT8, |p| p.i64_val = 0)];
+        let r = call(|cb, fun| sqlx4k_postgresql_cn_fetch_all_with_params(pool.rt, cn, sql.as_ptr(), params.as_ptr(), 1, cb, fun)).ok();
+        assert_eq!(r.rows(), [[Some("1".into())], [Some("3".into())]]);
+        assert_eq!(cn_fetch_all(&pool, cn, "select count(*) from t").ok().value().as_deref(), Some("2"));
+        call(|cb, fun| sqlx4k_postgresql_cn_release(pool.rt, cn, cb, fun)).ok();
+    }
+
+    #[test]
+    #[ignore = "needs the PostgreSQL of docker-compose.yml"]
+    fn a_transaction_is_begun_on_the_connection() {
+        let pool = Pool::open(2);
+        let cn = call(|cb, fun| sqlx4k_postgresql_cn_acquire(pool.rt, cb, fun)).ok().get().cn;
+        cn_query(&pool, cn, "create temp table t(id int8)").ok();
+        let tx = call(|cb, fun| sqlx4k_postgresql_cn_tx_begin(pool.rt, cn, cb, fun)).ok().get().tx;
+        assert!(!tx.is_null());
+        call(|cb, fun| sqlx4k_postgresql_tx_commit(pool.rt, tx, cb, fun)).ok();
+        call(|cb, fun| sqlx4k_postgresql_cn_release(pool.rt, cn, cb, fun)).ok();
+    }
+
+    #[test]
+    #[ignore = "needs the PostgreSQL of docker-compose.yml"]
+    fn a_failing_or_unreadable_statement_leaves_the_connection_usable() {
+        let pool = Pool::open(1);
+        let cn = call(|cb, fun| sqlx4k_postgresql_cn_acquire(pool.rt, cb, fun)).ok().get().cn;
+        assert_eq!(cn_fetch_all(&pool, cn, "select * from missing_table").get().error, ERROR_DATABASE);
+        let bad = c("not a date");
+        let params = [text_param(PARAM_DATE, &bad)];
+        let sql = c("select $1::date");
+        let r = call(|cb, fun| sqlx4k_postgresql_cn_query_with_params(pool.rt, cn, sql.as_ptr(), params.as_ptr(), 1, cb, fun));
+        assert_eq!(r.get().error, ERROR_DATABASE);
+        assert_eq!(cn_fetch_all(&pool, cn, "select 1").ok().value().as_deref(), Some("1"));
+        call(|cb, fun| sqlx4k_postgresql_cn_release(pool.rt, cn, cb, fun)).ok();
+    }
+}

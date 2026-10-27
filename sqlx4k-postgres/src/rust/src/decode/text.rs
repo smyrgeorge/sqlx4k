@@ -119,3 +119,69 @@ pub(crate) fn format_pg_array_fmt<'a, T: 'a, I: Iterator<Item = &'a T>, F: FnMut
     s.push('}');
     s
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_float_is_written_as_postgresql_and_kotlin_read_it() {
+        assert_eq!(float_text(1.5f64), "1.5");
+        assert_eq!(float_text(f64::INFINITY), "Infinity");
+        assert_eq!(float_text(f32::NEG_INFINITY), "-Infinity");
+        assert_eq!(float_text(f64::NAN), "NaN");
+    }
+
+    #[test]
+    fn an_array_element_is_quoted_when_it_must_be() {
+        assert_eq!(pg_array_element("abc"), "abc");
+        assert_eq!(pg_array_element(""), "\"\"");
+        assert_eq!(pg_array_element("null"), "\"null\"");
+        assert_eq!(pg_array_element("a,b"), "\"a,b\"");
+        assert_eq!(pg_array_element("a b"), "\"a b\"");
+        assert_eq!(pg_array_element("{x}"), "\"{x}\"");
+        assert_eq!(pg_array_element("say \"hi\" \\"), "\"say \\\"hi\\\" \\\\\"");
+    }
+
+    #[test]
+    fn bytea_escape_output_is_decoded() {
+        assert_eq!(decode_bytea_escape("abc").unwrap(), b"abc");
+        assert_eq!(decode_bytea_escape("a\\\\b").unwrap(), b"a\\b");
+        assert_eq!(decode_bytea_escape("\\000\\377").unwrap(), [0u8, 255]);
+        assert!(decode_bytea_escape("\\9").is_none());
+        assert!(decode_bytea_escape("\\00").is_none());
+    }
+
+    #[test]
+    fn trailing_zeros_of_a_fraction_are_trimmed() {
+        assert_eq!(trim_pg_fraction("10:00:00.500000".to_string()), "10:00:00.5");
+        assert_eq!(trim_pg_fraction("10:00:00.000000".to_string()), "10:00:00");
+        assert_eq!(trim_pg_fraction("2024-01-01 10:00:00".to_string()), "2024-01-01 10:00:00");
+        assert_eq!(trim_pg_fraction("infinity".to_string()), "infinity");
+    }
+
+    #[test]
+    fn seconds_are_written_with_their_fraction_if_any() {
+        assert_eq!(pg_seconds(5, 0), "05");
+        assert_eq!(pg_seconds(5, 500_000), "05.5");
+        assert_eq!(pg_seconds(59, 123_456), "59.123456");
+        assert_eq!(pg_seconds(0, 1), "00.000001");
+    }
+
+    #[test]
+    fn a_range_bound_is_quoted_when_it_must_be() {
+        assert_eq!(pg_range_bound("10"), "10");
+        assert_eq!(pg_range_bound(""), "\"\"");
+        assert_eq!(pg_range_bound("2020-01-01 10:00:00"), "\"2020-01-01 10:00:00\"");
+        assert_eq!(pg_range_bound("a,b"), "\"a,b\"");
+        // Quotes and backslashes are doubled, not escaped.
+        assert_eq!(pg_range_bound("a\"b\\c"), "\"a\"\"b\\\\c\"");
+    }
+
+    #[test]
+    fn arrays_are_written_in_braces() {
+        assert_eq!(format_pg_array_fmt([1, 2, 3].iter(), |v| v.to_string()), "{1,2,3}");
+        assert_eq!(format_pg_array_fmt(Vec::<i32>::new().iter(), |v| v.to_string()), "{}");
+        assert_eq!(format_pg_nullable_array_fmt([Some(1), None].iter(), |v| v.to_string()), "{1,NULL}");
+    }
+}

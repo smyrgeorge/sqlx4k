@@ -237,3 +237,196 @@ pub(crate) fn bind_params<'q>(
     }
     q
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{block_on, c, connect_options, param, text, text_param};
+    use crate::types::ERROR_DATABASE;
+    use sqlx::postgres::PgPoolOptions;
+    use sqlx::Row;
+    use std::ffi::CString;
+    use std::ptr::null;
+
+    fn read(params: &[Sqlx4kPostgresParam]) -> Result<Vec<OwnedParam>, String> {
+        read_params(params.as_ptr(), params.len() as c_int)
+    }
+
+    #[test]
+    fn no_params_read_as_none() {
+        assert!(read_params(null(), 0).unwrap().is_empty());
+        assert!(read_params(null(), 3).unwrap().is_empty());
+    }
+
+    #[test]
+    fn every_kind_is_read() {
+        let (s, date, time, ts, tstz, uuid) = (
+            c("hello"),
+            c("2024-02-29"),
+            c("12:34:56.5"),
+            c("2024-02-29 12:34:56"),
+            c("2024-02-29 12:34:56.123456"),
+            c("67e55044-10b1-426f-9247-bb680e5fe0c8"),
+        );
+        let blob = [1u8, 0, 255];
+        let params = [
+            param(PARAM_NULL, |p| p.null_type = PARAM_INT8),
+            param(PARAM_BOOL, |p| p.i64_val = 1),
+            param(PARAM_INT2, |p| p.i64_val = -2),
+            param(PARAM_INT4, |p| p.i64_val = 4),
+            param(PARAM_INT8, |p| p.i64_val = i64::MAX),
+            param(PARAM_FLOAT4, |p| p.f64_val = 1.5),
+            param(PARAM_FLOAT8, |p| p.f64_val = -2.25),
+            text_param(PARAM_TEXT, &s),
+            param(PARAM_BLOB, |p| {
+                p.blob = blob.as_ptr();
+                p.blob_len = 3
+            }),
+            text_param(PARAM_DATE, &date),
+            text_param(PARAM_TIME, &time),
+            text_param(PARAM_TIMESTAMP, &ts),
+            text_param(PARAM_TIMESTAMPTZ, &tstz),
+            text_param(PARAM_UUID, &uuid),
+        ];
+        let read = read(&params).unwrap();
+        assert!(matches!(read[0], OwnedParam::Null(PARAM_INT8)));
+        assert!(matches!(read[1], OwnedParam::Bool(true)));
+        assert!(matches!(read[2], OwnedParam::Int2(-2)));
+        assert!(matches!(read[3], OwnedParam::Int4(4)));
+        assert!(matches!(read[4], OwnedParam::Int8(i64::MAX)));
+        assert!(matches!(read[5], OwnedParam::Float4(v) if v == 1.5));
+        assert!(matches!(read[6], OwnedParam::Float8(v) if v == -2.25));
+        assert!(matches!(&read[7], OwnedParam::Text(v) if v == "hello"));
+        assert!(matches!(&read[8], OwnedParam::Blob(v) if v == &blob));
+        assert!(matches!(&read[9], OwnedParam::Date(v) if v.to_string() == "2024-02-29"));
+        assert!(matches!(&read[10], OwnedParam::Time(v) if v.to_string() == "12:34:56.500"));
+        assert!(matches!(&read[11], OwnedParam::Timestamp(v) if v.to_string() == "2024-02-29 12:34:56"));
+        assert!(matches!(&read[12], OwnedParam::TimestampTz(v) if v.to_string() == "2024-02-29 12:34:56.123456 UTC"));
+        assert!(matches!(&read[13], OwnedParam::Uuid(v) if v.to_string() == "67e55044-10b1-426f-9247-bb680e5fe0c8"));
+    }
+
+    #[test]
+    fn a_text_is_read_by_its_length() {
+        // NUL included, and the C string read up to the length only.
+        let s = CString::new("a").unwrap();
+        let bytes = b"a\0b and more";
+        let p = param(PARAM_TEXT, |p| {
+            p.text = bytes.as_ptr() as *const c_char;
+            p.text_len = 3
+        });
+        assert_eq!(read_text(&p), "a\0b");
+        let empty = param(PARAM_TEXT, |p| p.text = s.as_ptr());
+        assert_eq!(read_text(&empty), "");
+        assert_eq!(read_text(&param(PARAM_TEXT, |_| {})), "");
+    }
+
+    #[test]
+    fn an_empty_or_missing_blob_reads_empty() {
+        let read = read(&[param(PARAM_BLOB, |p| p.blob_len = 5)]).unwrap();
+        assert!(matches!(&read[0], OwnedParam::Blob(v) if v.is_empty()));
+    }
+
+    #[test]
+    fn a_value_that_cannot_be_read_is_an_error() {
+        for (kind, value, message) in [
+            (PARAM_DATE, "2024-13-01", "Invalid DATE"),
+            (PARAM_TIME, "25:00", "Invalid TIME"),
+            (PARAM_TIMESTAMP, "yesterday", "Invalid TIMESTAMP"),
+            (PARAM_TIMESTAMPTZ, "now", "Invalid TIMESTAMPTZ"),
+            (PARAM_UUID, "not-a-uuid", "Invalid UUID"),
+        ] {
+            let v = c(value);
+            let err = read(&[text_param(kind, &v)]).err().unwrap();
+            assert!(err.starts_with(message), "{err}");
+        }
+        let err = read(&[param(99, |_| {})]).err().unwrap();
+        assert_eq!(err, "Unknown Sqlx4kPostgresParam kind: 99");
+    }
+
+    #[test]
+    fn a_params_error_hands_back_the_transaction() {
+        let mut tx = 1;
+        let tx = &mut tx as *mut i32 as *mut c_void;
+        let r = params_error("bad value".to_string(), tx);
+        let result = unsafe { &*r };
+        assert_eq!(result.error, ERROR_DATABASE);
+        assert_eq!(result.tx, tx);
+        assert!(text(result.error_message).unwrap().contains("bad value"));
+        crate::result::sqlx4k_postgres_free_result(r);
+    }
+
+    #[test]
+    #[ignore = "needs the PostgreSQL of docker-compose.yml"]
+    fn every_kind_is_bound() {
+        block_on(async {
+            let pool = PgPoolOptions::new().max_connections(1).connect_with(connect_options()).await.unwrap();
+            let params = vec![
+                OwnedParam::Bool(true),
+                OwnedParam::Int2(-2),
+                OwnedParam::Int4(4),
+                OwnedParam::Int8(8),
+                OwnedParam::Float4(1.5),
+                OwnedParam::Float8(-2.25),
+                OwnedParam::Text("x".to_string()),
+                OwnedParam::Blob(vec![1, 2]),
+                OwnedParam::Date(chrono::NaiveDate::from_ymd_opt(2024, 2, 29).unwrap()),
+                OwnedParam::Time(chrono::NaiveTime::from_hms_opt(1, 2, 3).unwrap()),
+                OwnedParam::Timestamp(chrono::NaiveDate::from_ymd_opt(2024, 2, 29).unwrap().and_hms_opt(1, 2, 3).unwrap()),
+                OwnedParam::TimestampTz(chrono::DateTime::from_timestamp(0, 0).unwrap()),
+                OwnedParam::Uuid(uuid::Uuid::nil()),
+            ];
+            let sql = "select $1::bool::text, $2::int2::text, $3::int4::text, $4::int8::text, $5::float4::text, \
+                       $6::float8::text, $7::text, encode($8::bytea, 'hex'), $9::date::text, $10::time::text, \
+                       $11::timestamp::text, ($12::timestamptz at time zone 'UTC')::text, $13::uuid::text";
+            let row = bind_params(sqlx::query(sql), params).fetch_one(&pool).await.unwrap();
+            let values: Vec<String> = (0..13).map(|i| row.get::<String, _>(i)).collect();
+            assert_eq!(
+                values,
+                [
+                    "true", "-2", "4", "8", "1.5", "-2.25", "x", "0102", "2024-02-29", "01:02:03",
+                    "2024-02-29 01:02:03", "1970-01-01 00:00:00", "00000000-0000-0000-0000-000000000000"
+                ]
+            );
+            pool.close().await;
+        });
+    }
+
+    #[test]
+    #[ignore = "needs the PostgreSQL of docker-compose.yml"]
+    fn nulls_are_bound_with_their_type_or_none() {
+        block_on(async {
+            let pool = PgPoolOptions::new().max_connections(1).connect_with(connect_options()).await.unwrap();
+            // A typed NULL keeps its type: pg_typeof reads it without a cast.
+            for (kind, type_name) in [
+                (PARAM_BOOL, "boolean"),
+                (PARAM_INT2, "smallint"),
+                (PARAM_INT4, "integer"),
+                (PARAM_INT8, "bigint"),
+                (PARAM_FLOAT4, "real"),
+                (PARAM_FLOAT8, "double precision"),
+                (PARAM_BLOB, "bytea"),
+                (PARAM_DATE, "date"),
+                (PARAM_TIME, "time without time zone"),
+                (PARAM_TIMESTAMP, "timestamp without time zone"),
+                (PARAM_TIMESTAMPTZ, "timestamp with time zone"),
+                (PARAM_UUID, "uuid"),
+            ] {
+                // A statement of its own each (sqlx caches a statement, with its parameter types, by its SQL).
+                let sql = format!("select pg_typeof($1)::text, $1 is null -- {kind}");
+                let row = bind_params(sqlx::query(sqlx::AssertSqlSafe(sql)), vec![OwnedParam::Null(kind)])
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+                assert_eq!(row.get::<String, _>(0), type_name);
+                assert!(row.get::<bool, _>(1));
+            }
+            // An untyped NULL takes the type the query gives it.
+            let row = bind_params(sqlx::query("select $1::int4 is null"), vec![OwnedParam::Null(PARAM_NULL)])
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            assert!(row.get::<bool, _>(0));
+            pool.close().await;
+        });
+    }
+}

@@ -467,3 +467,179 @@ mod numeric_tests {
         assert!(decode_pg_numeric_array_binary(&enc_array(&[(1, 1)], &[Some(vec![0, 1])])).is_none());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::postgres::types::PgRange;
+    use sqlx::{Postgres, Type};
+
+    fn be(parts: &[&[u8]]) -> Vec<u8> {
+        parts.concat()
+    }
+
+    /// A binary array (`array_send`) of one or more dimensions starting at `lbound`, of the given elements.
+    fn array(elem_oid: u32, dims: &[i32], lbound: i32, elements: &[Option<Vec<u8>>]) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.extend((dims.len() as i32).to_be_bytes());
+        out.extend((elements.iter().any(Option::is_none) as i32).to_be_bytes());
+        out.extend(elem_oid.to_be_bytes());
+        for d in dims {
+            out.extend(d.to_be_bytes());
+            out.extend(lbound.to_be_bytes());
+        }
+        for e in elements {
+            match e {
+                Some(b) => {
+                    out.extend((b.len() as i32).to_be_bytes());
+                    out.extend(b);
+                }
+                None => out.extend((-1i32).to_be_bytes()),
+            }
+        }
+        out
+    }
+
+    /// The (resolved) type of `T`, as sqlx knows it.
+    fn type_of<T: Type<Postgres>>() -> PgTypeInfo {
+        T::type_info()
+    }
+
+    #[test]
+    fn dates_decode_with_their_infinities() {
+        assert_eq!(decode_pg_date_binary(&0i32.to_be_bytes()).as_deref(), Some("2000-01-01"));
+        assert_eq!(decode_pg_date_binary(&(-1i32).to_be_bytes()).as_deref(), Some("1999-12-31"));
+        assert_eq!(decode_pg_date_binary(&i32::MAX.to_be_bytes()).as_deref(), Some("infinity"));
+        assert_eq!(decode_pg_date_binary(&i32::MIN.to_be_bytes()).as_deref(), Some("-infinity"));
+        assert_eq!(decode_pg_date_binary(&[0, 1]), None);
+    }
+
+    #[test]
+    fn timestamps_decode_with_their_infinities() {
+        assert_eq!(decode_pg_timestamp_binary(&0i64.to_be_bytes()).as_deref(), Some("2000-01-01 00:00:00.000000"));
+        assert_eq!(decode_pg_timestamp_binary(&1_500_000i64.to_be_bytes()).as_deref(), Some("2000-01-01 00:00:01.500000"));
+        assert_eq!(decode_pg_timestamp_binary(&i64::MAX.to_be_bytes()).as_deref(), Some("infinity"));
+        assert_eq!(decode_pg_timestamp_binary(&i64::MIN.to_be_bytes()).as_deref(), Some("-infinity"));
+        assert_eq!(decode_pg_timestamp_binary(&[1, 2, 3]), None);
+    }
+
+    #[test]
+    fn times_decode_up_to_24_hours() {
+        assert_eq!(decode_pg_time_binary(&0i64.to_be_bytes()).as_deref(), Some("00:00:00"));
+        assert_eq!(decode_pg_time_binary(&45_296_500_000i64.to_be_bytes()).as_deref(), Some("12:34:56.500000"));
+        assert_eq!(decode_pg_time_binary(&86_400_000_000i64.to_be_bytes()).as_deref(), Some("24:00:00"));
+        assert_eq!(decode_pg_time_binary(&86_400_000_001i64.to_be_bytes()), None);
+        assert_eq!(decode_pg_time_binary(&(-1i64).to_be_bytes()), None);
+    }
+
+    fn interval(time: i64, day: i32, month: i32) -> Option<String> {
+        decode_pg_interval_binary(&be(&[&time.to_be_bytes(), &day.to_be_bytes(), &month.to_be_bytes()]))
+    }
+
+    #[test]
+    fn intervals_decode_as_postgresql_writes_them() {
+        assert_eq!(interval(0, 1, 0).as_deref(), Some("1 day"));
+        assert_eq!(interval(0, 2, 0).as_deref(), Some("2 days"));
+        assert_eq!(interval(14_706_500_000, 3, 14).as_deref(), Some("1 year 2 mons 3 days 04:05:06.5"));
+        assert_eq!(interval(7_200_000_000, -1, 0).as_deref(), Some("-1 days +02:00:00"));
+        assert_eq!(interval(-3_600_000_000, 0, 0).as_deref(), Some("-01:00:00"));
+        assert_eq!(interval(0, 0, 0).as_deref(), Some("00:00:00"));
+        assert_eq!(interval(0, 0, -14).as_deref(), Some("-1 years -2 mons"));
+        assert_eq!(interval(i64::MAX, i32::MAX, i32::MAX).as_deref(), Some("infinity"));
+        assert_eq!(interval(i64::MIN, i32::MIN, i32::MIN).as_deref(), Some("-infinity"));
+        assert_eq!(decode_pg_interval_binary(&[0; 15]), None);
+    }
+
+    #[test]
+    fn times_with_a_time_zone_decode_with_their_offset() {
+        let timetz = |micros: i64, zone_west: i32| decode_pg_timetz_binary(&be(&[&micros.to_be_bytes(), &zone_west.to_be_bytes()]));
+        assert_eq!(timetz(45_296_000_000, -7_200).as_deref(), Some("12:34:56+02"));
+        assert_eq!(timetz(45_296_500_000, 12_600).as_deref(), Some("12:34:56.5-03:30"));
+        assert_eq!(timetz(0, -19_800 - 7).as_deref(), Some("00:00:00+05:30:07"));
+        assert_eq!(timetz(0, 0).as_deref(), Some("00:00:00+00"));
+    }
+
+    #[test]
+    fn network_addresses_decode_with_their_mask_when_not_full() {
+        let inet = |family: u8, bits: u8, cidr: u8, addr: &[u8]| {
+            decode_pg_inet_binary(&be(&[&[family, bits, cidr, addr.len() as u8], addr]))
+        };
+        assert_eq!(inet(2, 32, 0, &[192, 168, 0, 1]).as_deref(), Some("192.168.0.1"));
+        assert_eq!(inet(2, 24, 0, &[192, 168, 0, 1]).as_deref(), Some("192.168.0.1/24"));
+        assert_eq!(inet(2, 32, 1, &[10, 0, 0, 1]).as_deref(), Some("10.0.0.1/32"));
+        let mut v6 = [0u8; 16];
+        v6[15] = 1;
+        assert_eq!(inet(3, 128, 0, &v6).as_deref(), Some("::1"));
+        assert_eq!(inet(3, 64, 0, &v6).as_deref(), Some("::1/64"));
+        assert_eq!(inet(9, 32, 0, &[1, 2, 3, 4]), None);
+        assert_eq!(inet(2, 32, 0, &[1, 2, 3]), None);
+    }
+
+    #[test]
+    fn bit_strings_decode_most_significant_first() {
+        assert_eq!(decode_pg_bit_binary(&be(&[&4i32.to_be_bytes(), &[0b0101_0000]])).as_deref(), Some("0101"));
+        assert_eq!(decode_pg_bit_binary(&be(&[&9i32.to_be_bytes(), &[0b1011_0011, 0b1000_0000]])).as_deref(), Some("101100111"));
+        assert_eq!(decode_pg_bit_binary(&be(&[&0i32.to_be_bytes()])).as_deref(), Some(""));
+        assert_eq!(decode_pg_bit_binary(&be(&[&9i32.to_be_bytes(), &[0]])), None);
+    }
+
+    #[test]
+    fn scalars_decode_by_their_type_name() {
+        let scalar = |name: &str, bytes: &[u8]| decode_pg_scalar_binary(name, bytes);
+        assert_eq!(scalar("INT2", &(-2i16).to_be_bytes()).as_deref(), Some("-2"));
+        assert_eq!(scalar("int4", &4i32.to_be_bytes()).as_deref(), Some("4"));
+        assert_eq!(scalar("INT8", &i64::MIN.to_be_bytes()).as_deref(), Some("-9223372036854775808"));
+        assert_eq!(scalar("regclass", &1259u32.to_be_bytes()).as_deref(), Some("1259"));
+        assert_eq!(scalar("xid8", &u64::MAX.to_be_bytes()).as_deref(), Some("18446744073709551615"));
+        assert_eq!(scalar("FLOAT4", &1.5f32.to_be_bytes()).as_deref(), Some("1.5"));
+        assert_eq!(scalar("FLOAT8", &f64::INFINITY.to_be_bytes()).as_deref(), Some("Infinity"));
+        assert_eq!(scalar("BOOL", &[1]).as_deref(), Some("t"));
+        assert_eq!(scalar("BOOL", &[0]).as_deref(), Some("f"));
+        assert_eq!(scalar("BYTEA", &[0xde, 0xad]).as_deref(), Some("\\xdead"));
+        assert_eq!(scalar("UUID", &[0; 16]).as_deref(), Some("00000000-0000-0000-0000-000000000000"));
+        assert_eq!(scalar("MONEY", &(-1234i64).to_be_bytes()).as_deref(), Some("-12.34"));
+        assert_eq!(scalar("MACADDR", &[8, 0, 0x2b, 1, 2, 3]).as_deref(), Some("08:00:2b:01:02:03"));
+        assert_eq!(scalar("POINT", &be(&[&1.5f64.to_be_bytes(), &(-2f64).to_be_bytes()])).as_deref(), Some("(1.5,-2)"));
+        assert_eq!(scalar("JSONB", b"\x01{\"a\": 1}").as_deref(), Some("{\"a\": 1}"));
+        assert_eq!(scalar("TEXT", "héllo".as_bytes()).as_deref(), Some("héllo"));
+        assert_eq!(scalar("TIMESTAMP", &1_500_000i64.to_be_bytes()).as_deref(), Some("2000-01-01 00:00:01.5"));
+        assert_eq!(scalar("geometry", &[1, 2]), None);
+        assert_eq!(scalar("INT4", &[1, 2]), None);
+    }
+
+    #[test]
+    fn an_unknown_binary_value_reads_as_text_or_hex() {
+        assert_eq!(decode_unknown_binary(b"plain text\n"), "plain text\n");
+        assert_eq!(decode_unknown_binary(&[0, 1, 2]), "\\x000102");
+        assert_eq!(decode_unknown_binary(&[0xff]), "\\xff");
+    }
+
+    #[test]
+    fn arrays_decode_with_their_dimensions_and_bounds() {
+        let int4 = |v: i32| Some(v.to_be_bytes().to_vec());
+        // int4[] of int4 (OID 23)
+        let bytes = array(23, &[2, 2], 1, &[int4(1), int4(2), int4(3), int4(4)]);
+        assert_eq!(decode_pg_binary(&type_of::<Vec<i32>>(), &bytes).as_deref(), Some("{{1,2},{3,4}}"));
+        let bytes = array(23, &[2], 0, &[int4(1), None]);
+        assert_eq!(decode_pg_binary(&type_of::<Vec<i32>>(), &bytes).as_deref(), Some("[0:1]={1,NULL}"));
+        assert_eq!(decode_pg_binary(&type_of::<Vec<i32>>(), &array(23, &[], 1, &[])).as_deref(), Some("{}"));
+        // text[] (of OID 25): elements quoted as array_out writes them.
+        let bytes = array(25, &[2], 1, &[Some(b"a b".to_vec()), Some(b"c".to_vec())]);
+        assert_eq!(decode_pg_binary(&type_of::<Vec<String>>(), &bytes).as_deref(), Some("{\"a b\",c}"));
+        // A truncated array is malformed.
+        assert_eq!(decode_pg_binary(&type_of::<Vec<i32>>(), &bytes[..bytes.len() - 1]), None);
+    }
+
+    #[test]
+    fn ranges_decode_with_their_bounds() {
+        let bound = |v: i32| be(&[&4i32.to_be_bytes(), &v.to_be_bytes()]);
+        // int4range: [1,10)
+        let bytes = be(&[&[0x02], &bound(1), &bound(10)]);
+        assert_eq!(decode_pg_binary(&type_of::<PgRange<i32>>(), &bytes).as_deref(), Some("[1,10)"));
+        // (,5]: lower infinite, upper inclusive
+        let bytes = be(&[&[0x08 | 0x04], &bound(5)]);
+        assert_eq!(decode_pg_binary(&type_of::<PgRange<i32>>(), &bytes).as_deref(), Some("(,5]"));
+        assert_eq!(decode_pg_binary(&type_of::<PgRange<i32>>(), &[0x01]).as_deref(), Some("empty"));
+        assert_eq!(decode_pg_range_binary(&[0x02, 0, 0], &type_of::<i32>()), None);
+    }
+}

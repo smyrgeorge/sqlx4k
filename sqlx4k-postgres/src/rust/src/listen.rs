@@ -168,3 +168,87 @@ pub(crate) fn sqlx4k_postgresql_result_of_pg_notification(item: PgNotification) 
         ..Default::default()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ffi::pool::sqlx4k_postgresql_query;
+    use crate::test_support::{c, call, unique, Pool, Res};
+    use std::collections::HashMap;
+    use std::sync::atomic::{AtomicI32, Ordering};
+    use std::sync::{mpsc, Mutex};
+
+    /// Where the notifications of each listener (by notify id) go.
+    fn receivers() -> &'static Mutex<HashMap<c_int, mpsc::Sender<usize>>> {
+        static RECEIVERS: OnceLock<Mutex<HashMap<c_int, mpsc::Sender<usize>>>> = OnceLock::new();
+        RECEIVERS.get_or_init(Default::default)
+    }
+
+    extern "C" fn notify(id: c_int, result: *mut Sqlx4kPostgresResult) {
+        match receivers().lock().unwrap().get(&id) {
+            Some(sender) => sender.send(result as usize).unwrap(),
+            None => drop(Res(result)),
+        }
+    }
+
+    /// Listens to `channels` (comma-separated): the listener's notify id, and where its notifications arrive.
+    fn listen(pool: &Pool, channels: &str) -> (c_int, mpsc::Receiver<usize>) {
+        static NEXT: AtomicI32 = AtomicI32::new(1_000);
+        let id = NEXT.fetch_add(1, Ordering::Relaxed);
+        let (sender, receiver) = mpsc::channel();
+        receivers().lock().unwrap().insert(id, sender);
+        let channels = c(channels);
+        call(|cb, fun| sqlx4k_postgresql_listen(pool.rt, channels.as_ptr(), id, notify, cb, fun)).ok();
+        (id, receiver)
+    }
+
+    fn notify_on(pool: &Pool, channel: &str, payload: &str) {
+        let sql = c(&format!("select pg_notify('{channel}', '{payload}')"));
+        call(|cb, fun| sqlx4k_postgresql_query(pool.rt, sql.as_ptr(), cb, fun)).ok();
+    }
+
+    /// The channel and payload of the next notification.
+    fn next(receiver: &mpsc::Receiver<usize>) -> (String, String) {
+        let r = Res(receiver.recv_timeout(Duration::from_secs(10)).expect("no notification") as *mut Sqlx4kPostgresResult);
+        let (channel, kind) = r.columns().remove(0);
+        assert_eq!(kind, "TEXT");
+        (channel, r.value().unwrap())
+    }
+
+    #[test]
+    #[ignore = "needs the PostgreSQL of docker-compose.yml"]
+    fn notifications_of_the_channels_listened_to_are_delivered_in_order() {
+        let pool = Pool::open(2);
+        let (a, b, other) = (unique("ch_a"), unique("ch_b"), unique("ch_other"));
+        let (id, receiver) = listen(&pool, &format!("{a},{b}"));
+        notify_on(&pool, &other, "ignored");
+        notify_on(&pool, &a, "first");
+        notify_on(&pool, &b, "second");
+        assert_eq!(next(&receiver), (a.clone(), "first".to_string()));
+        assert_eq!(next(&receiver), (b.clone(), "second".to_string()));
+        call(|cb, fun| sqlx4k_postgresql_unlisten(id, cb, fun)).ok();
+        receivers().lock().unwrap().remove(&id);
+    }
+
+    #[test]
+    #[ignore = "needs the PostgreSQL of docker-compose.yml"]
+    fn a_listener_stopped_receives_nothing_more() {
+        let pool = Pool::open(2);
+        let channel = unique("ch_stop");
+        let (id, receiver) = listen(&pool, &channel);
+        notify_on(&pool, &channel, "before");
+        assert_eq!(next(&receiver).1, "before");
+        call(|cb, fun| sqlx4k_postgresql_unlisten(id, cb, fun)).ok();
+        assert!(!listeners().lock().unwrap().contains_key(&id));
+        notify_on(&pool, &channel, "after");
+        assert!(receiver.recv_timeout(Duration::from_millis(500)).is_err());
+        receivers().lock().unwrap().remove(&id);
+    }
+
+    #[test]
+    #[ignore = "needs the PostgreSQL of docker-compose.yml"]
+    fn stopping_an_unknown_listener_does_nothing() {
+        let _pool = Pool::open(1);
+        call(|cb, fun| sqlx4k_postgresql_unlisten(-42, cb, fun)).ok();
+    }
+}

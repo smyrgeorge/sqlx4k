@@ -8,6 +8,9 @@ mod result;
 mod stream;
 mod types;
 
+#[cfg(test)]
+mod test_support;
+
 use std::sync::OnceLock;
 use tokio::runtime::Runtime;
 
