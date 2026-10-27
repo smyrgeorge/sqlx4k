@@ -5,6 +5,7 @@ package io.github.smyrgeorge.sqlx4k.sqlite
 
 import android.content.Context
 import android.database.Cursor
+import android.database.DatabaseUtils
 import android.database.sqlite.SQLiteCursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteProgram
@@ -540,7 +541,17 @@ class SQLite(
         }
 
         private fun SQLiteDatabase.executeForResult(sql: String): ExecuteResult =
-            executeForResult(sql) { compileStatement(sql).use { it.executeUpdateDelete() } }
+            when (DatabaseUtils.getSqlStatementType(sql)) {
+                // Through execSQL, which does more than run them: for ATTACH, it turns write-ahead logging off, so that
+                // every connection sees the attached database; after DDL, it drops the idle read connections and the
+                // cached statements, which hold the old schema (a query read a table's columns as they were).
+                DatabaseUtils.STATEMENT_ATTACH, DatabaseUtils.STATEMENT_DDL -> {
+                    execSQL(sql)
+                    ExecuteResult(rowsAffected = 0, lastInsertId = null)
+                }
+
+                else -> executeForResult(sql) { compileStatement(sql).use { it.executeUpdateDelete() } }
+            }
 
         private fun SQLiteDatabase.executeForResult(query: Statement.NativeQuery): ExecuteResult =
             executeForResult(query.sql) {
