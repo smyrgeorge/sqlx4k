@@ -467,17 +467,33 @@ fn stream_rows_of<'e>(
 ///
 /// A chunk also ends where a result set does: its schema is read from its first row, so it must not
 /// hold the rows of two result sets, whose columns differ.
+///
+/// sqlx's read of a MySQL packet is not cancel-safe: it takes the packet's header off the connection's
+/// buffer before it waits for the payload, so a read dropped midway leaves the connection out of step
+/// with the server (the next statement reads payload bytes as a header, and waits for that many bytes,
+/// up to 16 MB, or misreads the protocol). Unless `abort_reads` is set (the connection is closed after
+/// a cancelled stream), a row read thus runs to its end, and `cancel` is checked between rows; sqlx then
+/// reads and discards the rest of the result on the connection's next use.
 async fn stream_rows(
     mut rows: RowStream<'_>,
     fetch_size: usize,
     tx: mpsc::Sender<StreamChunk>,
     mut cancel: oneshot::Receiver<()>,
+    abort_reads: bool,
 ) -> bool {
     let mut chunk: Vec<MySqlRow> = Vec::with_capacity(fetch_size);
     loop {
-        let next = tokio::select! {
-            _ = &mut cancel => return false,
-            next = rows.try_next() => next,
+        let next = if abort_reads {
+            tokio::select! {
+                _ = &mut cancel => return false,
+                next = rows.try_next() => next,
+            }
+        } else {
+            // Fired, or its sender dropped.
+            if !matches!(cancel.try_recv(), Err(oneshot::error::TryRecvError::Empty)) {
+                return false;
+            }
+            rows.try_next().await
         };
         match next {
             Ok(Some(item)) => {
@@ -707,7 +723,7 @@ impl Sqlx4kMySql {
         let task = RUNTIME.get().unwrap().spawn(async move {
             let exhausted = {
                 let rows = stream_rows_of(&mut cn, sql, params);
-                stream_rows(rows, fetch_size, tx, cancel_rx).await
+                stream_rows(rows, fetch_size, tx, cancel_rx, true).await
             };
             if !exhausted {
                 // Cancelled with rows pending: sqlx would read and discard the remainder on the next
@@ -738,7 +754,7 @@ impl Sqlx4kMySql {
             // rows on the connection's next use.
             let cn = unsafe { &mut *(cn.raw() as *mut PoolConnection<MySql>) };
             let rows = stream_rows_of(&mut **cn, sql, params);
-            stream_rows(rows, fetch_size, tx, cancel_rx).await;
+            stream_rows(rows, fetch_size, tx, cancel_rx, false).await;
         });
         stream_result_of(Sqlx4kMysqlStream {
             rx: tokio::sync::Mutex::new(rx),
@@ -760,7 +776,7 @@ impl Sqlx4kMySql {
             // Borrowed in place (not re-boxed like `tx_fetch_all`), so the Kotlin-held pointer stays valid.
             let tx = unsafe { &mut *(tx.raw() as *mut Transaction<'static, MySql>) };
             let rows = stream_rows_of(&mut **tx, sql, params);
-            stream_rows(rows, fetch_size, chunks, cancel_rx).await;
+            stream_rows(rows, fetch_size, chunks, cancel_rx, false).await;
         });
         stream_result_of(Sqlx4kMysqlStream {
             rx: tokio::sync::Mutex::new(rx),

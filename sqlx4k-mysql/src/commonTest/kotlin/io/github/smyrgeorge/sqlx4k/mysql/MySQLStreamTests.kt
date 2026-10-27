@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 
 class MySQLStreamTests {
 
@@ -166,6 +167,34 @@ class MySQLStreamTests {
                 cn.close().getOrThrow()
             }
             assertCount(table, 1_000)
+        } finally {
+            drop(table)
+        }
+    }
+
+    // A stream cancelled while a row is read (its packet split across reads) must leave the connection in step with
+    // the server: its next statements are answered, and in time.
+    @Test
+    fun `a connection stays usable after streams of large rows are cancelled`(): Unit = runBlocking {
+        val table = seed(50)
+        try {
+            val cn = db.acquire().getOrThrow()
+            try {
+                repeat(20) { i ->
+                    val first = cn.fetch("select id, repeat('x', 4000000) as v from $table order by id;", fetchSize = 1)
+                        .map { it.get("id").asInt() }
+                        .take(1)
+                        .toList()
+                    assertThat(first).isEqualTo(listOf(1))
+                    val c = withTimeout(10.seconds) {
+                        cn.fetchAll("select $i as c;").getOrThrow().first().get("c").asInt()
+                    }
+                    assertThat(c).isEqualTo(i)
+                }
+            } finally {
+                cn.close().getOrThrow()
+            }
+            assertCount(table, 50)
         } finally {
             drop(table)
         }
