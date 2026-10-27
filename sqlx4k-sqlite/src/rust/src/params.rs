@@ -89,3 +89,105 @@ pub(crate) fn bind_params<'q>(
     }
     q
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{block_on, c, memory, param, text_param};
+    use sqlx::{Connection, Row};
+    use std::ptr::null;
+
+    fn read(params: &[Sqlx4kSqliteParam]) -> Vec<OwnedParam> {
+        read_params(params.as_ptr(), params.len() as c_int)
+    }
+
+    #[test]
+    fn no_params_read_as_none() {
+        assert!(read_params(null(), 0).is_empty());
+        assert!(read_params(null(), 3).is_empty());
+    }
+
+    #[test]
+    fn every_kind_is_read() {
+        let s = c("hello");
+        let blob = [1u8, 0, 255];
+        let read = read(&[
+            param(PARAM_NULL, |_| {}),
+            param(PARAM_INT, |p| p.i64_val = i64::MIN),
+            param(PARAM_REAL, |p| p.f64_val = -2.25),
+            text_param(PARAM_TEXT, &s),
+            param(PARAM_BLOB, |p| {
+                p.blob = blob.as_ptr();
+                p.blob_len = 3
+            }),
+        ]);
+        assert!(matches!(read[0], OwnedParam::Null));
+        assert!(matches!(read[1], OwnedParam::Int(i64::MIN)));
+        assert!(matches!(read[2], OwnedParam::Real(v) if v == -2.25));
+        assert!(matches!(&read[3], OwnedParam::Text(v) if v == "hello"));
+        assert!(matches!(&read[4], OwnedParam::Blob(v) if v == &blob));
+    }
+
+    #[test]
+    fn a_text_is_read_by_its_length() {
+        let bytes = b"a\0b and more";
+        let s = c("a");
+        let read = read(&[
+            param(PARAM_TEXT, |p| {
+                p.text = bytes.as_ptr() as *const c_char;
+                p.text_len = 3
+            }),
+            param(PARAM_TEXT, |p| p.text = s.as_ptr()),
+            param(PARAM_TEXT, |p| p.text_len = 4),
+            // Invalid UTF-8 is replaced, not trusted.
+            param(PARAM_TEXT, |p| {
+                p.text = b"\xff".as_ptr() as *const c_char;
+                p.text_len = 1
+            }),
+        ]);
+        let texts: Vec<&str> = read
+            .iter()
+            .map(|p| match p {
+                OwnedParam::Text(s) => s.as_str(),
+                _ => panic!("not a text"),
+            })
+            .collect();
+        assert_eq!(texts, ["a\0b", "", "", "\u{fffd}"]);
+    }
+
+    #[test]
+    fn an_empty_or_missing_blob_reads_empty() {
+        let read = read(&[param(PARAM_BLOB, |p| p.blob_len = 5)]);
+        assert!(matches!(&read[0], OwnedParam::Blob(v) if v.is_empty()));
+    }
+
+    // Kotlin only passes the kinds above; another one is a bug on its side (and aborts a release build).
+    #[test]
+    #[should_panic(expected = "Unknown Sqlx4kSqliteParam kind: 9")]
+    fn an_unknown_kind_panics() {
+        read(&[param(9, |_| {})]);
+    }
+
+    #[test]
+    fn every_kind_is_bound() {
+        block_on(async {
+            let mut cn = memory().await;
+            let params = vec![
+                OwnedParam::Null,
+                OwnedParam::Int(-8),
+                OwnedParam::Real(1.5),
+                OwnedParam::Text("a\0b".to_string()),
+                OwnedParam::Blob(vec![1, 2]),
+            ];
+            let sql = "select ? is null, typeof(?), ?, hex(?), hex(?)";
+            let row = bind_params(sqlx::query(sql), params).fetch_one(&mut cn).await.unwrap();
+            assert_eq!(row.get::<i64, _>(0), 1);
+            assert_eq!(row.get::<String, _>(1), "integer");
+            assert_eq!(row.get::<f64, _>(2), 1.5);
+            // The NUL inside the text is bound with it.
+            assert_eq!(row.get::<String, _>(3), "610062");
+            assert_eq!(row.get::<String, _>(4), "0102");
+            cn.close().await.unwrap();
+        });
+    }
+}

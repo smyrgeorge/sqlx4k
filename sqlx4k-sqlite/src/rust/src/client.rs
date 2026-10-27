@@ -484,3 +484,191 @@ mod pool_options_tests {
         assert_eq!(pool.get_max_lifetime(), Some(Duration::from_secs(2)));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::params::{read_params, PARAM_TEXT};
+    use crate::test_support::{block_on, c, text_param, Pool, Res, TempDb};
+    use crate::types::ERROR_POOL_CLOSED;
+    use std::time::Instant;
+
+    /// Runs `f` on the driver's runtime, as the exports do.
+    fn on_runtime<F: std::future::Future>(f: F) -> F::Output {
+        RUNTIME.get().unwrap().block_on(f)
+    }
+
+    fn client(pool: &Pool) -> &'static Sqlx4kSqlite {
+        unsafe { &*(pool.rt as *const Sqlx4kSqlite) }
+    }
+
+    fn ptr(p: *mut c_void) -> Sqlx4kSqlitePtr {
+        Sqlx4kSqlitePtr { ptr: p }
+    }
+
+    fn count(db: &Sqlx4kSqlite) -> String {
+        Res(on_runtime(db.fetch_all("select count(*) from t".to_string()))).ok().value().unwrap()
+    }
+
+    /// Waits (a while) until the pool has `n` idle connections.
+    fn wait_idle(db: &Sqlx4kSqlite, n: usize) {
+        for _ in 0..100 {
+            if db.pool.num_idle() == n {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(db.pool.num_idle(), n);
+    }
+
+    #[test]
+    fn the_mode_of_a_url_is_its_last_mode_parameter() {
+        assert_eq!(sqlite_url_mode("sqlite://a.db"), None);
+        assert_eq!(sqlite_url_mode("sqlite://a.db?cache=shared"), None);
+        assert_eq!(sqlite_url_mode("sqlite://a.db?mode=ro"), Some("ro"));
+        assert_eq!(sqlite_url_mode("sqlite://a.db?cache=shared&mode=rw"), Some("rw"));
+        assert_eq!(sqlite_url_mode("sqlite://a.db?mode=ro&mode=rwc"), Some("rwc"));
+        assert_eq!(sqlite_url_mode("sqlite://a.db?mode"), None);
+        assert_eq!(sqlite_url_mode("sqlite::memory:?mode=memory"), Some("memory"));
+    }
+
+    #[test]
+    fn closing_a_pool_closes_its_idle_connections_at_once() {
+        let db = TempDb::new();
+        block_on(async {
+            let pool = SqlitePoolOptions::new().min_connections(2).max_connections(2).connect_with(db.connect_options()).await.unwrap();
+            while pool.num_idle() < 2 {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            let started = Instant::now();
+            close_pool(&pool).await;
+            assert!(pool.is_closed());
+            assert_eq!(pool.size(), 0);
+            assert!(started.elapsed() < CLOSE_GRACE);
+        });
+    }
+
+    #[test]
+    fn closing_a_pool_does_not_wait_for_a_connection_held() {
+        let db = TempDb::new();
+        block_on(async {
+            let pool = SqlitePoolOptions::new().max_connections(1).connect_with(db.connect_options()).await.unwrap();
+            let held = pool.acquire().await.unwrap();
+            let started = Instant::now();
+            close_pool(&pool).await;
+            assert!(started.elapsed() < CLOSE_GRACE * 2);
+            assert!(pool.is_closed());
+            drop(held);
+            for _ in 0..100 {
+                if pool.size() == 0 {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            assert_eq!(pool.size(), 0);
+        });
+    }
+
+    #[test]
+    fn queries_run_on_the_pool() {
+        let pool = Pool::open(2);
+        let db = client(&pool);
+        Res(on_runtime(db.query("create table t(id integer primary key, k text unique, v text)".to_string()))).ok();
+        let r = Res(on_runtime(db.query("insert into t(k, v) values ('a', 'a'), ('b', 'b')".to_string()))).ok();
+        assert_eq!((r.get().rows_affected, r.get().last_insert_id), (2, 2));
+        let v = c("c");
+        let params = read_params([text_param(PARAM_TEXT, &v)].as_ptr(), 1);
+        let r = Res(on_runtime(db.query_with_params("update t set v = ? where id = 1".to_string(), params))).ok();
+        assert_eq!(r.get().rows_affected, 1);
+        let r = Res(on_runtime(db.fetch_all("select v from t order by id".to_string()))).ok();
+        assert_eq!(r.rows(), [[Some("c".into())], [Some("b".into())]]);
+        let params = read_params([text_param(PARAM_TEXT, &v)].as_ptr(), 1);
+        let r = Res(on_runtime(db.fetch_all_with_params("select id from t where v = ?".to_string(), params))).ok();
+        assert_eq!(r.rows(), [[Some("1".into())]]);
+    }
+
+    #[test]
+    fn an_upsert_reports_the_rowid_it_inserted_only() {
+        let pool = Pool::open(1);
+        let db = client(&pool);
+        Res(on_runtime(db.query("create table t(id integer primary key, k text unique, v int)".to_string()))).ok();
+        let upsert = |k: &str| format!("insert into t(k, v) values ('{k}', 1) on conflict(k) do update set v = v + 1");
+        let r = Res(on_runtime(db.query(upsert("a")))).ok();
+        assert_eq!((r.get().rows_affected, r.get().last_insert_id), (1, 1));
+        let r = Res(on_runtime(db.query(upsert("a")))).ok();
+        assert_eq!((r.get().rows_affected, r.get().last_insert_id), (1, 0));
+        let r = Res(on_runtime(db.query_with_params(upsert("b"), vec![]))).ok();
+        assert_eq!(r.get().last_insert_id, 2);
+        let r = Res(on_runtime(db.query_with_params(upsert("b"), vec![]))).ok();
+        assert_eq!(r.get().last_insert_id, 0);
+    }
+
+    #[test]
+    fn a_transaction_is_committed_or_rolled_back() {
+        let pool = Pool::open(2);
+        let db = client(&pool);
+        Res(on_runtime(db.query("create table t(id int)".to_string()))).ok();
+        for commit in [true, false] {
+            let tx = Res(on_runtime(db.tx_begin())).ok().get().tx;
+            // The transaction moves into each call and comes back in its result.
+            let tx = Res(on_runtime(db.tx_query(ptr(tx), "insert into t values (1)".to_string()))).ok().get().tx;
+            let r = Res(on_runtime(db.tx_fetch_all(ptr(tx), "select count(*) from t".to_string()))).ok();
+            let tx = r.get().tx;
+            assert_eq!(r.value().as_deref(), Some(if commit { "1" } else { "2" }));
+            if commit {
+                Res(on_runtime(db.tx_commit(ptr(tx)))).ok();
+            } else {
+                Res(on_runtime(db.tx_rollback(ptr(tx)))).ok();
+            }
+        }
+        assert_eq!(count(db), "1");
+    }
+
+    #[test]
+    fn a_transaction_begun_in_another_one_on_a_connection_is_a_savepoint() {
+        let pool = Pool::open(2);
+        let db = client(&pool);
+        Res(on_runtime(db.query("create table t(id int)".to_string()))).ok();
+        let cn = Res(on_runtime(db.cn_acquire())).ok().get().cn;
+        let outer = Res(on_runtime(db.cn_tx_begin(ptr(cn)))).ok().get().tx;
+        let outer = Res(on_runtime(db.tx_query(ptr(outer), "insert into t values (1)".to_string()))).ok().get().tx;
+        let inner = Res(on_runtime(db.cn_tx_begin(ptr(cn)))).ok().get().tx;
+        let inner = Res(on_runtime(db.tx_query(ptr(inner), "insert into t values (2)".to_string()))).ok().get().tx;
+        Res(on_runtime(db.tx_rollback(ptr(inner)))).ok();
+        Res(on_runtime(db.tx_commit(ptr(outer)))).ok();
+        Res(on_runtime(db.cn_release(ptr(cn)))).ok();
+        assert_eq!(count(db), "1");
+    }
+
+    #[test]
+    fn releasing_no_connection_does_nothing() {
+        let pool = Pool::open(1);
+        Res(on_runtime(client(&pool).cn_release(ptr(std::ptr::null_mut())))).ok();
+    }
+
+    #[test]
+    fn a_pool_stream_gives_its_connection_back_consumed_or_not() {
+        let pool = Pool::open(1);
+        let db = client(&pool);
+        let sql = "with recursive s(n) as (select 1 union all select n + 1 from s where n < 10000) select n from s";
+        let stream = Res(on_runtime(db.stream_open(sql.to_string(), vec![], 10))).ok().get().stream;
+        assert_eq!(Res(on_runtime(db.stream_next(ptr(stream)))).ok().rows().len(), 10);
+        Res(on_runtime(db.stream_close(ptr(stream)))).ok();
+        // Kept open (unlike the network drivers'): there is nothing to drain, and an in-memory database would be lost.
+        wait_idle(db, 1);
+        assert_eq!(db.pool.size(), 1);
+        let stream = Res(on_runtime(db.stream_open("select 1".to_string(), vec![], 10))).ok().get().stream;
+        assert_eq!(Res(on_runtime(db.stream_next(ptr(stream)))).ok().rows().len(), 1);
+        assert_eq!(Res(on_runtime(db.stream_next(ptr(stream)))).ok().get().size, 0);
+        Res(on_runtime(db.stream_close(ptr(stream)))).ok();
+        wait_idle(db, 1);
+    }
+
+    #[test]
+    fn a_closed_pool_runs_nothing() {
+        let pool = Pool::open(1);
+        let db = client(&pool);
+        Res(on_runtime(db.close())).ok();
+        assert_eq!(Res(on_runtime(db.query("select 1".to_string()))).get().error, ERROR_POOL_CLOSED);
+    }
+}

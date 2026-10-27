@@ -8,6 +8,9 @@ mod stream;
 mod types;
 mod upsert;
 
+#[cfg(test)]
+mod test_support;
+
 // Linux-only: provides the `fcntl64` symbol that the bundled `sqlite3.c` references but
 // Kotlin/Native's bundled glibc sysroot doesn't export. See the module docs for details.
 #[cfg(target_os = "linux")]

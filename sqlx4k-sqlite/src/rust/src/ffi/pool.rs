@@ -211,3 +211,132 @@ pub extern "C" fn sqlx4k_sqlite_fetch_all_with_params(
         fun(callback, result)
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::params::{PARAM_INT, PARAM_TEXT};
+    use crate::test_support::{c, call, open, param, text_param, Pool, Res, TempDb};
+    use crate::types::{ERROR_DATABASE, ERROR_POOL, ERROR_POOL_CLOSED};
+
+    fn query(rt: *mut c_void, sql: &str) -> Res {
+        let sql = c(sql);
+        call(|cb, fun| sqlx4k_sqlite_query(rt, sql.as_ptr(), cb, fun))
+    }
+
+    fn fetch_all(rt: *mut c_void, sql: &str) -> Res {
+        let sql = c(sql);
+        call(|cb, fun| sqlx4k_sqlite_fetch_all(rt, sql.as_ptr(), cb, fun))
+    }
+
+    fn close(rt: *mut c_void) {
+        call(|cb, fun| sqlx4k_sqlite_close(rt, cb, fun)).ok();
+    }
+
+    #[test]
+    fn an_invalid_url_is_an_error() {
+        let db = TempDb::new();
+        let r = open(&format!("{}?mode=bogus", db.url()), -1, 1);
+        assert_eq!(r.get().error, ERROR_POOL);
+        assert!(r.get().rt.is_null());
+    }
+
+    #[test]
+    fn a_missing_file_is_created_by_default_and_with_mode_rwc() {
+        for mode in ["", "?mode=rwc"] {
+            let db = TempDb::new();
+            let rt = open(&format!("{}{mode}", db.url()), -1, 1).ok().get().rt;
+            assert!(db.path.exists(), "{mode}");
+            close(rt);
+        }
+    }
+
+    #[test]
+    fn a_missing_file_is_not_created_with_mode_ro_or_rw() {
+        for mode in ["ro", "rw"] {
+            let db = TempDb::new();
+            let r = open(&format!("{}?mode={mode}", db.url()), -1, 1);
+            // SQLITE_CANTOPEN
+            assert_eq!((r.get().error, r.get().error_native_code), (ERROR_DATABASE, 14), "{mode}");
+            assert!(!db.path.exists(), "{mode}");
+        }
+    }
+
+    #[test]
+    fn a_read_only_pool_reads_but_does_not_write() {
+        let db = TempDb::new();
+        let rt = open(&db.url(), -1, 1).ok().get().rt;
+        query(rt, "create table t(id int)").ok();
+        query(rt, "insert into t values (1)").ok();
+        close(rt);
+        let rt = open(&format!("{}?mode=ro", db.url()), -1, 1).ok().get().rt;
+        assert_eq!(fetch_all(rt, "select count(*) from t").ok().value().as_deref(), Some("1"));
+        // SQLITE_READONLY
+        assert_eq!(query(rt, "insert into t values (2)").get().error_native_code, 8);
+        close(rt);
+    }
+
+    #[test]
+    fn a_file_pool_is_in_wal_mode() {
+        let pool = Pool::open(1);
+        assert_eq!(fetch_all(pool.rt, "pragma journal_mode").ok().value().as_deref(), Some("wal"));
+    }
+
+    #[test]
+    fn an_in_memory_database_lives_as_long_as_its_pool() {
+        let rt = open("sqlite::memory:", 1, 1).ok().get().rt;
+        query(rt, "create table t(id int)").ok();
+        query(rt, "insert into t values (1)").ok();
+        assert_eq!(fetch_all(rt, "select count(*) from t").ok().value().as_deref(), Some("1"));
+        close(rt);
+    }
+
+    #[test]
+    fn a_pool_keeps_its_minimum_of_connections() {
+        let db = TempDb::new();
+        let rt = open(&db.url(), 2, 3).ok().get().rt;
+        for _ in 0..100 {
+            if sqlx4k_sqlite_pool_idle_size(rt) == 2 {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(sqlx4k_sqlite_pool_size(rt), 2);
+        assert_eq!(sqlx4k_sqlite_pool_idle_size(rt), 2);
+        close(rt);
+    }
+
+    #[test]
+    fn statements_run_on_the_pool() {
+        let pool = Pool::open(2);
+        query(pool.rt, "create table t(id integer primary key, v text)").ok();
+        let r = query(pool.rt, "insert into t values (1, 'a'), (2, 'b')").ok();
+        assert_eq!((r.get().rows_affected, r.get().last_insert_id), (2, 2));
+        let v = c("c");
+        let params = [text_param(PARAM_TEXT, &v), param(PARAM_INT, |p| p.i64_val = 2)];
+        let sql = c("update t set v = ? where id = ?");
+        let r = call(|cb, fun| sqlx4k_sqlite_query_with_params(pool.rt, sql.as_ptr(), params.as_ptr(), 2, cb, fun)).ok();
+        assert_eq!(r.get().rows_affected, 1);
+        let sql = c("select v from t where id >= ? order by id");
+        let params = [param(PARAM_INT, |p| p.i64_val = 1)];
+        let r = call(|cb, fun| sqlx4k_sqlite_fetch_all_with_params(pool.rt, sql.as_ptr(), params.as_ptr(), 1, cb, fun)).ok();
+        assert_eq!(r.rows(), [[Some("a".into())], [Some("c".into())]]);
+        assert_eq!(fetch_all(pool.rt, "select count(*) from t").ok().value().as_deref(), Some("2"));
+    }
+
+    #[test]
+    fn a_failing_statement_is_an_error() {
+        let pool = Pool::open(1);
+        let r = fetch_all(pool.rt, "select * from missing_table");
+        assert_eq!((r.get().error, r.get().error_native_code), (ERROR_DATABASE, 1));
+        assert!(r.get().error_sql_state.is_null());
+    }
+
+    #[test]
+    fn a_closed_pool_runs_nothing() {
+        let pool = Pool::open(1);
+        close(pool.rt);
+        assert_eq!(query(pool.rt, "select 1").get().error, ERROR_POOL_CLOSED);
+        assert_eq!(fetch_all(pool.rt, "select 1").get().error, ERROR_POOL_CLOSED);
+    }
+}

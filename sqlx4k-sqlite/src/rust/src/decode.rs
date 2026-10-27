@@ -107,3 +107,34 @@ mod real_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_column_value_is_handed_over_with_its_length_and_a_terminator() {
+        for value in ["", "abc", "a\0b", "héllo"] {
+            let (raw, len) = column_value_into_raw(value.to_string());
+            assert_eq!(len as usize, value.len());
+            let bytes = unsafe { std::slice::from_raw_parts(raw as *const u8, len as usize + 1) };
+            assert_eq!(&bytes[..len as usize], value.as_bytes());
+            assert_eq!(bytes[len as usize], 0);
+            free_column_value(raw, len);
+        }
+    }
+
+    #[test]
+    fn freeing_no_value_does_nothing() {
+        free_column_value(std::ptr::null_mut(), 0);
+    }
+
+    #[test]
+    fn a_real_reads_back_as_itself() {
+        for value in [1.5, 7.0 / 3.0, 0.1 + 0.2, 1e-7, 123456789012345678.0, -5e-324, f64::MAX] {
+            let text = format_sqlite_real(value);
+            assert_eq!(text.parse::<f64>().unwrap(), value, "{text}");
+        }
+        assert_eq!(format_sqlite_real(f64::NAN), "NaN");
+    }
+}

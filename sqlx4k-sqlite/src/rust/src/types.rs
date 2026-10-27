@@ -166,3 +166,99 @@ pub extern "C" fn auto_generated_for_struct_sqlite_Sqlx4kSqliteResult(_: Sqlx4kS
 
 #[no_mangle]
 pub extern "C" fn auto_generated_for_struct_sqlite_Sqlx4kSqliteParam(_: Sqlx4kSqliteParam) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::result::sqlx4k_sqlite_free_result;
+
+    /// The constants of the Kotlin enum `name` of `SQLError` (sqlx4k/.../SQLError.kt), in their order.
+    fn kotlin_enum(name: &str) -> Vec<String> {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../sqlx4k/src/commonMain/kotlin/io/github/smyrgeorge/sqlx4k/SQLError.kt"
+        );
+        let source = std::fs::read_to_string(path).unwrap();
+        let body = source.split(&format!("enum class {name} {{")).nth(1).unwrap();
+        let body = &body[..body.find('}').unwrap()];
+        body.lines()
+            .map(str::trim)
+            .filter(|l| !l.starts_with("//") && !l.starts_with("/*"))
+            .map(|l| l.trim_end_matches(','))
+            .filter(|l| l.chars().next().is_some_and(char::is_uppercase))
+            .map(str::to_string)
+            .collect()
+    }
+
+    #[test]
+    fn error_codes_are_the_ordinals_of_the_kotlin_codes() {
+        let codes = kotlin_enum("Code");
+        for (code, name) in [
+            (ERROR_DATABASE, "Database"),
+            (ERROR_POOL_TIMED_OUT, "PoolTimedOut"),
+            (ERROR_POOL_CLOSED, "PoolClosed"),
+            (ERROR_WORKER_CRASHED, "WorkerCrashed"),
+            (ERROR_POOL, "Pool"),
+        ] {
+            assert_eq!(codes[code as usize], name);
+        }
+    }
+
+    #[test]
+    fn kinds_are_the_ordinals_of_the_kotlin_kinds() {
+        let kinds = kotlin_enum("Kind");
+        let ours = [
+            (KIND_UNIQUE_VIOLATION, "UniqueViolation"),
+            (KIND_FOREIGN_KEY_VIOLATION, "ForeignKeyViolation"),
+            (KIND_NOT_NULL_VIOLATION, "NotNullViolation"),
+            (KIND_CHECK_VIOLATION, "CheckViolation"),
+            (KIND_EXCLUSION_VIOLATION, "ExclusionViolation"),
+            (KIND_DEADLOCK, "Deadlock"),
+            (KIND_SERIALIZATION_FAILURE, "SerializationFailure"),
+            (KIND_LOCK_TIMEOUT, "LockTimeout"),
+            (KIND_OTHER, "Other"),
+        ];
+        assert_eq!(kinds.len(), ours.len());
+        for (kind, name) in ours {
+            assert_eq!(kinds[kind as usize], name);
+        }
+    }
+
+    #[test]
+    fn a_default_result_is_no_error_and_holds_nothing() {
+        let r = Sqlx4kSqliteResult::default();
+        assert_eq!(r.error, OK);
+        assert!(r.error_message.is_null());
+        assert!(r.error_sql_state.is_null());
+        assert_eq!(r.error_native_code, NO_NATIVE_CODE);
+        assert_eq!(r.error_kind, KIND_OTHER);
+        assert_eq!((r.rows_affected, r.last_insert_id), (0, 0));
+        assert!(r.cn.is_null() && r.tx.is_null() && r.rt.is_null() && r.stream.is_null());
+        assert!(r.schema.is_null() && r.rows.is_null());
+        assert_eq!(r.size, 0);
+    }
+
+    #[test]
+    fn a_leaked_result_is_freed() {
+        let leaked = Sqlx4kSqliteResult::default().leak();
+        assert!(!leaked.is_null());
+        sqlx4k_sqlite_free_result(leaked);
+    }
+
+    #[test]
+    fn a_default_schema_and_row_have_no_columns() {
+        let schema = Sqlx4kSqliteSchema::default();
+        assert_eq!(schema.size, 0);
+        assert!(schema.columns.is_null());
+        let row = Sqlx4kSqliteRow::default();
+        assert_eq!(row.size, 0);
+        assert!(row.columns.is_null());
+    }
+
+    #[test]
+    fn a_ptr_hands_back_its_pointer() {
+        let mut value = 7;
+        let ptr = Sqlx4kSqlitePtr { ptr: &mut value as *mut i32 as *mut c_void };
+        assert_eq!(ptr.raw(), &mut value as *mut i32 as *mut c_void);
+    }
+}
