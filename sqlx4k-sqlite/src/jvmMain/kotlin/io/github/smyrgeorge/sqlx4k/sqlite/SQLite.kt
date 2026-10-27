@@ -28,11 +28,14 @@ import io.github.smyrgeorge.sqlx4k.sqlite.pool.PooledTransaction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
@@ -324,7 +327,10 @@ class SQLite(
         // auto-commit off again did nothing, so the nested one's commit committed the whole of it, and the outer one's
         // rollback then failed, auto-commit being on again.
         override suspend fun begin(): Result<Transaction> = mutex.withLockCatching(::assertIsOpen) {
-            withContext(Dispatchers.IO) {
+            // Begun to completion also when the caller is cancelled meanwhile: withContext(Dispatchers.IO) would
+            // otherwise discard the transaction on return, left open on the connection, and recorded as the one a
+            // later begin() nests in (whose commit then only released a savepoint).
+            withContext(NonCancellable) { withContext(Dispatchers.IO) {
                 var parent = transaction
                 while (parent != null && parent.status != Transaction.Status.Open) parent = parent.parent
                 if (parent == null) {
@@ -334,7 +340,14 @@ class SQLite(
                     val savepoint = rethrowAsSQLError { connection.setSavepoint("sqlx4k_savepoint_${parent.depth}") }
                     JdbcTransaction(connection, false, encoders, savepoint, parent).also { parent.child = it }
                 }.also { transaction = it }
+            } }
+        }.mapCatching { tx ->
+            // A caller cancelled meanwhile never receives it: it is rolled back.
+            if (!currentCoroutineContext().isActive) {
+                tx.rollback()
+                currentCoroutineContext().ensureActive()
             }
+            tx
         }
     }
 

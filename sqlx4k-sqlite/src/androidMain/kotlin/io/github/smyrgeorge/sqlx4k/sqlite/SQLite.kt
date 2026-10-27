@@ -278,8 +278,10 @@ class SQLite(
         override suspend fun begin(): Result<Transaction> = mutex.withLockCatching(::assertIsOpen) {
             // Begin the transaction on the connection's dedicated thread, then hand
             // the same dispatcher to AndroidTransaction so commit/rollback also run
-            // on that thread (Android SQLiteDatabase sessions are thread-local).
-            withContext(dispatcher) {
+            // on that thread (Android SQLiteDatabase sessions are thread-local). To completion also when the caller is
+            // cancelled meanwhile: withContext(dispatcher) would otherwise discard the transaction on return, left
+            // open on the connection, and the one a later begin() nests in.
+            withContext(NonCancellable) { withContext(dispatcher) {
                 // A begin() while a transaction is open nests in the innermost one.
                 val parent = transactions.lastOrNull { it.status == Transaction.Status.Open }
                 db.beginTransactionNonExclusive()
@@ -290,7 +292,14 @@ class SQLite(
                     transactions.removeAll { it.status != Transaction.Status.Open }
                     transactions += tx
                 }
+            } }
+        }.mapCatching { tx ->
+            // A caller cancelled meanwhile never receives it: it is rolled back.
+            if (!currentCoroutineContext().isActive) {
+                tx.rollback()
+                currentCoroutineContext().ensureActive()
             }
+            tx
         }
     }
 

@@ -14,10 +14,12 @@ import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.impl.coroutines.TransactionContext
 import io.github.smyrgeorge.sqlx4k.impl.extensions.asLong
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import kotlin.random.Random
 import kotlin.test.AfterTest
 import kotlin.test.Test
-import kotlinx.coroutines.runBlocking
 
 class SQLiteTransactionTests : SQLiteTestBase() {
 
@@ -674,4 +676,28 @@ class SQLiteTransactionTests : SQLiteTestBase() {
                 db.execute("drop table $table;").getOrThrow()
             }
         }
+
+    // A begin() whose caller is cancelled while it runs must leave no transaction open on the connection: the next
+    // transaction would nest in it (as a savepoint), and its commit commit nothing for good.
+    @Test
+    fun `a begin cancelled while it runs leaves no transaction behind`(): Unit = runBlocking {
+        val table = newTable()
+        db.execute("create table $table(id integer primary key);").getOrThrow()
+        val cn = db.acquire().getOrThrow()
+        try {
+            repeat(5) { i ->
+                // Cancelled while begin() waits for the work it handed to another thread.
+                val job = launch { cn.begin() }
+                yield()
+                job.cancel()
+                job.join()
+                cn.transaction { execute("insert into $table(id) values ($i);").getOrThrow() }
+                // Committed for good: another connection sees it.
+                assertThat(countRows(table)).isEqualTo(i + 1L)
+            }
+        } finally {
+            cn.close().getOrThrow()
+            db.execute("drop table $table;").getOrThrow()
+        }
+    }
 }
