@@ -95,17 +95,23 @@ impl<'a> Cursor<'a> {
 
 /// Decodes the parameter buffer (mirror of the Kotlin encoder in `jni.kt`):
 ///   i32 count; repeat { u8 kind; [INT i64 | REAL f64 | TEXT str | BLOB bytes | NULL ø] }
-fn params_from_bytes(env: &mut JNIEnv, array: &JByteArray) -> Vec<OwnedParam> {
+/// An unknown kind is reported as an error (see `params_error`), as on the FFI path.
+fn params_from_bytes(env: &mut JNIEnv, array: &JByteArray) -> Result<Vec<OwnedParam>, String> {
     if array.as_raw().is_null() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     let bytes = env
         .convert_byte_array(array)
         .expect("Failed to read parameter byte array");
     if bytes.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
-    let mut c = Cursor { b: &bytes, pos: 0 };
+    params_of(&bytes)
+}
+
+/// Decodes the parameters of a non-empty buffer (see `params_from_bytes`).
+fn params_of(bytes: &[u8]) -> Result<Vec<OwnedParam>, String> {
+    let mut c = Cursor { b: bytes, pos: 0 };
     let count = c.i32().max(0);
     let mut out = Vec::with_capacity(count as usize);
     for _ in 0..count {
@@ -115,11 +121,12 @@ fn params_from_bytes(env: &mut JNIEnv, array: &JByteArray) -> Vec<OwnedParam> {
             PARAM_REAL => OwnedParam::Real(c.f64()),
             PARAM_TEXT => OwnedParam::Text(c.string()),
             PARAM_BLOB => OwnedParam::Blob(c.bytes()),
-            _ => OwnedParam::Null,
+            PARAM_NULL => OwnedParam::Null,
+            other => return Err(format!("Unknown parameter kind: {}", other)),
         };
         out.push(p);
     }
-    out
+    Ok(out)
 }
 
 // ----------------------------------------------------------------------------
@@ -225,7 +232,10 @@ pub extern "system" fn Java_io_github_smyrgeorge_sqlx4k_sqlite_cipher_CipherJni_
     params: JByteArray<'local>,
 ) -> jbyteArray {
     let sql = jstring_to_string(&mut env, &sql);
-    let owned = params_from_bytes(&mut env, &params);
+    let owned = match params_from_bytes(&mut env, &params) {
+        Ok(owned) => owned,
+        Err(err) => return finish(&mut env, params_error(err, std::ptr::null_mut())),
+    };
     let result = RUNTIME
         .get()
         .unwrap()
@@ -244,7 +254,10 @@ pub extern "system" fn Java_io_github_smyrgeorge_sqlx4k_sqlite_cipher_CipherJni_
     params: JByteArray<'local>,
 ) -> jbyteArray {
     let sql = jstring_to_string(&mut env, &sql);
-    let owned = params_from_bytes(&mut env, &params);
+    let owned = match params_from_bytes(&mut env, &params) {
+        Ok(owned) => owned,
+        Err(err) => return finish(&mut env, params_error(err, std::ptr::null_mut())),
+    };
     let result = RUNTIME
         .get()
         .unwrap()
@@ -271,7 +284,10 @@ pub extern "system" fn Java_io_github_smyrgeorge_sqlx4k_sqlite_cipher_CipherJni_
     fetch_size: jint,
 ) -> jbyteArray {
     let sql = jstring_to_string(&mut env, &sql);
-    let owned = params_from_bytes(&mut env, &params);
+    let owned = match params_from_bytes(&mut env, &params) {
+        Ok(owned) => owned,
+        Err(err) => return finish(&mut env, params_error(err, std::ptr::null_mut())),
+    };
     let result = RUNTIME.get().unwrap().block_on(engine(rt).stream_open(
         sql,
         owned,
@@ -293,7 +309,10 @@ pub extern "system" fn Java_io_github_smyrgeorge_sqlx4k_sqlite_cipher_CipherJni_
     fetch_size: jint,
 ) -> jbyteArray {
     let sql = jstring_to_string(&mut env, &sql);
-    let owned = params_from_bytes(&mut env, &params);
+    let owned = match params_from_bytes(&mut env, &params) {
+        Ok(owned) => owned,
+        Err(err) => return finish(&mut env, params_error(err, std::ptr::null_mut())),
+    };
     let result = RUNTIME.get().unwrap().block_on(engine(rt).cn_stream_open(
         ptr_of(cn),
         sql,
@@ -316,7 +335,10 @@ pub extern "system" fn Java_io_github_smyrgeorge_sqlx4k_sqlite_cipher_CipherJni_
     fetch_size: jint,
 ) -> jbyteArray {
     let sql = jstring_to_string(&mut env, &sql);
-    let owned = params_from_bytes(&mut env, &params);
+    let owned = match params_from_bytes(&mut env, &params) {
+        Ok(owned) => owned,
+        Err(err) => return finish(&mut env, params_error(err, ptr_of(tx).ptr)),
+    };
     let result = RUNTIME.get().unwrap().block_on(engine(rt).tx_stream_open(
         ptr_of(tx),
         sql,
@@ -438,7 +460,10 @@ pub extern "system" fn Java_io_github_smyrgeorge_sqlx4k_sqlite_cipher_CipherJni_
     params: JByteArray<'local>,
 ) -> jbyteArray {
     let sql = jstring_to_string(&mut env, &sql);
-    let owned = params_from_bytes(&mut env, &params);
+    let owned = match params_from_bytes(&mut env, &params) {
+        Ok(owned) => owned,
+        Err(err) => return finish(&mut env, params_error(err, std::ptr::null_mut())),
+    };
     let result = RUNTIME
         .get()
         .unwrap()
@@ -458,7 +483,10 @@ pub extern "system" fn Java_io_github_smyrgeorge_sqlx4k_sqlite_cipher_CipherJni_
     params: JByteArray<'local>,
 ) -> jbyteArray {
     let sql = jstring_to_string(&mut env, &sql);
-    let owned = params_from_bytes(&mut env, &params);
+    let owned = match params_from_bytes(&mut env, &params) {
+        Ok(owned) => owned,
+        Err(err) => return finish(&mut env, params_error(err, std::ptr::null_mut())),
+    };
     let result = RUNTIME
         .get()
         .unwrap()
@@ -578,7 +606,10 @@ pub extern "system" fn Java_io_github_smyrgeorge_sqlx4k_sqlite_cipher_CipherJni_
     params: JByteArray<'local>,
 ) -> jbyteArray {
     let sql = jstring_to_string(&mut env, &sql);
-    let owned = params_from_bytes(&mut env, &params);
+    let owned = match params_from_bytes(&mut env, &params) {
+        Ok(owned) => owned,
+        Err(err) => return finish(&mut env, params_error(err, ptr_of(tx).ptr)),
+    };
     let result = RUNTIME
         .get()
         .unwrap()
@@ -598,7 +629,10 @@ pub extern "system" fn Java_io_github_smyrgeorge_sqlx4k_sqlite_cipher_CipherJni_
     params: JByteArray<'local>,
 ) -> jbyteArray {
     let sql = jstring_to_string(&mut env, &sql);
-    let owned = params_from_bytes(&mut env, &params);
+    let owned = match params_from_bytes(&mut env, &params) {
+        Ok(owned) => owned,
+        Err(err) => return finish(&mut env, params_error(err, ptr_of(tx).ptr)),
+    };
     let result = RUNTIME
         .get()
         .unwrap()
@@ -639,6 +673,41 @@ mod tests {
         let mut b = 1i32.to_be_bytes().to_vec();
         b.push(0xff);
         Cursor { b: &b, pos: 0 }.string();
+    }
+
+    /// A parameter buffer of the given kinds, each followed by its value bytes.
+    fn buffer(params: &[(u8, &[u8])]) -> Vec<u8> {
+        let mut b = (params.len() as i32).to_be_bytes().to_vec();
+        for (kind, value) in params {
+            b.push(*kind);
+            b.extend(*value);
+        }
+        b
+    }
+
+    #[test]
+    fn every_kind_of_parameter_is_decoded() {
+        let text = [&2i32.to_be_bytes()[..], b"hi"].concat();
+        let blob = [&1i32.to_be_bytes()[..], &[0xff]].concat();
+        let b = buffer(&[
+            (PARAM_NULL as u8, &[]),
+            (PARAM_INT as u8, &(-3i64).to_be_bytes()),
+            (PARAM_REAL as u8, &2.5f64.to_be_bytes()),
+            (PARAM_TEXT as u8, &text),
+            (PARAM_BLOB as u8, &blob),
+        ]);
+        let params = params_of(&b).unwrap();
+        assert!(matches!(params[0], OwnedParam::Null));
+        assert!(matches!(params[1], OwnedParam::Int(-3)));
+        assert!(matches!(params[2], OwnedParam::Real(v) if v == 2.5));
+        assert!(matches!(&params[3], OwnedParam::Text(v) if v == "hi"));
+        assert!(matches!(&params[4], OwnedParam::Blob(v) if v == &[0xff]));
+    }
+
+    #[test]
+    fn an_unknown_kind_of_parameter_is_an_error() {
+        let b = buffer(&[(PARAM_INT as u8, &1i64.to_be_bytes()), (9, &[])]);
+        assert_eq!(params_of(&b).err().as_deref(), Some("Unknown parameter kind: 9"));
     }
 
     #[test]

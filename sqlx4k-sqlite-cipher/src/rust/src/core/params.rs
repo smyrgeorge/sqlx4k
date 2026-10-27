@@ -1,8 +1,10 @@
 //! Reading the parameters Kotlin passes, and binding them to a query.
 
 use sqlx::Sqlite;
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
+use crate::core::errors::error_result_of;
+use crate::core::types::Sqlx4kSqliteCipherResult;
 use crate::core::result::slice_of;
 
 pub const PARAM_NULL: c_int = 0;
@@ -40,38 +42,52 @@ pub enum OwnedParam {
 /// Reads `count` params from a C array and copies their data into owned
 /// Rust values, so the resulting Vec can be moved into an async block
 /// without referencing the caller's memory.
-pub fn read_params(params: *const Sqlx4kSqliteCipherParam, count: c_int) -> Vec<OwnedParam> {
+///
+/// A kind that cannot be read is reported as an error (see `params_error`): a panic here would abort the process.
+pub fn read_params(params: *const Sqlx4kSqliteCipherParam, count: c_int) -> Result<Vec<OwnedParam>, String> {
     if params.is_null() || count <= 0 {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     let slice = unsafe { slice_of(params, count as usize) };
     slice
         .iter()
-        .map(|p| match p.kind {
-            PARAM_NULL => OwnedParam::Null,
-            PARAM_INT => OwnedParam::Int(p.i64_val),
-            PARAM_REAL => OwnedParam::Real(p.f64_val),
-            PARAM_TEXT => {
-                let len = p.text_len.max(0) as usize;
-                let bytes = if len == 0 || p.text.is_null() {
-                    &[][..]
-                } else {
-                    unsafe { slice_of(p.text as *const u8, len) }
-                };
-                OwnedParam::Text(String::from_utf8_lossy(bytes).into_owned())
-            }
-            PARAM_BLOB => {
-                let len = p.blob_len.max(0) as usize;
-                let bytes = if len == 0 || p.blob.is_null() {
-                    Vec::new()
-                } else {
-                    unsafe { slice_of(p.blob, len) }.to_vec()
-                };
-                OwnedParam::Blob(bytes)
-            }
-            other => panic!("Unknown Sqlx4kSqliteCipherParam kind: {}", other),
+        .map(|p| {
+            Ok(match p.kind {
+                PARAM_NULL => OwnedParam::Null,
+                PARAM_INT => OwnedParam::Int(p.i64_val),
+                PARAM_REAL => OwnedParam::Real(p.f64_val),
+                PARAM_TEXT => {
+                    let len = p.text_len.max(0) as usize;
+                    let bytes = if len == 0 || p.text.is_null() {
+                        &[][..]
+                    } else {
+                        unsafe { slice_of(p.text as *const u8, len) }
+                    };
+                    OwnedParam::Text(String::from_utf8_lossy(bytes).into_owned())
+                }
+                PARAM_BLOB => {
+                    let len = p.blob_len.max(0) as usize;
+                    let bytes = if len == 0 || p.blob.is_null() {
+                        Vec::new()
+                    } else {
+                        unsafe { slice_of(p.blob, len) }.to_vec()
+                    };
+                    OwnedParam::Blob(bytes)
+                }
+                other => return Err(format!("Unknown Sqlx4kSqliteCipherParam kind: {}", other)),
+            })
         })
         .collect()
+}
+
+/// The result of a call whose parameters could not be read, handing back the transaction (`tx`, or null) it was
+/// given: the caller takes it back from every result.
+pub(crate) fn params_error(err: String, tx: *mut c_void) -> *mut Sqlx4kSqliteCipherResult {
+    Sqlx4kSqliteCipherResult {
+        tx,
+        ..error_result_of(sqlx::Error::Encode(err.into()))
+    }
+    .leak()
 }
 
 pub(crate) fn bind_params<'q>(
@@ -98,13 +114,13 @@ mod tests {
     use std::ptr::null;
 
     fn read(params: &[Sqlx4kSqliteCipherParam]) -> Vec<OwnedParam> {
-        read_params(params.as_ptr(), params.len() as c_int)
+        read_params(params.as_ptr(), params.len() as c_int).unwrap()
     }
 
     #[test]
     fn no_params_read_as_none() {
-        assert!(read_params(null(), 0).is_empty());
-        assert!(read_params(null(), 3).is_empty());
+        assert!(read_params(null(), 0).unwrap().is_empty());
+        assert!(read_params(null(), 3).unwrap().is_empty());
     }
 
     #[test]
@@ -161,11 +177,20 @@ mod tests {
         assert!(matches!(&read[0], OwnedParam::Blob(v) if v.is_empty()));
     }
 
-    // Kotlin only passes the kinds above; another one is a bug on its side (and aborts a release build).
+    // Kotlin only passes the kinds above; another one is a bug on its side, reported as an error (a panic would abort
+    // the process).
     #[test]
-    #[should_panic(expected = "Unknown Sqlx4kSqliteCipherParam kind: 9")]
-    fn an_unknown_kind_panics() {
-        read(&[param(9, |_| {})]);
+    fn an_unknown_kind_is_an_error() {
+        let params = [param(PARAM_INT, |_| {}), param(9, |_| {})];
+        assert_eq!(read_params(params.as_ptr(), 2).err().as_deref(), Some("Unknown Sqlx4kSqliteCipherParam kind: 9"));
+    }
+
+    #[test]
+    fn a_params_error_hands_back_the_transaction() {
+        let tx = 0x10 as *mut c_void;
+        let r = crate::test_support::Res(params_error("bad".to_string(), tx));
+        assert_eq!((r.get().error, r.get().tx), (crate::core::types::ERROR_DATABASE, tx));
+        assert!(r.error_message().unwrap().contains("bad"), "{:?}", r.error_message());
     }
 
     #[test]

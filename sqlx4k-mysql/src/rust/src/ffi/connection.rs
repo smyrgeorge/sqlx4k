@@ -3,7 +3,7 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::client::Sqlx4kMySql;
-use crate::params::{read_params, Sqlx4kMysqlParam};
+use crate::params::{params_error, read_params, Sqlx4kMysqlParam};
 use crate::result::c_chars_to_str_mysql;
 use crate::types::{Sqlx4kMysqlPtr, Sqlx4kMysqlResult};
 use crate::RUNTIME;
@@ -108,7 +108,10 @@ pub extern "C" fn sqlx4k_mysql_cn_query_with_params(
     let cn = Sqlx4kMysqlPtr { ptr: cn };
     let callback = Sqlx4kMysqlPtr { ptr: callback };
     let sql = c_chars_to_str_mysql(sql).to_owned();
-    let owned = read_params(params, params_len);
+    let owned = match read_params(params, params_len) {
+        Ok(owned) => owned,
+        Err(err) => return fun(callback, params_error(err, std::ptr::null_mut())),
+    };
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
     runtime.spawn(async move {
@@ -130,7 +133,10 @@ pub extern "C" fn sqlx4k_mysql_cn_fetch_all_with_params(
     let cn = Sqlx4kMysqlPtr { ptr: cn };
     let callback = Sqlx4kMysqlPtr { ptr: callback };
     let sql = c_chars_to_str_mysql(sql).to_owned();
-    let owned = read_params(params, params_len);
+    let owned = match read_params(params, params_len) {
+        Ok(owned) => owned,
+        Err(err) => return fun(callback, params_error(err, std::ptr::null_mut())),
+    };
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kMySql) };
     runtime.spawn(async move {

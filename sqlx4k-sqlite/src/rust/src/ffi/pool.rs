@@ -8,7 +8,7 @@ use tokio::runtime::Runtime;
 
 use crate::client::{check_database, sqlite_url_mode, with_pool_timeouts, Sqlx4kSqlite};
 use crate::errors::sqlx4k_sqlite_error_result_of;
-use crate::params::{read_params, Sqlx4kSqliteParam};
+use crate::params::{params_error, read_params, Sqlx4kSqliteParam};
 use crate::result::c_chars_to_str_sqlite;
 use crate::types::{Sqlx4kSqlitePtr, Sqlx4kSqliteResult};
 use crate::RUNTIME;
@@ -187,7 +187,10 @@ pub extern "C" fn sqlx4k_sqlite_query_with_params(
 ) {
     let callback = Sqlx4kSqlitePtr { ptr: callback };
     let sql = c_chars_to_str_sqlite(sql).to_owned();
-    let owned = read_params(params, params_len);
+    let owned = match read_params(params, params_len) {
+        Ok(owned) => owned,
+        Err(err) => return fun(callback, params_error(err, std::ptr::null_mut())),
+    };
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
     runtime.spawn(async move {
@@ -207,7 +210,10 @@ pub extern "C" fn sqlx4k_sqlite_fetch_all_with_params(
 ) {
     let callback = Sqlx4kSqlitePtr { ptr: callback };
     let sql = c_chars_to_str_sqlite(sql).to_owned();
-    let owned = read_params(params, params_len);
+    let owned = match read_params(params, params_len) {
+        Ok(owned) => owned,
+        Err(err) => return fun(callback, params_error(err, std::ptr::null_mut())),
+    };
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
     runtime.spawn(async move {

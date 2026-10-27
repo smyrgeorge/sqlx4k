@@ -728,12 +728,12 @@ mod tests {
         let r = Res(on_runtime(db.query("insert into t(k, v) values ('a', 'a'), ('b', 'b')".to_string()))).ok();
         assert_eq!((r.get().rows_affected, r.get().last_insert_id), (2, 2));
         let v = c("c");
-        let params = read_params([text_param(PARAM_TEXT, &v)].as_ptr(), 1);
+        let params = read_params([text_param(PARAM_TEXT, &v)].as_ptr(), 1).unwrap();
         let r = Res(on_runtime(db.query_with_params("update t set v = ? where id = 1".to_string(), params))).ok();
         assert_eq!(r.get().rows_affected, 1);
         let r = Res(on_runtime(db.fetch_all("select v from t order by id".to_string()))).ok();
         assert_eq!(r.rows(), [[Some("c".into())], [Some("b".into())]]);
-        let params = read_params([text_param(PARAM_TEXT, &v)].as_ptr(), 1);
+        let params = read_params([text_param(PARAM_TEXT, &v)].as_ptr(), 1).unwrap();
         let r = Res(on_runtime(db.fetch_all_with_params("select id from t where v = ?".to_string(), params))).ok();
         assert_eq!(r.rows(), [[Some("1".into())]]);
     }

@@ -3,7 +3,7 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::client::Sqlx4kSqlite;
-use crate::params::{read_params, Sqlx4kSqliteParam};
+use crate::params::{params_error, read_params, Sqlx4kSqliteParam};
 use crate::result::c_chars_to_str_sqlite;
 use crate::stream::stream_fetch_size;
 use crate::types::{Sqlx4kSqlitePtr, Sqlx4kSqliteResult};
@@ -21,7 +21,10 @@ pub extern "C" fn sqlx4k_sqlite_stream_open(
 ) {
     let callback = Sqlx4kSqlitePtr { ptr: callback };
     let sql = c_chars_to_str_sqlite(sql).to_owned();
-    let owned = read_params(params, params_len);
+    let owned = match read_params(params, params_len) {
+        Ok(owned) => owned,
+        Err(err) => return fun(callback, params_error(err, std::ptr::null_mut())),
+    };
     let fetch_size = stream_fetch_size(fetch_size);
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
@@ -45,7 +48,10 @@ pub extern "C" fn sqlx4k_sqlite_cn_stream_open(
     let callback = Sqlx4kSqlitePtr { ptr: callback };
     let cn = Sqlx4kSqlitePtr { ptr: cn };
     let sql = c_chars_to_str_sqlite(sql).to_owned();
-    let owned = read_params(params, params_len);
+    let owned = match read_params(params, params_len) {
+        Ok(owned) => owned,
+        Err(err) => return fun(callback, params_error(err, std::ptr::null_mut())),
+    };
     let fetch_size = stream_fetch_size(fetch_size);
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };
@@ -69,7 +75,10 @@ pub extern "C" fn sqlx4k_sqlite_tx_stream_open(
     let callback = Sqlx4kSqlitePtr { ptr: callback };
     let tx = Sqlx4kSqlitePtr { ptr: tx };
     let sql = c_chars_to_str_sqlite(sql).to_owned();
-    let owned = read_params(params, params_len);
+    let owned = match read_params(params, params_len) {
+        Ok(owned) => owned,
+        Err(err) => return fun(callback, params_error(err, tx.ptr)),
+    };
     let fetch_size = stream_fetch_size(fetch_size);
     let runtime = RUNTIME.get().unwrap();
     let sqlx4k = unsafe { &*(rt as *mut Sqlx4kSqlite) };

@@ -492,12 +492,12 @@ mod tests {
         // The id the insert generated (the first of its rows, on MySQL).
         assert_eq!(r.get().last_insert_id, 1);
         let v = c("c");
-        let params = read_params([text_param(PARAM_TEXT, &v)].as_ptr(), 1);
+        let params = read_params([text_param(PARAM_TEXT, &v)].as_ptr(), 1).unwrap();
         let r = Res(on_runtime(db.query_with_params(format!("update {table} set v = ? where id = 1"), params))).ok();
         assert_eq!(r.get().rows_affected, 1);
         let r = Res(on_runtime(db.fetch_all(format!("select v from {table} order by id")))).ok();
         assert_eq!(r.rows(), [[Some("c".into())], [Some("b".into())]]);
-        let params = read_params([text_param(PARAM_TEXT, &v)].as_ptr(), 1);
+        let params = read_params([text_param(PARAM_TEXT, &v)].as_ptr(), 1).unwrap();
         let r = Res(on_runtime(db.fetch_all_with_params(format!("select id from {table} where v = ?"), params))).ok();
         assert_eq!(r.rows(), [[Some("1".into())]]);
         Res(on_runtime(db.query(format!("drop table {table}")))).ok();
