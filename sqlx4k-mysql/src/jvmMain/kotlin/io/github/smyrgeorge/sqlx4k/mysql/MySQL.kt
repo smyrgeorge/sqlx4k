@@ -476,7 +476,9 @@ class MySQL(
             }
 
             val query = statement.renderNativeQuery(Dialect.MySQL, encoders)
-            val stmt = createStatement(query.sql.withQuotesDoubled())
+            // Only a statement with parameters needs r2dbc-mysql to find its placeholders; one without runs as written,
+            // as it then can in any sql_mode (with NO_BACKSLASH_ESCAPES, `'C:\'` is a whole string).
+            val stmt = createStatement(if (query.values.isEmpty()) query.sql else query.sql.withQuotesDoubled())
             query.values.forEachIndexed { index, value ->
                 when (value) {
                     is TypedNull -> stmt.bindNull(index, value.type.java)

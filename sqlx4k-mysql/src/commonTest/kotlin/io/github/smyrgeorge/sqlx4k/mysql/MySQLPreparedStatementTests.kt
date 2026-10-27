@@ -805,4 +805,19 @@ class MySQLPreparedStatementTests {
         assertThat(row.get("v").asString()).isEqualTo("1")
         assertThat(row.get("p").asString()).isEqualTo("2")
     }
+
+    // With NO_BACKSLASH_ESCAPES (not MySQL's default), a backslash is a plain character: a statement with no
+    // parameters runs as written.
+    @Test
+    fun `a statement with no parameters runs as written`(): Unit = runBlocking {
+        val cn = db.acquire().getOrThrow()
+        try {
+            cn.execute("set session sql_mode = concat(@@sql_mode, ',NO_BACKSLASH_ESCAPES');").getOrThrow()
+            val row = cn.fetchAll(Statement.create("select 'C:\\' as p")).getOrThrow().first()
+            assertThat(row.get("p").asString()).isEqualTo("C:\\")
+        } finally {
+            cn.execute("set session sql_mode = default;")
+            cn.close().getOrThrow()
+        }
+    }
 }

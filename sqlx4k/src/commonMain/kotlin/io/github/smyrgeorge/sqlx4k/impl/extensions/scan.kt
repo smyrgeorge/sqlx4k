@@ -71,7 +71,9 @@ internal fun CharSequence.startsWithDollarTagAt(start: Int): String? {
  *
  * A backslash escapes the next character (a quote included) in PostgreSQL's escape strings
  * (`E'it\'s'`). For [Dialect.MySQL], it does so in every quoted string (`'O\'Brien'`, as MySQL
- * reads them by default), `#` starts a line comment as well, and block comments do not nest.
+ * reads them by default), `#` starts a line comment as well, and block comments do not nest. A MySQL session with
+ * `NO_BACKSLASH_ESCAPES` in its sql_mode reads a backslash as a plain character: the placeholders of a statement
+ * with a backslash before a quote in a string are then not found where that session reads them.
  *
  * For each character outside these contexts the [onNormalChar] callback is invoked. It may
  * consume one or more characters (returning a new index), or return `null` to let the
