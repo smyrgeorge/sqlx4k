@@ -151,11 +151,11 @@ class ResultSetTests {
     }
 
     @Test
-    fun `Row get by name returns last column when names duplicate`() {
-        // associateBy keeps the LAST entry for duplicate keys, so get(name) resolves to the
-        // second "dup" column; both remain individually reachable by ordinal.
+    fun `Row get by name returns first column when names duplicate`() {
+        // As in JDBC and R2DBC (`select u.*, o.* ...` maps u.id, not o.id, to `id`); both remain individually
+        // reachable by ordinal.
         val r = row(col(0, "dup", "first"), col(1, "dup", "second"))
-        assertThat(r.get("dup").asString()).isEqualTo("second")
+        assertThat(r.get("dup").asString()).isEqualTo("first")
         assertThat(r.get(0).asString()).isEqualTo("first")
         assertThat(r.get(1).asString()).isEqualTo("second")
         assertThat(r.size).isEqualTo(2)
@@ -371,5 +371,13 @@ class ResultSetTests {
         assertThat(it.hasNext()).isFalse()
         val e = assertFailsWith<IllegalStateException> { it.next() }
         assertThat(e.message).isEqualTo("Rows :: Out of bounds (index 0)")
+    }
+
+    @Test
+    fun `Metadata get by name returns first column when names duplicate`() {
+        val meta = ResultSet.Metadata(
+            listOf(ResultSet.Metadata.Column(0, "id", "INT8"), ResultSet.Metadata.Column(1, "id", "TEXT"))
+        )
+        assertThat(meta.getColumn("id").type).isEqualTo("INT8")
     }
 }

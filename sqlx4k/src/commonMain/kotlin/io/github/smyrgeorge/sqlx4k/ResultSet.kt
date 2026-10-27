@@ -72,8 +72,10 @@ class ResultSet(
         private val columns: List<Column>
     ) {
 
+        // A name several columns share (`select u.*, o.* ...`) is the first one's, as in JDBC and R2DBC: associateBy
+        // kept the last one, so a mapper reading `id` got another table's.
         private val columnsByName: Map<String, Column> by lazy {
-            columns.associateBy { it.name }
+            HashMap<String, Column>(columns.size * 4 / 3 + 1).apply { columns.forEach { column -> getOrPut(column.name) { column } } }
         }
 
         /**
@@ -205,9 +207,9 @@ class ResultSet(
     class Metadata(
         private val columns: List<Column>
     ) {
-        // <name, ColumnMetadata>
+        // <name, ColumnMetadata>: a name several columns share is the first one's (see Row).
         private val columnsByName: Map<String, Column> by lazy {
-            columns.associateBy { it.name }
+            HashMap<String, Column>(columns.size * 4 / 3 + 1).apply { columns.forEach { column -> getOrPut(column.name) { column } } }
         }
 
         /**
