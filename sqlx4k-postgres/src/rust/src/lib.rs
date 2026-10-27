@@ -7,7 +7,7 @@ use sqlx::pool::PoolConnection;
 use sqlx::postgres::types::Oid;
 use sqlx::postgres::{
     PgArgumentBuffer, PgConnectOptions, PgConnection, PgListener, PgNotification, PgPool,
-    PgPoolOptions, PgRow, PgTypeInfo, PgValueFormat, PgValueRef,
+    PgPoolOptions, PgQueryResult, PgRow, PgTypeInfo, PgValueFormat, PgValueRef,
 };
 // Re-export sqlx's chrono/uuid feature shims so we don't need direct dependencies
 // on those crates — sqlx already pulls them in when the matching features are on.
@@ -548,7 +548,10 @@ const STREAM_CHANNEL_CAPACITY: usize = 2;
 const STREAM_DEFAULT_FETCH_SIZE: usize = 500;
 
 type StreamChunk = Result<Vec<PgRow>, sqlx::Error>;
-type RowStream<'e> = Pin<Box<dyn Stream<Item = Result<PgRow, sqlx::Error>> + Send + 'e>>;
+/// The rows of a query, each statement's rows followed by its result (`Left`), so a chunk can end where a
+/// statement does.
+type RowStream<'e> =
+    Pin<Box<dyn Stream<Item = Result<sqlx::Either<PgQueryResult, PgRow>, sqlx::Error>> + Send + 'e>>;
 
 /// A result set being streamed to Kotlin, row chunk by row chunk.
 ///
@@ -564,22 +567,30 @@ struct Sqlx4kPostgresStream {
 }
 
 /// Opens the row stream of a query on the given connection: the simple protocol for a plain query
-/// (as `fetch_all` does), a prepared statement when there are parameters to bind.
+/// (as `fetch_all` does), a prepared statement when there are parameters to bind. The simple protocol
+/// runs every statement of the SQL and returns the rows of each one after the other.
 fn stream_rows_of<'e>(
     cn: &'e mut PgConnection,
     sql: String,
     params: Vec<OwnedParam>,
 ) -> RowStream<'e> {
     if params.is_empty() {
-        cn.fetch(AssertSqlSafe(sql))
+        cn.fetch_many(AssertSqlSafe(sql))
     } else {
-        bind_params(sqlx::query::<Postgres>(AssertSqlSafe(sql)), params).fetch(cn)
+        Box::pin(
+            bind_params(sqlx::query::<Postgres>(AssertSqlSafe(sql)), params)
+                .fetch(cn)
+                .map_ok(sqlx::Either::Right),
+        )
     }
 }
 
 /// Drives a row stream, sending chunks of `fetch_size` rows until the stream ends or fails, or the
 /// consumer closes it (`cancel` fires, or the channel is dropped). Returns whether the stream was
 /// consumed to its end (an error counts as the end: the connection is in a clean state again).
+///
+/// A chunk also ends where a statement does: its schema is read from its first row, so it must not
+/// hold the rows of two statements, whose columns differ.
 async fn stream_rows(
     mut rows: RowStream<'_>,
     fetch_size: usize,
@@ -593,9 +604,16 @@ async fn stream_rows(
             next = rows.try_next() => next,
         };
         match next {
-            Ok(Some(row)) => {
-                chunk.push(row);
-                if chunk.len() >= fetch_size {
+            Ok(Some(item)) => {
+                let full = match item {
+                    sqlx::Either::Right(row) => {
+                        chunk.push(row);
+                        chunk.len() >= fetch_size
+                    }
+                    // The end of a statement.
+                    sqlx::Either::Left(_) => !chunk.is_empty(),
+                };
+                if full {
                     let full = std::mem::replace(&mut chunk, Vec::with_capacity(fetch_size));
                     tokio::select! {
                         _ = &mut cancel => return false,
