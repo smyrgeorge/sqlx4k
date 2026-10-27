@@ -22,7 +22,21 @@ internal object Columns {
         clazz.getAllProperties()
             .filter { it.validate(enableNewFeatures = true) }
             .filterNot { p -> p.annotations.any { it.qualifiedName() == TypeNames.TRANSIENT_ANNOTATION } }
+            .filter { isConstructorProperty(clazz, it) }
             .toList()
+
+    /**
+     * Whether the property is declared by the entity's primary constructor (a `val` / `var` parameter). The generated
+     * RowMapper builds the entity with that constructor, so only those are columns: a property declared in the class
+     * body (`val fullName get() = "$first $last"`) was taken for one too, written by INSERT / UPDATE, and passed to the
+     * constructor, which does not take it (the generated code did not compile). A class with no primary constructor
+     * keeps all its properties.
+     */
+    fun isConstructorProperty(clazz: KSClassDeclaration, prop: KSPropertyDeclaration): Boolean {
+        val parameters = clazz.primaryConstructor?.parameters ?: return true
+        val name = prop.simpleName.asString()
+        return parameters.any { (it.isVal || it.isVar) && it.name?.asString() == name }
+    }
 
     /** The ordered column names of a `@Table` entity (non-transient properties). */
     fun columnNames(clazz: KSClassDeclaration): List<String> =

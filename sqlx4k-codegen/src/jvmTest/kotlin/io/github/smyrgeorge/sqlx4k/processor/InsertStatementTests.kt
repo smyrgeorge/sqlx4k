@@ -11,6 +11,7 @@ import io.github.smyrgeorge.sqlx4k.processor.util.Article
 import io.github.smyrgeorge.sqlx4k.processor.util.Comment
 import io.github.smyrgeorge.sqlx4k.processor.util.Customer
 import io.github.smyrgeorge.sqlx4k.processor.util.Order
+import io.github.smyrgeorge.sqlx4k.processor.util.Person
 import io.github.smyrgeorge.sqlx4k.processor.util.Product
 import io.github.smyrgeorge.sqlx4k.processor.util.SavedQuery
 import io.github.smyrgeorge.sqlx4k.processor.util.Tag
@@ -335,5 +336,16 @@ class InsertStatementTests {
 
         assertThat(query.update().renderValues()).isEqualTo(listOf("select 1", "a statement", 42L, 7L))
         assertThat(query.delete().renderValues()).isEqualTo(listOf(7L))
+    }
+
+    // Person entity: properties declared in the class body are not columns
+
+    @Test
+    fun `Person insert and update write the constructor properties only`() {
+        val person = Person(id = 7, first = "Ada", last = "Lovelace")
+
+        assertThat(person.insert().render()).isEqualTo("insert into people(first, last) values ($1, $2) returning id;")
+        assertThat(person.update().render()).doesNotContain("full_name")
+        assertThat(person.update().render()).doesNotContain("visits")
     }
 }

@@ -125,6 +125,7 @@ class TableProcessor(
             .getAllProperties()
             .filter { it.validate(enableNewFeatures = true) }
             .filterNot { it.isTransient() }
+            .filter { Columns.isConstructorProperty(classDeclaration, it) }
             .toList()
             .asSequence()
 

@@ -23,6 +23,20 @@ data class User(
 )
 
 /**
+ * Entity with properties declared in its body, which are not columns.
+ */
+@Table("people")
+data class Person(
+    @Id
+    val id: Long,
+    val first: String,
+    val last: String
+) {
+    val fullName: String get() = "$first $last"
+    var visits: Int = 0
+}
+
+/**
  * Entity whose database-generated ID is null until it is inserted.
  */
 @Table("notes")
