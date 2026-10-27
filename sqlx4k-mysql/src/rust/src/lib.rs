@@ -3,15 +3,15 @@ use futures_util::TryStreamExt;
 use sqlx::error::ErrorKind;
 use sqlx::mysql::{
     MySqlConnectOptions, MySqlConnection, MySqlDatabaseError, MySqlPool, MySqlPoolOptions,
-    MySqlRow, MySqlTypeInfo, MySqlValueRef,
+    MySqlQueryResult, MySqlRow, MySqlTypeInfo, MySqlValueRef,
 };
 use sqlx::pool::PoolConnection;
 // Re-export sqlx's chrono feature shim so we don't need a direct dependency on
 // the chrono crate — sqlx already pulls it in when the matching feature is on.
 use sqlx::types::chrono;
 use sqlx::{
-    Acquire, AssertSqlSafe, Column, Connection, Error, Executor, MySql, Row, Transaction, Type,
-    TypeInfo, ValueRef,
+    Acquire, AssertSqlSafe, Column, Connection, Error, Execute, Executor, MySql, Row, Transaction,
+    Type, TypeInfo, ValueRef,
 };
 use std::{
     ffi::{c_char, c_int, c_ulonglong, c_void, CStr, CString},
@@ -428,7 +428,10 @@ const STREAM_CHANNEL_CAPACITY: usize = 2;
 const STREAM_DEFAULT_FETCH_SIZE: usize = 1_000;
 
 type StreamChunk = Result<Vec<MySqlRow>, sqlx::Error>;
-type RowStream<'e> = Pin<Box<dyn Stream<Item = Result<MySqlRow, sqlx::Error>> + Send + 'e>>;
+/// The rows of a query, each result set's rows followed by its result (`Left`), so a chunk can end where a
+/// result set does.
+type RowStream<'e> =
+    Pin<Box<dyn Stream<Item = Result<sqlx::Either<MySqlQueryResult, MySqlRow>, sqlx::Error>> + Send + 'e>>;
 
 /// A result set being streamed to Kotlin, row chunk by row chunk.
 ///
@@ -444,22 +447,26 @@ struct Sqlx4kMysqlStream {
 }
 
 /// Opens the row stream of a query on the given connection: the text protocol for a plain query
-/// (as `fetch_all` does), a prepared statement when there are parameters to bind.
+/// (as `fetch_all` does), a prepared statement when there are parameters to bind. Either can return
+/// several result sets (several statements, or a procedure that runs several SELECTs), one after the other.
 fn stream_rows_of<'e>(
     cn: &'e mut MySqlConnection,
     sql: String,
     params: Vec<OwnedParam>,
 ) -> RowStream<'e> {
     if params.is_empty() {
-        cn.fetch(AssertSqlSafe(sql))
+        cn.fetch_many(AssertSqlSafe(sql))
     } else {
-        bind_params(sqlx::query::<MySql>(AssertSqlSafe(sql)), params).fetch(cn)
+        cn.fetch_many(bind_params(sqlx::query::<MySql>(AssertSqlSafe(sql)), params))
     }
 }
 
 /// Drives a row stream, sending chunks of `fetch_size` rows until the stream ends or fails, or the
 /// consumer closes it (`cancel` fires, or the channel is dropped). Returns whether the stream was
 /// consumed to its end (an error counts as the end: the connection is in a clean state again).
+///
+/// A chunk also ends where a result set does: its schema is read from its first row, so it must not
+/// hold the rows of two result sets, whose columns differ.
 async fn stream_rows(
     mut rows: RowStream<'_>,
     fetch_size: usize,
@@ -473,9 +480,16 @@ async fn stream_rows(
             next = rows.try_next() => next,
         };
         match next {
-            Ok(Some(row)) => {
-                chunk.push(row);
-                if chunk.len() >= fetch_size {
+            Ok(Some(item)) => {
+                let full = match item {
+                    sqlx::Either::Right(row) => {
+                        chunk.push(row);
+                        chunk.len() >= fetch_size
+                    }
+                    // The end of a result set.
+                    sqlx::Either::Left(_) => !chunk.is_empty(),
+                };
+                if full {
                     let full = std::mem::replace(&mut chunk, Vec::with_capacity(fetch_size));
                     tokio::select! {
                         _ = &mut cancel => return false,
@@ -535,7 +549,7 @@ impl Sqlx4kMySql {
     }
 
     async fn fetch_all(&self, sql: String) -> *mut Sqlx4kMysqlResult {
-        let result = self.pool.fetch_all(AssertSqlSafe(sql)).await;
+        let result = fetch_last(&self.pool, AssertSqlSafe(sql)).await;
         sqlx4k_mysql_result_of(result).leak()
     }
 
@@ -585,7 +599,7 @@ impl Sqlx4kMySql {
 
     async fn cn_fetch_all(&self, cn: Sqlx4kMysqlPtr, sql: String) -> *mut Sqlx4kMysqlResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<MySql>) };
-        let result = cn.fetch_all(AssertSqlSafe(sql)).await;
+        let result = fetch_last(&mut **cn, AssertSqlSafe(sql)).await;
         sqlx4k_mysql_result_of(result).leak()
     }
 
@@ -667,7 +681,7 @@ impl Sqlx4kMySql {
 
     async fn tx_fetch_all(&self, tx: Sqlx4kMysqlPtr, sql: String) -> *mut Sqlx4kMysqlResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, MySql>) };
-        let result = tx.fetch_all(AssertSqlSafe(sql)).await;
+        let result = fetch_last(&mut *tx, AssertSqlSafe(sql)).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
         let result = sqlx4k_mysql_result_of(result);
@@ -805,7 +819,7 @@ impl Sqlx4kMySql {
         params: Vec<OwnedParam>,
     ) -> *mut Sqlx4kMysqlResult {
         let q = bind_params(sqlx::query::<MySql>(AssertSqlSafe(sql)), params);
-        let result = q.fetch_all(&self.pool).await;
+        let result = fetch_last(&self.pool, q).await;
         sqlx4k_mysql_result_of(result).leak()
     }
 
@@ -837,7 +851,7 @@ impl Sqlx4kMySql {
     ) -> *mut Sqlx4kMysqlResult {
         let cn = unsafe { &mut *(cn.ptr as *mut PoolConnection<MySql>) };
         let q = bind_params(sqlx::query::<MySql>(AssertSqlSafe(sql)), params);
-        let result = q.fetch_all(&mut **cn).await;
+        let result = fetch_last(&mut **cn, q).await;
         sqlx4k_mysql_result_of(result).leak()
     }
 
@@ -875,7 +889,7 @@ impl Sqlx4kMySql {
     ) -> *mut Sqlx4kMysqlResult {
         let mut tx = unsafe { *Box::from_raw(tx.ptr as *mut Transaction<'_, MySql>) };
         let q = bind_params(sqlx::query::<MySql>(AssertSqlSafe(sql)), params);
-        let result = q.fetch_all(&mut *tx).await;
+        let result = fetch_last(&mut *tx, q).await;
         let tx = Box::new(tx);
         let tx = Box::into_raw(tx);
         let result = sqlx4k_mysql_result_of(result);
@@ -1295,6 +1309,32 @@ pub extern "C" fn sqlx4k_mysql_tx_fetch_all(
         let result = sqlx4k.tx_fetch_all(tx, sql).await;
         fun(callback, result)
     });
+}
+
+/// Runs a query and returns the rows of the last of its result sets that has rows. A query can return several
+/// result sets, from several statements or a procedure that runs several SELECTs, which fetch_all would return
+/// one after the other: the result describes the columns of a single result set. A result set with no rows is
+/// passed over, as the status a CALL ends with is one (sqlx does not tell it from an empty SELECT).
+async fn fetch_last<'e, 'q: 'e, E, Q>(executor: E, query: Q) -> Result<Vec<MySqlRow>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+    Q: 'q + Execute<'q, MySql>,
+{
+    let mut items = executor.fetch_many(query);
+    let mut current = Vec::new();
+    let mut last = Vec::new();
+    while let Some(item) = items.try_next().await? {
+        match item {
+            // The end of a result set.
+            sqlx::Either::Left(_) => {
+                if !current.is_empty() {
+                    last = std::mem::take(&mut current)
+                }
+            }
+            sqlx::Either::Right(row) => current.push(row),
+        }
+    }
+    Ok(if current.is_empty() { last } else { current })
 }
 
 fn sqlx4k_mysql_result_of(result: Result<Vec<MySqlRow>, sqlx::Error>) -> Sqlx4kMysqlResult {

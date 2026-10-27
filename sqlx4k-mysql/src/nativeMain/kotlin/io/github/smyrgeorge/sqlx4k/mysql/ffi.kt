@@ -65,6 +65,10 @@ private fun Sqlx4kMysqlResult.toResultSet(): ResultSet {
     // Process rows
     val rows = List(size) { rowIndex ->
         val row = requireNotNull(rows) { "Rows cannot be null" }[rowIndex]
+        // The schema is read from the first row; indexing it past its end would read native memory out of bounds.
+        check(row.size == schema!!.pointed.size) {
+            "Row $rowIndex has ${row.size} columns, while the schema of its result has ${schema!!.pointed.size}"
+        }
 
         // Process columns for this row
         val columns = List(row.size) { colIndex ->
