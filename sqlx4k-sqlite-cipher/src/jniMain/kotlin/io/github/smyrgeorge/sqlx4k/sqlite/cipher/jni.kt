@@ -6,6 +6,7 @@ import io.github.smyrgeorge.sqlx4k.ExecuteResult
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.isInsertStatement
+import io.github.smyrgeorge.sqlx4k.impl.extensions.isUpsertStatement
 import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimeString
 import io.github.smyrgeorge.sqlx4k.impl.extensions.toTimestampString
 import io.github.smyrgeorge.sqlx4k.impl.types.SqlRawLiteral
@@ -195,7 +196,9 @@ internal class JniResult(
         return ExecuteResult(
             rowsAffected = rowsAffected,
             // 0 (none) for an UPSERT that left it unchanged, having updated the row instead of inserting it.
-            lastInsertId = lastInsertId.takeIf { it != 0L && rowsAffected > 0 && sql.isInsertStatement() },
+            lastInsertId = lastInsertId.takeIf {
+                rowsAffected > 0 && sql.isInsertStatement() && (it != 0L || !sql.isUpsertStatement())
+            },
         )
     }
 

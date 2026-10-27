@@ -6,6 +6,7 @@ import io.github.smyrgeorge.sqlx4k.ExecuteResult
 import io.github.smyrgeorge.sqlx4k.ResultSet
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.isInsertStatement
+import io.github.smyrgeorge.sqlx4k.impl.extensions.isUpsertStatement
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.CValue
@@ -123,7 +124,9 @@ internal fun CPointer<Sqlx4kSqliteCipherResult>?.resultSetOrError(): ResultSet =
  */
 private fun Sqlx4kSqliteCipherResult.toExecuteResult(sql: String): ExecuteResult {
     val rowsAffected = rows_affected.toLong()
-    val lastInsertId = last_insert_id.takeIf { it != 0L && rowsAffected > 0 && sql.isInsertStatement() }
+    val lastInsertId = last_insert_id.takeIf {
+        rowsAffected > 0 && sql.isInsertStatement() && (it != 0L || !sql.isUpsertStatement())
+    }
     return ExecuteResult(rowsAffected = rowsAffected, lastInsertId = lastInsertId)
 }
 

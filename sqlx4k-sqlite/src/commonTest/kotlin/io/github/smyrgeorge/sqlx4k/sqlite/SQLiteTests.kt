@@ -303,4 +303,17 @@ class SQLiteTests : SQLiteTestBase() {
         db.execute("drop table $items;").getOrThrow()
         db.execute("drop table $counters;").getOrThrow()
     }
+
+    // A rowid is 0 only when inserted as such: it is the insert's generated id all the same.
+    @Test
+    fun `an insert of rowid 0 reports it`(): Unit = runBlocking {
+        val table = "t_rowid0_${Random.nextInt(1_000_000)}"
+        db.execute("create table $table(id integer primary key, v text);").getOrThrow()
+        try {
+            assertThat(db.executeWithResult("insert into $table(id, v) values (0, 'root');").getOrThrow().lastInsertId)
+                .isEqualTo(0L)
+        } finally {
+            db.execute("drop table $table;").getOrThrow()
+        }
+    }
 }
