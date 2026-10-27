@@ -405,8 +405,10 @@ object SqlValidator {
         if (!select.joins.isNullOrEmpty()) return
         val items = select.selectItems ?: return
         if (items.any { it.expression is AllColumns }) return
+        // A column is read by the name it is selected as: its alias when it has one (`name AS display` yields
+        // `display`, not `name`; `lower(email) AS email` yields `email`), else the column's own name.
         val selected = items
-            .mapNotNull { (it.expression as? Column)?.columnName?.trim('"', '`', '[', ']')?.lowercase() }
+            .mapNotNull { (it.alias?.name ?: (it.expression as? Column)?.columnName)?.trim('"', '`', '[', ']')?.lowercase() }
             .toSet()
         val missing = columnNames.filter { it.lowercase() !in selected }
         if (missing.isNotEmpty()) {

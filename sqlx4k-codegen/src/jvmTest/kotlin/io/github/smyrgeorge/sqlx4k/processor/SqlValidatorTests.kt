@@ -287,6 +287,17 @@ class SqlValidatorTests {
     }
 
     @Test
+    fun `validateProjection reads an aliased column by its alias`() {
+        // `name` is selected as `display`: the row mapper finds no `name` column.
+        val ex = assertFailsWith<IllegalStateException> {
+            SqlValidator.validateProjection("findAll", parse("select id, name as display, email from users"), userColumnSet)
+        }
+        assertThat(ex.message!!).contains("name")
+        // An expression selected under an entity column's name provides that column.
+        SqlValidator.validateProjection("findAll", parse("select id, name, lower(email) as email from users"), userColumnSet)
+    }
+
+    @Test
     fun `validateProjection skips a query with joins`() {
         // A partial projection would normally fail, but a join short-circuits the check.
         SqlValidator.validateProjection(
