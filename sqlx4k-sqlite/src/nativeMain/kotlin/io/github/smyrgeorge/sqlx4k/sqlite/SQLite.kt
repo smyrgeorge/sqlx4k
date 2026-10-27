@@ -5,6 +5,7 @@ import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.ExecuteResult
 import io.github.smyrgeorge.sqlx4k.ResultSet
+import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Statement
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.Transaction.IsolationLevel
@@ -288,6 +289,7 @@ class SQLite(
             sqlx { c -> sqlx4k_sqlite_cn_tx_begin(rt, cn, c, fn) }.use { result ->
                 result.throwIfError()
                 SqlxTransaction(rt, result.tx!!, encoders, mutex).also { tx ->
+                    transactions.lastOrNull { it.status == Transaction.Status.Open }?.child = tx
                     transactions.removeAll { it.status != Transaction.Status.Open }
                     transactions += tx
                 }
@@ -318,10 +320,19 @@ class SQLite(
         override val commited: Boolean get() = _commited
         override val rollbacked: Boolean get() = _rollbacked
 
+        // The transaction nested in this one (begun on its connection while it was open, as a savepoint), if any.
+        // sqlx commits or rolls back the connection's innermost transaction, whichever one it is called on: ending
+        // this one while that one is open ended that one instead (its savepoint), and left this one open.
+        internal var child: SqlxTransaction? = null
+
         override suspend fun commit(): Result<Unit> = runCatching {
             mutex.withLock {
                 if (commited) return@withLock
                 assertIsOpen()
+                if (child?.status == Transaction.Status.Open) {
+                    SQLError(SQLError.Code.Database, "Cannot commit a transaction while one nested in it is still open.")
+                        .raise()
+                }
                 _status = Transaction.Status.Closed
                 sqlx { c -> sqlx4k_sqlite_tx_commit(rt, tx, c, fn) }.throwIfError()
                 _commited = true
@@ -332,6 +343,8 @@ class SQLite(
             mutex.withLock {
                 if (rollbacked) return@withLock
                 assertIsOpen()
+                // Rolled back with this one, first (see child).
+                child?.rollbackIfOpenLocked()
                 _status = Transaction.Status.Closed
                 sqlx { c -> sqlx4k_sqlite_tx_rollback(rt, tx, c, fn) }.throwIfError()
                 _rollbacked = true
@@ -344,6 +357,7 @@ class SQLite(
          */
         internal suspend fun rollbackIfOpenLocked() {
             if (status != Transaction.Status.Open) return
+            child?.rollbackIfOpenLocked()
             _status = Transaction.Status.Closed
             sqlx { c -> sqlx4k_sqlite_tx_rollback(rt, tx, c, fn) }.throwIfError()
             _rollbacked = true

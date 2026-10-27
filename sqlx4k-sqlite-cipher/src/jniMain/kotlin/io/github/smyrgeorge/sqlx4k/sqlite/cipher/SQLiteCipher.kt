@@ -383,6 +383,7 @@ class SQLiteCipher(
                     decodeResult(CipherJni.nativeTxRollback(rt, it)).throwIfError()
                 }
                 SqlxTransaction(rt, tx, encoders, mutex).also { tx ->
+                    transactions.lastOrNull { it.status == Transaction.Status.Open }?.child = tx
                     transactions.removeAll { it.status != Transaction.Status.Open }
                     transactions += tx
                 }
@@ -409,6 +410,11 @@ class SQLiteCipher(
         override val commited: Boolean get() = _commited
         override val rollbacked: Boolean get() = _rollbacked
 
+        // The transaction nested in this one (begun on its connection while it was open, as a savepoint), if any.
+        // sqlx commits or rolls back the connection's innermost transaction, whichever one it is called on: ending
+        // this one while that one is open ended that one instead (its savepoint), and left this one open.
+        internal var child: SqlxTransaction? = null
+
         // Commit and rollback end the transaction and free its native handle (and, for a pool-level
         // transaction, its connection): they run to completion also when the caller is cancelled.
         override suspend fun commit(): Result<Unit> = runCatching {
@@ -416,6 +422,10 @@ class SQLiteCipher(
                 mutex.withLock {
                     if (commited) return@withLock
                     assertIsOpen()
+                    if (child?.status == Transaction.Status.Open) {
+                        SQLError(SQLError.Code.Database, "Cannot commit a transaction while one nested in it is still open.")
+                            .raise()
+                    }
                     _status = Transaction.Status.Closed
                     try {
                         withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeTxCommit(rt, tx)).throwIfError() }
@@ -432,6 +442,8 @@ class SQLiteCipher(
                 mutex.withLock {
                     if (rollbacked) return@withLock
                     assertIsOpen()
+                    // Rolled back with this one, first (see child).
+                    child?.rollbackIfOpenLocked()
                     _status = Transaction.Status.Closed
                     try {
                         withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeTxRollback(rt, tx)).throwIfError() }
@@ -449,6 +461,7 @@ class SQLiteCipher(
          */
         internal suspend fun rollbackIfOpenLocked() {
             if (status != Transaction.Status.Open) return
+            child?.rollbackIfOpenLocked()
             _status = Transaction.Status.Closed
             withContext(Dispatchers.IO) { decodeResult(CipherJni.nativeTxRollback(rt, tx)).throwIfError() }
             _rollbacked = true

@@ -506,4 +506,56 @@ class MySQLTransactionTests {
             tx2.rollback()
         }
     }
+
+    // A begin() on a connection already in a transaction nests in it, as a savepoint, on every driver: rolling the
+    // nested one back undoes its work only, and committing it leaves the outer one to commit.
+    @Test
+    fun `a transaction begun on a connection in a transaction is a savepoint of it`(): Unit = runBlocking {
+        val table = newTable()
+        db.execute("create table $table(id int primary key);").getOrThrow()
+        val cn = db.acquire().getOrThrow()
+        try {
+            val outer = cn.begin().getOrThrow()
+            outer.execute("insert into $table(id) values (1);").getOrThrow()
+            val rolledBack = cn.begin().getOrThrow()
+            rolledBack.execute("insert into $table(id) values (2);").getOrThrow()
+            rolledBack.rollback().getOrThrow()
+            val committed = cn.begin().getOrThrow()
+            committed.execute("insert into $table(id) values (3);").getOrThrow()
+            committed.commit().getOrThrow()
+            // Not committed yet: the outer transaction is still open.
+            assertThat(countRows(table)).isEqualTo(0L)
+            outer.commit().getOrThrow()
+            assertThat(countRowsWhere(table, "id in (1, 3)")).isEqualTo(2L)
+            assertThat(countRows(table)).isEqualTo(2L)
+        } finally {
+            cn.close().getOrThrow()
+            db.execute("drop table $table;").getOrThrow()
+        }
+    }
+
+    @Test
+    fun `a transaction cannot be committed while one nested in it is open and its rollback ends both`(): Unit =
+        runBlocking {
+            val table = newTable()
+            db.execute("create table $table(id int primary key);").getOrThrow()
+            val cn = db.acquire().getOrThrow()
+            try {
+                val outer = cn.begin().getOrThrow()
+                outer.execute("insert into $table(id) values (1);").getOrThrow()
+                val inner = cn.begin().getOrThrow()
+                inner.execute("insert into $table(id) values (2);").getOrThrow()
+                assertThat(outer.commit()).isFailure()
+                assertThat(outer.status).isEqualTo(Transaction.Status.Open)
+                outer.rollback().getOrThrow()
+                assertThat(inner.rollbacked).isEqualTo(true)
+                // The connection is out of both: this one is committed at once.
+                cn.execute("insert into $table(id) values (3);").getOrThrow()
+                assertThat(countRows(table)).isEqualTo(1L)
+                assertThat(countRowsWhere(table, "id = 3")).isEqualTo(1L)
+            } finally {
+                cn.close().getOrThrow()
+                db.execute("drop table $table;").getOrThrow()
+            }
+        }
 }

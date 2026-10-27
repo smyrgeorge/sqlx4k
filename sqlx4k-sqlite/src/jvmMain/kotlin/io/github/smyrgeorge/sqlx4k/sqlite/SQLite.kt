@@ -315,10 +315,24 @@ class SQLite(
                 }
             }
 
+        // The last transaction begun on this connection: a begin() nests in it (or in the one it is nested in) while
+        // it is open.
+        private var transaction: JdbcTransaction? = null
+
+        // A begin() while a transaction is open nests in it, as a savepoint, as on the native driver: turning
+        // auto-commit off again did nothing, so the nested one's commit committed the whole of it, and the outer one's
+        // rollback then failed, auto-commit being on again.
         override suspend fun begin(): Result<Transaction> = mutex.withLockCatching(::assertIsOpen) {
             withContext(Dispatchers.IO) {
-                connection.autoCommit = false
-                JdbcTransaction(connection, false, encoders)
+                var parent = transaction
+                while (parent != null && parent.status != Transaction.Status.Open) parent = parent.parent
+                if (parent == null) {
+                    connection.autoCommit = false
+                    JdbcTransaction(connection, false, encoders)
+                } else {
+                    val savepoint = rethrowAsSQLError { connection.setSavepoint("sqlx4k_savepoint_${parent.depth}") }
+                    JdbcTransaction(connection, false, encoders, savepoint, parent).also { parent.child = it }
+                }.also { transaction = it }
             }
         }
     }
@@ -326,9 +340,17 @@ class SQLite(
     class JdbcTransaction(
         private var connection: NativeJdbcConnection,
         private val closeConnectionAfterTx: Boolean,
-        override val encoders: ValueEncoderRegistry
+        override val encoders: ValueEncoderRegistry,
+        // For a transaction nested in another one (begun on a connection in a transaction): its savepoint, and the
+        // transaction it is nested in.
+        private val savepoint: java.sql.Savepoint? = null,
+        internal val parent: JdbcTransaction? = null,
     ) : Transaction {
         private val mutex = Mutex()
+
+        // The transaction nested in this one, if any.
+        internal var child: JdbcTransaction? = null
+        internal val depth: Int get() = (parent?.depth ?: 0) + 1
         private var _status: Transaction.Status = Transaction.Status.Open
         private var _commited: Boolean = false
         private var _rollbacked: Boolean = false
@@ -344,7 +366,17 @@ class SQLite(
                 mutex.withLock {
                     if (commited) return@withLock
                     assertIsOpen()
+                    // Its work is part of this one's: ending this one first would leave it (its savepoint) dangling.
+                    if (child?.status == Transaction.Status.Open) {
+                        SQLError(SQLError.Code.Database, "Cannot commit a transaction while one nested in it is still open.")
+                            .raise()
+                    }
                     _status = Transaction.Status.Closed
+                    if (savepoint != null) {
+                        withContext(Dispatchers.IO) { rethrowAsSQLError { connection.releaseSavepoint(savepoint) } }
+                        _commited = true
+                        return@withLock
+                    }
                     withContext(Dispatchers.IO) {
                         connection.endTransaction(closeConnectionAfterTx) {
                             try {
@@ -370,7 +402,19 @@ class SQLite(
                 mutex.withLock {
                     if (rollbacked) return@withLock
                     assertIsOpen()
+                    // Rolled back with this one.
+                    child?.let { if (it.status == Transaction.Status.Open) it.rollback().getOrThrow() }
                     _status = Transaction.Status.Closed
+                    if (savepoint != null) {
+                        withContext(Dispatchers.IO) {
+                            rethrowAsSQLError {
+                                connection.rollback(savepoint)
+                                connection.releaseSavepoint(savepoint)
+                            }
+                        }
+                        _rollbacked = true
+                        return@withLock
+                    }
                     withContext(Dispatchers.IO) {
                         connection.endTransaction(closeConnectionAfterTx) {
                             rollback()

@@ -283,7 +283,8 @@ class PostgreSQLImpl(
         private var _transactionIsolationLevel: IsolationLevel? = null
         override val transactionIsolationLevel: IsolationLevel? get() = _transactionIsolationLevel
 
-        // The last transaction begun on this connection: close() rolls it back if it is still open.
+        // The last transaction begun on this connection: close() rolls back the one it is nested in, if it is still
+        // open, and a begin() nests in it (or in the one it is nested in) while it is open.
         private var transaction: R2dbcTransaction? = null
 
         // Runs to completion also when the caller is cancelled: in a cancelled coroutine the release would be
@@ -297,7 +298,7 @@ class PostgreSQLImpl(
                     // End an open transaction first: the isolation level reset below would otherwise run inside it,
                     // and the pool's rollback on release would undo it (SET is transactional in PostgreSQL), leaving
                     // the next borrower with this connection's isolation level.
-                    transaction?.let { if (it.status == Transaction.Status.Open) it.rollback() }
+                    transaction?.outermost?.let { if (it.status == Transaction.Status.Open) it.rollback() }
                     transaction = null
 
                     try {
@@ -352,18 +353,38 @@ class PostgreSQLImpl(
                 connection.createStatement(statement, encoders).fetchSize(fetchSize).streamRows()
             }
 
+        // A begin() while a transaction is open nests in it, as a savepoint, as on the native driver: a second BEGIN
+        // does nothing in a transaction, so the nested one's commit committed the whole of it, and the outer one's
+        // rollback then had nothing left to roll back.
         override suspend fun begin(): Result<Transaction> = mutex.withLockCatching(::assertIsOpen) {
-            connection.beginTransaction().toMono().awaitSingleOrNull()
-            R2dbcTransaction(connection, false, encoders).also { transaction = it }
+            var parent = transaction
+            while (parent != null && parent.status != Transaction.Status.Open) parent = parent.parent
+            if (parent == null) {
+                connection.beginTransaction().toMono().awaitSingleOrNull()
+                R2dbcTransaction(connection, false, encoders)
+            } else {
+                val savepoint = "sqlx4k_savepoint_${parent.depth}"
+                rethrowAsSQLError { connection.createSavepoint(savepoint).toMono().awaitSingleOrNull() }
+                R2dbcTransaction(connection, false, encoders, savepoint, parent).also { parent.child = it }
+            }.also { transaction = it }
         }
     }
 
     class R2dbcTransaction(
         private val connection: NativeR2dbcConnection,
         private val closeConnectionAfterTx: Boolean,
-        override val encoders: ValueEncoderRegistry
+        override val encoders: ValueEncoderRegistry,
+        // For a transaction nested in another one (begun on a connection in a transaction): its savepoint, and the
+        // transaction it is nested in.
+        private val savepoint: String? = null,
+        internal val parent: R2dbcTransaction? = null,
     ) : Transaction {
         private val mutex = Mutex()
+
+        // The transaction nested in this one, if any.
+        internal var child: R2dbcTransaction? = null
+        internal val depth: Int get() = (parent?.depth ?: 0) + 1
+        internal val outermost: R2dbcTransaction get() = parent?.outermost ?: this
         private var _status: Transaction.Status = Transaction.Status.Open
         private var _commited: Boolean = false
         private var _rollbacked: Boolean = false
@@ -375,7 +396,17 @@ class PostgreSQLImpl(
             mutex.withLock {
                 if (commited) return@withLock
                 assertIsOpen()
+                // Its work is part of this one's: ending this one first would leave it (its savepoint) dangling.
+                if (child?.status == Transaction.Status.Open) {
+                    SQLError(SQLError.Code.Database, "Cannot commit a transaction while one nested in it is still open.")
+                        .raise()
+                }
                 _status = Transaction.Status.Closed
+                if (savepoint != null) {
+                    rethrowAsSQLError { connection.releaseSavepoint(savepoint).toMono().awaitSingleOrNull() }
+                    _commited = true
+                    return@withLock
+                }
                 connection.endTransaction(closeConnectionAfterTx) {
                     commitTransaction().toMono().awaitSingleOrNull()
                     _commited = true
@@ -387,7 +418,17 @@ class PostgreSQLImpl(
             mutex.withLock {
                 if (rollbacked) return@withLock
                 assertIsOpen()
+                // Rolled back with this one.
+                child?.let { if (it.status == Transaction.Status.Open) it.rollback().getOrThrow() }
                 _status = Transaction.Status.Closed
+                if (savepoint != null) {
+                    rethrowAsSQLError {
+                        connection.rollbackTransactionToSavepoint(savepoint).toMono().awaitSingleOrNull()
+                        connection.releaseSavepoint(savepoint).toMono().awaitSingleOrNull()
+                    }
+                    _rollbacked = true
+                    return@withLock
+                }
                 connection.endTransaction(closeConnectionAfterTx) {
                     rollbackTransaction().toMono().awaitSingleOrNull()
                     _rollbacked = true
