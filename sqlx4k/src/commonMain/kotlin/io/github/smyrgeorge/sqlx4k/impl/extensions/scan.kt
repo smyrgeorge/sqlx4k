@@ -1,5 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.impl.extensions
 
+import io.github.smyrgeorge.sqlx4k.Dialect
+
 /**
  * Lookup table for identifier start characters (constant-time check).
  * Covers ASCII range: a-z, A-Z, _
@@ -67,6 +69,10 @@ internal fun CharSequence.startsWithDollarTagAt(start: Int): String? {
  * backtick-quoted identifiers, line comments (`--`), nested block comments, and
  * PostgreSQL dollar-quoted strings.
  *
+ * A backslash escapes the next character (a quote included) in PostgreSQL's escape strings
+ * (`E'it\'s'`). For [Dialect.MySQL], it does so in every quoted string (`'O\'Brien'`, as MySQL
+ * reads them by default), `#` starts a line comment as well, and block comments do not nest.
+ *
  * For each character outside these contexts the [onNormalChar] callback is invoked. It may
  * consume one or more characters (returning a new index), or return `null` to let the
  * scanner copy the character to the output buffer (when [writeOutput] is `true`).
@@ -76,6 +82,8 @@ internal fun CharSequence.startsWithDollarTagAt(start: Int): String? {
  *   unchanged (useful for extraction-only scans).
  * @param estimatedExtraSize Additional capacity added to the [StringBuilder] beyond the
  *   source string length. Useful when the callback is expected to expand placeholders.
+ * @param dialect The dialect whose lexical rules apply, when they differ (see above); `null` for
+ *   the standard ones, which PostgreSQL and SQLite follow.
  * @param onNormalChar Callback invoked for each character in "normal" context.
  *   Parameters: receiver is the source [String], `i` – current index, `c` – current
  *   character, `sb` – the output buffer. Return a new index to advance the scanner,
@@ -86,12 +94,15 @@ internal fun CharSequence.startsWithDollarTagAt(start: Int): String? {
 internal inline fun String.scanSql(
     writeOutput: Boolean = true,
     estimatedExtraSize: Int = 0,
+    dialect: Dialect? = null,
     crossinline onNormalChar: String.(i: Int, c: Char, sb: StringBuilder) -> Int?
 ): String {
     val sb = if (writeOutput) StringBuilder(maxOf(length + estimatedExtraSize, 0)) else StringBuilder(0)
+    val mysql = dialect == Dialect.MySQL
 
     var i = 0
     var inSQ = false
+    var sqEscapes = false // a backslash escapes the next character in the single-quoted string
     var inDQ = false
     var inBT = false
     var inLine = false
@@ -111,7 +122,7 @@ internal inline fun String.scanSql(
         if (blockDepth > 0) {
             if (writeOutput) sb.append(c)
             when (c) {
-                '/' if i + 1 < length && this[i + 1] == '*' -> {
+                '/' if !mysql && i + 1 < length && this[i + 1] == '*' -> {
                     if (writeOutput) sb.append('*')
                     i += 2
                     blockDepth++
@@ -151,7 +162,10 @@ internal inline fun String.scanSql(
         @Suppress("DuplicatedCode")
         if (inSQ) {
             if (writeOutput) sb.append(c)
-            if (c == '\'') {
+            if (c == '\\' && sqEscapes && i + 1 < length) {
+                if (writeOutput) sb.append(this[i + 1])
+                i += 2
+            } else if (c == '\'') {
                 if (i + 1 < length && this[i + 1] == '\'') {
                     if (writeOutput) sb.append('\'')
                     i += 2
@@ -165,7 +179,10 @@ internal inline fun String.scanSql(
         @Suppress("DuplicatedCode")
         if (inDQ) {
             if (writeOutput) sb.append(c)
-            if (c == '"') {
+            if (c == '\\' && mysql && i + 1 < length) {
+                if (writeOutput) sb.append(this[i + 1])
+                i += 2
+            } else if (c == '"') {
                 if (i + 1 < length && this[i + 1] == '"') {
                     if (writeOutput) sb.append('"')
                     i += 2
@@ -186,6 +203,12 @@ internal inline fun String.scanSql(
         }
 
         // Start of contexts
+        if (c == '#' && mysql) {
+            if (writeOutput) sb.append(c)
+            i++
+            inLine = true
+            continue
+        }
         if (c == '-' && i + 1 < length && this[i + 1] == '-') {
             if (writeOutput) sb.append("--")
             i += 2
@@ -199,6 +222,9 @@ internal inline fun String.scanSql(
             continue
         }
         if (c == '\'') {
+            // PostgreSQL's escape string: E'...' (the E not the end of an identifier).
+            sqEscapes = mysql || i > 0 && (this[i - 1] == 'E' || this[i - 1] == 'e') &&
+                    (i < 2 || !this[i - 2].isIdentPart())
             if (writeOutput) sb.append(c); i++; inSQ = true; continue
         }
         if (c == '"') {

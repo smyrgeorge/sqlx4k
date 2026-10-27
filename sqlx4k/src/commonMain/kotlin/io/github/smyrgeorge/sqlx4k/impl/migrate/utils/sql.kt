@@ -1,5 +1,6 @@
 package io.github.smyrgeorge.sqlx4k.impl.migrate.utils
 
+import io.github.smyrgeorge.sqlx4k.Dialect
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.impl.extensions.isIdentPart
 import io.github.smyrgeorge.sqlx4k.impl.extensions.isIdentStart
@@ -15,8 +16,11 @@ import kotlin.jvm.JvmInline
  * constructs that are not counted, and `END CASE` closes a `CASE`.) Only those statements are tracked, as `begin` and
  * `end` are valid column names in MySQL. A statement that is only comments (e.g. a trailing `-- note;`) is left out:
  * MySQL rejects it as empty.
+ *
+ * Quotes and comments are read by the lexical rules of [dialect] (see [scanSql]): MySQL's backslash escapes
+ * (`'O\'Brien'`) and `#` comments only for [Dialect.MySQL].
  */
-fun splitSqlStatements(sql: String): List<String> {
+fun splitSqlStatements(sql: String, dialect: Dialect? = null): List<String> {
     val result = mutableListOf<String>()
     var words = 0 // the words of the current statement seen so far (outside quotes and comments)
     var create = false // the current statement starts with CREATE
@@ -25,14 +29,14 @@ fun splitSqlStatements(sql: String): List<String> {
 
     fun flush(statement: CharSequence) {
         val stmt = statement.trim()
-        if (!stmt.isOnlyComments()) result.add(stmt.toString())
+        if (!stmt.isOnlyComments(dialect == Dialect.MySQL)) result.add(stmt.toString())
         words = 0
         create = false
         routine = false
         depth = 0
     }
 
-    val remainder = sql.scanSql { i, c, sb ->
+    val remainder = sql.scanSql(dialect = dialect) { i, c, sb ->
         when {
             c == ';' && depth == 0 -> {
                 flush(sb)
@@ -109,13 +113,13 @@ private fun String.nextWord(from: Int): Pair<String, Int> {
  * executable comment (`/*! ... */`, `/*M! ... */`, e.g. `/*!40101 SET NAMES utf8mb4 */` in a dump) is run by the server,
  * so it is a statement too.
  */
-private fun CharSequence.isOnlyComments(): Boolean {
+private fun CharSequence.isOnlyComments(mysql: Boolean): Boolean {
     var i = 0
     while (i < length) {
         when {
             this[i].isWhitespace() -> i++
             startsWith("/*!", i) || startsWith("/*M!", i) -> return false
-            startsWith("--", i) -> {
+            startsWith("--", i) || mysql && this[i] == '#' -> {
                 while (i < length && this[i] != '\n') i++
             }
 

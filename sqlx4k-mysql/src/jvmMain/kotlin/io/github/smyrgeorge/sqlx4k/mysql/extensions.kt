@@ -124,3 +124,47 @@ internal suspend inline fun NativeR2dbcConnection.endTransaction(
         if (close) withContext(NonCancellable) { this@endTransaction.close().toMono().awaitSingleOrNull() }
     }
 }
+
+/**
+ * Rewrites a quote escaped with a backslash in a string (`'O\'Brien'`) to a doubled one (`'O''Brien'`), which MySQL
+ * reads the same. r2dbc-mysql finds the `?` placeholders of a statement with a lexer of its own, which knows no
+ * backslash escapes: it ended the string at the escaped quote, and missed the placeholders after it.
+ */
+internal fun String.withQuotesDoubled(): String {
+    if ('\\' !in this) return this
+    val sb = StringBuilder(length)
+    var quote: Char? = null
+    var i = 0
+    while (i < length) {
+        val c = this[i]
+        if (quote == null) {
+            val commentEnd = when {
+                c == '#' || startsWith("--", i) -> indexOf('\n', i).let { if (it < 0) length else it }
+                startsWith("/*", i) -> indexOf("*/", i + 2).let { if (it < 0) length else it + 2 }
+                else -> -1
+            }
+            if (commentEnd >= 0) {
+                sb.append(this, i, commentEnd)
+                i = commentEnd
+                continue
+            }
+            if (c == '\'' || c == '"' || c == '`') quote = c
+        } else if (c == '\\' && quote != '`' && i + 1 < length) {
+            val next = this[i + 1]
+            if (next == quote) sb.append(quote).append(quote) else sb.append(c).append(next)
+            i += 2
+            continue
+        } else if (c == quote) {
+            if (i + 1 < length && this[i + 1] == quote) {
+                sb.append(c).append(c)
+                i += 2
+                continue
+            }
+            quote = null
+        }
+        sb.append(c)
+        i++
+    }
+    return sb.toString()
+}
+

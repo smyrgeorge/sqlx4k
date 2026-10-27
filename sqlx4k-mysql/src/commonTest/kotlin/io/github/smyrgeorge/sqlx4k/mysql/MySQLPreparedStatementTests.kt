@@ -794,5 +794,15 @@ class MySQLPreparedStatementTests {
             runCatching { db.execute("drop table if exists $table") }
         }
     }
-}
 
+    // MySQL reads a backslash in a string as an escape: the quote it escapes does not end the string, so the
+    // parameters after it are found.
+    @Test
+    fun `parameters after a backslash-escaped quote are bound`(): Unit = runBlocking {
+        val st = Statement.create("select 'O\\'Brien' as n, :v as v, ? as p").bind("v", 1).bind(0, 2)
+        val row = db.fetchAll(st).getOrThrow().first()
+        assertThat(row.get("n").asString()).isEqualTo("O'Brien")
+        assertThat(row.get("v").asString()).isEqualTo("1")
+        assertThat(row.get("p").asString()).isEqualTo("2")
+    }
+}

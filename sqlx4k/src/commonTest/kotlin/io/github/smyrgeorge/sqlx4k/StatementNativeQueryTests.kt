@@ -337,4 +337,47 @@ class StatementNativeQueryTests {
         }
         assertThat(ex.code).isEqualTo(SQLError.Code.NamedParameterValueNotSupplied)
     }
+
+    // ========================================================================================
+    // Backslash escapes and MySQL comments
+    // ========================================================================================
+
+    @Test
+    fun `a backslash-escaped quote does not end a MySQL string`() {
+        val st = Statement.create("update t set name = 'O\\'Brien', note = \"say \\\"?\\\"\" where id = ?").bind(0, 5)
+        val nq = st.renderNativeQuery(Dialect.MySQL, empty)
+        assertThat(nq.sql).isEqualTo("update t set name = 'O\\'Brien', note = \"say \\\"?\\\"\" where id = ?")
+        assertThat(nq.values).containsExactly(5)
+    }
+
+    @Test
+    fun `a named parameter after a backslash-escaped quote is bound on MySQL`() {
+        val st = Statement.create("select 'it\\'s' as a, :id as b").bind("id", 1)
+        val nq = st.renderNativeQuery(Dialect.MySQL, empty)
+        assertThat(nq.sql).isEqualTo("select 'it\\'s' as a, ? as b")
+        assertThat(nq.values).containsExactly(1)
+    }
+
+    @Test
+    fun `a backslash-escaped quote does not end a PostgreSQL escape string`() {
+        val st = Statement.create("select E'it\\'s ?' as a, ? as b").bind(0, 1)
+        val nq = st.renderNativeQuery(Dialect.PostgreSQL, empty)
+        assertThat(nq.sql).isEqualTo("select E'it\\'s ?' as a, $1 as b")
+        assertThat(nq.values).containsExactly(1)
+    }
+
+    @Test
+    fun `a backslash is a plain character in a PostgreSQL and SQLite standard string`() {
+        val st = Statement.create("select 'C:\\' as a, ? as b").bind(0, 1)
+        assertThat(st.renderNativeQuery(Dialect.PostgreSQL, empty).sql).isEqualTo("select 'C:\\' as a, $1 as b")
+        assertThat(st.renderNativeQuery(Dialect.SQLite, empty).sql).isEqualTo("select 'C:\\' as a, ? as b")
+    }
+
+    @Test
+    fun `a hash starts a comment on MySQL only`() {
+        val st = Statement.create("select ? as a # where b = ?\nfrom t").bind(0, 1)
+        val nq = st.renderNativeQuery(Dialect.MySQL, empty)
+        assertThat(nq.sql).isEqualTo("select ? as a # where b = ?\nfrom t")
+        assertThat(nq.values).containsExactly(1)
+    }
 }

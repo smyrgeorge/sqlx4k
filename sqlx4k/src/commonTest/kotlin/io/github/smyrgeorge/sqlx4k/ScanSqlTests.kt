@@ -917,4 +917,11 @@ class ScanSqlTests {
         val result = splitSqlStatements("/*!40101 SET NAMES utf8mb4 */;\n/*M!100616 SET NOTE_VERBOSITY=0 */;\nSELECT 1;")
         assertThat(result).containsExactly("/*!40101 SET NAMES utf8mb4 */", "/*M!100616 SET NOTE_VERBOSITY=0 */", "SELECT 1")
     }
+
+    @Test
+    fun `splitSqlStatements reads MySQL backslash escapes and hash comments`() {
+        val sql = "insert into t values ('a\\';b');\n# a note; with a semicolon\nselect 1;"
+        assertThat(splitSqlStatements(sql, Dialect.MySQL))
+            .containsExactly("insert into t values ('a\\';b')", "# a note; with a semicolon\nselect 1")
+    }
 }

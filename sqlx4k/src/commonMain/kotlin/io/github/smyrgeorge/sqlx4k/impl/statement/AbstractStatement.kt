@@ -40,9 +40,18 @@ abstract class AbstractStatement(
     final override val extractedPositionalParameters: Int
 
     init {
-        val (named, positional) = extractParameters()
-        extractedNamedParameters = named
-        extractedPositionalParameters = positional
+        val (named, positional) = extractParameters(null)
+        // MySQL reads a backslash in a string as an escape (`'O\'Brien'`) and `#` as a comment, which the other
+        // dialects do not, and the dialect is only known when the statement is rendered: a statement that reads
+        // differently under MySQL's rules takes the parameters of either reading, and is rendered by its dialect's.
+        if (sql.any { it == '\\' || it == '#' } || sql.contains("/*")) {
+            val (mysqlNamed, mysqlPositional) = extractParameters(Dialect.MySQL)
+            extractedNamedParameters = named + mysqlNamed
+            extractedPositionalParameters = maxOf(positional, mysqlPositional)
+        } else {
+            extractedNamedParameters = named
+            extractedPositionalParameters = positional
+        }
     }
 
     /**
@@ -167,7 +176,7 @@ abstract class AbstractStatement(
         var nextPositionalIndex = 0
         val values = ArrayList<Any?>(extractedPositionalParameters + extractedNamedParameters.size * 2)
 
-        val renderedSql = sql.renderWithScanner { i, c, sb ->
+        val renderedSql = sql.renderWithScanner(dialect) { i, c, sb ->
             // Handle positional '?'
             if (c == '?' && extractedPositionalParameters > 0) {
                 val value = getPositionalValue(nextPositionalIndex)
@@ -266,12 +275,14 @@ abstract class AbstractStatement(
         writeOutput: Boolean,
         extractedNamedParametersSize: Int = 0,
         extractedPositionalParametersSize: Int = 0,
+        dialect: Dialect? = null,
         crossinline onNormalChar: String.(i: Int, c: Char, sb: StringBuilder) -> Int?
     ): String {
         val totalParams = extractedPositionalParametersSize + extractedNamedParametersSize
         return scanSql(
             writeOutput = writeOutput,
             estimatedExtraSize = totalParams * AVERAGE_PARAM_SIZE,
+            dialect = dialect,
             onNormalChar = onNormalChar
         )
     }
@@ -292,11 +303,13 @@ abstract class AbstractStatement(
      * by the callback and the default handling of characters.
      */
     protected inline fun String.renderWithScanner(
+        dialect: Dialect? = null,
         crossinline onNormalChar: String.(i: Int, c: Char, sb: StringBuilder) -> Int?
     ): String = scan(
         writeOutput = true,
         extractedNamedParametersSize = extractedNamedParameters.size,
         extractedPositionalParametersSize = extractedPositionalParameters,
+        dialect = dialect,
         onNormalChar = onNormalChar
     )
 
@@ -313,9 +326,10 @@ abstract class AbstractStatement(
      * `null` continues the scan from the default next index.
      */
     protected inline fun String.scanWithExtractor(
+        dialect: Dialect? = null,
         crossinline onNormalChar: String.(i: Int, c: Char) -> Int?
     ) {
-        scan(writeOutput = false) { i, c, _ -> onNormalChar(this, i, c) }
+        scan(writeOutput = false, dialect = dialect) { i, c, _ -> onNormalChar(this, i, c) }
     }
 
     /**
@@ -341,10 +355,10 @@ abstract class AbstractStatement(
      *
      * @return A pair containing the set of named parameter names and the count of positional parameters.
      */
-    private fun extractParameters(): Pair<Set<String>, Int> {
+    private fun extractParameters(dialect: Dialect?): Pair<Set<String>, Int> {
         val names = hashSetOf<String>()
         var positionalCount = 0
-        sql.scanWithExtractor { i, c ->
+        sql.scanWithExtractor(dialect) { i, c ->
             // Check for positional parameter '?'
             if (c == '?') {
                 positionalCount++

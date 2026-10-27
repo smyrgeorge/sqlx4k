@@ -476,7 +476,7 @@ class MySQL(
             }
 
             val query = statement.renderNativeQuery(Dialect.MySQL, encoders)
-            val stmt = createStatement(query.sql)
+            val stmt = createStatement(query.sql.withQuotesDoubled())
             query.values.forEachIndexed { index, value ->
                 when (value) {
                     is TypedNull -> stmt.bindNull(index, value.type.java)
