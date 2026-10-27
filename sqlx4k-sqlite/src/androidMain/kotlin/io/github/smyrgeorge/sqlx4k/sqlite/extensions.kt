@@ -92,3 +92,34 @@ internal inline fun SQLiteDatabase.completeTransaction(close: Boolean, block: SQ
         if (close) runCatching { close() }
     }
 }
+
+/**
+ * Commits the outermost transaction, and closes the database afterwards when [close] is set. Blocking: run it on the
+ * connection's dispatcher, where the transaction was begun.
+ *
+ * SQLite keeps the transaction open when its COMMIT fails (a deferred foreign key violation, a busy database, ...),
+ * while [SQLiteDatabase.endTransaction] pops it before running the COMMIT: the connection would go on in it, so the
+ * next statements on it, of its next borrower too, would run in it and never be committed. A ROLLBACK run then would
+ * not reach it either: android.database.sqlite takes ROLLBACK for read-only, and runs it on another connection.
+ *
+ * The COMMIT is run here instead, while android.database.sqlite still holds the transaction, and so runs every
+ * statement on its connection (the leading `;` keeps it from taking the statement for its own COMMIT). When it fails,
+ * ending the transaction unmarked rolls it back. When it succeeds, SQLite is out of the transaction, and the COMMIT
+ * that ending it runs fails, which is ignored.
+ */
+internal fun SQLiteDatabase.commitOutermostTransaction(close: Boolean) {
+    try {
+        try {
+            rethrowAsSQLError { execSQL(";COMMIT") }
+        } catch (e: Throwable) {
+            runCatching { endTransaction() }
+            throw e
+        }
+        runCatching {
+            setTransactionSuccessful()
+            endTransaction()
+        }
+    } finally {
+        if (close) runCatching { close() }
+    }
+}

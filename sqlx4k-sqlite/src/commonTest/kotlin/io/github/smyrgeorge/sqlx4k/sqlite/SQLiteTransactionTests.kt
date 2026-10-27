@@ -9,6 +9,7 @@ import assertk.assertions.isFailure
 import assertk.assertions.isNotNull
 import assertk.assertions.isNull
 import assertk.assertions.isSuccess
+import io.github.smyrgeorge.sqlx4k.ConnectionPool
 import io.github.smyrgeorge.sqlx4k.SQLError
 import io.github.smyrgeorge.sqlx4k.Transaction
 import io.github.smyrgeorge.sqlx4k.impl.coroutines.TransactionContext
@@ -558,4 +559,64 @@ class SQLiteTransactionTests : SQLiteTestBase() {
             cn.close()
         }
     }
+
+    /** A parent table, and a child one whose foreign key to it is checked only at COMMIT. */
+    private suspend fun ISQLite.deferredForeignKeyTables(): Pair<String, String> {
+        val parent = newTable()
+        val child = newTable()
+        execute("create table $parent(id integer primary key);").getOrThrow()
+        execute(
+            "create table $child(id integer primary key, parent_id integer references $parent(id) deferrable initially deferred);"
+        ).getOrThrow()
+        return parent to child
+    }
+
+    @Test
+    fun `a connection whose commit failed at COMMIT time is out of the transaction`(): Unit = runBlocking {
+        val (parent, child) = db.deferredForeignKeyTables()
+        val cn = db.acquire().getOrThrow()
+        try {
+            cn.execute("pragma foreign_keys = on;").getOrThrow()
+            val tx = cn.begin().getOrThrow()
+            tx.execute("insert into $child(id, parent_id) values (1, 42);").getOrThrow()
+            assertThat(tx.commit()).isFailure()
+            // Not part of the transaction that failed: committed at once, so the other connections see it.
+            cn.execute("insert into $parent(id) values (1);").getOrThrow()
+            assertThat(countRows(parent)).isEqualTo(1L)
+            assertThat(countRows(child)).isEqualTo(0L)
+        } finally {
+            cn.close()
+        }
+    }
+
+    @Test
+    fun `a pooled connection whose commit failed at COMMIT time goes back to the pool out of the transaction`(): Unit =
+        runBlocking {
+            // A single connection, so the next transaction runs on the one whose commit failed.
+            val single = testSQLite(
+                "SQLiteTransactionTests-single",
+                ConnectionPool.Options.builder().maxConnections(1).build()
+            )
+            try {
+                val (parent, child) = single.deferredForeignKeyTables()
+                val cn = single.acquire().getOrThrow()
+                try {
+                    cn.execute("pragma foreign_keys = on;").getOrThrow()
+                } finally {
+                    cn.close().getOrThrow()
+                }
+
+                val tx = single.begin().getOrThrow()
+                tx.execute("insert into $child(id, parent_id) values (1, 42);").getOrThrow()
+                assertThat(tx.commit()).isFailure()
+
+                val next = single.begin().getOrThrow()
+                next.execute("insert into $parent(id) values (1);").getOrThrow()
+                next.commit().getOrThrow()
+                val count = "select (select count(*) from $parent) * 10 + (select count(*) from $child);"
+                assertThat(single.fetchAll(count).getOrThrow().first().get(0).asLong()).isEqualTo(10L)
+            } finally {
+                single.close().getOrThrow()
+            }
+        }
 }

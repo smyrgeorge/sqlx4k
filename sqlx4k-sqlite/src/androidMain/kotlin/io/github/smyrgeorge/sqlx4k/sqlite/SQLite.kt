@@ -281,10 +281,11 @@ class SQLite(
             // the same dispatcher to AndroidTransaction so commit/rollback also run
             // on that thread (Android SQLiteDatabase sessions are thread-local).
             withContext(dispatcher) {
+                val outermost = !db.inTransaction()
                 db.beginTransactionNonExclusive()
                 // Recorded as soon as it is begun: a caller cancelled meanwhile never receives it, and closing the
                 // connection must still roll it back.
-                AndroidTransaction(db, false, encoders, dispatcher).also { tx ->
+                AndroidTransaction(db, false, encoders, dispatcher, outermost).also { tx ->
                     transactions.removeAll { it.status != Transaction.Status.Open }
                     transactions += tx
                 }
@@ -298,7 +299,9 @@ class SQLite(
         override val encoders: ValueEncoderRegistry,
         // Must be the same dispatcher used by the owning AndroidConnection so that
         // beginTransaction/setTransactionSuccessful/endTransaction all run on the same thread.
-        private val dispatcher: CoroutineDispatcher
+        private val dispatcher: CoroutineDispatcher,
+        // Not nested in another transaction of the connection: its commit runs the COMMIT.
+        private val outermost: Boolean = true
     ) : Transaction {
         private val mutex = Mutex()
         private var _status: Transaction.Status = Transaction.Status.Open
@@ -335,7 +338,8 @@ class SQLite(
                     assertIsOpen()
                     _status = Transaction.Status.Closed
                     withContext(dispatcher) {
-                        db.completeTransaction(closeConnectionAfterTx) { setTransactionSuccessful() }
+                        if (outermost) db.commitOutermostTransaction(closeConnectionAfterTx)
+                        else db.completeTransaction(closeConnectionAfterTx) { setTransactionSuccessful() }
                     }
                     // Only once the COMMIT itself succeeded (it runs when the transaction ends).
                     _commited = true

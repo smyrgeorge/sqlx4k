@@ -347,7 +347,16 @@ class SQLite(
                     _status = Transaction.Status.Closed
                     withContext(Dispatchers.IO) {
                         connection.endTransaction(closeConnectionAfterTx) {
-                            commit()
+                            try {
+                                commit()
+                            } catch (e: Throwable) {
+                                // SQLite keeps the transaction open when the COMMIT fails (a deferred foreign key
+                                // violated, a busy database): roll it back, as the native driver does, or the next
+                                // statements on the connection would run in it.
+                                runCatching { rollback() }.onFailure(e::addSuppressed)
+                                runCatching { autoCommit = true }.onFailure(e::addSuppressed)
+                                throw e
+                            }
                             autoCommit = true
                             _commited = true
                         }
