@@ -708,9 +708,11 @@ class SQLite(
 
             // Connection factory that creates Android SQLite connections. The database is opened to completion also
             // when the caller is cancelled meanwhile (an acquire timeout, ...), and then closed: dropped, it would stay
-            // open until the garbage collector finalizes it.
+            // open until the garbage collector finalizes it. NonCancellable wraps the switch to Dispatchers.IO rather
+            // than joining it: withContext(NonCancellable + Dispatchers.IO) returns into the caller's context, and
+            // discards its result there when the caller is cancelled, so the database was dropped all the same.
             val connectionFactory: suspend () -> Connection = {
-                val connection = withContext(NonCancellable + Dispatchers.IO) {
+                val connection = withContext(NonCancellable) { withContext(Dispatchers.IO) {
                     val db = when {
                         isInMemory -> SQLiteDatabase.create(null)
 
@@ -737,7 +739,7 @@ class SQLite(
                     // Enforce foreign keys, as the other targets do (SQLite leaves them off by default).
                     db.setForeignKeyConstraintsEnabled(true)
                     AndroidConnection(db, encoders)
-                }
+                } }
                 if (!currentCoroutineContext().isActive) {
                     connection.close()
                     currentCoroutineContext().ensureActive()
