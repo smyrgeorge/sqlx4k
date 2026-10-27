@@ -18,6 +18,7 @@ import com.google.devtools.ksp.symbol.KSValueParameter
 import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.validate
 import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.impl.extensions.extractSqlParameters
 import io.github.smyrgeorge.sqlx4k.processor.utils.Quadruple
 import java.io.OutputStream
 
@@ -574,17 +575,22 @@ class RepositoryProcessor(
         useContextParameters: Boolean
     ) {
         val name = fn.simpleName()
-        val statement = Statement.create(sql)
-        if (statement.extractedPositionalParameters > 0)
+        // Read by the lexical rules of the repository's dialect: a statement takes the parameters of both MySQL's
+        // reading (backslash escapes, `#` comments) and the standard one, as its dialect is only known when it runs,
+        // and those of the other reading are not the query's (`'C:\' and url = 'http://h/?x=1'` on PostgreSQL).
+        val (namedParameters, positionalParameters) = sql.extractSqlParameters(
+            if (dialect == Dialect.MySQL || dialect == Dialect.MariaDB) io.github.smyrgeorge.sqlx4k.Dialect.MySQL else null
+        )
+        if (positionalParameters > 0)
             error("Method '$name' uses positional parameters in @Query (only named parameters are supported).")
         // Exclude 'context' argument.
         val parameters = if (useContextParameters) fn.parameters else fn.parameters.drop(1)
-        if (parameters.size != statement.extractedNamedParameters.size)
-            error("Method '$name' has ${parameters.size} parameters but @Query statement has ${statement.extractedNamedParameters.size} named parameters.")
+        if (parameters.size != namedParameters.size)
+            error("Method '$name' has ${parameters.size} parameters but @Query statement has ${namedParameters.size} named parameters.")
         parameters.forEach { p ->
             val pName = p.name?.asString()
                 ?: error("All query parameters must be named when using namedParameters support")
-            if (!statement.extractedNamedParameters.contains(pName))
+            if (!namedParameters.contains(pName))
                 error("Method '$name' has parameter '$pName' but @Query statement does not contain a named parameter with that name.")
         }
     }

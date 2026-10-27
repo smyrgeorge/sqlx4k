@@ -4,6 +4,7 @@ import assertk.assertThat
 import assertk.assertions.containsExactly
 import assertk.assertions.isEmpty
 import assertk.assertions.isEqualTo
+import io.github.smyrgeorge.sqlx4k.impl.extensions.extractSqlParameters
 import io.github.smyrgeorge.sqlx4k.impl.extensions.isUpsertStatement
 import io.github.smyrgeorge.sqlx4k.impl.extensions.scanSql
 import io.github.smyrgeorge.sqlx4k.impl.migrate.utils.splitSqlStatements
@@ -934,5 +935,12 @@ class ScanSqlTests {
         assertThat("insert into t(v) values ('on conflict do update')".isUpsertStatement()).isEqualTo(false)
         assertThat("insert into t(v) values (1) -- on conflict do update".isUpsertStatement()).isEqualTo(false)
         assertThat("insert into t(v) values (1)".isUpsertStatement()).isEqualTo(false)
+    }
+
+    @Test
+    fun `extractSqlParameters reads a statement by the lexical rules of a dialect`() {
+        val sql = "select 'C:\\' as a, 'h/?x' as b, :id as c # :old"
+        assertThat("$sql\n".extractSqlParameters()).isEqualTo(Pair(setOf("id", "old"), 0))
+        assertThat("$sql\n".extractSqlParameters(Dialect.MySQL)).isEqualTo(Pair(emptySet<String>(), 1))
     }
 }

@@ -258,6 +258,35 @@ internal inline fun String.scanSql(
 }
 
 /**
+ * The named parameters (`:name`) and the number of positional parameters (`?`) of the SQL statement, outside quotes,
+ * comments and dollar-quoted strings, read by the lexical rules of [dialect] (see [scanSql]). A PostgreSQL cast (`::`)
+ * is no parameter.
+ */
+fun String.extractSqlParameters(dialect: Dialect? = null): Pair<Set<String>, Int> {
+    val names = hashSetOf<String>()
+    var positionalCount = 0
+    scanSql(writeOutput = false, dialect = dialect) { i, c, _ ->
+        // Check for positional parameter '?'
+        if (c == '?') {
+            positionalCount++
+            return@scanSql i + 1
+        }
+        // Check for named parameter ':'
+        if (c != ':') return@scanSql null
+        // Skip PostgreSQL type casts '::'
+        if (i + 1 < length && this[i + 1] == ':') return@scanSql i + 2
+        if (i + 1 < length && this[i + 1].isIdentStart()) {
+            var j = i + 2
+            while (j < length && this[j].isIdentPart()) j++
+            names.add(substring(i + 1, j))
+            return@scanSql j
+        }
+        null
+    }
+    return Pair(names, positionalCount)
+}
+
+/**
  * Whether the SQL statement is an UPSERT (`INSERT ... ON CONFLICT ... DO UPDATE`, as SQLite and PostgreSQL write it),
  * judged by its words outside quotes and comments.
  *

@@ -8,6 +8,7 @@ import io.github.smyrgeorge.sqlx4k.impl.extensions.appendNativeValue
 import io.github.smyrgeorge.sqlx4k.impl.extensions.isIdentPart
 import io.github.smyrgeorge.sqlx4k.impl.extensions.isIdentStart
 import io.github.smyrgeorge.sqlx4k.impl.extensions.resolveNativeValue
+import io.github.smyrgeorge.sqlx4k.impl.extensions.extractSqlParameters
 import io.github.smyrgeorge.sqlx4k.impl.extensions.scanSql
 import io.github.smyrgeorge.sqlx4k.impl.statement.AbstractStatement.Companion.NOT_SET
 import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
@@ -355,29 +356,7 @@ abstract class AbstractStatement(
      *
      * @return A pair containing the set of named parameter names and the count of positional parameters.
      */
-    private fun extractParameters(dialect: Dialect?): Pair<Set<String>, Int> {
-        val names = hashSetOf<String>()
-        var positionalCount = 0
-        sql.scanWithExtractor(dialect) { i, c ->
-            // Check for positional parameter '?'
-            if (c == '?') {
-                positionalCount++
-                return@scanWithExtractor i + 1
-            }
-            // Check for named parameter ':'
-            if (c != ':') return@scanWithExtractor null
-            // Skip PostgreSQL type casts '::'
-            if (i + 1 < length && this[i + 1] == ':') return@scanWithExtractor i + 2
-            if (i + 1 < length && this[i + 1].isIdentStart()) {
-                var j = i + 2
-                while (j < length && this[j].isIdentPart()) j++
-                names.add(substring(i + 1, j))
-                return@scanWithExtractor j
-            }
-            null
-        }
-        return Pair(names, positionalCount)
-    }
+    private fun extractParameters(dialect: Dialect?): Pair<Set<String>, Int> = sql.extractSqlParameters(dialect)
 
     companion object {
         /**

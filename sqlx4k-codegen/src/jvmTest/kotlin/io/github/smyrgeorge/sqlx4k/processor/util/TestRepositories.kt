@@ -26,6 +26,11 @@ interface UserCrudRepository : CrudRepository<User> {
     @Query("SELECT * FROM users WHERE email = :email")
     suspend fun findOneByEmail(context: QueryExecutor, email: String): Result<User?>
 
+    // A backslash is a plain character in a standard string: read with MySQL's escapes, the second string's `?`
+    // would be a positional parameter.
+    @Query("SELECT * FROM users WHERE name <> 'C:\\' AND email <> 'http://h/?x=1' AND id = :id")
+    suspend fun findOneByIdBesideBackslashes(context: QueryExecutor, id: Long): Result<User?>
+
     @Query("SELECT * FROM users")
     suspend fun findAll(context: QueryExecutor): Result<List<User>>
 
