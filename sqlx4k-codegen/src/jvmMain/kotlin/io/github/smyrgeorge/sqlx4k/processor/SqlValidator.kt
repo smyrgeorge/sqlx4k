@@ -1,6 +1,7 @@
 package io.github.smyrgeorge.sqlx4k.processor
 
 import io.github.smyrgeorge.sqlx4k.Statement
+import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import net.sf.jsqlparser.expression.BinaryExpression
 import net.sf.jsqlparser.expression.Expression
 import net.sf.jsqlparser.expression.Function
@@ -95,10 +96,14 @@ object SqlValidator {
      * @param sql The SQL query string to be validated.
      */
     fun validateQuerySchema(fn: String, sql: String) {
+        // Rendered by the statement itself (`?` placeholders, as SQLite writes them): replacing each `:name` in the
+        // text also replaced the start of a longer name (`:id` in `:idList`, making it `?List`), and failed the build
+        // on a valid query.
         fun String.convertNamedParametersToPositional(): String {
-            var s = this
-            Statement.create(this).extractedNamedParameters.forEach { s = s.replace(":$it", "?") }
-            return s
+            val statement = Statement.create(this)
+            statement.extractedNamedParameters.forEach { statement.bind(it, null) }
+            repeat(statement.extractedPositionalParameters) { statement.bind(it, null) }
+            return statement.renderNativeQuery(io.github.smyrgeorge.sqlx4k.Dialect.SQLite, ValueEncoderRegistry.EMPTY).sql
         }
 
         try {

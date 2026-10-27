@@ -713,4 +713,22 @@ class SqlValidatorTests {
         val sql = "select 1 from users where email = :email"
         assertThat(SqlValidator.dropOrderBy(parse(sql), sql)).isEqualTo(sql)
     }
+
+    // =============================================================================================
+    // validateQuerySchema
+    // =============================================================================================
+
+    @Test
+    fun `validateQuerySchema accepts named parameters one of which starts another's name`() {
+        val dir = kotlin.io.path.createTempDirectory("sqlx4k-schema").toFile()
+        try {
+            dir.resolve("1_init.sql").writeText("create table users(id bigint, name varchar(64));")
+            SqlValidator.loadSchema(dir.path)
+            // `:id` was replaced in `:idList` too (`?List`), and the query rejected.
+            SqlValidator.validateQuerySchema("fn", "select id, name from users where id = :id or id in (:idList)")
+            SqlValidator.validateQuerySchema("fn", "select id from users where name = :name or name = :nameOther")
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
 }
