@@ -370,6 +370,13 @@ rows (1,000 by default). The connection serving the query is busy until the flow
 cancelled; a flow of a `Connection` or `Transaction` holds it for the whole collection. A failure fails the
 collection with an `SQLError`.
 
+> [!NOTE]
+> On MySQL (native targets), a flow of a `Connection` or `Transaction` whose collector is cancelled stops between
+> rows: the row being read is read to its end first, as a read stopped midway would leave the connection out of step
+> with the server. So the cancellation waits for that row, e.g. until a lock it waits for is released (up to
+> `innodb_lock_wait_timeout`). The rest of the result is read and discarded on the connection's next use. A flow of
+> the pool closes its connection instead, and stops at once.
+
 ```kotlin
 db.fetch("select * from events order by id;", fetchSize = 1_000)
     .map { it.get("payload").asString() }
@@ -1252,6 +1259,14 @@ println("Migration completed. $res")
 
 This process will create a table with name `_sqlx4k_migrations`. For more information, take a look at
 the [examples](#examples).
+
+> [!NOTE]
+> Each migration file runs in a single transaction. On SQLite, where every target enforces foreign keys,
+> `PRAGMA foreign_keys` has no effect inside a transaction, so a migration cannot turn them off: rebuilding a table
+> that other tables reference (create a new table, copy the rows, drop the old one, rename the new one, as SQLite's
+> documentation describes) deletes the referencing rows (`ON DELETE CASCADE`) or fails (`NO ACTION` / `RESTRICT`)
+> when the old table is dropped. Drop or rebuild the referencing tables in the same migration, or alter the table in
+> place (`ALTER TABLE ... ADD / RENAME / DROP COLUMN`) where SQLite allows it.
 
 ## Extensions
 
