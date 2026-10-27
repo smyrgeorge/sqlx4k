@@ -73,3 +73,56 @@ pub(crate) fn inserted_rowid(res: &sqlx::sqlite::SqliteQueryResult, before: Opti
         rowid
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{block_on, memory};
+    use sqlx::{Connection, Executor};
+
+    #[test]
+    fn the_words_outside_quotes_and_comments_are_read() {
+        let sql = "Insert INTO \"on conflict\" values ('do update', [do update], `x`) -- on conflict\n/* do update */ on_x";
+        assert_eq!(sql_words(sql), ["insert", "into", "values", "on_x"]);
+        // A doubled quote stays in its string.
+        assert_eq!(sql_words("select 'it''s on conflict' as a"), ["select", "as", "a"]);
+        // An unterminated string or comment ends the SQL.
+        assert_eq!(sql_words("select 'on conflict"), ["select"]);
+        assert_eq!(sql_words("select /* on conflict"), ["select"]);
+    }
+
+    #[test]
+    fn an_upsert_is_told_from_other_statements() {
+        assert!(is_upsert("insert into t values (1) on conflict (id) do update set v = 2"));
+        assert!(is_upsert("INSERT INTO t VALUES (1)\nON  CONFLICT(id)\tDO UPDATE SET v = excluded.v"));
+        assert!(!is_upsert("insert into t values (1) on conflict do nothing"));
+        assert!(!is_upsert("insert into t values ('on conflict do update')"));
+        assert!(!is_upsert("insert into t values (1) -- on conflict do update"));
+        assert!(!is_upsert("update t set v = 1"));
+    }
+
+    #[test]
+    fn an_upsert_that_updates_reports_no_rowid() {
+        block_on(async {
+            let mut cn = memory().await;
+            cn.execute("create table t(id integer primary key, k text unique, v int)").await.unwrap();
+            assert_eq!(last_insert_rowid(&mut cn).await, Some(0));
+            let res = cn.execute("insert into t(k, v) values ('a', 1)").await.unwrap();
+            assert_eq!(inserted_rowid(&res, None), 1);
+
+            let upsert = "insert into t(k, v) values ('a', 2) on conflict(k) do update set v = excluded.v";
+            let before = last_insert_rowid(&mut cn).await;
+            assert_eq!(before, Some(1));
+            let res = cn.execute(upsert).await.unwrap();
+            // The row was updated: the connection's rowid is the earlier insert's.
+            assert_eq!((res.rows_affected(), res.last_insert_rowid()), (1, 1));
+            assert_eq!(inserted_rowid(&res, before), 0);
+
+            let upsert = "insert into t(k, v) values ('b', 3) on conflict(k) do update set v = excluded.v";
+            let before = last_insert_rowid(&mut cn).await;
+            let res = cn.execute(upsert).await.unwrap();
+            assert_eq!(inserted_rowid(&res, before), 2);
+            cn.close().await.unwrap();
+        });
+    }
+}

@@ -13,6 +13,9 @@
 mod core;
 mod ffi;
 
+#[cfg(test)]
+mod test_support;
+
 #[cfg(not(target_os = "ios"))]
 mod jni;
 

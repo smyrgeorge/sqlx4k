@@ -605,3 +605,47 @@ pub extern "system" fn Java_io_github_smyrgeorge_sqlx4k_sqlite_cipher_CipherJni_
         .block_on(engine(rt).tx_fetch_all_with_params(ptr_of(tx), sql, owned));
     finish(&mut env, result)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_cursor_reads_the_big_endian_values_in_order() {
+        let mut b = vec![9];
+        b.extend(7i32.to_be_bytes());
+        b.extend((-5i64).to_be_bytes());
+        b.extend(1.5f64.to_be_bytes());
+        b.extend(3i32.to_be_bytes());
+        b.extend(b"a\0b");
+        b.extend(2i32.to_be_bytes());
+        b.extend("é".as_bytes());
+        // A negative length reads as empty.
+        b.extend((-1i32).to_be_bytes());
+        let mut c = Cursor { b: &b, pos: 0 };
+        assert_eq!(c.u8(), 9);
+        assert_eq!(c.i32(), 7);
+        assert_eq!(c.i64(), -5);
+        assert_eq!(c.f64(), 1.5);
+        assert_eq!(c.bytes(), b"a\0b");
+        assert_eq!(c.string(), "é");
+        assert!(c.bytes().is_empty());
+        assert_eq!(c.pos, b.len());
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid UTF-8 in TEXT parameter")]
+    fn a_text_of_invalid_utf8_panics() {
+        let mut b = 1i32.to_be_bytes().to_vec();
+        b.push(0xff);
+        Cursor { b: &b, pos: 0 }.string();
+    }
+
+    #[test]
+    fn a_pointer_crosses_as_a_long() {
+        let mut value = 7;
+        let handle = &mut value as *mut i32 as usize as jlong;
+        assert_eq!(ptr_of(handle).ptr, &mut value as *mut i32 as *mut c_void);
+        assert!(ptr_of(0).ptr.is_null());
+    }
+}

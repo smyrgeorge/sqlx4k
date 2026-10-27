@@ -112,3 +112,88 @@ pub(crate) fn stream_result_of(stream: Sqlx4kSqliteCipherStream) -> *mut Sqlx4kS
     }
     .leak()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{block_on, memory};
+    use sqlx::{Connection, Row};
+
+    const SERIES: &str = "with recursive s(n) as (select 1 union all select n + 1 from s where n < 25) select n from s";
+
+    #[test]
+    fn a_fetch_size_of_zero_or_less_is_the_default() {
+        assert_eq!(stream_fetch_size(0), STREAM_DEFAULT_FETCH_SIZE);
+        assert_eq!(stream_fetch_size(-1), STREAM_DEFAULT_FETCH_SIZE);
+        assert_eq!(stream_fetch_size(7), 7);
+    }
+
+    /// Streams `sql` on a connection of its own in chunks of `fetch_size`: the chunks sent (their rows' first values,
+    /// or an error). `cancel_first` closes the stream before it starts.
+    fn stream(sql: &str, params: Vec<OwnedParam>, fetch_size: usize, cancel_first: bool) -> Vec<Result<Vec<i64>, String>> {
+        block_on(async {
+            let mut cn = memory().await;
+            let (tx, mut rx) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
+            let (cancel, cancel_rx) = oneshot::channel();
+            if cancel_first {
+                drop(cancel);
+            } else {
+                std::mem::forget(cancel);
+            }
+            let ((), chunks) = {
+                let rows = stream_rows_of(&mut cn, sql.to_string(), params);
+                tokio::join!(stream_rows(rows, fetch_size, tx, cancel_rx), async {
+                    let mut chunks = Vec::new();
+                    while let Some(chunk) = rx.recv().await {
+                        chunks.push(chunk.map(|rows| rows.iter().map(|r| r.get::<i64, _>(0)).collect()).map_err(|e| e.to_string()));
+                    }
+                    chunks
+                })
+            };
+            // The connection is usable after the stream.
+            let one: i64 = sqlx::query_scalar("select 1").fetch_one(&mut cn).await.unwrap();
+            assert_eq!(one, 1);
+            cn.close().await.unwrap();
+            chunks
+        })
+    }
+
+    fn sizes(chunks: Vec<Result<Vec<i64>, String>>) -> Vec<usize> {
+        chunks.into_iter().map(|c| c.unwrap().len()).collect()
+    }
+
+    #[test]
+    fn rows_are_sent_in_chunks_of_the_fetch_size() {
+        let chunks = stream(SERIES, vec![], 10, false);
+        assert_eq!(chunks.iter().flat_map(|c| c.clone().unwrap()).collect::<Vec<_>>(), (1..=25).collect::<Vec<_>>());
+        assert_eq!(sizes(chunks), [10, 10, 5]);
+    }
+
+    #[test]
+    fn a_huge_fetch_size_is_one_chunk() {
+        assert_eq!(sizes(stream(SERIES, vec![], i32::MAX as usize, false)), [25]);
+    }
+
+    #[test]
+    fn a_prepared_statement_is_streamed() {
+        let chunks = stream("select ? union all select ?", vec![OwnedParam::Int(1), OwnedParam::Int(2)], 1, false);
+        assert_eq!(chunks, [Ok(vec![1]), Ok(vec![2])]);
+    }
+
+    #[test]
+    fn an_empty_result_sends_no_chunk() {
+        assert!(stream("select 1 where false", vec![], 10, false).is_empty());
+    }
+
+    #[test]
+    fn a_closed_stream_stops_before_its_end() {
+        assert!(stream(SERIES, vec![], 1, true).is_empty());
+    }
+
+    #[test]
+    fn an_error_is_sent_and_ends_the_stream() {
+        let chunks = stream("select * from missing_table", vec![], 10, false);
+        assert_eq!(chunks.len(), 1);
+        assert!(chunks[0].as_ref().unwrap_err().contains("missing_table"));
+    }
+}

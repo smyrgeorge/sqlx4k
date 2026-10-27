@@ -15,6 +15,10 @@ use crate::core::types::{
 
 /// Frees a leaked [`Sqlx4kSqliteCipherResult`] and every nested allocation it owns.
 pub fn free_result(ptr: *mut Sqlx4kSqliteCipherResult) {
+    // Like C's free(NULL): Box::from_raw requires a non-null pointer.
+    if ptr.is_null() {
+        return;
+    }
     let ptr: Sqlx4kSqliteCipherResult = unsafe { *Box::from_raw(ptr) };
 
     if ptr.error >= 0 {
@@ -196,5 +200,86 @@ mod free_result_tests {
     #[test]
     fn frees_an_empty_result() {
         free_result(result_of(Ok(vec![])).leak());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{block_on, c, memory, Res};
+    use crate::core::types::{ERROR_POOL_CLOSED, OK};
+    use sqlx::{Connection, Executor};
+    use std::ptr::null;
+
+    #[test]
+    fn a_c_string_reads_as_str() {
+        let s = c("héllo");
+        assert_eq!(c_chars_to_str(s.as_ptr()), "héllo");
+    }
+
+    #[test]
+    fn a_null_pointer_reads_as_an_empty_slice_or_vec() {
+        assert!(unsafe { slice_of::<u8>(null(), 0) }.is_empty());
+        assert!(unsafe { slice_of::<u8>(null(), 5) }.is_empty());
+        assert!(unsafe { vec_of::<u8>(null_mut(), 0) }.is_empty());
+        let bytes = [1u8, 2, 3];
+        assert_eq!(unsafe { slice_of(bytes.as_ptr(), 2) }, &[1, 2]);
+    }
+
+    #[test]
+    fn freeing_a_null_result_does_nothing() {
+        free_result(null_mut());
+    }
+
+    #[test]
+    fn no_rows_make_an_empty_result() {
+        let r = Res(result_of(Ok(vec![])).leak());
+        assert_eq!((r.get().error, r.get().size), (OK, 0));
+        assert!(r.columns().is_empty());
+    }
+
+    #[test]
+    fn an_error_makes_an_error_result() {
+        let r = Res(result_of(Err(sqlx::Error::PoolClosed)).leak());
+        assert_eq!((r.get().error, r.get().size), (ERROR_POOL_CLOSED, 0));
+    }
+
+    fn fetched(sql: &str) -> Res {
+        block_on(async {
+            let mut cn = memory().await;
+            let rows = cn.fetch_all(sqlx::AssertSqlSafe(sql.to_string())).await;
+            cn.close().await.unwrap();
+            Res(result_of(rows).leak())
+        })
+    }
+
+    #[test]
+    fn rows_are_read_with_their_schema_and_values_by_length() {
+        let r = fetched("select 1 as a, null as b, 'x' || char(0) || 'y' as c, 1.5 as d, x'01ff' as e union all select 2, 3, '', 1e300, x''").ok();
+        let columns = r.columns();
+        let columns: Vec<(&str, &str)> = columns.iter().map(|(n, k)| (n.as_str(), k.as_str())).collect();
+        // The types of the first row's values.
+        assert_eq!(columns, [("a", "INTEGER"), ("b", "NULL"), ("c", "TEXT"), ("d", "REAL"), ("e", "BLOB")]);
+        // The NUL inside a value is kept, a REAL is written as SQLite writes it, a BLOB as hex.
+        assert_eq!(
+            r.rows(),
+            [
+                [Some("1".into()), None, Some("x\0y".into()), Some("1.5".into()), Some("01ff".into())],
+                [Some("2".into()), Some("3".into()), Some("".into()), Some("1.0e+300".into()), Some("".into())],
+            ]
+        );
+    }
+
+    #[test]
+    fn invalid_utf8_text_is_replaced() {
+        let r = fetched("select cast(x'61ff62' as text)").ok();
+        assert_eq!(r.value().as_deref(), Some("a\u{fffd}b"));
+    }
+
+    #[test]
+    fn a_failed_query_makes_an_error_result() {
+        let r = fetched("select * from missing_table");
+        assert!(!r.is_ok());
+        assert!(r.error_message().unwrap().contains("no such table"));
     }
 }
