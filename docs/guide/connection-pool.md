@@ -26,16 +26,54 @@ val options = ConnectionPool.Options.builder()
     .idleTimeout(10.minutes)
     .maxLifetime(30.minutes)
     .build()
-
-val db = PostgreSQL(
-    url = "postgresql://localhost:15432/test",
-    username = "postgres",
-    password = "postgres",
-    options = options
-)
 ```
 
-How to create each driver is described in [Databases](../databases/postgresql.md).
+Then pass the options to the driver:
+
+=== "PostgreSQL"
+
+    ```kotlin
+    val db = PostgreSQL(
+        url = "postgresql://localhost:15432/test",
+        username = "postgres",
+        password = "postgres",
+        options = options
+    )
+    ```
+
+=== "MySQL / MariaDB"
+
+    ```kotlin
+    val db = MySQL(
+        url = "mysql://localhost:13306/test",
+        username = "mysql",
+        password = "mysql",
+        options = options
+    )
+    ```
+
+=== "SQLite"
+
+    ```kotlin
+    val db = SQLite(
+        url = "sqlite://test.db", // If the `test.db` file is not found, a new db will be created.
+        options = options
+    )
+    ```
+
+=== "SQLCipher"
+
+    ```kotlin
+    val db = SQLiteCipher(
+        url = "sqlite://test.db", // If not found, a new (encrypted) db will be created.
+        password = "a-strong-passphrase",
+        options = options
+    )
+    ```
+
+In a multiplatform setup, use the `postgreSQL(...)`, `mySQL(...)`, `sqlite(...)` and `sqliteCipher(...)` functions
+instead. The URL formats and the notes of each driver are described in its page under
+[Databases](../databases/postgresql.md).
 
 ## Acquiring and using connections
 

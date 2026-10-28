@@ -54,6 +54,6 @@ sqlx4k {
 | `sqlx4k-sqlite-cipher` | The [SQLCipher](../databases/sqlcipher.md) (encrypted SQLite) driver.                                                     |
 | `sqlx4k-codegen`       | The KSP [code generator](../codegen/index.md) for `@Table` entities and `@Repository` interfaces.                         |
 | `sqlx4k-codegen-test`  | Generates [in-memory repositories](../codegen/in-memory-repositories.md) for unit tests.                                  |
-| `sqlx4k-arrow`         | Repository interfaces for [Arrow](https://arrow-kt.io/) (see [Hooks](../codegen/hooks.md#list-of-repository-interfaces)). |
+| `sqlx4k-arrow`         | Repository interfaces for [Arrow](https://arrow-kt.io/) (see [Repositories](../codegen/repositories.md#repository-interfaces)). |
 | `sqlx4k-postgres-pgmq` | A client for the [PostgreSQL Message Queue](../extensions/pgmq.md).                                                       |
 | `sqlx4k-gradle-plugin` | The [Gradle plugin](gradle-plugin.md).                                                                                    |

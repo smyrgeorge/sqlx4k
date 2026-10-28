@@ -35,6 +35,7 @@ nav = [
     ] },
     { "Code generation" = [
         "codegen/index.md",
+        "codegen/repositories.md",
         "codegen/entities.md",
         "codegen/batch-operations.md",
         "codegen/context-parameters.md",

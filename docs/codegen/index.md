@@ -4,7 +4,7 @@ sqlx4k ships a KSP code generator (`sqlx4k-codegen`) that writes, at build time:
 
 - the CRUD operations (`insert`, `update`, `delete`, `save`, [batch operations](batch-operations.md)) of every
   `@Table` entity,
-- the implementation of every `@Repository` interface, including its `@Query` methods,
+- the implementation of every [`@Repository`](repositories.md) interface, including its `@Query` methods,
 - a [row mapper](#auto-generated-rowmapper) for every entity,
 
 and [validates](validation.md) the SQL of every `@Query` method while doing so.
@@ -52,7 +52,7 @@ The validation and optimization options are listed in [Validation](validation.md
 
 ## Entities and repositories
 
-Create a data class that will be mapped to a table, and a repository for it:
+Map a data class to a table with `@Table`, and declare a `@Repository` for it:
 
 ```kotlin
 @Table("sqlx4k")
@@ -64,52 +64,20 @@ data class Sqlx4k(
 
 @Repository
 interface Sqlx4kRepository : CrudRepository<Sqlx4k> {
-    // The processor will validate the SQL syntax in the @Query methods.
-    // If you want to disable this validation, you can set the "validate-sql-syntax" arg to "false".
     @Query("SELECT * FROM sqlx4k WHERE id = :id")
     suspend fun findOneById(context: QueryExecutor, id: Int): Result<Sqlx4k?>
-
-    @Query("SELECT * FROM sqlx4k")
-    suspend fun findAll(context: QueryExecutor): Result<List<Sqlx4k>>
-
-    @Query("SELECT count(*) FROM sqlx4k")
-    suspend fun countAll(context: QueryExecutor): Result<Long>
-
-    @Query("SELECT * FROM sqlx4k WHERE id = :id")
-    suspend fun existsById(context: QueryExecutor, id: Int): Result<Boolean>
 }
 ```
 
-Then in your code you can use it like:
+The generator writes `Sqlx4kRepositoryImpl`, with the CRUD operations of the entity and your `@Query` methods:
 
 ```kotlin
-// Insert a new record.
-val record = Sqlx4k(id = 1, test = "test")
-val res: Sqlx4k = Sqlx4kRepositoryImpl.insert(db, record).getOrThrow()
-// Execute a generated query.
-val res: List<Sqlx4k> = Sqlx4kRepositoryImpl.findAll(db).getOrThrow()
+val res: Sqlx4k = Sqlx4kRepositoryImpl.insert(db, Sqlx4k(id = 1, test = "test")).getOrThrow()
+val one: Sqlx4k? = Sqlx4kRepositoryImpl.findOneById(db, 1).getOrThrow()
 ```
 
-Because the interface extends `CrudRepository<T>`, the generator also adds the CRUD helper methods automatically:
-`insert`, `update`, `delete`, and `save`. To customize how properties map to columns, see [Entities](entities.md).
-
-### Query methods
-
-A `@Query` method's name prefix determines its shape and expected return type:
-
-| Prefix                                | Return type          | Notes                                       |
-|---------------------------------------|----------------------|---------------------------------------------|
-| `findAll` / `findAllBy…`              | `Result<List<T>>`    |                                             |
-| `findOneBy…`                          | `Result<T?>`         |                                             |
-| `countAll` / `countBy…`               | `Result<Long>`       |                                             |
-| `existsBy…`                           | `Result<Boolean>`    |                                             |
-| `deleteAll` / `deleteBy…`, `execute…` | `Result<Long>`       | The number of affected rows.                |
-| `streamAll` / `streamAllBy…`          | `Flow<T>`            | Declared as non-`suspend` functions.        |
-
-`stream*` methods stream the rows instead of loading them all: the query runs when the flow is collected, and a failure
-fails the collection. They fetch rows in chunks of `@Query(fetchSize = …)` rows (the driver's default when unset).
-
-For more details, take a look at the [examples](../getting-started/examples.md).
+- [Repositories](repositories.md): the generated CRUD operations, the `@Query` methods and the repository interfaces.
+- [Entities](entities.md): how the properties map to columns (`@Column`, `@Transient`, `@Version`, `@Converter`).
 
 ## Auto-generated RowMapper
 
@@ -144,12 +112,12 @@ ksp {
 }
 ```
 
-| Dialect                  | Effect                                                                     |
-|--------------------------|----------------------------------------------------------------------------|
-| `mysql`                  | Adjusts CRUD query generation for MySQL compatibility.                     |
-| `mariadb`                | Like `mysql`, but uses `INSERT ... RETURNING` (MariaDB 10.5+) for `insert()`. |
-| `postgresql`             | Enables PostgreSQL-specific extensions (array types).                      |
-| `sqlite`                 | Adjusts CRUD query generation for SQLite compatibility.                    |
-| default (or `generic`)   | Uses standard SQL with builtin decoders.                                   |
+| Dialect                | Effect                                                                        |
+|------------------------|-------------------------------------------------------------------------------|
+| `mysql`                | Adjusts CRUD query generation for MySQL compatibility.                        |
+| `mariadb`              | Like `mysql`, but uses `INSERT ... RETURNING` (MariaDB 10.5+) for `insert()`. |
+| `postgresql`           | Enables PostgreSQL-specific extensions (array types).                         |
+| `sqlite`               | Adjusts CRUD query generation for SQLite compatibility.                       |
+| default (or `generic`) | Uses standard SQL with builtin decoders.                                      |
 
 The [Gradle plugin](../getting-started/gradle-plugin.md) sets the dialect from the chosen `driver`.

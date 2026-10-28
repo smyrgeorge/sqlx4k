@@ -66,7 +66,8 @@ db.fetch("select * from users;", UserRowMapper).collect { user -> println(user) 
 
 ## Prepared statements
 
-Statements support both named and positional parameters:
+A `Statement` keeps the values apart from the SQL text: bind your values instead of concatenating them into the query,
+which prevents SQL injection. Statements support both named and positional parameters:
 
 ```kotlin
 // With named parameters:
@@ -89,5 +90,21 @@ db.fetchAll(st2).getOrThrow().map {
     Test(id = id.asInt())
 }
 ```
+
+### Binding collections
+
+A collection (an `Iterable` or an array) bound to a single parameter expands into one placeholder per element,
+wrapped in parentheses, which makes `IN` lists straightforward:
+
+```kotlin
+// Runs: select * from users where id in ($1, $2, $3)
+val st = Statement
+    .create("select * from users where id in :ids")
+    .bind("ids", listOf(1, 2, 3))
+```
+
+Wrap the collection in `NoWrappingTuple` to expand it without the parentheses, e.g. for
+`select array[?]` on PostgreSQL. Binding an empty collection fails with an `SQLError` whose code is `EmptyCollection`, as `in ()`
+is not valid SQL.
 
 To map the rows to your own types, see [Mapping rows](mapping.md).

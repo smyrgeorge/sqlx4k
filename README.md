@@ -84,6 +84,7 @@ sqlx4k {
   (coroutines)
 - [Database migrations](https://smyrgeorge.github.io/sqlx4k/guide/migrations/)
 - [Code generation](https://smyrgeorge.github.io/sqlx4k/codegen/): CRUD and `@Repository` implementations
+    - [Repositories](https://smyrgeorge.github.io/sqlx4k/codegen/repositories/): generated CRUD operations and `@Query` methods
     - [Entities](https://smyrgeorge.github.io/sqlx4k/codegen/entities/): `@Column`, `@Transient`, optimistic locking
       with `@Version`, `@Converter`
     - [Batch operations](https://smyrgeorge.github.io/sqlx4k/codegen/batch-operations/)

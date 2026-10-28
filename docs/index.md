@@ -81,7 +81,8 @@ sqlx4k runs on the JVM, Android, iOS, macOS, Linux and Windows: see [Supported t
 
 ## Articles
 
-Short deep-dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop used in sqlx4k:
+Short deep-dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop used in sqlx4k, published on the
+author's [homepage](https://smyrgeorge.github.io/) (under construction):
 
 - *Introduction to the Kotlin Native and FFI:*
   [[Part 1]](https://smyrgeorge.github.io/posts/sqlx4k---introduction-to-the-kotlin-native-and-ffi-part-1/),
