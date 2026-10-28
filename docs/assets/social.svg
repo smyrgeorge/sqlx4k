@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#171A3D"/>
+      <stop offset="1" stop-color="#232659"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#2E3270" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#grid)" opacity="0.55"/>
+  <rect x="0" y="0" width="12" height="640" fill="#F2A65A"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace" text-anchor="middle">
+    <text x="640" y="327" font-size="172" font-weight="700" fill="#E6E8FA" letter-spacing="-5">sqlx4k<tspan fill="#F2A65A">_</tspan></text>
+    <text x="640" y="415" font-size="38" fill="#A9AEDB">Coroutine-first SQL toolkit</text>
+    <text x="640" y="467" font-size="38" fill="#A9AEDB">for Kotlin Multiplatform</text>
+  </g>
+</svg>
