@@ -1,0 +1,37 @@
+{#-
+  The theme's main template, with the Open Graph and Twitter tags that link previews (Slack, X, LinkedIn, …) read: the
+  title and description of the page, and docs/assets/social.png as the image (a PNG, as most of them do not show SVG).
+-#}
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {% if page.is_homepage or page.url in ["", "/", "index.html"] %}
+    {% set og_title = config.site_name %}
+  {% elif page.meta and page.meta.title %}
+    {% set og_title = page.meta.title ~ " - " ~ config.site_name %}
+  {% else %}
+    {% set og_title = (page.title | striptags) ~ " - " ~ config.site_name %}
+  {% endif %}
+  {% if page.meta and page.meta.description %}
+    {% set og_description = page.meta.description %}
+  {% else %}
+    {% set og_description = config.site_description %}
+  {% endif %}
+  {% set og_image = config.site_url ~ "assets/social.png" %}
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ config.site_name }}">
+  <meta property="og:title" content="{{ og_title }}">
+  <meta property="og:description" content="{{ og_description }}">
+  {% if page.canonical_url %}
+    <meta property="og:url" content="{{ page.canonical_url }}">
+  {% endif %}
+  <meta property="og:image" content="{{ og_image }}">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="{{ config.site_name }}: {{ config.site_description }}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ og_title }}">
+  <meta name="twitter:description" content="{{ og_description }}">
+  <meta name="twitter:image" content="{{ og_image }}">
+{% endblock %}

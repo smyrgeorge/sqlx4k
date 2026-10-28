@@ -66,6 +66,8 @@ nav = [
 ]
 
 [project.theme]
+# Template overrides: the Open Graph tags of the link previews (overrides/main.html).
+custom_dir = "overrides"
 language = "en"
 features = [
     "content.action.edit",
