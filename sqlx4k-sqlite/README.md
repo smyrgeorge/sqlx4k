@@ -8,7 +8,7 @@ SQLite driver implementation for sqlx4k, providing coroutine-first database acce
 (JVM, Android and native).
 
 ```kotlin
-implementation("io.github.smyrgeorge:sqlx4k-sqlite:x.y.z")
+implementation("io.github.smyrgeorge:sqlx4k-sqlite:1.17.0")
 ```
 
 📖 See the [SQLite documentation](https://smyrgeorge.github.io/sqlx4k/databases/sqlite/) for the setup, the URL format,
