@@ -1,0 +1,43 @@
+/*
+ * One Dark (Atom) for the code blocks, in both the light and the dark scheme. Only the blocks (.highlight) are styled:
+ * inline code keeps the colors of the theme.
+ */
+.md-typeset .highlight {
+    --md-code-bg-color: #282c34;
+    --md-code-bg-color--light: #2c313a;
+    --md-code-bg-color--lighter: #3e4451;
+    --md-code-fg-color: #abb2bf;
+    --md-code-hl-color: #61afef;
+    --md-code-hl-color--light: #2c313a;
+    --md-code-hl-name-color: #abb2bf;
+    --md-code-hl-keyword-color: #c678dd;
+    --md-code-hl-string-color: #98c379;
+    --md-code-hl-number-color: #d19a66;
+    --md-code-hl-constant-color: #d19a66;
+    --md-code-hl-function-color: #61afef;
+    --md-code-hl-special-color: #56b6c2;
+    --md-code-hl-operator-color: #56b6c2;
+    --md-code-hl-punctuation-color: #abb2bf;
+    --md-code-hl-variable-color: #e06c75;
+    --md-code-hl-generic-color: #abb2bf;
+    --md-code-hl-comment-color: #7f848e;
+    /* The copy and select buttons, line numbers and scrollbars: they sit on the dark background in either scheme. */
+    --md-default-fg-color: #abb2bf;
+    --md-default-fg-color--light: #7f848e;
+    --md-default-fg-color--lighter: #5c6370;
+    --md-default-fg-color--lightest: #4b5263;
+}
+
+/* Comments are italic, and classes, annotations and types yellow, as in One Dark. */
+.md-typeset .highlight :is(.c, .c1, .ch, .cm, .cs, .sd) {
+    font-style: italic;
+}
+
+.md-typeset .highlight :is(.nc, .nd, .kt) {
+    color: #e5c07b;
+}
+
+/* Pygments marks the calls after a dot (db.fetchAll(...)) as attributes: blue, as the functions. */
+.md-typeset .highlight .na {
+    color: #61afef;
+}

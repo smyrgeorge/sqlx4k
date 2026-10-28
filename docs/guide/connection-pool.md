@@ -110,3 +110,24 @@ val conn: Connection = db.acquire().getOrThrow()
 // Set the isolation level before starting operations
 conn.setTransactionIsolationLevel(Transaction.IsolationLevel.Serializable).getOrThrow()
 ```
+
+The levels are `ReadUncommitted`, `ReadCommitted`, `RepeatableRead` and `Serializable`. A connection starts at the
+database's default level: `ReadCommitted` on PostgreSQL, `RepeatableRead` on MySQL and MariaDB. The level applies to
+the transactions begun on that connection only, and is reset to the default when the connection returns to the pool.
+On SQLite the call has no effect: its transactions are always serializable.
+
+## Pool state and shutdown
+
+`poolSize()` returns the number of connections currently open, and `poolIdleSize()` how many of them are idle, e.g.
+to export them as metrics:
+
+```kotlin
+println("Connections: ${db.poolSize()} open, ${db.poolIdleSize()} idle.")
+```
+
+Close the pool when the application shuts down: `close()` closes its connections, and any later call on it fails (on
+PostgreSQL and MySQL, with an `SQLError` whose code is `PoolClosed`).
+
+```kotlin
+db.close().getOrThrow()
+```

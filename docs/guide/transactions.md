@@ -18,6 +18,23 @@ db.transaction {
 }
 ```
 
+`transaction` returns the value of its block. The transaction is rolled back when the block throws, and also when it
+returns a failed `Result`. Either way, the error is rethrown; a failed commit throws an `SQLError` whose code is
+`TransactionCommitFailed`. If the calling coroutine is cancelled, the transaction is rolled back too, as its work did
+not complete.
+
+To get a `Result` instead of an exception, use `transactionCatching`:
+
+```kotlin
+val res: Result<Long> = db.transactionCatching {
+    execute("update accounts set balance = balance - 10 where id = 1;").getOrThrow()
+    execute("update accounts set balance = balance + 10 where id = 2;").getOrThrow()
+}
+res.onFailure { e -> println("Transfer rolled back: ${e.message}") }
+```
+
+See [Error handling](errors.md) for what a failure holds.
+
 To change the isolation level, see
 [Setting the transaction isolation level](connection-pool.md#setting-the-transaction-isolation-level).
 

@@ -107,4 +107,18 @@ Wrap the collection in `NoWrappingTuple` to expand it without the parentheses, e
 `select array[?]` on PostgreSQL. Binding an empty collection fails with an `SQLError` whose code is `EmptyCollection`, as `in ()`
 is not valid SQL.
 
+### Binding nulls
+
+Bind `null` like any other value. Some columns need the type of the `NULL` to be sent along with it (e.g. `uuid`,
+`timestamptz` or an array on PostgreSQL): bind it with `bindNull`, which takes the Kotlin type of the parameter:
+
+```kotlin
+val st = Statement
+    .create("update users set external_id = :externalId where id = :id")
+    .bindNull("externalId", Uuid::class)
+    .bind("id", 1)
+```
+
+The types you can bind are listed in [Supported types](mapping.md#supported-types).
+
 To map the rows to your own types, see [Mapping rows](mapping.md).

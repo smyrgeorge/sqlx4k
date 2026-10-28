@@ -1,0 +1,8 @@
+/*
+ * In the tables, every column but the last holds a short value (a module, an option, a type, a default): keep it on
+ * one line instead of letting the description in the last column squeeze it. A table wider than the page scrolls
+ * horizontally.
+ */
+.md-typeset table:not([class]) :is(th, td):not(:last-child) {
+    white-space: nowrap;
+}

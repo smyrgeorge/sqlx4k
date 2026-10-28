@@ -44,6 +44,11 @@ See [Connection pool](../guide/connection-pool.md) for the pool `options`.
   for `insert()` (see [Code generation](../codegen/index.md#dialects)).
 - On MySQL and MariaDB the drivers report the *matched* rows as affected, so a `batchUpdate` entity whose values did
   not change still counts as updated.
+- A statement that reads per-connection state left by the previous one, such as `LAST_INSERT_ID()`, must run on the
+  same connection, which a pool does not guarantee. `withSingleConnection { cx -> ... }` runs its block on a single
+  connection (borrowed from the pool, if needed), and `withReadBackTransaction { cx -> ... }` in a single
+  transaction. Both are in `io.github.smyrgeorge.sqlx4k.mysql`, and the generated code uses them to read back the rows
+  it writes.
 
 !!! note "Cancelling a streamed query (native targets)"
 

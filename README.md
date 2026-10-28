@@ -45,17 +45,7 @@ Short deep‑dive posts covering Kotlin/Native, FFI, and Rust ↔ Kotlin interop
 
 ## Usage
 
-```kotlin
-implementation("io.github.smyrgeorge:sqlx4k-postgres:1.17.0")
-// or for MySQL
-implementation("io.github.smyrgeorge:sqlx4k-mysql:1.17.0")
-// or for SQLite
-implementation("io.github.smyrgeorge:sqlx4k-sqlite:1.17.0")
-// or for SQLite with encryption (SQLCipher)
-implementation("io.github.smyrgeorge:sqlx4k-sqlite-cipher:1.17.0")
-```
-
-Or let the [Gradle plugin](https://smyrgeorge.github.io/sqlx4k/getting-started/gradle-plugin/) add the driver and set up
+The [Gradle plugin](https://smyrgeorge.github.io/sqlx4k/getting-started/gradle-plugin/) adds the driver and sets up
 the code generation for you:
 
 ```kotlin
@@ -70,12 +60,24 @@ sqlx4k {
 }
 ```
 
-## Showcase
+Or add the driver yourself:
 
 > [!NOTE]
-> The repository implementations, the CRUD queries and the row mappers below are not written by hand: sqlx4k
-> generates them at build time with [KSP](https://kotlinlang.org/docs/ksp-overview.html), from your `@Table` and
-> `@Repository` declarations. See [Code generation](https://smyrgeorge.github.io/sqlx4k/codegen/).
+> The driver alone does not set up the [code generation](https://smyrgeorge.github.io/sqlx4k/codegen/) (`@Table`,
+> `@Repository`, compile-time validation): use the plugin, or configure KSP yourself as described in
+> [Manual setup](https://smyrgeorge.github.io/sqlx4k/codegen/#manual-setup).
+
+```kotlin
+implementation("io.github.smyrgeorge:sqlx4k-postgres:1.17.0")
+// or for MySQL
+implementation("io.github.smyrgeorge:sqlx4k-mysql:1.17.0")
+// or for SQLite
+implementation("io.github.smyrgeorge:sqlx4k-sqlite:1.17.0")
+// or for SQLite with encryption (SQLCipher)
+implementation("io.github.smyrgeorge:sqlx4k-sqlite-cipher:1.17.0")
+```
+
+## Showcase
 
 Map a data class to a table with `@Table`:
 
@@ -87,43 +89,17 @@ data class User(
     val name: String,
     @Column(name = "mail_address")
     val email: String,
-    @Version
-    val version: Long = 0, // Optimistic locking, managed by the generated code.
 )
 ```
 
-Declare a `@Repository`: the code generator writes its implementation, `UserRepositoryImpl`, with the CRUD operations
-(`insert`, `update`, `delete`, `save`, `batchInsert`, `batchUpdate`) and your `@Query` methods:
+Declare a `@Repository`: the code generator writes its implementation, `UserRepositoryImpl`, with your `@Query`
+methods and the CRUD operations:
 
-```kotlin
-@Repository
-interface UserRepository : CrudRepository<User> {
-    @Query("SELECT * FROM users WHERE mail_address = :email")
-    suspend fun findOneByEmail(context: QueryExecutor, email: String): Result<User?>
-
-    @Query("SELECT * FROM users WHERE name = :name")
-    suspend fun findAllByName(context: QueryExecutor, name: String): Result<List<User>>
-
-    @Query("SELECT count(*) FROM users")
-    suspend fun countAll(context: QueryExecutor): Result<Long>
-}
-```
-
-Use it with the database, a connection or a transaction:
-
-```kotlin
-val db = PostgreSQL(url = "postgresql://localhost:15432/test", username = "postgres", password = "postgres")
-
-db.transaction {
-    val alice = UserRepositoryImpl.insert(this, User(name = "Alice", email = "alice@example.com")).getOrThrow()
-    UserRepositoryImpl.update(this, alice.copy(name = "Alice Smith")).getOrThrow() // version 0 -> 1
-}
-
-val alice: User? = UserRepositoryImpl.findOneByEmail(db, "alice@example.com").getOrThrow()
-```
-
-Or, with [context parameters](https://kotlinlang.org/docs/context-parameters.html), extend `ContextCrudRepository`
-instead, and the `QueryExecutor` is taken from the scope rather than passed to every call:
+- `insert`: inserts the entity and returns it as stored, with the generated columns (e.g. the id) read back
+- `update`: updates the row matched by the `@Id` and returns the entity as stored
+- `delete`: deletes the row matched by the `@Id`
+- `save`: inserts a new entity (id `0`) or updates an existing one
+- `batchInsert` and `batchUpdate`: insert or update many entities with a single statement
 
 ```kotlin
 @Repository
@@ -131,12 +107,36 @@ interface UserRepository : ContextCrudRepository<User> {
     @Query("SELECT * FROM users WHERE mail_address = :email")
     context(context: QueryExecutor)
     suspend fun findOneByEmail(email: String): Result<User?>
-}
 
-db.transaction {
+    @Query("SELECT * FROM users WHERE name = :name")
+    context(context: QueryExecutor)
+    suspend fun findAllByName(name: String): Result<List<User>>
+
+    @Query("SELECT count(*) FROM users")
+    context(context: QueryExecutor)
+    suspend fun countAll(): Result<Long>
+}
+```
+
+> [!TIP]
+> Using [Arrow](https://arrow-kt.io/)? Extend `ArrowContextCrudRepository` (or `ArrowCrudRepository`) from
+> `sqlx4k-arrow` instead, and the generated methods return `Either<SQLError, T>` rather than `Result<T>`. See
+> [Repository interfaces](https://smyrgeorge.github.io/sqlx4k/codegen/repositories/#repository-interfaces).
+
+The methods take the `QueryExecutor` (the database, a connection or a transaction) from the scope, as a
+[context parameter](https://kotlinlang.org/docs/context-parameters.html):
+
+```kotlin
+val db = PostgreSQL(url = "postgresql://localhost:15432/test", username = "postgres", password = "postgres")
+
+// The transaction returns the value of its block: here, the updated user.
+val updated: User = db.transaction {
     // Every call in the block runs in the transaction.
-    val alice = UserRepositoryImpl.insert(User(name = "Alice", email = "alice@example.com")).getOrThrow()
-    UserRepositoryImpl.update(alice.copy(name = "Alice Smith")).getOrThrow()
+    // The entities are immutable: every call returns a new instance, with the values the database stored.
+    val user = User(name = "Alice", email = "alice@example.com") // id = 0
+    val alice = UserRepositoryImpl.insert(user).getOrThrow() // id generated by the database
+    val renamed = alice.copy(name = "Alice Smith")
+    UserRepositoryImpl.update(renamed).getOrThrow()
 }
 
 with(db) {
@@ -144,41 +144,138 @@ with(db) {
 }
 ```
 
+See [Repositories](https://smyrgeorge.github.io/sqlx4k/codegen/repositories/),
+[Entities](https://smyrgeorge.github.io/sqlx4k/codegen/entities/) and
+[Context parameters](https://smyrgeorge.github.io/sqlx4k/codegen/context-parameters/) for the details.
+
+### Compile-time validations
+
 Every `@Query` is checked while the code is generated, so a broken query fails the build instead of failing at
 runtime:
 
 ```kotlin
 @Query("SELECT * FROM users WHERE emial = :email") // Fails the build: `emial` is not a column of `User`.
-suspend fun findOneByEmail(context: QueryExecutor, email: String): Result<User?>
+context(context: QueryExecutor)
+suspend fun findOneByEmail(email: String): Result<User?>
 ```
 
-See [Repositories](https://smyrgeorge.github.io/sqlx4k/codegen/repositories/),
-[Entities](https://smyrgeorge.github.io/sqlx4k/codegen/entities/) and
-[Validation](https://smyrgeorge.github.io/sqlx4k/codegen/validation/) for the details.
+See [Query validations](https://smyrgeorge.github.io/sqlx4k/codegen/validation/#query-validations) for the full list.
+
+### Compile-time optimizations
+
+The generated SQL is optimized while the code is generated, without changing its result. For instance,
+`findOneByEmail` from the repository above runs as:
+
+```sql
+-- SELECT * is expanded into the columns of the entity, and LIMIT 2 is enough to tell one row from many.
+SELECT id, name, mail_address FROM users WHERE mail_address = :email LIMIT 2
+```
+
+See [Optimizations](https://smyrgeorge.github.io/sqlx4k/codegen/validation/#optimizations) for the full list.
+
+### Without context parameters
+
+Extend `CrudRepository` instead, and pass the `QueryExecutor` as the first argument of every call:
+
+```kotlin
+@Repository
+interface UserRepository : CrudRepository<User> {
+    @Query("SELECT * FROM users WHERE mail_address = :email")
+    suspend fun findOneByEmail(context: QueryExecutor, email: String): Result<User?>
+}
+
+val updated: User = db.transaction {
+    // save inserts a new entity (id = 0) and updates an existing one.
+    val user = User(name = "Alice", email = "alice@example.com")
+    val alice = UserRepositoryImpl.save(this, user).getOrThrow() // insert
+    UserRepositoryImpl.save(this, alice.copy(name = "Alice Smith")).getOrThrow() // update
+}
+
+val alice: User? = UserRepositoryImpl.findOneByEmail(db, "alice@example.com").getOrThrow()
+```
+
+### Using the driver directly
+
+The code generation is optional: the driver runs your SQL as it is, with the values bound as the parameters of a
+prepared statement.
+
+> [!NOTE]
+> The compile-time validations and optimizations above apply to the `@Query` methods of `@Repository` interfaces
+> only: SQL passed straight to the driver runs as written.
+
+```kotlin
+// execute returns the number of affected rows.
+val affected: Long = db.execute("delete from users where name = 'Bob'").getOrThrow()
+
+// Bind the values instead of concatenating them into the SQL (named :name or positional ? parameters).
+val statement = Statement
+    .create("select * from users where name = :name")
+    .bind("name", "Alice")
+
+// fetchAll returns all the rows: read their columns yourself...
+val emails: List<String> = db.fetchAll(statement).getOrThrow().map { it.get("mail_address").asString() }
+
+// ...or with a RowMapper.
+object UserRowMapper : RowMapper<User> {
+    override fun map(row: ResultSet.Row, converters: ValueEncoderRegistry): User = User(
+        id = row.get("id").asLong(),
+        name = row.get("name").asString(),
+        email = row.get("mail_address").asString(),
+    )
+}
+
+val users: List<User> = db.fetchAll(statement, UserRowMapper).getOrThrow()
+
+// fetch streams the rows as a Flow, without loading them all in memory.
+db.fetch("select * from users", UserRowMapper).collect { println(it) }
+
+// The transaction is committed at the end of the block, and rolled back if the block fails.
+db.transaction {
+    execute("insert into users(name, mail_address) values ('Bob', 'bob@example.com')").getOrThrow()
+    execute("update users set name = 'Robert' where name = 'Bob'").getOrThrow()
+}
+```
+
+See [Running queries](https://smyrgeorge.github.io/sqlx4k/guide/queries/),
+[Mapping rows](https://smyrgeorge.github.io/sqlx4k/guide/mapping/) and
+[Transactions](https://smyrgeorge.github.io/sqlx4k/guide/transactions/) for the details.
 
 ## Features
 
 - [Supported databases](https://smyrgeorge.github.io/sqlx4k/databases/postgresql/): PostgreSQL, MySQL, MariaDB, SQLite
   and SQLCipher (encrypted SQLite)
-- [Gradle plugin](https://smyrgeorge.github.io/sqlx4k/getting-started/gradle-plugin/)
+- [Gradle plugin (sqlx4k-gradle-plugin)](https://smyrgeorge.github.io/sqlx4k/getting-started/gradle-plugin/)
 - [Async I/O & coroutines](https://smyrgeorge.github.io/sqlx4k/guide/)
 - [Connection pool and settings](https://smyrgeorge.github.io/sqlx4k/guide/connection-pool/)
-- [Running queries](https://smyrgeorge.github.io/sqlx4k/guide/queries/): `execute`, `executeWithResult`, `fetchAll`,
-  `fetch` (streaming), prepared statements
-- [Row mappers and custom value converters](https://smyrgeorge.github.io/sqlx4k/guide/mapping/)
-- [Transactions](https://smyrgeorge.github.io/sqlx4k/guide/transactions/), savepoints and `TransactionContext`
-  (coroutines)
-- [Database migrations](https://smyrgeorge.github.io/sqlx4k/guide/migrations/)
-- [Code generation](https://smyrgeorge.github.io/sqlx4k/codegen/): CRUD and `@Repository` implementations
-    - [Repositories](https://smyrgeorge.github.io/sqlx4k/codegen/repositories/): generated CRUD operations and `@Query` methods
-    - [Entities](https://smyrgeorge.github.io/sqlx4k/codegen/entities/): `@Column`, `@Transient`, optimistic locking
-      with `@Version`, `@Converter`
+- [Acquiring and using connections](https://smyrgeorge.github.io/sqlx4k/guide/connection-pool/#acquiring-and-using-connections)
+- [Running queries](https://smyrgeorge.github.io/sqlx4k/guide/queries/)
+    - [execute: for SQL statements that modify data](https://smyrgeorge.github.io/sqlx4k/guide/queries/#execute)
+    - [executeWithResult: for inserts that generate an id](https://smyrgeorge.github.io/sqlx4k/guide/queries/#executewithresult)
+    - [fetchAll: for queries that return data](https://smyrgeorge.github.io/sqlx4k/guide/queries/#fetchall)
+    - [fetch: for streaming large results](https://smyrgeorge.github.io/sqlx4k/guide/queries/#fetch)
+- [Prepared statements (named and positional parameters)](https://smyrgeorge.github.io/sqlx4k/guide/queries/#prepared-statements)
+- [Row mappers](https://smyrgeorge.github.io/sqlx4k/guide/mapping/#row-mappers)
+- [Custom value converters](https://smyrgeorge.github.io/sqlx4k/guide/mapping/#custom-value-converters)
+- [Transactions](https://smyrgeorge.github.io/sqlx4k/guide/transactions/)
+    - [Savepoints](https://smyrgeorge.github.io/sqlx4k/guide/transactions/#savepoints)
+    - [TransactionContext (coroutines)](https://smyrgeorge.github.io/sqlx4k/guide/transactions/#transactioncontext-coroutines)
+- [Code generation: CRUD and @Repository implementations](https://smyrgeorge.github.io/sqlx4k/codegen/)
+    - [Repositories: generated CRUD operations and @Query methods](https://smyrgeorge.github.io/sqlx4k/codegen/repositories/)
+    - [Customizing columns with @Column](https://smyrgeorge.github.io/sqlx4k/codegen/entities/#customizing-columns-with-column)
+    - [Excluding properties with @Transient](https://smyrgeorge.github.io/sqlx4k/codegen/entities/#excluding-properties-with-transient)
+    - [Optimistic locking with @Version](https://smyrgeorge.github.io/sqlx4k/codegen/entities/#optimistic-locking-with-version)
+    - [Auto-generated RowMapper](https://smyrgeorge.github.io/sqlx4k/codegen/#auto-generated-rowmapper)
     - [Batch operations](https://smyrgeorge.github.io/sqlx4k/codegen/batch-operations/)
+    - [Property-level converters (@Converter)](https://smyrgeorge.github.io/sqlx4k/codegen/entities/#property-level-converters-converter)
     - [Context parameters](https://smyrgeorge.github.io/sqlx4k/codegen/context-parameters/)
     - [Repository hooks](https://smyrgeorge.github.io/sqlx4k/codegen/hooks/)
-    - [Compile-time SQL validation and query optimizations](https://smyrgeorge.github.io/sqlx4k/codegen/validation/)
+    - [List of repository interfaces](https://smyrgeorge.github.io/sqlx4k/codegen/repositories/#repository-interfaces)
+    - [SQL syntax validation (compile-time)](https://smyrgeorge.github.io/sqlx4k/codegen/validation/#sql-syntax-validation)
+    - [SQL schema validation (compile-time)](https://smyrgeorge.github.io/sqlx4k/codegen/validation/#sql-schema-validation)
+    - [Query validations and optimizations](https://smyrgeorge.github.io/sqlx4k/codegen/validation/#query-validations-and-optimizations)
     - [In-memory repositories (for unit testing)](https://smyrgeorge.github.io/sqlx4k/codegen/in-memory-repositories/)
-- Extensions
+- [Database migrations](https://smyrgeorge.github.io/sqlx4k/guide/migrations/)
+- [Extensions](https://smyrgeorge.github.io/sqlx4k/extensions/)
     - [PostgreSQL LISTEN/NOTIFY](https://smyrgeorge.github.io/sqlx4k/databases/postgresql/#listen-notify)
     - [PostgreSQL Message Queue (PGMQ)](https://smyrgeorge.github.io/sqlx4k/extensions/pgmq/)
     - [SQLDelight](https://smyrgeorge.github.io/sqlx4k/extensions/sqldelight/)
@@ -189,7 +286,7 @@ See [Repositories](https://smyrgeorge.github.io/sqlx4k/codegen/repositories/),
 Full runnable applications, built with the Gradle plugin:
 
 - PostgreSQL: [examples/postgres](./examples/postgres)
-- MySQL: [examples/mysql](./examples/mysql)
+- MySQL/MariaDB: [examples/mysql](./examples/mysql)
 - SQLite: [examples/sqlite](./examples/sqlite)
 
 ## Contributing
@@ -202,10 +299,16 @@ The documentation lives in [docs](./docs) and is published with [Zensical](https
 
 ## Acknowledgements
 
-sqlx4k stands on the shoulders of excellent open-source projects, such as [sqlx](https://github.com/launchbadge/sqlx),
-r2dbc, [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc), [SQLCipher](https://www.zetetic.net/sqlcipher/),
-[JSqlParser](https://github.com/JSQLParser/JSqlParser) and [Apache Calcite](https://calcite.apache.org/): see the
-[full list](https://smyrgeorge.github.io/sqlx4k/acknowledgements/).
+sqlx4k stands on the shoulders of excellent open-source projects, such as:
+
+- [sqlx](https://github.com/launchbadge/sqlx)
+- [r2dbc](https://r2dbc.io/)
+- [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)
+- [SQLCipher](https://www.zetetic.net/sqlcipher/)
+- [JSqlParser](https://github.com/JSQLParser/JSqlParser)
+- [Apache Calcite](https://calcite.apache.org/)
+
+See the [full list](https://smyrgeorge.github.io/sqlx4k/acknowledgements/).
 
 ## License
 
