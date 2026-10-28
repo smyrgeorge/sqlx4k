@@ -80,6 +80,16 @@ implementation("io.github.smyrgeorge:sqlx4k-sqlite-cipher:1.17.0")
 
 ## Showcase
 
+> [!TIP]
+> Using an AI coding agent (Claude Code, Codex, Cursor, Copilot, …)? Install the sqlx4k skill, so it sets up the
+> project and writes the code the recommended way:
+>
+> ```shell
+> npx skills add smyrgeorge/sqlx4k
+> ```
+>
+> See [AI agents](https://smyrgeorge.github.io/sqlx4k/getting-started/ai-agents/).
+
 Map a data class to a table with `@Table`:
 
 ```kotlin

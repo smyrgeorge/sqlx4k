@@ -22,6 +22,17 @@ sqlx4k {
 
 See [Gradle plugin](gradle-plugin.md) for all the options, such as the extensions and the code-generator arguments.
 
+!!! tip "Using an AI coding agent?"
+
+    Install the sqlx4k skill, so your agent (Claude Code, Codex, Cursor, Copilot, …) sets up the project and writes the
+    code the recommended way:
+
+    ```shell
+    npx skills add smyrgeorge/sqlx4k
+    ```
+
+    See [AI agents](ai-agents.md).
+
 ## Without the plugin
 
 Or add the driver of your database yourself:
