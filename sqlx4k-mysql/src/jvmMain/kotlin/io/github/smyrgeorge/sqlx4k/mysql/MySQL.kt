@@ -25,45 +25,26 @@ import io.github.smyrgeorge.sqlx4k.ValueEncoderRegistry
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migration
 import io.github.smyrgeorge.sqlx4k.impl.migrate.MigrationFile
 import io.github.smyrgeorge.sqlx4k.impl.migrate.Migrator
-import io.github.smyrgeorge.sqlx4k.impl.types.TypedNull
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufAllocator
 import io.r2dbc.pool.ConnectionPoolConfiguration
 import io.r2dbc.spi.ConnectionFactoryOptions
-import io.r2dbc.spi.Row
-import java.net.URLDecoder
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactive.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalDateTime
-import kotlinx.datetime.LocalTime
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toJavaLocalDate
-import kotlinx.datetime.toJavaLocalDateTime
-import kotlinx.datetime.toJavaLocalTime
-import kotlinx.datetime.toLocalDateTime
-import reactor.core.publisher.Mono
+import java.net.URLDecoder
 import kotlin.jvm.optionals.getOrElse
 import kotlin.text.Charsets.UTF_8
 import kotlin.time.Duration
-import kotlin.time.Instant
 import kotlin.time.toJavaDuration
-import kotlin.uuid.Uuid
 import io.r2dbc.pool.ConnectionPool as NativeR2dbcConnectionPool
 import io.r2dbc.spi.Connection as NativeR2dbcConnection
-import io.r2dbc.spi.Result as NativeR2dbcResultSet
 
 /**
  * The `MySQL` class provides a driver implementation for interacting with a MySQL database.
@@ -409,95 +390,6 @@ class MySQL(
     }
 
     companion object {
-        /**
-         * INSERT or REPLACE, after any leading comments: the statements whose rows (MariaDB's `RETURNING`) carry the
-         * generated id.
-         */
-        private val INSERT_SQL = Regex(
-            """^(\s+|--[^\n]*+|#[^\n]*+|/\*.*?\*/)*(insert|replace)\b""",
-            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
-        )
-
-        /**
-         * Executes the statement and reports its update count and generated id. With returnGeneratedValues(),
-         * r2dbc-mysql reports `LAST_INSERT_ID()` from the server's reply to the statement (no extra query); it is 0
-         * when the statement generated no id. Every result is consumed: see fetchResultSet.
-         */
-        private suspend fun io.r2dbc.spi.Statement.executeForResult(sql: String): ExecuteResult {
-            var rowsAffected = 0L
-            var lastInsertId: Long? = null
-            val insert = INSERT_SQL.containsMatchIn(sql)
-            returnGeneratedValues().execute().asFlow().collect { result ->
-                result
-                    .flatMap { segment ->
-                        // An error arrives as a message segment: fail like rowsUpdated would.
-                        if (segment is NativeR2dbcResultSet.Message) return@flatMap Mono.error(segment.exception())
-                        // A segment may carry both: the update count and a row (read here, while it is valid).
-                        val count = (segment as? NativeR2dbcResultSet.UpdateCount)?.value() ?: 0L
-                        // The generated id is MySQL's synthetic LAST_INSERT_ID row, or the first column of MariaDB's
-                        // RETURNING row of an insert. Any other row is the statement's own (a SELECT, a procedure's
-                        // result set): not an id, and not necessarily a number.
-                        val id = (segment as? NativeR2dbcResultSet.RowSegment)?.row()?.let { row ->
-                            val synthetic = row.metadata.columnMetadatas.firstOrNull()?.name == "LAST_INSERT_ID"
-                            if (synthetic || insert) (row.get(0) as? Number)?.toLong() else null
-                        }
-                        Mono.just(count to id)
-                    }
-                    .asFlow()
-                    .collect { (count, id) ->
-                        rowsAffected += count
-                        if (lastInsertId == null) lastInsertId = id
-                    }
-            }
-            return ExecuteResult(rowsAffected = rowsAffected, lastInsertId = lastInsertId?.takeIf { it != 0L })
-        }
-
-        /**
-         * Executes the statement and reads the rows of its last result. Every result is consumed, in order, as it
-         * arrives: a statement can produce several (PostgreSQL's SET produces two), and a result left unconsumed
-         * (awaitLast() only kept the last one) left the connection out of step, so the error of the next statement
-         * on it was lost and reported as a success.
-         */
-        private suspend fun io.r2dbc.spi.Statement.fetchResultSet(): ResultSet {
-            var last: ResultSet? = null
-            execute().asFlow().collect { result -> last = result.toResultSet() }
-            return last ?: ResultSet(emptyList(), null, ResultSet.Metadata(emptyList()))
-        }
-
-        private fun NativeR2dbcConnection.createStatement(
-            statement: Statement,
-            encoders: ValueEncoderRegistry
-        ): io.r2dbc.spi.Statement {
-            fun Any.toR2dbc(): Any = when (this) {
-                is Char -> toString()
-                // MySQL DATETIME is timezone-agnostic; convert to UTC LocalDateTime to
-                // avoid session-timezone shifts when the driver binds java.time.Instant.
-                is Instant -> toLocalDateTime(TimeZone.UTC).toJavaLocalDateTime()
-                is LocalDate -> toJavaLocalDate()
-                is LocalTime -> toJavaLocalTime()
-                is LocalDateTime -> toJavaLocalDateTime()
-                // MySQL has no native UUID type; pass as string.
-                // Also handle java.util.UUID since Kotlin's Uuid value class may be stored
-                // as its underlying type when boxed as Any?.
-                is Uuid -> toString()
-                is java.util.UUID -> toString()
-                else -> this
-            }
-
-            val query = statement.renderNativeQuery(Dialect.MySQL, encoders)
-            // Only a statement with parameters needs r2dbc-mysql to find its placeholders; one without runs as written,
-            // as it then can in any sql_mode (with NO_BACKSLASH_ESCAPES, `'C:\'` is a whole string).
-            val stmt = createStatement(if (query.values.isEmpty()) query.sql else query.sql.withQuotesDoubled())
-            query.values.forEachIndexed { index, value ->
-                when (value) {
-                    is TypedNull -> stmt.bindNull(index, value.type.java)
-                    null -> stmt.bindNull(index, Any::class.java)
-                    else -> stmt.bind(index, value.toR2dbc())
-                }
-            }
-            return stmt
-        }
-
         // The URL properties the native driver (sqlx) reads, and r2dbc's `ssl`.
         private val URL_PARAMS = setOf(
             "ssl", "ssl-mode", "sslmode", "ssl-ca", "sslca", "ssl-cert", "sslcert", "ssl-key", "sslkey", "socket",
@@ -521,7 +413,10 @@ class MySQL(
             // An unknown property is rejected rather than ignored: a misspelt `ssl-mode` would silently connect
             // without the TLS verification it asked for.
             val params = url.substringAfter('?', "").split('&').filter { it.isNotEmpty() }.associate {
-                URLDecoder.decode(it.substringBefore('='), UTF_8) to URLDecoder.decode(it.substringAfter('=', ""), UTF_8)
+                URLDecoder.decode(it.substringBefore('='), UTF_8) to URLDecoder.decode(
+                    it.substringAfter('=', ""),
+                    UTF_8
+                )
             }
             params.keys.firstOrNull { it !in URL_PARAMS }?.let {
                 invalidUrl("Unknown parameter `$it` in MySQL URL. Supported: ${URL_PARAMS.joinToString()}.")
@@ -597,49 +492,6 @@ class MySQL(
                 options.idleTimeout?.let { maxIdleTime(it.toJavaDuration()) }
                 options.maxLifetime?.let { maxLifeTime(it.toJavaDuration()) }
             }.build()
-        }
-
-        /** Column types that hold raw bytes: r2dbc-mysql tells them from text by the `binary` collation. */
-        private val BINARY_TYPES = setOf("VARBINARY", "TINYBLOB", "BLOB", "MEDIUMBLOB", "LONGBLOB")
-
-        private fun Row.toRow(): ResultSet.Row {
-            val columns = metadata.columnMetadatas.mapIndexed { i, c ->
-                if (c.type.name in BINARY_TYPES) {
-                    ResultSet.Row.Column(
-                        ordinal = i,
-                        name = c.name,
-                        type = c.type.name,
-                        value = null,
-                        bytes = get(i, ByteArray::class.java)
-                    )
-                } else {
-                    ResultSet.Row.Column(
-                        ordinal = i,
-                        name = c.name,
-                        type = c.type.name,
-                        value = get(i, String::class.java)
-                    )
-                }
-            }
-            return ResultSet.Row(columns)
-        }
-
-        /**
-         * Streams the rows of the statement with reactive backpressure (R2DBC publishes the rows as the
-         * server sends them; prepared statements honour the fetch size through a server-side cursor);
-         * a driver failure fails the collection with the matching [SQLError].
-         */
-        private fun io.r2dbc.spi.Statement.streamRows(): Flow<ResultSet.Row> = flow {
-            execute().asFlow().collect { result ->
-                emitAll(result.map { row, _ -> row.toRow() }.asFlow())
-            }
-        }.catch { e -> throw (e as? SQLError) ?: e.toSQLError() }
-
-        private suspend fun NativeR2dbcResultSet.toResultSet(): ResultSet {
-            val rows = map { r, _ -> r.toRow() }.asFlow().toList()
-            val meta = if (rows.isEmpty()) ResultSet.Metadata(emptyList())
-            else rows.first().toMetadata()
-            return ResultSet(rows, null, meta)
         }
     }
 }
