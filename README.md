@@ -30,7 +30,8 @@ validation—preventing runtime surprises before they happen
 The library is designed to be extensible, with a growing ecosystem of tools and extensions like PGMQ (PostgreSQL Message
 Queue), SQLDelight integration, and more.
 
-📖 [Documentation](https://smyrgeorge.github.io/sqlx4k/) · 📚 [API reference](https://smyrgeorge.github.io/sqlx4k/api/)
+📖 [Documentation](https://smyrgeorge.github.io/sqlx4k/) · 📚 [API reference](https://smyrgeorge.github.io/sqlx4k/api/) ·
+🤖 [Agent skill](https://smyrgeorge.github.io/sqlx4k/getting-started/ai-agents/)
 
 #### 📰 Articles
 
@@ -245,7 +246,7 @@ See [Running queries](https://smyrgeorge.github.io/sqlx4k/guide/queries/),
 - [Supported databases](https://smyrgeorge.github.io/sqlx4k/databases/postgresql/): PostgreSQL, MySQL, MariaDB, SQLite
   and SQLCipher (encrypted SQLite)
 - [Gradle plugin (sqlx4k-gradle-plugin)](https://smyrgeorge.github.io/sqlx4k/getting-started/gradle-plugin/)
-- [Async I/O & coroutines](https://smyrgeorge.github.io/sqlx4k/guide/)
+- [Async I/O and coroutines](https://smyrgeorge.github.io/sqlx4k/guide/)
 - [Connection pool and settings](https://smyrgeorge.github.io/sqlx4k/guide/connection-pool/)
 - [Acquiring and using connections](https://smyrgeorge.github.io/sqlx4k/guide/connection-pool/#acquiring-and-using-connections)
 - [Running queries](https://smyrgeorge.github.io/sqlx4k/guide/queries/)

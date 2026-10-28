@@ -24,6 +24,7 @@ nav = [
         "getting-started/installation.md",
         "getting-started/gradle-plugin.md",
         "getting-started/examples.md",
+        "getting-started/ai-agents.md",
     ] },
     { "Databases" = [
         "databases/postgresql.md",
@@ -64,6 +65,18 @@ nav = [
     { "Acknowledgements" = "acknowledgements.md" },
     { "API reference" = "https://smyrgeorge.github.io/sqlx4k/api/" },
 ]
+
+# llms.txt (an index of the pages, for AI agents) and llms-full.txt (every page in one file).
+[project.plugins.llmstxt]
+full_output = "llms-full.txt"
+
+[project.plugins.llmstxt.sections]
+"Getting started" = ["index.md", "getting-started/*.md", "platforms.md"]
+"Databases" = ["databases/*.md"]
+"Guide" = ["guide/*.md"]
+"Code generation" = ["codegen/*.md"]
+"Extensions" = ["extensions/*.md"]
+"Contributing" = ["contributing/*.md"]
 
 [project.theme]
 # Template overrides: the Open Graph tags of the link previews (overrides/main.html).

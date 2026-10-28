@@ -28,15 +28,16 @@ export CXX_x86_64_w64_mingw32=x86_64-w64-mingw32-g++
 
 version=$(./gradlew properties -q | awk '/^version:/ {print $2}')
 
-# Set the released version in the README snippets: the sqlx4k dependencies and the Gradle plugin, whatever version
-# they carry (the previous release, or the x.y.z placeholder). The commit is part of the tagged release.
+# Set the released version in the snippets of the READMEs and of the agent skill: the sqlx4k dependencies and the
+# Gradle plugin, whatever version they carry (the previous release, or the x.y.z placeholder). The commit is part of
+# the tagged release.
 # The files are kept in the positional parameters (the script takes no arguments): sh has no arrays.
-set -- README.md sqlx4k-sqlite/README.md sqlx4k-postgres-pgmq/README.md
+set -- README.md sqlx4k-sqlite/README.md sqlx4k-postgres-pgmq/README.md skills/sqlx4k/SKILL.md skills/sqlx4k/references/*.md
 perl -pi -e '
     s/(io\.github\.smyrgeorge:sqlx4k[\w-]*:)[^")\s]+/${1}'"$version"'/g;
     s/(id\("io\.github\.smyrgeorge\.sqlx4k"\) version ")[^"]+/${1}'"$version"'/g;
 ' "$@"
-git diff --quiet -- "$@" || git commit -m "Set the version in the README files to '$version'." -- "$@"
+git diff --quiet -- "$@" || git commit -m "Set the version in the README and skill files to '$version'." -- "$@"
 git push
 
 # Pushing the tag also publishes the documentation (the guides and the Dokka API reference) to GitHub Pages,

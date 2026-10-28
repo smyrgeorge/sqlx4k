@@ -1,4 +1,4 @@
-# Async I/O & coroutines
+# Async I/O and coroutines
 
 Every query API in sqlx4k is a `suspend` function that returns a `Result`: `execute`, `fetchAll`, `begin`,
 `transaction { }` and the generated repository methods suspend instead of blocking the calling thread, and report
