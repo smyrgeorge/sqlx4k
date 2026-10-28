@@ -1,0 +1,122 @@
+name: Docs
+permissions:
+  contents: read
+
+on:
+  # A release publishes the documentation of that version: the guides (docs/) and the API reference (Dokka).
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+  # Republishes the documentation from the selected ref, e.g. after a fix to the guides between releases.
+  workflow_dispatch:
+  # Pull requests that touch the guides only check that the site builds (broken links, bad config); nothing is
+  # deployed.
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'docs/**'
+      - 'zensical.toml'
+      - '.github/workflows/docs.yml'
+
+# One deployment at a time; a newer run does not cancel one already deploying.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.x
+
+      - name: Install Zensical
+        run: pip install zensical
+
+      # The snippets in docs/ use x.y.z for the sqlx4k version, which reads naturally in a local preview. The
+      # published site shows the version being documented instead (the one of the version catalog), so its
+      # snippets can be copied as they are.
+      - name: Set Version in Snippets
+        run: |
+          version=$(sed -n 's/^sqlx4k = "\(.*\)"$/\1/p' gradle/libs.versions.toml)
+          test -n "$version"
+          grep -rl 'x\.y\.z' docs | xargs -r sed -i "s/x\.y\.z/$version/g"
+
+      # --strict fails the build on warnings, such as a link to a page that does not exist.
+      - name: Build Site
+        run: zensical build --clean --strict
+
+      # The API reference is only generated for a deployment: it needs the whole Kotlin and Rust toolchain (the
+      # cinterop of the native source sets builds the Rust crates), set up as in ci.yml. The runner builds the
+      # JVM, Android and linuxX64 targets, which cover every source set (common, jvm, android, native).
+      - name: Setup Java
+        if: github.event_name != 'pull_request'
+        uses: actions/setup-java@v6
+        with:
+          distribution: corretto
+          java-version: 21
+
+      - name: Setup Rust
+        if: github.event_name != 'pull_request'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Gradle
+        if: github.event_name != 'pull_request'
+        uses: gradle/actions/setup-gradle@v6.4.0
+        with:
+          cache-read-only: true
+
+      - name: Setup Rust Cache
+        if: github.event_name != 'pull_request'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            sqlx4k-mysql/src/rust -> target
+            sqlx4k-postgres/src/rust -> target
+            sqlx4k-sqlite/src/rust -> target
+            sqlx4k-sqlite-cipher/src/rust -> target
+          save-if: false
+
+      - name: Setup Kotlin/Native Cache
+        if: github.event_name != 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('gradle/libs.versions.toml') }}
+
+      - name: Bootstrap sqlx4k Gradle plugin
+        if: github.event_name != 'pull_request'
+        run: ./scripts/bootstrap.sh
+
+      - name: Generate API Reference
+        if: github.event_name != 'pull_request'
+        run: |
+          ./gradlew :dokka:dokkaGenerate
+          mkdir -p site/api
+          cp -R dokka/build/dokka/html/. site/api/
+
+      - name: Upload Pages Artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

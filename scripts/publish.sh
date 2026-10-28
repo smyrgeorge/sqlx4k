@@ -26,15 +26,11 @@ export CXX_x86_64_w64_mingw32=x86_64-w64-mingw32-g++
 
 ./gradlew build -Ptargets=all
 
-./gradlew :dokka:dokkaGenerate -Ptargets=all
-rm -rf ./docs/*
-cp -R ./dokka/build/dokka/html/* ./docs/
-
 version=$(./gradlew properties -q | awk '/^version:/ {print $2}')
-git add --all
-git commit -m "Added documentation for '$version'."
 git push
 
+# Pushing the tag also publishes the documentation (the guides and the Dokka API reference) to GitHub Pages,
+# through the docs workflow (.github/workflows/docs.yml).
 git tag "$version" -f
 git push --tags -f
 

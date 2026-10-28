@@ -8,6 +8,10 @@ test-cipher.db-shm
 test-cipher.db-wal
 test-ciphers.db-journal
 
+# Documentation site built by Zensical (zensical build / serve).
+/site/
+/.cache/
+
 # Generated Android native libraries — built from Rust by the buildRustAndroid (cargo-ndk) task.
 **/src/androidMain/jniLibs/
 
