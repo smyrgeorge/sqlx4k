@@ -26,6 +26,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.concurrent.Volatile
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -278,6 +279,8 @@ class SQLiteCipher(
         // The transactions begun on this connection (a begin() while one is open nests in it, as a savepoint): they
         // share the mutex (all drive the same native connection), and close() rolls back the ones still open.
         private val transactions = mutableListOf<SqlxTransaction>()
+        // Read without the mutex by the getters below, possibly from another thread.
+        @Volatile
         private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
         override val transactionIsolationLevel: IsolationLevel? = null
@@ -403,8 +406,12 @@ class SQLiteCipher(
         constructor(rt: Long, tx: Long, encoders: ValueEncoderRegistry, onEnd: () -> Unit = {}) :
                 this(rt, tx, encoders, Mutex(), onEnd)
 
+        // Read without the mutex by the getters below, possibly from another thread.
+        @Volatile
         private var _status: Transaction.Status = Transaction.Status.Open
+        @Volatile
         private var _commited: Boolean = false
+        @Volatile
         private var _rollbacked: Boolean = false
         override val status: Transaction.Status get() = _status
         override val commited: Boolean get() = _commited

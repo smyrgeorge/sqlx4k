@@ -32,6 +32,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
+import kotlin.concurrent.Volatile
 import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
 import kotlin.uuid.ExperimentalUuidApi
@@ -169,6 +170,8 @@ class SQLite(
         override val encoders: ValueEncoderRegistry
     ) : Connection {
         private val mutex = Mutex()
+        // Read without the mutex by the getters below, possibly from another thread.
+        @Volatile
         private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
         override val transactionIsolationLevel: IsolationLevel? = null
@@ -305,8 +308,12 @@ class SQLite(
         // alone, so the whole transaction can only be rolled back.
         private var rollbackOnly: Boolean = false
         private val outermostTransaction: AndroidTransaction get() = parent?.outermostTransaction ?: this
+        // Read without the mutex by the getters below, possibly from another thread.
+        @Volatile
         private var _status: Transaction.Status = Transaction.Status.Open
+        @Volatile
         private var _commited: Boolean = false
+        @Volatile
         private var _rollbacked: Boolean = false
         override val status: Transaction.Status get() = _status
         override val commited: Boolean get() = _commited

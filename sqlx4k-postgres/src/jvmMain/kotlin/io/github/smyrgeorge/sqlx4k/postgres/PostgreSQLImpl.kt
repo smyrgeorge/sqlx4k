@@ -25,6 +25,7 @@ import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.concurrent.Volatile
 import kotlin.jvm.optionals.getOrElse
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -259,8 +260,11 @@ class PostgreSQLImpl(
         override val encoders: ValueEncoderRegistry
     ) : Connection {
         private val mutex = Mutex()
+        // Read without the mutex by the getters below, possibly from another thread.
+        @Volatile
         private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
+        @Volatile
         private var _transactionIsolationLevel: IsolationLevel? = null
         override val transactionIsolationLevel: IsolationLevel? get() = _transactionIsolationLevel
 
@@ -366,8 +370,12 @@ class PostgreSQLImpl(
         internal var child: R2dbcTransaction? = null
         internal val depth: Int get() = (parent?.depth ?: 0) + 1
         internal val outermost: R2dbcTransaction get() = parent?.outermost ?: this
+        // Read without the mutex by the getters below, possibly from another thread.
+        @Volatile
         private var _status: Transaction.Status = Transaction.Status.Open
+        @Volatile
         private var _commited: Boolean = false
+        @Volatile
         private var _rollbacked: Boolean = false
         override val status: Transaction.Status get() = _status
         override val commited: Boolean get() = _commited

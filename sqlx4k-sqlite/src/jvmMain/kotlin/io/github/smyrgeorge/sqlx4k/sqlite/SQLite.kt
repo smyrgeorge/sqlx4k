@@ -36,6 +36,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.sql.SQLException
 import java.sql.SQLTransientConnectionException
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.concurrent.Volatile
 import kotlin.time.Duration
 import kotlin.uuid.ExperimentalUuidApi
 import java.sql.Connection as NativeJdbcConnection
@@ -223,6 +224,8 @@ class SQLite(
         private val onClose: () -> Unit = {},
     ) : Connection {
         private val mutex = Mutex()
+        // Read without the mutex by the getters below, possibly from another thread.
+        @Volatile
         private var _status: Connection.Status = Connection.Status.Open
         override val status: Connection.Status get() = _status
         override val transactionIsolationLevel: IsolationLevel? = null
@@ -352,8 +355,12 @@ class SQLite(
         // The transaction nested in this one, if any.
         internal var child: JdbcTransaction? = null
         internal val depth: Int get() = (parent?.depth ?: 0) + 1
+        // Read without the mutex by the getters below, possibly from another thread.
+        @Volatile
         private var _status: Transaction.Status = Transaction.Status.Open
+        @Volatile
         private var _commited: Boolean = false
+        @Volatile
         private var _rollbacked: Boolean = false
         override val status: Transaction.Status get() = _status
         override val commited: Boolean get() = _commited
