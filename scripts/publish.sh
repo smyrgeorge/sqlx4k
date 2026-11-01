@@ -37,7 +37,10 @@ perl -pi -e '
     s/(io\.github\.smyrgeorge:sqlx4k[\w-]*:)[^")\s]+/${1}'"$version"'/g;
     s/(id\("io\.github\.smyrgeorge\.sqlx4k"\) version ")[^"]+/${1}'"$version"'/g;
 ' "$@"
-git diff --quiet -- "$@" || git commit -m "Set the version in the README and skill files to '$version'." -- "$@"
+# The version catalog goes in the same commit: a version bump left uncommitted would otherwise be missing from the tag
+# (the docs workflow reads the version from there) and be discarded by the final git checkout.
+set -- gradle/libs.versions.toml "$@"
+git diff --quiet -- "$@" || git commit -m "Set the version to '$version'." -- "$@"
 git push
 
 # Pushing the tag also publishes the documentation (the guides and the Dokka API reference) to GitHub Pages,
