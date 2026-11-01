@@ -39,7 +39,7 @@ already does otherwise, or when the user asks.
 ```kotlin
 plugins {
     kotlin("multiplatform") // or kotlin("jvm")
-    id("io.github.smyrgeorge.sqlx4k") version "1.17.0"
+    id("io.github.smyrgeorge.sqlx4k") version "1.18.0"
 }
 
 sqlx4k {

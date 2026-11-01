@@ -143,7 +143,7 @@ ksp {
 
 dependencies {
     // One KSP configuration per target that processes the code, e.g. kspCommonMainMetadata, kspJvm, kspMacosArm64.
-    add("kspJvm", "io.github.smyrgeorge:sqlx4k-codegen:1.17.0")
+    add("kspJvm", "io.github.smyrgeorge:sqlx4k-codegen:1.18.0")
 }
 ```
 
@@ -153,7 +153,7 @@ dependencies {
 repository, for unit tests without a database. Add it to the test KSP configuration only:
 
 ```kotlin
-add("kspJvmTest", "io.github.smyrgeorge:sqlx4k-codegen-test:1.17.0")
+add("kspJvmTest", "io.github.smyrgeorge:sqlx4k-codegen-test:1.18.0")
 ```
 
 ```kotlin

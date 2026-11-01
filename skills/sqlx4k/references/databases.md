@@ -9,7 +9,7 @@ Docs: <https://smyrgeorge.github.io/sqlx4k/databases/postgresql/>
 | SQLite          | `sqlx4k-sqlite`        | `SQLite`            | `SQLite`             | `sqlite(...)`          |
 | SQLCipher       | `sqlx4k-sqlite-cipher` | `SQLiteCipher`      | `SQLiteCipher`       | `sqliteCipher(...)`    |
 
-Without the plugin, add the module: `implementation("io.github.smyrgeorge:sqlx4k-postgres:1.17.0")`. Every constructor
+Without the plugin, add the module: `implementation("io.github.smyrgeorge:sqlx4k-postgres:1.18.0")`. Every constructor
 also takes `options: ConnectionPool.Options` and `encoders: ValueEncoderRegistry`. In `commonMain` code, use the
 multiplatform function.
 

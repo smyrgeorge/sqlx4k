@@ -52,7 +52,7 @@ the code generation for you:
 ```kotlin
 plugins {
     kotlin("multiplatform") // or kotlin("jvm")
-    id("io.github.smyrgeorge.sqlx4k") version "1.17.0"
+    id("io.github.smyrgeorge.sqlx4k") version "1.18.0"
 }
 
 sqlx4k {
@@ -69,13 +69,13 @@ Or add the driver yourself:
 > [Manual setup](https://smyrgeorge.github.io/sqlx4k/codegen/#manual-setup).
 
 ```kotlin
-implementation("io.github.smyrgeorge:sqlx4k-postgres:1.17.0")
+implementation("io.github.smyrgeorge:sqlx4k-postgres:1.18.0")
 // or for MySQL
-implementation("io.github.smyrgeorge:sqlx4k-mysql:1.17.0")
+implementation("io.github.smyrgeorge:sqlx4k-mysql:1.18.0")
 // or for SQLite
-implementation("io.github.smyrgeorge:sqlx4k-sqlite:1.17.0")
+implementation("io.github.smyrgeorge:sqlx4k-sqlite:1.18.0")
 // or for SQLite with encryption (SQLCipher)
-implementation("io.github.smyrgeorge:sqlx4k-sqlite-cipher:1.17.0")
+implementation("io.github.smyrgeorge:sqlx4k-sqlite-cipher:1.18.0")
 ```
 
 ## Showcase
