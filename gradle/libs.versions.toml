@@ -4,7 +4,7 @@ sqlx4k = "1.18.0"
 # https://plugins.gradle.org/plugin/org.jetbrains.kotlin.jvm
 kotlin = "2.4.21"
 # https://github.com/Kotlin/kotlinx-io
-kotlinx-io = "0.9.1"
+kotlinx-io = "0.9.2"
 # https://github.com/Kotlin/kotlinx-datetime
 kotlinx-datetime = "0.8.0"
 # https://github.com/Kotlin/kotlinx.coroutines
