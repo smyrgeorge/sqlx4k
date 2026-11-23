@@ -49,7 +49,7 @@ jetbrains = "26.1.0"
 # https://developer.android.com/studio/releases/gradle-plugin
 android-gradle-plugin = "9.5.2"
 # https://github.com/robolectric/robolectric
-robolectric = "4.17"
+robolectric = "4.18.1"
 # https://developer.android.com/jetpack/androidx/releases/test
 androidx-test-core = "1.7.0"
 
